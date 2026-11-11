@@ -70,7 +70,10 @@
           <kbd>W</kbd>
           <div><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
         </div>
-        <div><strong>Свободное движение</strong><span>WASD или стрелки · Q / E — камера</span></div>
+        <div>
+          <strong>Свободное движение</strong
+          ><span>WASD или стрелки · Q / E — камера · R — реакции</span>
+        </div>
         <span class="control-separator"></span>
         <p>Подойдите к ящику,<br />чтобы его сдвинуть</p>
       </div>
@@ -94,6 +97,38 @@
           >
             ↷
           </button>
+        </div>
+        <div class="reactions-control">
+          <button
+            id="reactions-toggle"
+            class="button quiet"
+            aria-expanded="false"
+            aria-controls="reactions-panel"
+            aria-keyshortcuts="R"
+            hidden
+          >
+            Реакции <kbd>R</kbd>
+          </button>
+          <section
+            id="reactions-panel"
+            class="reactions-panel"
+            aria-labelledby="reactions-title"
+            hidden
+          >
+            <div class="reactions-heading">
+              <h2 id="reactions-title">Реакции</h2>
+              <button
+                class="reaction-close"
+                data-close
+                aria-label="Закрыть реакции (Escape)"
+                title="Закрыть (Esc)"
+              >
+                ×
+              </button>
+            </div>
+            <p id="reactions-status" role="status">Выберите реакцию · в мире на 3 секунды</p>
+            <div class="reaction-choices" role="group" aria-label="Выбор реакции"></div>
+          </section>
         </div>
         <button id="respawn" class="button quiet" hidden>
           ↺ <span id="respawn-label">На старт</span></button

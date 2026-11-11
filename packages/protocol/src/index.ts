@@ -1,5 +1,10 @@
 import { schema, t } from '@colyseus/schema';
-import type { EntityState, PlayerState, SimulationSnapshot } from '@su/contracts';
+import {
+  PROTOCOL_VERSION,
+  type EntityState,
+  type PlayerState,
+  type SimulationSnapshot,
+} from '@su/contracts';
 
 /** Flat input is encoded and acknowledged by Colyseus, independently of actions. */
 export class MoveInputSchema extends schema(
@@ -38,6 +43,9 @@ export class PlayerSchema extends EntitySchema.extend(
     name: t.string().default(''),
     color: t.string().default(''),
     connected: t.boolean().default(true),
+    reactionId: t.string().default(''),
+    reactionSequence: t.uint32().default(0),
+    reactionExpiresAtTick: t.uint32().default(0),
   },
   'Player',
 ) {}
@@ -45,7 +53,7 @@ export class WorldState extends schema(
   {
     worldEpoch: t.string().default(''),
     serverTick: t.uint32().default(0),
-    protocolVersion: t.uint16().default(1),
+    protocolVersion: t.uint16().default(PROTOCOL_VERSION),
     mapVersion: t.string().default(''),
     simulationConfigHash: t.string().default(''),
     occupancy: t.uint8().default(0),

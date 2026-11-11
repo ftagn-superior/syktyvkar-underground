@@ -20,6 +20,9 @@ import {
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
+  REACTION_DURATION_MS,
+  TICK_RATE,
+  findReaction,
   NEUTRAL_INPUT,
   WORLD_FORMAT_VERSION,
   canonicalJson,
@@ -28,6 +31,7 @@ import {
   validateWorldManifest,
   worldManifestIdentity,
   type ActionResult,
+  type ReactionRequest,
   type MoveInput,
   type WorldDefinition,
   type WorldInfo,
@@ -111,6 +115,9 @@ export class GameSession {
   private pendingRespawn?: number;
   private respawnTimeout?: ReturnType<typeof setTimeout>;
   private respawnAvailableAt = 0;
+  private pendingReaction?: number;
+  private reactionTimeout?: ReturnType<typeof setTimeout>;
+  private reactionAvailableAt = 0;
   private inputEnabled = true;
   private discardNextInputFrame = false;
   private lastAck = 0;
@@ -131,7 +138,10 @@ export class GameSession {
     private readonly onNotice: (message: string) => void,
   ) {}
   private setState(state: ConnectionState, message?: string): void {
-    if (state !== 'playing') this.clearPendingRespawn();
+    if (state !== 'playing') {
+      this.clearPendingRespawn();
+      this.clearPendingReaction();
+    }
     this.state = state;
     this.onState(state, message);
   }
@@ -302,7 +312,25 @@ export class GameSession {
           this.onNotice(readableError(message));
       });
       room.onMessage<ActionResult>('actionResult', (result) => {
-        if (this.room !== room || result.requestId !== this.pendingRespawn) return;
+        if (this.room !== room) return;
+        if (result.requestId === this.pendingReaction) {
+          this.clearPendingReaction();
+          if (result.ok || result.code === 'RATE_LIMITED') {
+            const delay =
+              typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
+                ? Math.min(REACTION_DURATION_MS, Math.max(0, result.retryAfterMs))
+                : REACTION_DURATION_MS;
+            this.reactionAvailableAt = performance.now() + delay;
+          }
+          if (!result.ok && result.code)
+            this.onNotice(
+              result.code === 'RATE_LIMITED'
+                ? 'Дождитесь окончания текущей реакции.'
+                : (messages[result.code] ?? result.code),
+            );
+          return;
+        }
+        if (result.requestId !== this.pendingRespawn) return;
         this.clearPendingRespawn();
         if (result.ok || result.code === 'RATE_LIMITED') {
           const delay =
@@ -543,6 +571,7 @@ export class GameSession {
     const entities: DisplayEntity[] = [];
     for (const player of room.state.players.values()) {
       const pose = player === self ? this.simulation.pose() : this.remotePose(player);
+      const remainingMs = this.reactionRemainingMs(player.reactionExpiresAtTick, now);
       entities.push({
         ...toPlayerState(player),
         position: { x: pose.x, y: pose.y, z: pose.z },
@@ -550,6 +579,10 @@ export class GameSession {
         name: player.name,
         color: player.color,
         connected: player.connected,
+        reaction:
+          this.state === 'playing' && player.reactionId
+            ? { id: player.reactionId, sequence: player.reactionSequence, remainingMs }
+            : undefined,
       });
     }
     const crate = room.state.crate;
@@ -617,6 +650,53 @@ export class GameSession {
       remainingMs: Math.max(0, this.respawnAvailableAt - performance.now()),
     };
   }
+  private reactionRemainingMs(expiresAtTick: number, now = performance.now()): number {
+    const serverTick = this.room?.state?.serverTick ?? 0;
+    return Math.max(
+      0,
+      ((expiresAtTick - serverTick) * 1000) / TICK_RATE - (now - this.lastPatchAt),
+    );
+  }
+  reactionStatus(): { pending: boolean; remainingMs: number; available: boolean } {
+    const self = this.room?.state?.players?.get(this.room.sessionId);
+    return {
+      pending: this.pendingReaction !== undefined,
+      remainingMs: Math.max(
+        0,
+        this.reactionAvailableAt - performance.now(),
+        this.reactionRemainingMs(self?.reactionExpiresAtTick ?? 0),
+      ),
+      available: this.state === 'playing' && this.inputEnabled && !this.stalled,
+    };
+  }
+  private clearPendingReaction(): void {
+    clearTimeout(this.reactionTimeout);
+    this.reactionTimeout = undefined;
+    this.pendingReaction = undefined;
+  }
+  react(reactionId: string): void {
+    const status = this.reactionStatus();
+    if (
+      !status.available ||
+      status.pending ||
+      status.remainingMs > 0 ||
+      !findReaction(reactionId) ||
+      document.hidden
+    )
+      return;
+    this.actionId++;
+    this.pendingReaction = this.actionId;
+    this.reactionTimeout = setTimeout(() => {
+      this.clearPendingReaction();
+      this.onNotice('Ответ на реакцию не получен. Проверьте связь и попробуйте снова.');
+    }, 5000);
+    this.save();
+    this.room!.send('requestReaction', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      reactionId,
+    } satisfies ReactionRequest);
+  }
   private clearPendingRespawn(): void {
     clearTimeout(this.respawnTimeout);
     this.respawnTimeout = undefined;
@@ -663,7 +743,9 @@ export class GameSession {
   }
   private cleanup(preserveRecovery = false): void {
     this.clearPendingRespawn();
+    this.clearPendingReaction();
     this.respawnAvailableAt = 0;
+    this.reactionAvailableAt = 0;
     if (!preserveRecovery) this.stopRecoveryCheck();
     this.predictor?.dispose();
     this.predictor = undefined;
@@ -717,6 +799,7 @@ export class GameSession {
       stalled: this.stalled,
       inputEnabled: this.inputEnabled,
       respawn: this.respawnStatus(),
+      reaction: this.reactionStatus(),
       mapVersion: this.info?.mapVersion,
       simulationConfigHash: this.info?.simulationConfigHash,
       authoritative: self ? toPlayerState(self) : null,

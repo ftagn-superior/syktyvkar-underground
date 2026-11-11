@@ -9,9 +9,11 @@ import {
   PROTOCOL_VERSION,
   RECONNECT_SECONDS,
   RESPAWN_COOLDOWN_MS,
+  REACTION_DURATION_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
   normalizeInput,
+  findReaction,
   type ActionResult,
   type ErrorCode,
   type WorldDefinition,
@@ -80,6 +82,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     applyEntityState(this.state.crate, this.world.getSnapshot().crate);
     this.onMessage('clientReady', (client) => this.ready(client));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
+    this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('resync', (client) => {
       this.inputs.get(client.sessionId).clear();
       const session = this.sessions.get(client.sessionId);
@@ -178,6 +181,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
       if (actual) applyEntityState(player, actual);
+      if (player.reactionId && ctx.tick >= player.reactionExpiresAtTick) {
+        player.reactionId = '';
+        player.reactionExpiresAtTick = 0;
+      }
     }
     applyEntityState(this.state.crate, snapshot.crate);
     this.state.serverTick = ctx.tick;
@@ -193,7 +200,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
 
-  private respawn(client: Client, request: unknown): void {
+  /** All discrete actions share one request sequence and bounded result cache. */
+  private beginAction(
+    client: Client,
+    request: unknown,
+  ): { session: Session; requestId: number; code?: ErrorCode } | undefined {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     const data = request as { requestId?: unknown; worldEpoch?: unknown } | null;
@@ -223,12 +234,29 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     session.lastRequest = requestId;
     let code: ErrorCode | undefined;
     if (data.worldEpoch !== this.state.worldEpoch) code = 'STALE_WORLD';
-    else if (!this.state.players.has(client.sessionId)) code = 'WORLD_NOT_READY';
-    else if (performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS) code = 'RATE_LIMITED';
-    else if (!this.world.respawnPlayer(session.entityId)) code = 'SPAWN_UNAVAILABLE';
-    else {
-      session.lastRespawn = performance.now();
-      this.inputs.get(client.sessionId).clear();
+    else if (!session.connected || !this.state.players.has(client.sessionId))
+      code = 'WORLD_NOT_READY';
+    return { session, requestId, code };
+  }
+
+  private finishAction(client: Client, session: Session, result: ActionResult): void {
+    session.results.set(result.requestId, result);
+    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
+    client.send('actionResult', result);
+  }
+
+  private respawn(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    if (!code) {
+      if (performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS) code = 'RATE_LIMITED';
+      else if (!this.world.respawnPlayer(session.entityId)) code = 'SPAWN_UNAVAILABLE';
+      else {
+        session.lastRespawn = performance.now();
+        this.inputs.get(client.sessionId).clear();
+      }
     }
     const result: ActionResult = {
       requestId,
@@ -243,9 +271,42 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           }
         : {}),
     };
-    session.results.set(requestId, result);
-    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
-    client.send('actionResult', result);
+    this.finishAction(client, session, result);
+  }
+
+  private react(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const reaction = findReaction((request as { reactionId?: unknown }).reactionId);
+    const player = this.state.players.get(client.sessionId);
+    const remainingTicks = Math.max(
+      0,
+      (player?.reactionExpiresAtTick ?? 0) - this.state.serverTick,
+    );
+    if (!code) {
+      if (!reaction) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else {
+        player!.reactionId = reaction.id;
+        player!.reactionSequence++;
+        player!.reactionExpiresAtTick =
+          this.state.serverTick + Math.ceil((REACTION_DURATION_MS * TICK_RATE) / 1000);
+      }
+    }
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === undefined || code === 'RATE_LIMITED'
+        ? {
+            retryAfterMs: code
+              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
+              : REACTION_DURATION_MS,
+          }
+        : {}),
+    });
   }
 
   onDrop(client: Client, code?: number): void {

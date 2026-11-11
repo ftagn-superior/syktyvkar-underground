@@ -5,6 +5,7 @@ import { GameSession, readableError, type ConnectionState } from './network/sess
 import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
+import { ReactionMenu } from './ui/reactions';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -43,6 +44,7 @@ let loaded = false;
 let starting = false;
 let keyboard: KeyboardInput;
 let graphicsLost = false;
+let reactions: ReactionMenu | undefined;
 
 function showNotice(message: string): void {
   notice.textContent = message;
@@ -95,13 +97,32 @@ function updateState(state: ConnectionState, message?: string): void {
   }
   if (message) showNotice(message);
   renderRespawn();
+  reactions?.update(session.reactionStatus());
 }
 const session = new GameSession(updateState, showNotice);
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
   view?.rotateCamera(direction);
 }
-keyboard = new KeyboardInput(() => session.neutral(), rotateCamera);
+reactions = new ReactionMenu(
+  element<HTMLButtonElement>('reactions-toggle'),
+  element('reactions-panel'),
+  element('reactions-status'),
+  canvas,
+  (id) => {
+    session.react(id);
+    reactions!.update(session.reactionStatus());
+  },
+  () => {
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+);
+keyboard = new KeyboardInput(
+  () => session.neutral(),
+  rotateCamera,
+  () => reactions!.toggleOpen(),
+);
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
   respawn.disabled = graphicsLost || session.state !== 'playing' || pending || remainingMs > 0;
@@ -249,6 +270,7 @@ leave.addEventListener('click', () => {
   void session.leave();
 });
 diagnosticsToggle.addEventListener('click', () => {
+  reactions?.close(false);
   diagnostics.hidden = !diagnostics.hidden;
   diagnosticsToggle.setAttribute('aria-expanded', String(!diagnostics.hidden));
   renderMetrics();
@@ -283,6 +305,7 @@ canvas.addEventListener('webglcontextlost', (event) => {
 const uiTimer = setInterval(() => {
   renderRespawn();
   renderMetrics();
+  reactions?.update(session.reactionStatus());
 }, 250);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) location.reload();
@@ -296,6 +319,7 @@ window.addEventListener(
     session.dispose();
     view?.dispose();
     keyboard.dispose();
+    reactions?.dispose();
   },
   { once: true },
 );

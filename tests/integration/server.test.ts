@@ -4,6 +4,8 @@ import { createGameServer } from '../../apps/server/src/index.js';
 import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/index.js';
 import {
   RESPAWN_COOLDOWN_MS,
+  REACTION_DURATION_MS,
+  TICK_RATE,
   type ActionResult,
   type WorldInfo,
 } from '../../packages/contracts/src/index.js';
@@ -161,6 +163,124 @@ describe('one authoritative world over actual WebSocket connections', () => {
     await expect(sdk.reconnect(token)).rejects.toThrow();
     const fresh = await join();
     expect(fresh.state.players.get(fresh.sessionId)!.entityId).not.toBe(entityId);
+  });
+
+  it('shares one timed reaction per player, deduplicates requests, and keeps respawn independent', async () => {
+    const sender = await join();
+    const observer = await join();
+    const results: ActionResult[] = [];
+    sender.onMessage('actionResult', (result: ActionResult) => results.push(result));
+    const request = (requestId: number, reactionId = 'hello', worldEpoch = info.worldEpoch) =>
+      sender.send('requestReaction', {
+        requestId,
+        worldEpoch,
+        reactionId,
+        entityId: observer.sessionId,
+        durationMs: 999_999,
+      });
+    request(1);
+    await until(
+      () =>
+        results.length === 1 &&
+        observer.state.players.get(sender.sessionId)?.reactionId === 'hello',
+    );
+    const player = observer.state.players.get(sender.sessionId)!;
+    const expires = player.reactionExpiresAtTick;
+    expect(results[0]).toMatchObject({ ok: true, retryAfterMs: REACTION_DURATION_MS });
+    expect(player.reactionSequence).toBe(1);
+    expect(expires - observer.state.serverTick).toBeGreaterThan(0);
+    expect(expires - observer.state.serverTick).toBeLessThanOrEqual(
+      (REACTION_DURATION_MS * TICK_RATE) / 1000,
+    );
+    expect(observer.state.players.get(observer.sessionId)!.reactionId).toBe('');
+    request(1, 'love');
+    request(2, 'love');
+    sender.send('requestRespawn', { requestId: 3, worldEpoch: info.worldEpoch });
+    request(4, 'love', 'old-world');
+    request(5, '__proto__');
+    await until(() => results.length === 6);
+    expect(results[1]).toEqual(results[0]);
+    expect(results[2]).toMatchObject({ ok: false, code: 'RATE_LIMITED' });
+    expect(results[2].retryAfterMs).toBeGreaterThan(0);
+    expect(results[3].ok).toBe(true);
+    expect(results[4].code).toBe('STALE_WORLD');
+    expect(results[5].code).toBe('INVALID_INPUT');
+    expect(player.reactionSequence).toBe(1);
+    expect(player.reactionExpiresAtTick).toBe(expires);
+    await until(
+      () =>
+        player.reactionId === '' && sender.state.players.get(sender.sessionId)!.reactionId === '',
+      4500,
+    );
+    expect(player.reactionExpiresAtTick).toBe(0);
+    // Retrying an old successful request after expiry must never replay the sticker.
+    request(1);
+    await until(() => results.length === 7);
+    expect(results[6]).toEqual(results[0]);
+    expect(app.room.state.players.get(sender.sessionId)!.reactionId).toBe('');
+    request(6);
+    await until(() => player.reactionId === 'hello' && player.reactionSequence === 2);
+  });
+
+  it('rejects malformed reactions and reactions before the character is ready', async () => {
+    const room = await join(false);
+    const results: ActionResult[] = [];
+    const problems: string[] = [];
+    room.onMessage('actionResult', (result: ActionResult) => results.push(result));
+    room.onMessage('problem', ({ code }: { code: string }) => problems.push(code));
+    for (const request of [null, {}, { requestId: -1 }, { requestId: 1.5 }, { requestId: '1' }])
+      room.send('requestReaction', request);
+    room.send('requestReaction', {
+      requestId: 1,
+      worldEpoch: info.worldEpoch,
+      reactionId: 'hello',
+    });
+    await until(() => problems.length === 5 && results.length === 1);
+    expect(problems.every((code) => code === 'INVALID_INPUT')).toBe(true);
+    expect(results[0].code).toBe('WORLD_NOT_READY');
+    room.send('clientReady');
+    await until(() => room.state.players.has(room.sessionId));
+    room.send('requestReaction', {
+      requestId: 2,
+      worldEpoch: info.worldEpoch,
+      reactionId: { id: 'hello' },
+    });
+    room.send('requestReaction', {
+      requestId: 3,
+      worldEpoch: info.worldEpoch,
+      reactionId: 'missing',
+    });
+    await until(() => results.length === 3);
+    expect(results.slice(1).every((result) => result.code === 'INVALID_INPUT')).toBe(true);
+    expect(app.room.state.players.get(room.sessionId)!.reactionSequence).toBe(0);
+  });
+
+  it('gives late joiners and reconnected clients only the remaining reaction lifetime', async () => {
+    const sender = await join();
+    sender.send('requestReaction', {
+      requestId: 1,
+      worldEpoch: info.worldEpoch,
+      reactionId: 'love',
+    });
+    await until(() => sender.state.players.get(sender.sessionId)?.reactionId === 'love');
+    const expires = sender.state.players.get(sender.sessionId)!.reactionExpiresAtTick;
+    await sleep(300);
+    const late = await join();
+    expect(late.state.players.get(sender.sessionId)!.reactionExpiresAtTick).toBe(expires);
+    const token = late.reconnectionToken;
+    late.connection.close(1000);
+    await until(() => app.room.diagnostics().reserved === 1);
+    const recovered = await sdk.reconnect<WorldState>(token);
+    recovered.reconnection.enabled = false;
+    recovered.onMessage('resync', () => {});
+    rooms.delete(late);
+    rooms.add(recovered);
+    await until(() => recovered.state?.players?.get(sender.sessionId)?.reactionId === 'love');
+    expect(recovered.state.players.get(sender.sessionId)!.reactionExpiresAtTick).toBe(expires);
+    expect(recovered.state.players.get(sender.sessionId)!.reactionSequence).toBe(1);
+    await until(() => recovered.state.players.get(sender.sessionId)!.reactionId === '', 4500);
+    const after = await join();
+    expect(after.state.players.get(sender.sessionId)!.reactionId).toBe('');
   });
 
   it('automatically restores a connection closed with the SDK offline code', async () => {

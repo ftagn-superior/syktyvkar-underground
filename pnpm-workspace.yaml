@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/world-build
+  - tools/load-test
+minimumReleaseAgeExclude:
+  - '@colyseus/core@0.18.28'
+  - '@colyseus/schema@5.0.47'
+  - '@colyseus/sdk@0.18.10'
+  - '@colyseus/ws-transport@0.18.5'
+  - vite@8.3.8
+  - prettier@3.10.0
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: false

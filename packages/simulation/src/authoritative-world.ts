@@ -1,0 +1,56 @@
+import { NEUTRAL_INPUT, type MoveInput, type Vec3, type WorldDefinition } from '@su/contracts';
+import { createPhysicsWorld, type PhysicsWorld, type WasmBinary } from './physics-world.js';
+export class AuthoritativeWorld {
+  constructor(private readonly world: PhysicsWorld) {}
+  addPlayer(entityId: string, spawn?: Vec3) {
+    if (this.world.characters.has(entityId)) return this.world.state(entityId);
+    const position = this.world.findSpawn(undefined, spawn);
+    if (!position) return undefined;
+    this.world.createCharacter(entityId, position);
+    return this.world.state(entityId);
+  }
+  removePlayer(id: string) {
+    this.world.removeCharacter(id);
+  }
+  setInput(id: string, input: MoveInput) {
+    const character = this.world.characters.get(id);
+    if (character) character.input = { moveX: input.moveX, moveZ: input.moveZ };
+  }
+  step(dt = 1 / this.world.definition.simulation.tickRate) {
+    this.world.advance(dt);
+  }
+  getSnapshot() {
+    return this.world.snapshot();
+  }
+  respawnPlayer(id: string): boolean {
+    const character = this.world.characters.get(id);
+    if (!character) return false;
+    const position = this.world.findSpawn(id);
+    if (!position) return false;
+    const next = {
+      ...this.world.state(id),
+      position,
+      revision: character.revision + 1,
+      velocity: { x: 0, y: 0, z: 0 },
+      grounded: false,
+    };
+    this.world.restoreCharacter(next);
+    this.setInput(id, NEUTRAL_INPUT);
+    return true;
+  }
+  diagnostics() {
+    return {
+      bodies: this.world.disposed ? 0 : this.world.physics.getBodies().length,
+      players: this.world.characters.size,
+    };
+  }
+  dispose() {
+    this.world.dispose();
+  }
+}
+export async function createAuthoritativeWorld(
+  definition: WorldDefinition,
+  wasmBinary?: WasmBinary,
+): Promise<AuthoritativeWorld> {
+  return new AuthoritativeWorld(await createPhysicsWorld(definition, wasmBinary, false));
+}

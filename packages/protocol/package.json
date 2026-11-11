@@ -1,0 +1,13 @@
+{
+  "name": "@su/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@su/contracts": "workspace:*",
+    "@colyseus/schema": "5.0.47"
+  }
+}

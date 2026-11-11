@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101820" />
+    <meta
+      name="description"
+      content="Syktyvkar Underground — небольшой общий мир. Войдите на полигон, исследуйте площадку и двигайте предметы вместе."
+    />
+    <title>Syktyvkar Underground · Полигон</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23101820'/%3E%3Cpath d='M16 21 32 12l16 9v22L32 52l-16-9Z' fill='none' stroke='%2365d6bc' stroke-width='4'/%3E%3Cpath d='m16 21 16 10 16-10M32 31v21' stroke='%2365d6bc' stroke-width='4' fill='none'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <canvas id="world" aria-label="Трёхмерный сетевой полигон" tabindex="0"></canvas>
+    <div id="labels" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Syktyvkar Underground, главная">
+        <svg viewBox="0 0 40 44" aria-hidden="true">
+          <path d="m20 2 17 10v20L20 42 3 32V12Z" />
+          <path d="m3 12 17 10 17-10M20 22v20" />
+        </svg>
+        <span>SYKTYVKAR<span class="brand-secondary">UNDERGROUND</span></span>
+      </a>
+      <div class="world-status">
+        <span class="status-dot" id="status-dot"></span
+        ><span id="connection-status" role="status">Загрузка</span
+        ><span class="status-divider"></span><span id="player-count">0 / 8</span
+        ><span class="count-label">игроков</span>
+      </div>
+    </header>
+    <main id="welcome" class="welcome" aria-labelledby="welcome-title">
+      <div class="eyebrow">
+        <span></span> ПОЛИГОН 01 <span class="version">TECH DEMO · V0.1</span>
+      </div>
+      <h1 id="welcome-title">Встретимся<br />на полигоне.</h1>
+      <p id="welcome-description">
+        Небольшой мир для общих экспериментов. Двигайтесь, сталкивайтесь и толкайте ящик вместе.
+      </p>
+      <button id="join" class="button primary" disabled>
+        <span id="join-label">Загружаем мир…</span><span aria-hidden="true">↗</span>
+      </button>
+      <p id="welcome-note" class="welcome-note">
+        Без регистрации. Для второго игрока откройте ещё одну вкладку.
+      </p>
+    </main>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section
+      id="graphics-recovery"
+      class="graphics-recovery"
+      role="alert"
+      aria-labelledby="graphics-title"
+      hidden
+    >
+      <div class="eyebrow">ОТОБРАЖЕНИЕ ПРИОСТАНОВЛЕНО</div>
+      <h2 id="graphics-title">Восстанавливаем графику</h2>
+      <p>
+        Движение отключено до восстановления изображения. Если ожидание затянулось, перезагрузите
+        страницу.
+      </p>
+      <button id="graphics-reload" class="button primary">Перезагрузить страницу</button>
+    </section>
+    <footer class="bottom-bar">
+      <div class="controls">
+        <div class="keys" aria-hidden="true">
+          <kbd>W</kbd>
+          <div><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
+        </div>
+        <div><strong>Свободное движение</strong><span>WASD или стрелки · Q / E — камера</span></div>
+        <span class="control-separator"></span>
+        <p>Подойдите к ящику,<br />чтобы его сдвинуть</p>
+      </div>
+      <div class="actions">
+        <div class="camera-controls" role="group" aria-label="Поворот камеры">
+          <button
+            id="camera-left"
+            class="icon-button"
+            aria-label="Повернуть камеру влево (Q)"
+            title="Повернуть камеру влево (Q)"
+            disabled
+          >
+            ↶
+          </button>
+          <button
+            id="camera-right"
+            class="icon-button"
+            aria-label="Повернуть камеру вправо (E)"
+            title="Повернуть камеру вправо (E)"
+            disabled
+          >
+            ↷
+          </button>
+        </div>
+        <button id="respawn" class="button quiet" hidden>
+          ↺ <span id="respawn-label">На старт</span></button
+        ><button id="leave" class="button quiet" hidden>Выйти</button
+        ><button
+          id="diagnostics-toggle"
+          class="icon-button"
+          aria-label="Диагностика"
+          aria-expanded="false"
+          title="Диагностика"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 17v-4m5 4V7m5 10V4m5 13v-7" />
+          </svg>
+        </button>
+      </div>
+    </footer>
+    <aside id="diagnostics" class="diagnostics" aria-label="Диагностика соединения" hidden>
+      <div class="diagnostics-heading">ДИАГНОСТИКА <span>LIVE</span></div>
+      <label class="quality-setting" for="quality"
+        >Качество графики
+        <select id="quality">
+          <option value="standard">Обычное</option>
+          <option value="economy">Экономное</option>
+        </select>
+      </label>
+      <p class="quality-note">Экономное — меньше разрешение, без теней.</p>
+      <dl id="metrics"></dl>
+      <button id="download-report" class="button quiet report-button">Скачать отчёт</button>
+    </aside>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

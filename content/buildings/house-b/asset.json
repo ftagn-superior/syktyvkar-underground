@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "assetId": "house-b",
+  "source": {
+    "kind": "house",
+    "file": "source.json"
+  }
+}

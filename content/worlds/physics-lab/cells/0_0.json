@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "cellId": "0_0",
+  "buildings": [
+    {
+      "entityId": "building-a",
+      "assetId": "house-a",
+      "position": {
+        "x": -8,
+        "y": 0,
+        "z": -14
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "building-b",
+      "assetId": "house-b",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": -13
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    }
+  ]
+}

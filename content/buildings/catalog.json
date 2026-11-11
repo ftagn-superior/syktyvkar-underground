@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "assets": {
+    "house-a": "house-a/asset.json",
+    "house-b": "house-b/asset.json"
+  }
+}

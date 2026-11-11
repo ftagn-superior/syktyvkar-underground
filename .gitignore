@@ -1,0 +1,9 @@
+node_modules/
+dist/
+apps/client/public/generated/
+output/
+.playwright-cli/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example

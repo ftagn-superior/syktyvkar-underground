@@ -1,0 +1,42 @@
+{
+  "name": "syktyvkar-underground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "world:build": "node --import tsx tools/world-build/src/index.ts",
+    "dev": "pnpm world:build && node tools/dev.mjs",
+    "check": "tsc --noEmit && node tools/check-boundaries.mjs",
+    "test": "vitest run",
+    "build": "pnpm world:build && pnpm check && node tools/build.mjs",
+    "start": "node dist/server/main.mjs",
+    "load": "node --import tsx tools/load-test/src/index.ts",
+    "test:physics:browser": "node --import tsx tests/browser-physics.ts",
+    "test:assets:browser": "node --import tsx tests/browser-assets.ts",
+    "test:browser": "node --import tsx tests/browser-smoke.ts",
+    "format": "prettier --write apps packages tools tests content package.json tsconfig.json vitest.config.ts pnpm-workspace.yaml",
+    "test:soak": "node --import tsx tests/browser-soak.ts",
+    "test:network": "node --import tsx tests/browser-network.ts",
+    "test:network:netem": "bash tests/browser-network-netem.sh",
+    "test:restart:browser": "node --import tsx tests/browser-restart.ts",
+    "test:polish:browser": "node --import tsx tests/browser-polish.ts",
+    "test:render:browser": "node --import tsx tests/browser-render-profile.ts",
+    "test:buildings:browser": "node --import tsx tests/browser-buildings.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "typescript": "5.9.3",
+    "tsx": "4.23.15",
+    "vite": "8.3.8",
+    "vitest": "5.1.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.65.0",
+    "@colyseus/sdk": "0.18.10",
+    "@types/express": "5.0.6",
+    "prettier": "3.10.0"
+  }
+}

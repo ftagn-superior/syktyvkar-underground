@@ -14,6 +14,10 @@
     "test": "vitest run",
     "build": "pnpm world:build && pnpm check && node tools/build.mjs",
     "start": "node dist/server/main.mjs",
+    "db:migrate": "node --import tsx apps/server/src/migrate.ts",
+    "db:migrate:built": "node dist/server/migrate.mjs",
+    "test:accounts": "node tools/test-accounts.mjs",
+    "test:accounts:browser": "node tools/test-accounts.mjs --browser",
     "load": "node --import tsx tools/load-test/src/index.ts",
     "test:physics:browser": "node --import tsx tests/browser-physics.ts",
     "test:assets:browser": "node --import tsx tests/browser-assets.ts",
@@ -28,15 +32,18 @@
     "test:buildings:browser": "node --import tsx tests/browser-buildings.ts"
   },
   "devDependencies": {
-    "@types/node": "24.10.0",
-    "typescript": "5.9.3",
-    "tsx": "4.23.15",
-    "vite": "8.3.8",
-    "vitest": "5.1.0",
-    "esbuild": "0.28.2",
-    "playwright": "1.65.0",
     "@colyseus/sdk": "0.18.10",
     "@types/express": "5.0.6",
-    "prettier": "3.10.0"
+    "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
+    "esbuild": "0.28.2",
+    "jose": "6.2.17",
+    "openid-client": "6.8.9",
+    "playwright": "1.65.0",
+    "prettier": "3.10.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
   }
 }

@@ -1,3 +1,6 @@
+import { PROFILE_COLORS } from './accounts.js';
+export * from './accounts.js';
+
 export const PROTOCOL_VERSION = 1;
 export const WORLD_FORMAT_VERSION = 2;
 export const TICK_RATE = 60;
@@ -154,16 +157,7 @@ export interface RespawnRequest {
   requestId: number;
   worldEpoch: string;
 }
-export const PLAYER_COLORS = [
-  '#65d6bc',
-  '#f3b35a',
-  '#8c9eff',
-  '#ed88b7',
-  '#9bd06d',
-  '#68c8ed',
-  '#c7a0ed',
-  '#e98b69',
-];
+export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 export function normalizeInput(value: unknown): MoveInput | undefined {
   if (!value || typeof value !== 'object') return;
   const { moveX, moveZ } = value as MoveInput;

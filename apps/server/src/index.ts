@@ -5,6 +5,11 @@ import { WebSocketTransport } from '@colyseus/ws-transport';
 import { MAX_PLAYERS, PROTOCOL_VERSION, type WorldInfo } from '@su/contracts';
 import { WorldRoom } from './world-room.js';
 import { readWorldDirectory } from './world-bundle.js';
+import { AccountHttp } from './accounts/http.js';
+import { AccountStore } from './accounts/store.js';
+import { checkAccountSchema } from './accounts/migrations.js';
+import type { AccountConfig } from './config.js';
+import type { LoginProvider } from './accounts/telegram.js';
 
 export interface GameServerOptions {
   port?: number;
@@ -13,19 +18,36 @@ export interface GameServerOptions {
   clientDirectory?: string;
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
+  accounts?: { config: AccountConfig; store: AccountStore; provider?: LoginProvider };
 }
 export async function createGameServer(options: GameServerOptions = {}) {
   const worldDirectory = resolve(options.worldDirectory ?? 'dist/worlds/physics-lab');
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const { manifest, definition } = await readWorldDirectory(worldDirectory);
+  if (options.accounts) await checkAccountSchema(options.accounts.store.pool);
+  let room: WorldRoom | undefined;
+  const accounts = options.accounts
+    ? new AccountHttp(
+        options.accounts.config,
+        options.accounts.store,
+        (id) => room?.revokeAuthSession(id),
+        options.accounts.provider,
+      )
+    : undefined;
   const http = createServer();
   const transport = new WebSocketTransport({
     server: http,
     maxPayload: 4096,
     pingInterval: 3000,
     pingMaxRetries: 2,
+    beforeUpgrade: accounts
+      ? (context) => {
+          const origin = context.headers.get('origin');
+          if (origin && origin !== accounts.config.publicOrigin)
+            return new Response('Origin is not allowed.', { status: 403 });
+        }
+      : undefined,
   });
-  let room: WorldRoom | undefined;
   let ready = false;
   const server = new Server({
     transport,
@@ -33,8 +55,25 @@ export async function createGameServer(options: GameServerOptions = {}) {
     gracefullyShutdown: false,
     express(app) {
       app.disable('x-powered-by');
+      app.set('trust proxy', 'loopback');
+      if (accounts) app.use(accounts.router);
+      else
+        app.get('/api/me', (_req, res) => {
+          res.setHeader('Cache-Control', 'no-store');
+          res.json({ enabled: false, account: null });
+        });
       app.get('/health/live', (_req, res) => res.json({ ok: true }));
-      app.get('/health/ready', (_req, res) => res.status(ready ? 200 : 503).json({ ready }));
+      app.get('/health/ready', async (_req, res) => {
+        let available = ready;
+        if (available && accounts) {
+          try {
+            await accounts.store.pool.query('SELECT 1');
+          } catch {
+            available = false;
+          }
+        }
+        res.status(available ? 200 : 503).json({ ready: available });
+      });
       app.get('/api/world', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
         if (!ready || !room) {
@@ -112,6 +151,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     manifest,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
+    accounts,
   });
   try {
     await server.serverless();

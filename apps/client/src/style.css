@@ -223,6 +223,55 @@ h1 {
   margin: 17px 0 0;
   color: #879aa6;
 }
+.account-panel {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.telegram-login {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  color: #edf3f4;
+  background: #24668c;
+  font-size: 14px;
+}
+#profile-form {
+  display: grid;
+  gap: 9px;
+}
+#profile-form label {
+  color: var(--muted);
+  font-size: 12px;
+}
+#profile-form input,
+#profile-form select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #20323e;
+  color: #edf3f4;
+  padding: 10px;
+  font: inherit;
+}
+#profile-form input:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+}
+.account-panel > button {
+  margin-top: 10px;
+  width: 100%;
+}
+.account-message {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+.account-message:empty {
+  display: none;
+}
 .bottom-bar {
   bottom: 26px;
   align-items: flex-end;

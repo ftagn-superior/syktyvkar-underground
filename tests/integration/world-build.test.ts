@@ -57,7 +57,7 @@ async function load(manifest: WorldManifest, output: string) {
     return bytes;
   });
 }
-describe('world v2 release', () => {
+describe('world v3 release', () => {
   it('builds reproducible models and a verified graph of dependencies', async () =>
     withContent(async (root, source) => {
       const first = await buildWorld(source, join(root, 'first'));
@@ -95,7 +95,7 @@ describe('world v2 release', () => {
       const geometry = await buildWorld(source, join(root, 'geometry'));
       expect(geometry.simulationConfigHash).not.toBe(first.simulationConfigHash);
       const base = await readJson(source);
-      base.entities.find((e: any) => e.kind === 'crate').mass = 20;
+      base.entities[0].friction = 0.7;
       await writeJson(source, base);
       const mass = await buildWorld(source, join(root, 'mass'));
       expect(mass.simulationConfigHash).not.toBe(geometry.simulationConfigHash);

@@ -117,9 +117,10 @@ export async function buildWorld(
     authored.formatVersion !== WORLD_FORMAT_VERSION ||
     !Array.isArray(authored.cells) ||
     authored.cells.length === 0 ||
-    typeof authored.assetCatalog !== 'string'
+    typeof authored.assetCatalog !== 'string' ||
+    typeof authored.itemCatalog !== 'string'
   )
-    throw new Error('World source must use formatVersion 2, cells and assetCatalog');
+    throw new Error('World source must use formatVersion 3, cells and assetCatalog');
   const base: WorldBase = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: authored.worldId,
@@ -127,6 +128,8 @@ export async function buildWorld(
     simulation: authored.simulation,
     spawnPoints: authored.spawnPoints,
     entities: authored.entities,
+    itemCatalog: await readJson(resolve(dirname(resolve(source)), authored.itemCatalog)),
+    initialItems: authored.initialItems,
     // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
     ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
   };

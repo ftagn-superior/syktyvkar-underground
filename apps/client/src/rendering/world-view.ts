@@ -1,3 +1,4 @@
+import '@babylonjs/core/Culling/ray';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
@@ -19,6 +20,7 @@ import {
   REACTION_DURATION_MS,
   type DisplayReaction,
   type EntityState,
+  type ItemPose,
   type Vec3,
   type WorldDefinition,
   type WorldManifest,
@@ -29,6 +31,7 @@ import { BuildingViews } from './buildings';
 import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
 
 export interface DisplayEntity extends EntityState {
+  typeId?: string;
   name?: string;
   color?: string;
   connected?: boolean;
@@ -86,6 +89,8 @@ export class WorldView {
   private ownPosition?: Vector3;
   private disposed = false;
   private preparation?: Promise<void>;
+  private ghost?: Mesh;
+  private ghostType?: string;
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly labels: HTMLElement,
@@ -417,7 +422,7 @@ export class WorldView {
         marker.material = markerMaterial;
       }
     } else {
-      const size = this.definition.entities.find((item) => item.entityId === entity.entityId)!.size;
+      const size = this.definition.itemCatalog.types[entity.typeId!].size;
       mesh = MeshBuilder.CreateBox(
         'crate',
         { width: size.x, height: size.y, depth: size.z },
@@ -443,6 +448,52 @@ export class WorldView {
     mesh.receiveShadows = true;
     this.shadow.addShadowCaster(mesh, true);
     return { root, label, material };
+  }
+  pointerRay() {
+    const ray = this.scene.createPickingRay(
+      this.scene.pointerX,
+      this.scene.pointerY,
+      Matrix.Identity(),
+      this.camera,
+    );
+    return {
+      from: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
+      to: {
+        x: ray.origin.x + ray.direction.x * 5000,
+        y: ray.origin.y + ray.direction.y * 5000,
+        z: ray.origin.z + ray.direction.z * 5000,
+      },
+    };
+  }
+  showPlacement(typeId?: string, pose?: ItemPose, valid = false) {
+    if (!typeId || !pose) {
+      this.ghost?.setEnabled(false);
+      return;
+    }
+    if (!this.ghost || this.ghostType !== typeId) {
+      this.ghost?.dispose(false, true);
+      const size = this.definition.itemCatalog.types[typeId].size;
+      this.ghost = MeshBuilder.CreateBox(
+        'placement-preview',
+        { width: size.x, height: size.y, depth: size.z },
+        this.scene,
+      );
+      this.ghost.isPickable = false;
+      this.ghost.material = this.material('placement-preview', '#65d6bc');
+      this.ghostType = typeId;
+    }
+    this.ghost.setEnabled(true);
+    this.ghost.position.copyFrom(vector(pose.position));
+    this.ghost.rotationQuaternion = new Quaternion(
+      pose.rotation.x,
+      pose.rotation.y,
+      pose.rotation.z,
+      pose.rotation.w,
+    );
+    const material = this.ghost.material as StandardMaterial;
+    material.alpha = 0.45;
+    material.diffuseColor = Color3.FromHexString(valid ? '#65d6bc' : '#ed7272');
+    material.emissiveColor = material.diffuseColor.scale(0.3);
   }
   private positionLabels(): void {
     const width = this.engine.getRenderWidth(true);

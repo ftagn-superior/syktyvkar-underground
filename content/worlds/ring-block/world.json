@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "worldId": "ring-block",
   "bounds": {
     "min": {
@@ -142,24 +142,6 @@
       "friction": 0.6,
       "restitution": 0.05,
       "color": "#414f60"
-    },
-    {
-      "entityId": "crate-01",
-      "kind": "crate",
-      "position": {
-        "x": 9.5,
-        "y": 0.52,
-        "z": 9
-      },
-      "size": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "mass": 10,
-      "friction": 0.6,
-      "restitution": 0.05,
-      "color": "#e8ae64"
     }
   ],
   "landmarks": [
@@ -194,5 +176,23 @@
   "cells": [
     "cells/0_0.json"
   ],
-  "assetCatalog": "../../buildings/ring-block/catalog.json"
+  "assetCatalog": "../../buildings/ring-block/catalog.json",
+  "itemCatalog": "../../items/catalog.json",
+  "initialItems": [
+    {
+      "seedId": "crate-01",
+      "typeId": "wooden-crate",
+      "position": {
+        "x": 9.5,
+        "y": 0.52,
+        "z": 9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    }
+  ]
 }

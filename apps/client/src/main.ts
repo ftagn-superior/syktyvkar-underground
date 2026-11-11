@@ -6,6 +6,7 @@ import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
 import { ReactionMenu } from './ui/reactions';
+import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 
 function element<T extends HTMLElement>(id: string): T {
@@ -46,6 +47,7 @@ let starting = false;
 let keyboard: KeyboardInput;
 let graphicsLost = false;
 let reactions: ReactionMenu | undefined;
+let inventory: InventoryPanel | undefined;
 
 function showNotice(message: string): void {
   notice.textContent = message;
@@ -102,8 +104,16 @@ function updateState(state: ConnectionState, message?: string): void {
   if (message) showNotice(message);
   renderRespawn();
   reactions?.update(session.reactionStatus());
+  inventory?.update();
 }
 const session = new GameSession(updateState, showNotice);
+const storageStatus = document.createElement('div');
+storageStatus.className = 'storage-status';
+storageStatus.setAttribute('role', 'status');
+storageStatus.hidden = true;
+storageStatus.textContent =
+  'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
+document.body.append(storageStatus);
 const accounts = new AccountPanel(
   () => {
     session.accountId = accounts.account?.accountId;
@@ -111,6 +121,7 @@ const accounts = new AccountPanel(
   },
   () => session.leave(),
 );
+inventory = new InventoryPanel(session, canvas);
 const accountPreparation = accounts.load();
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
@@ -230,6 +241,7 @@ async function start(): Promise<void> {
         const frame = session.frame(now, delta, keyboard.read(view!.cameraAngle));
         view!.follow(frame.ownId);
         view!.update(frame.entities, frame.ownId);
+        inventory?.frame(view!);
       } catch (error) {
         loaded = false;
         starting = true;
@@ -316,9 +328,11 @@ canvas.addEventListener('webglcontextlost', (event) => {
 });
 // Feedback remains alive even when WebGL has stopped producing frames.
 const uiTimer = setInterval(() => {
+  storageStatus.hidden = !session.storageUnavailable;
   renderRespawn();
   renderMetrics();
   reactions?.update(session.reactionStatus());
+  inventory?.update();
 }, 250);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) location.reload();
@@ -333,6 +347,7 @@ window.addEventListener(
     view?.dispose();
     keyboard.dispose();
     reactions?.dispose();
+    inventory?.dispose();
   },
   { once: true },
 );

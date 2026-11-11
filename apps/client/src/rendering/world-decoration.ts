@@ -62,7 +62,7 @@ export function decorateWorld(scene: Scene, world: WorldDefinition): void {
   lineSystem('spawn-marks', spawnLines, palette.spawn, 0.5);
   labels.push({ text: '01  СТАРТ', x: spawnMidX, z: spawnMaxZ + 2.6, color: palette.spawn });
 
-  const crate = world.entities.find((entity) => entity.kind === 'crate');
+  const crate = world.initialItems[0];
   if (crate) {
     const { x, z } = crate.position;
     const lines = [circle(x, z, 2.5, 64)];

@@ -321,6 +321,19 @@ export function simulationProjection(world: WorldDefinition) {
     },
     bounds: { min: vector(world.bounds.min), max: vector(world.bounds.max) },
     spawnPoints: world.spawnPoints.map(vector),
+    itemCatalog: Object.fromEntries(
+      Object.entries(world.itemCatalog.types).map(([id, t]) => [
+        id,
+        {
+          model: t.model,
+          size: vector(t.size),
+          mass: t.mass,
+          friction: t.friction,
+          restitution: t.restitution,
+        },
+      ]),
+    ),
+    initialItems: world.initialItems,
     entities: world.entities.map((e) => ({
       entityId: e.entityId,
       kind: e.kind,

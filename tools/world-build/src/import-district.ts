@@ -411,7 +411,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     midX = (minX + maxX) / 2,
     midZ = (minZ + maxZ) / 2;
   const world: WorldSource = {
-    formatVersion: 2,
+    formatVersion: 3,
     worldId: config.worldId,
     bounds: {
       min: { x: minX, y: -5, z: minZ },
@@ -423,21 +423,20 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       character: { height: 1.8, radius, speed: 4, sprintSpeed: 14, mass: 70 },
     },
     spawnPoints: config.spawnPoints,
+    itemCatalog: relative(worldDir, 'content/items/catalog.json').replaceAll('\\', '/'),
+    initialItems: [
+      {
+        seedId: 'crate-01',
+        typeId: 'wooden-crate',
+        position: config.crate,
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    ],
     entities: [
       wall('boundary-north', { x: midX, y: 0.75, z: minZ + 0.25 }, { x: width, y: 1.5, z: 0.5 }),
       wall('boundary-south', { x: midX, y: 0.75, z: maxZ - 0.25 }, { x: width, y: 1.5, z: 0.5 }),
       wall('boundary-west', { x: minX + 0.25, y: 0.75, z: midZ }, { x: 0.5, y: 1.5, z: depth }),
       wall('boundary-east', { x: maxX - 0.25, y: 0.75, z: midZ }, { x: 0.5, y: 1.5, z: depth }),
-      {
-        entityId: 'crate-01',
-        kind: 'crate',
-        position: config.crate,
-        size: { x: 1, y: 1, z: 1 },
-        mass: 10,
-        friction: 0.6,
-        restitution: 0.05,
-        color: '#e8ae64',
-      },
     ],
     landmarks: (config.landmarks ?? []).map(({ id, name, osm, position }) => {
       const anchor = osm ? roofs.get(osm) : position;

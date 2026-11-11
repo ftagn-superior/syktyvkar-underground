@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "types": {
+    "wooden-crate": {
+      "typeId": "wooden-crate",
+      "name": "Деревянный ящик",
+      "icon": "📦",
+      "model": "box",
+      "size": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "mass": 10,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#d6a15a",
+      "maxStack": 10
+    }
+  }
+}

@@ -1,5 +1,7 @@
 import {
   type MoveInput,
+  type ItemPose,
+  type Vec3,
   type PlayerState,
   type SimulationSnapshot,
   type WorldDefinition,
@@ -27,6 +29,12 @@ export class PredictionWorld {
   getState(): PlayerState {
     if (!this.ownId) throw new Error('Prediction needs an authoritative state');
     return this.world.state(this.ownId);
+  }
+  surfaceRay(from: Vec3, to: Vec3) {
+    return this.world.surfaceRay(from, to, this.ownId);
+  }
+  checkPlacement(typeId: string, pose: ItemPose) {
+    return this.world.checkPlacement(typeId, pose, this.ownId);
   }
   dispose() {
     this.world.dispose();

@@ -17,8 +17,8 @@
     "start": "node dist/server/main.mjs",
     "db:migrate": "node --import tsx apps/server/src/migrate.ts",
     "db:migrate:built": "node dist/server/migrate.mjs",
-    "test:accounts": "node tools/test-accounts.mjs",
-    "test:accounts:browser": "node tools/test-accounts.mjs --browser",
+    "test:accounts": "node tools/test-database.mjs",
+    "test:accounts:browser": "node tools/test-database.mjs --browser",
     "load": "node --import tsx tools/load-test/src/index.ts",
     "test:physics:browser": "node --import tsx tests/browser-physics.ts",
     "test:assets:browser": "node --import tsx tests/browser-assets.ts",
@@ -31,7 +31,9 @@
     "test:polish:browser": "node --import tsx tests/browser-polish.ts",
     "test:render:browser": "node --import tsx tests/browser-render-profile.ts",
     "test:buildings:browser": "node --import tsx tests/browser-buildings.ts",
-    "test:reactions:browser": "node --import tsx tests/browser-reactions.ts"
+    "test:reactions:browser": "node --import tsx tests/browser-reactions.ts",
+    "test:items": "node tools/test-database.mjs --items",
+    "test:items:browser": "node tools/test-database.mjs --items --browser"
   },
   "devDependencies": {
     "@colyseus/sdk": "0.18.10",

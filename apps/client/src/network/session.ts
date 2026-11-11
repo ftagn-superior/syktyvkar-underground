@@ -10,13 +10,19 @@ import {
   MoveInputSchema,
   WorldState,
   toPlayerState,
-  toEntityState,
+  toItemState,
   toSimulationSnapshot,
   type EntitySchema,
 } from '@su/protocol';
 import { createPredictionWorld, type PredictionWorld } from '@su/simulation/prediction';
 import {
   MAX_INPUT_QUEUE,
+  type InventoryView,
+  type ItemAction,
+  type ItemCommand,
+  type ItemResult,
+  type ItemPose,
+  type ItemError,
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
@@ -48,6 +54,15 @@ type StoredSession = { token: string; epoch: string; actionId: number; accountId
 const storageKey = 'su:session:v1';
 const fields = ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'] as const;
 const messages: Record<string, string> = {
+  STORAGE_UNAVAILABLE:
+    'Сохранение временно недоступно. Мир приостановлен до восстановления связи с БД.',
+  ITEM_UNAVAILABLE: 'Предмет уже перемещён. Инвентарь обновлён.',
+  OUT_OF_REACH: 'Подойдите ближе: дальность взаимодействия — 3 метра.',
+  BLOCKED: 'Здесь есть препятствие или место уже занято.',
+  NO_SUPPORT: 'Для предмета нужна опора.',
+  OUT_OF_BOUNDS: 'Предмет должен целиком находиться в границах мира.',
+  INCOMPATIBLE_STACK: 'Эти стопки нельзя объединить или ячейка уже заполнена.',
+  OPERATION_CONFLICT: 'Идентификатор операции уже использован.',
   WORLD_FULL: 'На полигоне уже 8 игроков. Попробуйте войти чуть позже.',
   WORLD_NOT_READY: 'Сервер ещё готовит мир. Попробуйте снова через несколько секунд.',
   VERSION_MISMATCH: 'Версия мира изменилась. Перезагрузите страницу.',
@@ -102,6 +117,12 @@ function percentile(values: number[], percentile: number): number {
 
 export class GameSession {
   accountId?: string;
+  inventory: InventoryView = { slots: [] };
+  private pendingItem?: ItemCommand;
+  private itemRetryAt = 0;
+  private persistencePaused = false;
+  onInventoryChange?: () => void;
+  onItemResult?: (result: ItemResult) => void;
   state: ConnectionState = 'loading';
   definition!: WorldDefinition;
   manifest!: WorldManifest;
@@ -230,7 +251,7 @@ export class GameSession {
     }
     if (stored.epoch !== this.info.worldEpoch) {
       writeStored();
-      this.onNotice('Мир был перезапущен. Войдите, чтобы начать заново.');
+      this.onNotice('Мир был перезапущен. Войдите снова; предметы сохранены.');
       return;
     }
     await this.join(stored);
@@ -323,6 +344,31 @@ export class GameSession {
         if (this.room === room && this.state !== 'reconnecting')
           this.onNotice(readableError(message));
       });
+      room.onMessage<InventoryView>('inventory', (inventory) => {
+        if (this.room !== room) return;
+        this.inventory = inventory;
+        this.onInventoryChange?.();
+      });
+      room.onMessage<ItemResult>('itemResult', (result) => {
+        if (this.room !== room || result.operationId !== this.pendingItem?.operationId) return;
+        if (
+          result.code === 'STORAGE_UNAVAILABLE' ||
+          result.code === 'WORLD_NOT_READY' ||
+          result.code === 'RATE_LIMITED'
+        ) {
+          this.itemRetryAt = performance.now() + 3000;
+          return;
+        }
+        this.pendingItem = undefined;
+        try {
+          sessionStorage.removeItem(`su:item-operation:${this.accountId}`);
+        } catch {
+          /* optional storage */
+        }
+        if (!result.ok && result.code) this.onNotice(messages[result.code] ?? result.code);
+        this.onItemResult?.(result);
+        this.onInventoryChange?.();
+      });
       room.onMessage<ActionResult>('actionResult', (result) => {
         if (this.room !== room) return;
         if (result.requestId === this.pendingReaction) {
@@ -402,7 +448,7 @@ export class GameSession {
             await this.leave(
               this.reloadRequired
                 ? 'Мир был перезапущен с новой версией. Перезагрузите страницу.'
-                : 'Мир был перезапущен. Войдите, чтобы начать заново.',
+                : 'Мир был перезапущен. Войдите снова; предметы сохранены.',
             );
             return;
           }
@@ -436,12 +482,18 @@ export class GameSession {
       void this.leave('Мир был перезапущен. Войдите снова.');
       return;
     }
+    if (this.persistencePaused !== room.state.paused) {
+      this.persistencePaused = room.state.paused;
+      this.simulation?.reset();
+      if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
+        this.onNotice(messages.STORAGE_UNAVAILABLE);
+    }
     const self = room.state.players.get(room.sessionId);
     if (!self) return;
     if (!this.simulation) this.startPrediction();
     if (this.revisions.get(self.entityId) !== self.revision) this.simulation!.reset();
     const liveIds = new Set([
-      room.state.crate.entityId,
+      ...Array.from(room.state.items.values(), (item) => item.entityId),
       ...Array.from(room.state.players.values(), (player) => player.entityId),
     ]);
     for (const [id, entity] of this.trackedEntities)
@@ -451,7 +503,7 @@ export class GameSession {
         this.revisions.delete(id);
       }
     for (const player of room.state.players.values()) this.attach(player);
-    this.attach(room.state.crate);
+    for (const item of room.state.items.values()) this.attach(item);
     if (this.waitingResync) {
       this.simulation!.reset();
       this.waitingResync = false;
@@ -462,6 +514,16 @@ export class GameSession {
     if (this.state !== 'playing') {
       this.setState('playing');
       this.save();
+      if (this.accountId) {
+        try {
+          this.pendingItem =
+            JSON.parse(sessionStorage.getItem(`su:item-operation:${this.accountId}`) ?? 'null') ??
+            undefined;
+        } catch {
+          /* optional storage */
+        }
+        this.itemRetryAt = 0;
+      }
     }
   }
   private attach(entity: EntitySchema): void {
@@ -548,7 +610,7 @@ export class GameSession {
       }
     }
     const room = this.room;
-    if (!room?.state?.crate || !this.predictor || !this.input || !this.simulation)
+    if (!room?.state?.worldEpoch || !this.predictor || !this.input || !this.simulation)
       return { entities: this.preview() };
     if (this.input.lastProcessed !== this.lastAck || this.input.pendingCount === 0) {
       this.lastAck = this.input.lastProcessed;
@@ -564,12 +626,14 @@ export class GameSession {
       room.send('resync');
     }
     if (!stalled && !this.waitingResync && this.state === 'playing') this.stalled = false;
-    const steps = this.inputEnabled ? Math.min(this.predictor.tick(now), 5) : 0;
+    const steps =
+      this.inputEnabled && !this.persistencePaused ? Math.min(this.predictor.tick(now), 5) : 0;
     if (
       this.state === 'playing' &&
       this.inputEnabled &&
       !this.discardNextInputFrame &&
       !this.stalled &&
+      !this.persistencePaused &&
       !document.hidden
     ) {
       for (let i = 0; i < steps && this.input.pendingCount < MAX_INPUT_QUEUE; i++) {
@@ -580,6 +644,15 @@ export class GameSession {
       }
     }
     this.discardNextInputFrame = false;
+    if (
+      this.pendingItem &&
+      this.state === 'playing' &&
+      !this.persistencePaused &&
+      now >= this.itemRetryAt
+    ) {
+      room.send('itemCommand', this.pendingItem);
+      this.itemRetryAt = now + 3000;
+    }
     const self = room.state.players.get(room.sessionId);
     const entities: DisplayEntity[] = [];
     for (const player of room.state.players.values()) {
@@ -598,13 +671,14 @@ export class GameSession {
             : undefined,
       });
     }
-    const crate = room.state.crate;
-    entities.push({
-      ...toEntityState(crate),
-      position: this.remotePose(crate),
-      rotation: this.remoteRotation(crate),
-      color: this.definition.entities.find((entity) => entity.kind === 'crate')!.color,
-    });
+    for (const item of room.state.items.values())
+      entities.push({
+        ...toItemState(item),
+        typeId: item.typeId,
+        position: this.remotePose(item),
+        rotation: this.remoteRotation(item),
+        color: this.definition.itemCatalog.types[item.typeId].color,
+      });
     return { entities, ownId: self?.entityId };
   }
   private remotePose(entity: EntitySchema): Pose {
@@ -623,22 +697,91 @@ export class GameSession {
     };
   }
   preview(): DisplayEntity[] {
-    const crate = this.definition?.entities.find((entity) => entity.kind === 'crate');
-    return crate
-      ? [
-          {
-            entityId: crate.entityId,
-            kind: 'crate',
-            revision: 0,
-            position: crate.position,
-            rotation: { x: 0, y: 0, z: 0, w: 1 },
-            velocity: { x: 0, y: 0, z: 0 },
-            angularVelocity: { x: 0, y: 0, z: 0 },
-            color: crate.color,
-          },
-        ]
-      : [];
+    return [];
   }
+  get itemPending() {
+    return !!this.pendingItem;
+  }
+  get worldPaused() {
+    return this.persistencePaused;
+  }
+  get storageUnavailable() {
+    return this.room?.state.pauseReason === 'STORAGE_UNAVAILABLE';
+  }
+  itemAction(action: ItemAction) {
+    if (
+      !this.accountId ||
+      !this.room ||
+      this.state !== 'playing' ||
+      this.pendingItem ||
+      this.persistencePaused
+    )
+      return;
+    this.pendingItem = {
+      operationId: crypto.randomUUID(),
+      worldEpoch: this.info.worldEpoch,
+      action,
+    };
+    try {
+      sessionStorage.setItem(
+        `su:item-operation:${this.accountId}`,
+        JSON.stringify(this.pendingItem),
+      );
+    } catch {
+      /* retry survives reconnect in memory */
+    }
+    this.itemRetryAt = 0;
+    this.onInventoryChange?.();
+  }
+  nearestItem(): string | undefined {
+    const room = this.room,
+      self = room?.state.players.get(room.sessionId);
+    if (!self) return;
+    return Array.from(room!.state.items.values())
+      .map((i) => ({
+        id: i.entityId,
+        distance: Math.hypot(i.x - self.x, i.y - self.y, i.z - self.z),
+      }))
+      .filter((i) => i.distance <= 3)
+      .sort((a, b) => a.distance - b.distance)[0]?.id;
+  }
+  placement(
+    typeId: string,
+    from: Vec3,
+    to: Vec3,
+    rotation: ItemPose['rotation'],
+  ): { pose?: ItemPose; error?: ItemError } {
+    const hit = this.physics?.surfaceRay(from, to);
+    if (!hit) return { error: 'NO_SUPPORT' };
+    const size = this.definition.itemCatalog.types[typeId].size;
+    // Projection of the rotated box half extents onto the support normal.
+    const { x, y, z, w } = rotation,
+      n = hit.normal;
+    const radius =
+      (Math.abs(
+        n.x * (1 - 2 * (y * y + z * z)) + n.y * 2 * (x * y + w * z) + n.z * 2 * (x * z - w * y),
+      ) *
+        size.x +
+        Math.abs(
+          n.x * 2 * (x * y - w * z) + n.y * (1 - 2 * (x * x + z * z)) + n.z * 2 * (y * z + w * x),
+        ) *
+          size.y +
+        Math.abs(
+          n.x * 2 * (x * z + w * y) + n.y * 2 * (y * z - w * x) + n.z * (1 - 2 * (x * x + y * y)),
+        ) *
+          size.z) /
+      2;
+    const pose = {
+      position: {
+        x: hit.point.x + n.x * (radius + 0.015),
+        y: hit.point.y + n.y * (radius + 0.015),
+        z: hit.point.z + n.z * (radius + 0.015),
+      },
+      rotation,
+    };
+    return { pose, error: this.physics?.checkPlacement(typeId, pose) };
+  }
+
   neutral(): void {
     if (!this.input || this.state !== 'playing' || this.stalled) return;
     Object.assign(this.input.data, NEUTRAL_INPUT);
@@ -758,6 +901,10 @@ export class GameSession {
   private cleanup(preserveRecovery = false): void {
     this.clearPendingRespawn();
     this.clearPendingReaction();
+    this.inventory = { slots: [] };
+    this.pendingItem = undefined;
+    this.persistencePaused = false;
+    this.onInventoryChange?.();
     this.respawnAvailableAt = 0;
     this.reactionAvailableAt = 0;
     if (!preserveRecovery) this.stopRecoveryCheck();
@@ -803,8 +950,10 @@ export class GameSession {
       warmingUp:
         this.state === 'playing' && (this.frameWarmupMs < 60_000 || this.frames.length === 0),
       lastCorrection: { sequence: this.correctionCount, magnitude: this.corrections.at(-1) ?? 0 },
-      renderedCratePosition:
-        room?.state?.crate && this.predictor ? this.remotePose(room.state.crate) : null,
+      renderedItemPosition:
+        room?.state?.items?.size && this.predictor
+          ? this.remotePose(room.state.items.values().next().value!)
+          : null,
       correctionP95: percentile(this.corrections, 0.95),
       correctionMax: Math.max(0, ...this.corrections),
       correctionCount: this.correctionCount,
@@ -818,7 +967,9 @@ export class GameSession {
       simulationConfigHash: this.info?.simulationConfigHash,
       authoritative: self ? toPlayerState(self) : null,
       predicted: self && this.simulation ? this.physics?.getState() : null,
-      crate: room?.state?.crate ? toEntityState(room.state.crate) : null,
+      items: room?.state?.items ? Array.from(room.state.items.values(), toItemState) : [],
+      inventory: this.inventory,
+      storagePaused: this.persistencePaused,
       entities: room?.state?.players ? Array.from(room.state.players.values(), toPlayerState) : [],
     };
   }

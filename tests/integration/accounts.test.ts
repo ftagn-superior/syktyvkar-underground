@@ -1,8 +1,8 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { randomBytes } from 'node:crypto';
-import { createGameServer } from '../../apps/server/src/index.js';
-import { migrateAccounts } from '../../apps/server/src/accounts/migrations.js';
+import { createGameServer } from '../helpers/game-server.js';
+import { migrateDatabase } from '../../apps/server/src/migrations.js';
 import {
   PROTOCOL_VERSION,
   type AccountResponse,
@@ -55,6 +55,7 @@ describe.skipIf(!databaseUrl)(
       room.onMessage('problem', () => {});
       room.onMessage('resync', () => {});
       room.onMessage('actionResult', () => {});
+      room.onMessage('inventory', () => {});
       rooms.add(room);
       if (ready) {
         room.send('clientReady');
@@ -73,7 +74,7 @@ describe.skipIf(!databaseUrl)(
     });
 
     it('migrates repeatedly and registers one identity under concurrent first logins', async () => {
-      await migrateAccounts(fixture.pool);
+      await migrateDatabase(fixture.pool);
       const identities = await Promise.all(
         Array.from({ length: 6 }, () =>
           fixture.store.login(
@@ -370,11 +371,11 @@ describe.skipIf(!databaseUrl)(
       }
     });
 
-    it('returns 503 without acknowledging a save when database connections are unavailable, while physics continues', async () => {
+    it('returns 503 without acknowledging a save when account pool is exhausted while the world writer remains available', async () => {
       const { cookie, state } = await login('database-unavailable');
       const room = await join(cookie);
       const tick = app.room.state.serverTick;
-      const held = await Promise.all(Array.from({ length: 5 }, () => fixture.pool.connect()));
+      const held = await Promise.all(Array.from({ length: 4 }, () => fixture.pool.connect()));
       try {
         const [save, readiness] = await Promise.all([
           fetch(app.url + '/api/me/profile', {

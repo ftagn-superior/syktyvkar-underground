@@ -1,4 +1,11 @@
-import { NEUTRAL_INPUT, type MoveInput, type Vec3, type WorldDefinition } from '@su/contracts';
+import {
+  NEUTRAL_INPUT,
+  type ItemState,
+  type ItemPose,
+  type MoveInput,
+  type Vec3,
+  type WorldDefinition,
+} from '@su/contracts';
 import { createPhysicsWorld, type PhysicsWorld, type WasmBinary } from './physics-world.js';
 export class AuthoritativeWorld {
   constructor(private readonly world: PhysicsWorld) {}
@@ -22,6 +29,28 @@ export class AuthoritativeWorld {
   }
   getSnapshot() {
     return this.world.snapshot();
+  }
+  replaceItems(items: ItemState[]) {
+    this.world.replaceItems(items);
+  }
+  reconcileItems(items: ItemState[]) {
+    const current = new Map(this.world.snapshot().items.map((i) => [i.entityId, i]));
+    const ids = new Set(items.map((i) => i.entityId));
+    for (const id of current.keys()) if (!ids.has(id)) this.world.removeItem(id);
+    for (const item of items)
+      if (current.get(item.entityId)?.placementVersion !== item.placementVersion) {
+        this.world.removeItem(item.entityId);
+        this.world.addItem(item);
+      }
+  }
+  checkPickup(playerId: string, itemId: string) {
+    const item = this.world.objects.get(itemId);
+    return item?.item
+      ? this.world.canReach(playerId, item.node.position, itemId)
+      : ('ITEM_UNAVAILABLE' as const);
+  }
+  checkPlacement(typeId: string, pose: ItemPose, playerId?: string) {
+    return this.world.checkPlacement(typeId, pose, playerId);
   }
   respawnPlayer(id: string): boolean {
     const character = this.world.characters.get(id);

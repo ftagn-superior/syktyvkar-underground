@@ -10,7 +10,7 @@ import { triangulate, clipRing, type Point2 } from '../../tools/world-build/src/
 import { generateFootprint, generateGround } from '../../tools/world-build/src/city.js';
 import { generateKit } from '../../tools/world-build/src/kit.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
-import { createGameServer } from '../../apps/server/src/index.js';
+import { createGameServer } from '../helpers/game-server.js';
 import { readWorldDirectory } from '../../apps/server/src/world-bundle.js';
 
 const area = (points: Point2[], triangles: number[]) => {
@@ -386,6 +386,7 @@ describe('мир ring-block', () => {
       entityId: 'ground',
       assetId: 'ring-block-ground',
     });
+    if (!process.env.SU_TEST_DATABASE_URL) return;
     const app = await createGameServer({ port: 0, worldDirectory: release });
     try {
       const info = await fetch(app.url + '/api/world').then((r) => r.json());
@@ -403,6 +404,7 @@ describe('мир ring-block', () => {
     const worldPath = join(source, 'world.json');
     const world = JSON.parse(await readFile(worldPath, 'utf8'));
     world.assetCatalog = join(process.cwd(), 'content/buildings/ring-block/catalog.json');
+    world.itemCatalog = join(process.cwd(), 'content/items/catalog.json');
     world.landmarks[0].name = 'Кольцо Коммунистической';
     await writeFile(worldPath, JSON.stringify(world));
     const renamed = await buildWorld(worldPath, join(temporary, 'renamed'));

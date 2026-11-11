@@ -1,3 +1,4 @@
+import type { Pool } from 'pg';
 import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
 import { Server, matchMaker } from '@colyseus/core';
@@ -7,11 +8,13 @@ import { WorldRoom } from './world-room.js';
 import { readWorldDirectory } from './world-bundle.js';
 import { AccountHttp } from './accounts/http.js';
 import { AccountStore } from './accounts/store.js';
-import { checkAccountSchema } from './accounts/migrations.js';
-import type { AccountConfig } from './config.js';
+import { checkDatabaseSchema } from './migrations.js';
+import { readDatabaseUrl, type AccountConfig } from './config.js';
+import { createDatabasePool } from './database.js';
 import type { LoginProvider } from './accounts/telegram.js';
 
 export interface GameServerOptions {
+  pool?: Pool;
   port?: number;
   host?: string;
   worldDirectory?: string;
@@ -26,7 +29,15 @@ export async function createGameServer(options: GameServerOptions = {}) {
   const { manifest, definition } = await readWorldDirectory(worldDirectory);
   // worldId проверен по шаблону [a-z0-9-] и безопасен как сегмент URL.
   const worldPath = `/worlds/${manifest.worldId}`;
-  if (options.accounts) await checkAccountSchema(options.accounts.store.pool);
+  const ownedPool =
+    !options.pool && !options.accounts ? createDatabasePool(readDatabaseUrl()) : undefined;
+  const pool = options.pool ?? options.accounts?.store.pool ?? ownedPool!;
+  try {
+    await checkDatabaseSchema(pool);
+  } catch (error) {
+    await ownedPool?.end();
+    throw error;
+  }
   let room: WorldRoom | undefined;
   const accounts = options.accounts
     ? new AccountHttp(
@@ -66,10 +77,10 @@ export async function createGameServer(options: GameServerOptions = {}) {
         });
       app.get('/health/live', (_req, res) => res.json({ ok: true }));
       app.get('/health/ready', async (_req, res) => {
-        let available = ready;
-        if (available && accounts) {
+        let available = ready && !!room?.isReady();
+        if (available) {
           try {
-            await accounts.store.pool.query('SELECT 1');
+            await pool.query('SELECT 1');
           } catch {
             available = false;
           }
@@ -78,7 +89,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
       });
       app.get('/api/world', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
-        if (!ready || !room) {
+        if (!ready || !room?.isReady()) {
           res.status(503).json({ code: 'WORLD_NOT_READY' });
           return;
         }
@@ -96,7 +107,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
       });
       app.get('/api/diagnostics', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
-        if (!ready || !room) {
+        if (!ready || !room?.isReady()) {
           res.status(503).json({ code: 'WORLD_NOT_READY' });
           return;
         }
@@ -151,6 +162,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
   server.define('world', WorldRoom, {
     definition,
     manifest,
+    pool,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
     accounts,
@@ -170,6 +182,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
   } catch (error) {
     ready = false;
     await server.gracefullyShutdown(false);
+    await ownedPool?.end();
     throw error;
   }
   const address = http.address();
@@ -182,17 +195,25 @@ export async function createGameServer(options: GameServerOptions = {}) {
     url: `http://${options.host ?? '127.0.0.1'}:${address.port}`,
     close() {
       ready = false;
-      return (closing ??= server.gracefullyShutdown(false).then(
-        () =>
-          new Promise<void>((done) => {
-            if (!http.listening) {
-              done();
-              return;
-            }
-            http.close(() => done());
-            http.closeAllConnections();
-          }),
-      ));
+      return (closing ??= (async () => {
+        let saveError: unknown;
+        try {
+          await room!.shutdownWorld();
+        } catch (error) {
+          saveError = error;
+        }
+        await server.gracefullyShutdown(false);
+        await new Promise<void>((done) => {
+          if (!http.listening) {
+            done();
+            return;
+          }
+          http.close(() => done());
+          http.closeAllConnections();
+        });
+        await ownedPool?.end();
+        if (saveError) throw saveError;
+      })());
     },
   };
 }

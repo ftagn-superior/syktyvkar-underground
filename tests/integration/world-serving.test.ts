@@ -3,7 +3,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildWorld } from '../../tools/world-build/src/index.js';
-import { createGameServer } from '../../apps/server/src/index.js';
+import { createGameServer } from '../helpers/game-server.js';
 import { readWorldDirectory } from '../../apps/server/src/world-bundle.js';
 
 let temporary: string;
@@ -17,17 +17,17 @@ afterAll(async () => {
   await rm(temporary, { recursive: true, force: true });
 });
 
-it('serves only release-listed assets and initializes physics from the same release', async () => {
+it.skipIf(!process.env.SU_TEST_DATABASE_URL)('serves verified world assets', async () => {
   const app = await createGameServer({ port: 0, worldDirectory: bundle });
   try {
     const info = await fetch(app.url + '/api/world').then((r) => r.json());
     const manifest = await fetch(app.url + info.manifestUrl).then((r) => r.json());
     const { definition } = await readWorldDirectory(bundle);
-    expect(manifest.formatVersion).toBe(2);
+    expect(manifest.formatVersion).toBe(3);
     expect(manifest.mapVersion).toBe(info.mapVersion);
     expect(definition.buildings).toHaveLength(2);
     expect(app.room.diagnostics().bodies).toBe(
-      definition.entities.length + definition.buildings.length,
+      definition.entities.length + definition.initialItems.length + definition.buildings.length,
     );
     for (const asset of Object.values(manifest.assets) as {
       modelFile: string;

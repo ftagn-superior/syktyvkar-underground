@@ -36,12 +36,13 @@ export function validateWorld(value: unknown): WorldDefinition {
   vector(world.simulation.gravity, 'gravity');
   const character = world.simulation.character;
   invariant(character && typeof character === 'object', 'character');
-  for (const key of ['height', 'radius', 'speed', 'mass'] as const) {
+  for (const key of ['height', 'radius', 'speed', 'sprintSpeed', 'mass'] as const) {
     invariant(
       Number.isFinite(character[key]) && character[key] > 0 && character[key] <= 1000,
       `character.${key}`,
     );
   }
+  invariant(character.sprintSpeed >= character.speed, 'sprintSpeed must be at least speed');
   invariant(character.height >= 2 * character.radius, 'capsule height');
   invariant(
     Array.isArray(world.entities) && world.entities.length > 0 && world.entities.length <= 1000,

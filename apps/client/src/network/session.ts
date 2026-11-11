@@ -535,6 +535,7 @@ export class GameSession {
       for (let i = 0; i < steps && this.input.pendingCount < MAX_INPUT_QUEUE; i++) {
         this.input.data.moveX = command.moveX;
         this.input.data.moveZ = command.moveZ;
+        this.input.data.sprint = command.sprint ?? false;
         this.input.send();
       }
     }

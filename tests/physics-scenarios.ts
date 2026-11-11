@@ -1,9 +1,32 @@
 import { createAuthoritativeWorld } from '../packages/simulation/src/authoritative-world.js';
 import { createPredictionWorld } from '../packages/simulation/src/prediction.js';
 import { buildingFixture, physicsFixture } from '../packages/simulation/src/test-fixture.js';
+import { NEUTRAL_INPUT } from '../packages/contracts/src/index.js';
 
 /** The exact same scenario runs in Node and in Chromium through Vite. */
 export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) {
+  const movement = [];
+  const movementWorld = await createAuthoritativeWorld(physicsFixture(), wasmBinary);
+  try {
+    movementWorld.addPlayer('local');
+    for (const sprint of [false, true, false]) {
+      const start = movementWorld.getSnapshot().players[0].position;
+      movementWorld.setInput('local', { moveX: -1, moveZ: -1, sprint });
+      for (let step = 0; step < 30; step++) movementWorld.step();
+      const { position, velocity } = movementWorld.getSnapshot().players[0];
+      movement.push({
+        sprint,
+        distance: Math.hypot(position.x - start.x, position.z - start.z),
+        speed: Math.hypot(velocity.x, velocity.z),
+      });
+    }
+    movementWorld.setInput('local', NEUTRAL_INPUT);
+    movementWorld.step();
+    const { velocity } = movementWorld.getSnapshot().players[0];
+    movement.push({ sprint: false, distance: 0, speed: Math.hypot(velocity.x, velocity.z) });
+  } finally {
+    movementWorld.dispose();
+  }
   const cadence = [];
   for (const fps of [30, 60, 120]) {
     const definition = physicsFixture();
@@ -30,6 +53,7 @@ export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) 
     }
   }
   const definition = physicsFixture();
+  definition.entities[1].size.z = 40;
   definition.entities.push({
     ...definition.entities[1],
     entityId: 'corner',
@@ -44,7 +68,7 @@ export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) 
     for (let batch = 0; batch < 60; batch++) {
       const snapshot = server.getSnapshot();
       prediction.reconcile(snapshot.players[0], snapshot);
-      const input = { moveX: 1, moveZ: batch < 40 ? 1 : -1 };
+      const input = { moveX: 1, moveZ: batch < 40 ? 1 : -1, sprint: true };
       server.setInput('local', input);
       for (let step = 0; step < 6; step++) {
         prediction.step(input);
@@ -74,7 +98,7 @@ export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) 
         throw new Error(`${kind}: a clear spawn was rejected`);
       if (server.addPlayer('occupied', occupiedSpawn))
         throw new Error(`${kind}: spawn inside a rotated solid was accepted`);
-      const input = { moveX: 1, moveZ: 0 };
+      const input = { moveX: 1, moveZ: 0, sprint: true };
       server.setInput('local', input);
       server.setInput('pass', { moveX: 0, moveZ: 1 });
       let maximumReplayDrift = 0;
@@ -104,5 +128,5 @@ export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) 
       prediction.dispose();
     }
   }
-  return { cadence, maximumReplayDrift, buildings };
+  return { movement, cadence, maximumReplayDrift, buildings };
 }

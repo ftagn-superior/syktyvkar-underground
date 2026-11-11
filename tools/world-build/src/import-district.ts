@@ -350,7 +350,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     simulation: {
       tickRate: 60,
       gravity: { x: 0, y: -9.81, z: 0 },
-      character: { height: 1.8, radius, speed: 4, mass: 70 },
+      character: { height: 1.8, radius, speed: 4, sprintSpeed: 14, mass: 70 },
     },
     spawnPoints: config.spawnPoints,
     entities: [

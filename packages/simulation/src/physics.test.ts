@@ -3,6 +3,7 @@ import { physicsFixture as fixture } from './test-fixture.js';
 import { createAuthoritativeWorld, loadServerWasm } from './server.js';
 import { createPredictionWorld } from './prediction.js';
 import { createPhysicsWorld } from './physics-world.js';
+import { NEUTRAL_INPUT } from '@su/contracts';
 
 describe('Havok shared world', () => {
   it('accepts structural input fields exposed through prototype accessors', async () => {
@@ -12,6 +13,9 @@ describe('Havok shared world', () => {
       }
       get moveZ() {
         return 0;
+      }
+      get sprint() {
+        return true;
       }
     }
     const definition = fixture();
@@ -25,8 +29,51 @@ describe('Havok shared world', () => {
         server.step();
         prediction.step(new Input());
       }
-      expect(server.getSnapshot().players[0].position.x).toBeGreaterThan(1.9);
-      expect(prediction.getState().position.x).toBeGreaterThan(1.9);
+      expect(server.getSnapshot().players[0].position.x).toBeGreaterThan(4);
+      expect(prediction.getState().position.x).toBeGreaterThan(4);
+    } finally {
+      server.dispose();
+      prediction.dispose();
+    }
+  });
+  it.each([
+    { moveX: -1, moveZ: 0 },
+    { moveX: -1, moveZ: -1 },
+  ])('switches between walking, sprinting and stopping with input %j', async (direction) => {
+    const definition = fixture();
+    const server = await createAuthoritativeWorld(definition);
+    const prediction = await createPredictionWorld(definition, await loadServerWasm());
+    try {
+      server.addPlayer('a');
+      const snapshot = server.getSnapshot();
+      prediction.reconcile(snapshot.players[0], snapshot);
+      for (const sprint of [false, true, false]) {
+        const input = { ...direction, sprint };
+        server.setInput('a', input);
+        const start = server.getSnapshot().players[0].position;
+        for (let i = 0; i < 30; i++) {
+          server.step();
+          prediction.step(input);
+        }
+        const actual = server.getSnapshot().players[0];
+        const expectedSpeed = sprint ? 14 : 4;
+        expect(Math.hypot(actual.velocity.x, actual.velocity.z)).toBeCloseTo(expectedSpeed, 3);
+        expect(Math.hypot(actual.position.x - start.x, actual.position.z - start.z)).toBeCloseTo(
+          expectedSpeed / 2,
+          2,
+        );
+        const predicted = prediction.getState().position;
+        expect(
+          Math.hypot(actual.position.x - predicted.x, actual.position.z - predicted.z),
+        ).toBeLessThan(0.001);
+      }
+      server.setInput('a', NEUTRAL_INPUT);
+      server.step();
+      prediction.step(NEUTRAL_INPUT);
+      expect(server.getSnapshot().players[0].velocity.x).toBeCloseTo(0, 5);
+      expect(server.getSnapshot().players[0].velocity.z).toBeCloseTo(0, 5);
+      expect(prediction.getState().velocity.x).toBeCloseTo(0, 5);
+      expect(prediction.getState().velocity.z).toBeCloseTo(0, 5);
     } finally {
       server.dispose();
       prediction.dispose();
@@ -75,13 +122,13 @@ describe('Havok shared world', () => {
       eight.dispose();
     }
   });
-  it('keeps head-on controllers separated', async () => {
+  it.each([false, true])('keeps head-on controllers separated (sprint: %s)', async (sprint) => {
     const world = await createAuthoritativeWorld(fixture());
     try {
       world.addPlayer('a', { x: -2, y: 0, z: 0 });
       world.addPlayer('b', { x: 2, y: 0, z: 0 });
-      world.setInput('a', { moveX: 1, moveZ: 0 });
-      world.setInput('b', { moveX: -1, moveZ: 0 });
+      world.setInput('a', { moveX: 1, moveZ: 0, sprint });
+      world.setInput('b', { moveX: -1, moveZ: 0, sprint });
       for (let i = 0; i < 240; i++) {
         world.step();
         if (i >= 120) {
@@ -97,20 +144,27 @@ describe('Havok shared world', () => {
       world.dispose();
     }
   });
-  it('pushes the real dynamic crate and refuses occupied spawn positions', async () => {
-    const world = await createAuthoritativeWorld(fixture());
-    try {
-      expect(world.addPlayer('a', { x: 0, y: 0, z: 3 })).toBeDefined();
-      expect(world.addPlayer('b', { x: 0, y: 0, z: 3 })).toBeUndefined();
-      world.setInput('a', { moveX: 0, moveZ: 1 });
-      for (let i = 0; i < 120; i++) world.step();
-      expect(world.getSnapshot().crate.position.z).toBeGreaterThan(7);
-      expect(world.respawnPlayer('a')).toBe(true);
-      expect(world.getSnapshot().players[0].revision).toBe(1);
-    } finally {
-      world.dispose();
-    }
-  });
+  it.each([false, true])(
+    'pushes the real dynamic crate and refuses occupied spawns (sprint: %s)',
+    async (sprint) => {
+      const world = await createAuthoritativeWorld(fixture());
+      try {
+        expect(world.addPlayer('a', { x: 0, y: 0, z: 3 })).toBeDefined();
+        expect(world.addPlayer('b', { x: 0, y: 0, z: 3 })).toBeUndefined();
+        world.setInput('a', { moveX: 0, moveZ: 1, sprint });
+        // Sample sprint contact before the fast crate can leave the test world and reset.
+        for (let i = 0; i < (sprint ? 60 : 120); i++) world.step();
+        expect(world.getSnapshot().crate.position.z).toBeGreaterThan(7);
+        expect(world.respawnPlayer('a')).toBe(true);
+        expect(world.getSnapshot().players[0].revision).toBe(1);
+        world.step();
+        expect(world.getSnapshot().players[0].velocity.x).toBeCloseTo(0, 5);
+        expect(world.getSnapshot().players[0].velocity.z).toBeCloseTo(0, 5);
+      } finally {
+        world.dispose();
+      }
+    },
+  );
   it.each([false, true])(
     'returns a lost crate only when its starting position is free (occupied: %s)',
     async (occupied) => {
@@ -144,66 +198,75 @@ describe('Havok shared world', () => {
       }
     },
   );
-  it('restores and replays a controller at a wall without accumulating drift', async () => {
-    const definition = fixture();
-    const server = await createAuthoritativeWorld(definition);
-    const prediction = await createPredictionWorld(definition, await loadServerWasm());
-    try {
-      server.addPlayer('a');
-      const input = { moveX: 1, moveZ: 0 };
-      server.setInput('a', input);
-      let maximumDrift = 0;
-      for (let batch = 0; batch < 60; batch++) {
-        const snapshot = server.getSnapshot();
-        prediction.reconcile(snapshot.players[0], snapshot);
-        for (let step = 0; step < 6; step++) {
-          prediction.step(input);
-          server.step();
-        }
-        const a = server.getSnapshot().players[0].position;
-        const b = prediction.getState().position;
-        maximumDrift = Math.max(maximumDrift, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
-      }
-      expect(maximumDrift).toBeLessThan(0.05);
-    } finally {
-      server.dispose();
-      prediction.dispose();
-    }
-  });
-  it('replays diagonal movement into an inside corner with bounded drift', async () => {
-    const definition = fixture();
-    definition.entities.push({
-      ...definition.entities[1],
-      entityId: 'corner',
-      position: { x: 0, y: 1.5, z: 3 },
-      size: { x: 10, y: 3, z: 1 },
-    });
-    const server = await createAuthoritativeWorld(definition);
-    const prediction = await createPredictionWorld(definition, await loadServerWasm());
-    try {
-      server.addPlayer('a');
-      let maximumDrift = 0;
-      for (let batch = 0; batch < 60; batch++) {
-        const snapshot = server.getSnapshot();
-        prediction.reconcile(snapshot.players[0], snapshot);
-        const input = { moveX: 1, moveZ: batch < 40 ? 1 : -1 };
+  it.each([false, true])(
+    'restores and replays at a wall without accumulating drift (sprint: %s)',
+    async (sprint) => {
+      const definition = fixture();
+      const server = await createAuthoritativeWorld(definition);
+      const prediction = await createPredictionWorld(definition, await loadServerWasm());
+      try {
+        server.addPlayer('a');
+        const input = { moveX: 1, moveZ: 0, sprint };
         server.setInput('a', input);
-        for (let step = 0; step < 6; step++) {
-          prediction.step(input);
-          server.step();
+        let maximumDrift = 0;
+        for (let batch = 0; batch < 60; batch++) {
+          const snapshot = server.getSnapshot();
+          prediction.reconcile(snapshot.players[0], snapshot);
+          for (let step = 0; step < 6; step++) {
+            prediction.step(input);
+            server.step();
+          }
+          const a = server.getSnapshot().players[0].position;
+          const b = prediction.getState().position;
+          maximumDrift = Math.max(maximumDrift, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
         }
-        const a = server.getSnapshot().players[0].position;
-        const b = prediction.getState().position;
-        maximumDrift = Math.max(maximumDrift, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
-        expect(a.x).toBeLessThan(4.2);
-        expect(a.z).toBeLessThan(2.2);
+        expect(maximumDrift).toBeLessThan(0.05);
+        expect(server.getSnapshot().players[0].position.x).toBeGreaterThan(4);
+        expect(server.getSnapshot().players[0].position.x).toBeLessThan(4.2);
+      } finally {
+        server.dispose();
+        prediction.dispose();
       }
-      expect(maximumDrift).toBeLessThan(0.05);
-    } finally {
-      server.dispose();
-      prediction.dispose();
-    }
-  });
+    },
+  );
+  it.each([false, true])(
+    'replays diagonal movement into an inside corner (sprint: %s)',
+    async (sprint) => {
+      const definition = fixture();
+      definition.entities[1].size.z = 40;
+      definition.entities.push({
+        ...definition.entities[1],
+        entityId: 'corner',
+        position: { x: 0, y: 1.5, z: 3 },
+        size: { x: 10, y: 3, z: 1 },
+      });
+      const server = await createAuthoritativeWorld(definition);
+      const prediction = await createPredictionWorld(definition, await loadServerWasm());
+      try {
+        server.addPlayer('a');
+        let maximumDrift = 0;
+        for (let batch = 0; batch < 60; batch++) {
+          const snapshot = server.getSnapshot();
+          prediction.reconcile(snapshot.players[0], snapshot);
+          const input = { moveX: 1, moveZ: batch < 40 ? 1 : -1, sprint };
+          server.setInput('a', input);
+          for (let step = 0; step < 6; step++) {
+            prediction.step(input);
+            server.step();
+          }
+          const a = server.getSnapshot().players[0].position;
+          const b = prediction.getState().position;
+          maximumDrift = Math.max(maximumDrift, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
+          expect(a.x).toBeLessThan(4.2);
+          expect(a.z).toBeLessThan(2.2);
+        }
+        expect(maximumDrift).toBeLessThan(0.05);
+      } finally {
+        server.dispose();
+        prediction.dispose();
+      }
+    },
+  );
   it('produces the same simulation when the outer render cadence is 30, 60 or 120 Hz', async () => {
     const results = [];
     for (const fps of [30, 60, 120]) {

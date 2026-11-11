@@ -315,6 +315,7 @@ export function simulationProjection(world: WorldDefinition) {
         height: character.height,
         radius: character.radius,
         speed: character.speed,
+        sprintSpeed: character.sprintSpeed,
         mass: character.mass,
       },
     },

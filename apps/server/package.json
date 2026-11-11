@@ -7,11 +7,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@colyseus/core": "0.18.28",
+    "@colyseus/ws-transport": "0.18.5",
     "@su/contracts": "workspace:*",
     "@su/protocol": "workspace:*",
     "@su/simulation": "workspace:*",
-    "@colyseus/core": "0.18.28",
-    "@colyseus/ws-transport": "0.18.5",
-    "express": "5.3.0"
+    "express": "5.3.0",
+    "openid-client": "6.8.9",
+    "pg": "8.23.1"
   }
 }

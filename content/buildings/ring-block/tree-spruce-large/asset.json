@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "assetId": "tree-spruce-large",
+  "source": {
+    "kind": "tree",
+    "file": "source.json"
+  }
+}

@@ -44,7 +44,7 @@ import type { DisplayEntity } from '../rendering/world-view';
 export type ConnectionState =
   'loading' | 'ready' | 'connecting' | 'playing' | 'reconnecting' | 'error';
 type Pose = { x: number; y: number; z: number };
-type StoredSession = { token: string; epoch: string; actionId: number };
+type StoredSession = { token: string; epoch: string; actionId: number; accountId?: string };
 const storageKey = 'su:session:v1';
 const fields = ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'] as const;
 const messages: Record<string, string> = {
@@ -57,6 +57,11 @@ const messages: Record<string, string> = {
   STALE_WORLD: 'Мир был перезапущен. Войдите снова.',
   INVALID_INPUT: 'Сервер отклонил команду. Состояние восстановлено.',
   ALREADY_PROCESSED: 'Этот запрос уже обработан.',
+  AUTH_REQUIRED: 'Авторизация истекла. Обновите страницу и войдите через Telegram снова.',
+  ACCOUNT_CHANGED: 'Аккаунт изменился в другой вкладке. Обновите страницу перед входом.',
+  ACCOUNT_IN_USE:
+    'Этот аккаунт уже находится в игре. Покиньте мир в другой вкладке или дождитесь завершения переподключения.',
+  ACCOUNTS_UNAVAILABLE: 'Хранилище аккаунтов временно недоступно. Повторите вход позже.',
 };
 export function readableError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
@@ -96,6 +101,7 @@ function percentile(values: number[], percentile: number): number {
 }
 
 export class GameSession {
+  accountId?: string;
   state: ConnectionState = 'loading';
   definition!: WorldDefinition;
   manifest!: WorldManifest;
@@ -218,6 +224,10 @@ export class GameSession {
   async restore(): Promise<void> {
     const stored = readStored();
     if (!stored) return;
+    if (stored.accountId !== this.accountId) {
+      writeStored();
+      return;
+    }
     if (stored.epoch !== this.info.worldEpoch) {
       writeStored();
       this.onNotice('Мир был перезапущен. Войдите, чтобы начать заново.');
@@ -253,6 +263,8 @@ export class GameSession {
               protocolVersion: PROTOCOL_VERSION,
               mapVersion: info.mapVersion,
               simulationConfigHash: info.simulationConfigHash,
+              accountMode: this.accountId ? 'account' : 'guest',
+              expectedAccountId: this.accountId,
             },
             WorldState,
           );
@@ -563,6 +575,7 @@ export class GameSession {
       for (let i = 0; i < steps && this.input.pendingCount < MAX_INPUT_QUEUE; i++) {
         this.input.data.moveX = command.moveX;
         this.input.data.moveZ = command.moveZ;
+        this.input.data.sprint = command.sprint ?? false;
         this.input.send();
       }
     }
@@ -739,6 +752,7 @@ export class GameSession {
         token: this.room.reconnectionToken,
         epoch: this.info.worldEpoch,
         actionId: this.actionId,
+        accountId: this.accountId,
       });
   }
   private cleanup(preserveRecovery = false): void {

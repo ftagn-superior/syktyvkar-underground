@@ -6,7 +6,10 @@ import { REACTIONS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
 
 // Run after build: the two real browsers share an isolated, freshly created world.
-const app = await createGameServer({ port: 0 });
+const app = await createGameServer({
+  port: 0,
+  worldDirectory: process.env.SU_TEST_WORLD_DIRECTORY,
+});
 const browser = await launchTestBrowser();
 const errors: string[] = [];
 const checks: string[] = [];
@@ -29,9 +32,12 @@ try {
   const [sender, observer] = await Promise.all(contexts.map((context) => context.newPage()));
   for (const page of [sender, observer]) {
     page.setDefaultTimeout(10_000);
-    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('pageerror', (error) => {
+      errors.push(error.message);
+      console.error('Browser error:', error.message);
+    });
     await page.goto(`${app.url}/?diagnostics=1`);
-    await page.locator('#join:not([disabled])').waitFor();
+    await page.locator('#join:not([disabled])').waitFor({ timeout: 45_000 });
     await page.locator('#join').click();
     await playing(page);
   }

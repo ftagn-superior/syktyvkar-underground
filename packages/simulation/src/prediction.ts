@@ -16,7 +16,11 @@ export class PredictionWorld {
   }
   step(input: MoveInput, dt = 1 / this.world.definition.simulation.tickRate): PlayerState {
     if (!this.ownId) throw new Error('Prediction needs an authoritative state before stepping');
-    this.world.characters.get(this.ownId)!.input = { moveX: input.moveX, moveZ: input.moveZ };
+    this.world.characters.get(this.ownId)!.input = {
+      moveX: input.moveX,
+      moveZ: input.moveZ,
+      sprint: input.sprint ?? false,
+    };
     this.world.advance(dt);
     return this.getState();
   }

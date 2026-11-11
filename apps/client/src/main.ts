@@ -6,6 +6,7 @@ import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
 import { ReactionMenu } from './ui/reactions';
+import { AccountPanel } from './ui/account-panel';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -58,7 +59,8 @@ function updateState(state: ConnectionState, message?: string): void {
   const playing = state === 'playing';
   const reconnecting = state === 'reconnecting';
   welcome.hidden = graphicsLost || playing || (reconnecting && !!session.room);
-  join.disabled = graphicsLost || state === 'loading' || state === 'connecting' || reconnecting;
+  join.disabled =
+    graphicsLost || accounts.busy || state === 'loading' || state === 'connecting' || reconnecting;
   joinLabel.textContent =
     state === 'loading'
       ? 'Загружаем мир…'
@@ -72,7 +74,9 @@ function updateState(state: ConnectionState, message?: string): void {
               : 'Повторить загрузку'
             : session.reloadRequired
               ? 'Перезагрузить страницу'
-              : 'Войти';
+              : accounts.enabled && !accounts.account
+                ? 'Войти гостем'
+                : 'Войти';
   status.textContent = {
     loading: 'Загрузка',
     ready: session.reloadRequired
@@ -100,6 +104,14 @@ function updateState(state: ConnectionState, message?: string): void {
   reactions?.update(session.reactionStatus());
 }
 const session = new GameSession(updateState, showNotice);
+const accounts = new AccountPanel(
+  () => {
+    session.accountId = accounts.account?.accountId;
+    updateState(session.state);
+  },
+  () => session.leave(),
+);
+const accountPreparation = accounts.load();
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
   view?.rotateCamera(direction);
@@ -235,6 +247,7 @@ async function start(): Promise<void> {
       }
     });
     loaded = true;
+    await accountPreparation;
     session.markPrepared();
     await session.restore();
   } catch (error) {

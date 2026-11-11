@@ -1,0 +1,198 @@
+{
+  "formatVersion": 2,
+  "worldId": "ring-block",
+  "bounds": {
+    "min": {
+      "x": -269,
+      "y": -5,
+      "z": -737
+    },
+    "max": {
+      "x": 211,
+      "y": 50,
+      "z": 131
+    }
+  },
+  "simulation": {
+    "tickRate": 60,
+    "gravity": {
+      "x": 0,
+      "y": -9.81,
+      "z": 0
+    },
+    "character": {
+      "height": 1.8,
+      "radius": 0.35,
+      "speed": 4,
+      "sprintSpeed": 14,
+      "mass": 70
+    }
+  },
+  "spawnPoints": [
+    {
+      "x": -3,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "x": 5,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "x": -7,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": 7,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 17
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 17
+    }
+  ],
+  "entities": [
+    {
+      "entityId": "boundary-north",
+      "kind": "obstacle",
+      "position": {
+        "x": -29,
+        "y": 0.75,
+        "z": -736.75
+      },
+      "size": {
+        "x": 480,
+        "y": 1.5,
+        "z": 0.5
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "boundary-south",
+      "kind": "obstacle",
+      "position": {
+        "x": -29,
+        "y": 0.75,
+        "z": 130.75
+      },
+      "size": {
+        "x": 480,
+        "y": 1.5,
+        "z": 0.5
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "boundary-west",
+      "kind": "obstacle",
+      "position": {
+        "x": -268.75,
+        "y": 0.75,
+        "z": -303
+      },
+      "size": {
+        "x": 0.5,
+        "y": 1.5,
+        "z": 868
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "boundary-east",
+      "kind": "obstacle",
+      "position": {
+        "x": 210.75,
+        "y": 0.75,
+        "z": -303
+      },
+      "size": {
+        "x": 0.5,
+        "y": 1.5,
+        "z": 868
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "crate-01",
+      "kind": "crate",
+      "position": {
+        "x": 9.5,
+        "y": 0.52,
+        "z": 9
+      },
+      "size": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "mass": 10,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#e8ae64"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "ring",
+      "name": "Кольцо · «Трудовая слава»",
+      "position": {
+        "x": 0,
+        "y": 29,
+        "z": 0
+      }
+    },
+    {
+      "id": "school-1",
+      "name": "Школа №1",
+      "position": {
+        "x": 67.57,
+        "y": 13.1,
+        "z": -451.66
+      }
+    },
+    {
+      "id": "banya-4",
+      "name": "Баня №4",
+      "position": {
+        "x": -168.27,
+        "y": 13.1,
+        "z": -545.6
+      }
+    }
+  ],
+  "cells": [
+    "cells/0_0.json"
+  ],
+  "assetCatalog": "../../buildings/ring-block/catalog.json"
+}

@@ -115,6 +115,29 @@ describe('one authoritative world over actual WebSocket connections', () => {
     expect(Math.hypot(player.x - stopped.x, player.z - stopped.z)).toBeLessThan(0.03);
   });
 
+  it('replicates sprint changes without changing axes and stops stale sprint input', async () => {
+    const room = await join();
+    const input = room.input({ type: MoveInputSchema, mode: 'reliable' });
+    const player = room.state.players.get(room.sessionId)!;
+    const initialX = player.x;
+    // From the first spawn this short westward path is clear at both speeds.
+    input.data.moveX = -1;
+    for (const sprint of [false, true, false, true]) {
+      input.data.sprint = sprint;
+      for (let i = 0; i < 12; i++) {
+        input.send();
+        await sleep(1000 / 60);
+      }
+      // Check the replicated server velocity while the queue still has input.
+      expect(Math.hypot(player.vx, player.vz)).toBeCloseTo(sprint ? 14 : 4, 2);
+    }
+    expect(player.x).toBeLessThan(initialX - 3);
+    await until(() => Math.hypot(player.vx, player.vz) < 0.01);
+    const stopped = { x: player.x, z: player.z };
+    await sleep(150);
+    expect(Math.hypot(player.x - stopped.x, player.z - stopped.z)).toBeLessThan(0.03);
+  });
+
   it('makes respawn requests idempotent, rate limited, and epoch scoped', async () => {
     const room = await join();
     const results: ActionResult[] = [];

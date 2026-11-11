@@ -1,0 +1,2611 @@
+{
+  "formatVersion": 1,
+  "cellId": "0_0",
+  "buildings": [
+    {
+      "entityId": "ground",
+      "assetId": "ring-block-ground",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "osm-relation-13601216",
+      "assetId": "osm-relation-13601216",
+      "position": {
+        "x": -148.88,
+        "y": 0,
+        "z": -157.92
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "relation",
+        "id": "13601216"
+      }
+    },
+    {
+      "entityId": "osm-way-109234380",
+      "assetId": "osm-way-109234380",
+      "position": {
+        "x": 47.65,
+        "y": 0,
+        "z": -619.9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "109234380"
+      }
+    },
+    {
+      "entityId": "osm-way-109234381",
+      "assetId": "osm-way-109234381",
+      "position": {
+        "x": 132.4,
+        "y": 0,
+        "z": -635.05
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "109234381"
+      }
+    },
+    {
+      "entityId": "osm-way-109234383",
+      "assetId": "osm-way-109234383",
+      "position": {
+        "x": 101.63,
+        "y": 0,
+        "z": -568.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "109234383"
+      }
+    },
+    {
+      "entityId": "osm-way-109234384",
+      "assetId": "osm-way-109234384",
+      "position": {
+        "x": 7.65,
+        "y": 0,
+        "z": -585.47
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "109234384"
+      }
+    },
+    {
+      "entityId": "osm-way-109234385",
+      "assetId": "osm-way-109234385",
+      "position": {
+        "x": -144.5,
+        "y": 0,
+        "z": -587.5
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "109234385"
+      }
+    },
+    {
+      "entityId": "osm-way-109234386",
+      "assetId": "osm-way-109234386",
+      "position": {
+        "x": -56.2,
+        "y": 0,
+        "z": -601.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "109234386"
+      }
+    },
+    {
+      "entityId": "osm-way-110770955",
+      "assetId": "osm-way-110770955",
+      "position": {
+        "x": 17.13,
+        "y": 0,
+        "z": -521.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110770955"
+      }
+    },
+    {
+      "entityId": "osm-way-110777684",
+      "assetId": "osm-way-110777684",
+      "position": {
+        "x": -42.97,
+        "y": 0,
+        "z": -674.19
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777684"
+      }
+    },
+    {
+      "entityId": "osm-way-110777686",
+      "assetId": "osm-way-110777686",
+      "position": {
+        "x": -83.4,
+        "y": 0,
+        "z": -638.93
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777686"
+      }
+    },
+    {
+      "entityId": "osm-way-110777687",
+      "assetId": "osm-way-110777687",
+      "position": {
+        "x": -212.65,
+        "y": 0,
+        "z": -625.02
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777687"
+      }
+    },
+    {
+      "entityId": "osm-way-110777688",
+      "assetId": "osm-way-110777688",
+      "position": {
+        "x": 7.9,
+        "y": 0,
+        "z": -652.95
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777688"
+      }
+    },
+    {
+      "entityId": "osm-way-110777689",
+      "assetId": "osm-way-110777689",
+      "position": {
+        "x": 105.78,
+        "y": 0,
+        "z": -669.17
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777689"
+      }
+    },
+    {
+      "entityId": "osm-way-110777690",
+      "assetId": "osm-way-110777690",
+      "position": {
+        "x": 146.45,
+        "y": 0,
+        "z": -676.35
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777690"
+      }
+    },
+    {
+      "entityId": "osm-way-110777691",
+      "assetId": "osm-way-110777691",
+      "position": {
+        "x": -124.62,
+        "y": 0,
+        "z": -646.33
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777691"
+      }
+    },
+    {
+      "entityId": "osm-way-110777693",
+      "assetId": "osm-way-110777693",
+      "position": {
+        "x": 97.6,
+        "y": 0,
+        "z": -703.12
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777693"
+      }
+    },
+    {
+      "entityId": "osm-way-110777694",
+      "assetId": "osm-way-110777694",
+      "position": {
+        "x": 58.15,
+        "y": 0,
+        "z": -663.25
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777694"
+      }
+    },
+    {
+      "entityId": "osm-way-110777695",
+      "assetId": "osm-way-110777695",
+      "position": {
+        "x": -166.62,
+        "y": 0,
+        "z": -624.15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110777695"
+      }
+    },
+    {
+      "entityId": "osm-way-110778592",
+      "assetId": "osm-way-110778592",
+      "position": {
+        "x": -220.44,
+        "y": 0,
+        "z": -673.22
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110778592"
+      }
+    },
+    {
+      "entityId": "osm-way-110778594",
+      "assetId": "osm-way-110778594",
+      "position": {
+        "x": -138.17,
+        "y": 0,
+        "z": -710.63
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110778594"
+      }
+    },
+    {
+      "entityId": "osm-way-110778595",
+      "assetId": "osm-way-110778595",
+      "position": {
+        "x": -175.7,
+        "y": 0,
+        "z": -705.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110778595"
+      }
+    },
+    {
+      "entityId": "osm-way-110778598",
+      "assetId": "osm-way-110778598",
+      "position": {
+        "x": -175.38,
+        "y": 0,
+        "z": -672.18
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "110778598"
+      }
+    },
+    {
+      "entityId": "osm-way-111493596",
+      "assetId": "osm-way-111493596",
+      "position": {
+        "x": -168.27,
+        "y": 0,
+        "z": -545.6
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "111493596"
+      }
+    },
+    {
+      "entityId": "osm-way-111536850",
+      "assetId": "osm-way-111536850",
+      "position": {
+        "x": -66.35,
+        "y": 0,
+        "z": -447.1
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "111536850"
+      }
+    },
+    {
+      "entityId": "osm-way-111538131",
+      "assetId": "osm-way-111538131",
+      "position": {
+        "x": 67.57,
+        "y": 0,
+        "z": -451.66
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "111538131"
+      }
+    },
+    {
+      "entityId": "osm-way-117389687",
+      "assetId": "osm-way-117389687",
+      "position": {
+        "x": 31.9,
+        "y": 0,
+        "z": -219.9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "117389687"
+      }
+    },
+    {
+      "entityId": "osm-way-117389703",
+      "assetId": "osm-way-117389703",
+      "position": {
+        "x": -40.62,
+        "y": 0,
+        "z": -221
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "117389703"
+      }
+    },
+    {
+      "entityId": "osm-way-117389706",
+      "assetId": "osm-way-117389706",
+      "position": {
+        "x": 41.43,
+        "y": 0,
+        "z": -432.55
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "117389706"
+      }
+    },
+    {
+      "entityId": "osm-way-118373015",
+      "assetId": "osm-way-118373015",
+      "position": {
+        "x": -92.1,
+        "y": 0,
+        "z": -497.95
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "118373015"
+      }
+    },
+    {
+      "entityId": "osm-way-118373017",
+      "assetId": "osm-way-118373017",
+      "position": {
+        "x": -83.67,
+        "y": 0,
+        "z": -478.13
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "118373017"
+      }
+    },
+    {
+      "entityId": "osm-way-1234256148",
+      "assetId": "osm-way-1234256148",
+      "position": {
+        "x": -89.25,
+        "y": 0,
+        "z": -670.45
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1234256148"
+      }
+    },
+    {
+      "entityId": "osm-way-1234256201",
+      "assetId": "osm-way-1234256201",
+      "position": {
+        "x": -144.3,
+        "y": 0,
+        "z": -680.15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1234256201"
+      }
+    },
+    {
+      "entityId": "osm-way-1234256334",
+      "assetId": "osm-way-1234256334",
+      "position": {
+        "x": -59,
+        "y": 0,
+        "z": -707.67
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1234256334"
+      }
+    },
+    {
+      "entityId": "osm-way-1258973447",
+      "assetId": "osm-way-1258973447",
+      "position": {
+        "x": -148.88,
+        "y": 0,
+        "z": -157.92
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1258973447"
+      }
+    },
+    {
+      "entityId": "osm-way-1277836302",
+      "assetId": "osm-way-1277836302",
+      "position": {
+        "x": 99.16,
+        "y": 0,
+        "z": -79.03
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1277836302"
+      }
+    },
+    {
+      "entityId": "osm-way-1278428879",
+      "assetId": "osm-way-1278428879",
+      "position": {
+        "x": 74.75,
+        "y": 0,
+        "z": -524.77
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1278428879"
+      }
+    },
+    {
+      "entityId": "osm-way-1291799392",
+      "assetId": "osm-way-1291799392",
+      "position": {
+        "x": -80.63,
+        "y": 0,
+        "z": -28.99
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1291799392"
+      }
+    },
+    {
+      "entityId": "osm-way-1292020496",
+      "assetId": "osm-way-1292020496",
+      "position": {
+        "x": -221.12,
+        "y": 0,
+        "z": -170.6
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292020496"
+      }
+    },
+    {
+      "entityId": "osm-way-1292020497",
+      "assetId": "osm-way-1292020497",
+      "position": {
+        "x": -233.12,
+        "y": 0,
+        "z": -165.77
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292020497"
+      }
+    },
+    {
+      "entityId": "osm-way-1292032997",
+      "assetId": "osm-way-1292032997",
+      "position": {
+        "x": -223.07,
+        "y": 0,
+        "z": -150.85
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292032997"
+      }
+    },
+    {
+      "entityId": "osm-way-1292032998",
+      "assetId": "osm-way-1292032998",
+      "position": {
+        "x": -218.45,
+        "y": 0,
+        "z": -152.5
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292032998"
+      }
+    },
+    {
+      "entityId": "osm-way-1292032999",
+      "assetId": "osm-way-1292032999",
+      "position": {
+        "x": -220.15,
+        "y": 0,
+        "z": -156.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292032999"
+      }
+    },
+    {
+      "entityId": "osm-way-1292033000",
+      "assetId": "osm-way-1292033000",
+      "position": {
+        "x": -213.2,
+        "y": 0,
+        "z": -152.45
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292033000"
+      }
+    },
+    {
+      "entityId": "osm-way-1292842070",
+      "assetId": "osm-way-1292842070",
+      "position": {
+        "x": 19.18,
+        "y": 0,
+        "z": -71.5
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1292842070"
+      }
+    },
+    {
+      "entityId": "osm-way-1303691960",
+      "assetId": "osm-way-1303691960",
+      "position": {
+        "x": -28.95,
+        "y": 0,
+        "z": 79.28
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1303691960"
+      }
+    },
+    {
+      "entityId": "osm-way-1303693231",
+      "assetId": "osm-way-1303693231",
+      "position": {
+        "x": -83.5,
+        "y": 0,
+        "z": 76.38
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1303693231"
+      }
+    },
+    {
+      "entityId": "osm-way-1317421165",
+      "assetId": "osm-way-1317421165",
+      "position": {
+        "x": 67.22,
+        "y": 0,
+        "z": 30.42
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1317421165"
+      }
+    },
+    {
+      "entityId": "osm-way-1317422735",
+      "assetId": "osm-way-1317422735",
+      "position": {
+        "x": 67.19,
+        "y": 0,
+        "z": -2.23
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1317422735"
+      }
+    },
+    {
+      "entityId": "osm-way-1317432069",
+      "assetId": "osm-way-1317432069",
+      "position": {
+        "x": 158.17,
+        "y": 0,
+        "z": 17.95
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1317432069"
+      }
+    },
+    {
+      "entityId": "osm-way-1317554464",
+      "assetId": "osm-way-1317554464",
+      "position": {
+        "x": 116.29,
+        "y": 0,
+        "z": -27.19
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1317554464"
+      }
+    },
+    {
+      "entityId": "osm-way-1317556490",
+      "assetId": "osm-way-1317556490",
+      "position": {
+        "x": 90.39,
+        "y": 0,
+        "z": 62.47
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1317556490"
+      }
+    },
+    {
+      "entityId": "osm-way-1349030676",
+      "assetId": "osm-way-1349030676",
+      "position": {
+        "x": -200.72,
+        "y": 0,
+        "z": -1.05
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1349030676"
+      }
+    },
+    {
+      "entityId": "osm-way-1349056254",
+      "assetId": "osm-way-1349056254",
+      "position": {
+        "x": -233.5,
+        "y": 0,
+        "z": -9.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1349056254"
+      }
+    },
+    {
+      "entityId": "osm-way-1532245447",
+      "assetId": "osm-way-1532245447",
+      "position": {
+        "x": -64.3,
+        "y": 0,
+        "z": -325.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1532245447"
+      }
+    },
+    {
+      "entityId": "osm-way-1532254465",
+      "assetId": "osm-way-1532254465",
+      "position": {
+        "x": -90.18,
+        "y": 0,
+        "z": -251.57
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1532254465"
+      }
+    },
+    {
+      "entityId": "osm-way-1532257419",
+      "assetId": "osm-way-1532257419",
+      "position": {
+        "x": -58.77,
+        "y": 0,
+        "z": -182.67
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "1532257419"
+      }
+    },
+    {
+      "entityId": "osm-way-413530668",
+      "assetId": "osm-way-413530668",
+      "position": {
+        "x": -53.1,
+        "y": 0,
+        "z": -552.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "413530668"
+      }
+    },
+    {
+      "entityId": "osm-way-413530670",
+      "assetId": "osm-way-413530670",
+      "position": {
+        "x": -96.2,
+        "y": 0,
+        "z": -522.25
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "413530670"
+      }
+    },
+    {
+      "entityId": "osm-way-56438149",
+      "assetId": "osm-way-56438149",
+      "position": {
+        "x": 79.85,
+        "y": 0,
+        "z": -148.55
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438149"
+      }
+    },
+    {
+      "entityId": "osm-way-56438150",
+      "assetId": "osm-way-56438150",
+      "position": {
+        "x": 122.53,
+        "y": 0,
+        "z": 55.9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438150"
+      }
+    },
+    {
+      "entityId": "osm-way-56438151",
+      "assetId": "osm-way-56438151",
+      "position": {
+        "x": 73.93,
+        "y": 0,
+        "z": 79.53
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438151"
+      }
+    },
+    {
+      "entityId": "osm-way-56438158",
+      "assetId": "osm-way-56438158",
+      "position": {
+        "x": -143.37,
+        "y": 0,
+        "z": 12.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438158"
+      }
+    },
+    {
+      "entityId": "osm-way-56438161",
+      "assetId": "osm-way-56438161",
+      "position": {
+        "x": -18.4,
+        "y": 0,
+        "z": -110.12
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438161"
+      }
+    },
+    {
+      "entityId": "osm-way-56438162",
+      "assetId": "osm-way-56438162",
+      "position": {
+        "x": 29.9,
+        "y": 0,
+        "z": -133.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438162"
+      }
+    },
+    {
+      "entityId": "osm-way-56438169",
+      "assetId": "osm-way-56438169",
+      "position": {
+        "x": 124.95,
+        "y": 0,
+        "z": -158.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "56438169"
+      }
+    },
+    {
+      "entityId": "osm-way-648612399",
+      "assetId": "osm-way-648612399",
+      "position": {
+        "x": 42.58,
+        "y": 0,
+        "z": -54.51
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "648612399"
+      }
+    },
+    {
+      "entityId": "osm-way-649278785",
+      "assetId": "osm-way-649278785",
+      "position": {
+        "x": -180.1,
+        "y": 0,
+        "z": -201.15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "649278785"
+      }
+    },
+    {
+      "entityId": "osm-way-649280473",
+      "assetId": "osm-way-649280473",
+      "position": {
+        "x": -225.93,
+        "y": 0,
+        "z": 72.48
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "649280473"
+      }
+    },
+    {
+      "entityId": "osm-way-651637284",
+      "assetId": "osm-way-651637284",
+      "position": {
+        "x": -240.6,
+        "y": 0,
+        "z": -210.15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "651637284"
+      }
+    },
+    {
+      "entityId": "osm-way-662826329",
+      "assetId": "osm-way-662826329",
+      "position": {
+        "x": -36.35,
+        "y": 0,
+        "z": -535.72
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "662826329"
+      }
+    },
+    {
+      "entityId": "osm-way-695880457",
+      "assetId": "osm-way-695880457",
+      "position": {
+        "x": -237.72,
+        "y": 0,
+        "z": -109.82
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "695880457"
+      }
+    },
+    {
+      "entityId": "osm-way-696916495",
+      "assetId": "osm-way-696916495",
+      "position": {
+        "x": 153.5,
+        "y": 0,
+        "z": -577.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "696916495"
+      }
+    },
+    {
+      "entityId": "osm-way-696916923",
+      "assetId": "osm-way-696916923",
+      "position": {
+        "x": 166.88,
+        "y": 0,
+        "z": -436.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "696916923"
+      }
+    },
+    {
+      "entityId": "osm-way-696944805",
+      "assetId": "osm-way-696944805",
+      "position": {
+        "x": 49.75,
+        "y": 0,
+        "z": -559.65
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "696944805"
+      }
+    },
+    {
+      "entityId": "osm-way-713735797",
+      "assetId": "osm-way-713735797",
+      "position": {
+        "x": -108.42,
+        "y": 0,
+        "z": -518.95
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735797"
+      }
+    },
+    {
+      "entityId": "osm-way-713735798",
+      "assetId": "osm-way-713735798",
+      "position": {
+        "x": -136.25,
+        "y": 0,
+        "z": -514.65
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735798"
+      }
+    },
+    {
+      "entityId": "osm-way-713735799",
+      "assetId": "osm-way-713735799",
+      "position": {
+        "x": -74.45,
+        "y": 0,
+        "z": -516.72
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735799"
+      }
+    },
+    {
+      "entityId": "osm-way-713735800",
+      "assetId": "osm-way-713735800",
+      "position": {
+        "x": -71.02,
+        "y": 0,
+        "z": -528.82
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735800"
+      }
+    },
+    {
+      "entityId": "osm-way-713735801",
+      "assetId": "osm-way-713735801",
+      "position": {
+        "x": -67.62,
+        "y": 0,
+        "z": -551.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735801"
+      }
+    },
+    {
+      "entityId": "osm-way-713735802",
+      "assetId": "osm-way-713735802",
+      "position": {
+        "x": -82.75,
+        "y": 0,
+        "z": -571.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735802"
+      }
+    },
+    {
+      "entityId": "osm-way-713735803",
+      "assetId": "osm-way-713735803",
+      "position": {
+        "x": -116.12,
+        "y": 0,
+        "z": -544.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735803"
+      }
+    },
+    {
+      "entityId": "osm-way-713735804",
+      "assetId": "osm-way-713735804",
+      "position": {
+        "x": -142.74,
+        "y": 0,
+        "z": -540.31
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "713735804"
+      }
+    },
+    {
+      "entityId": "osm-way-770338789",
+      "assetId": "osm-way-770338789",
+      "position": {
+        "x": -218.57,
+        "y": 0,
+        "z": 8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "770338789"
+      }
+    },
+    {
+      "entityId": "osm-way-771631574",
+      "assetId": "osm-way-771631574",
+      "position": {
+        "x": 90.7,
+        "y": 0,
+        "z": -631.37
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "771631574"
+      }
+    },
+    {
+      "entityId": "osm-way-773109149",
+      "assetId": "osm-way-773109149",
+      "position": {
+        "x": 33.95,
+        "y": 0,
+        "z": -710.57
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "773109149"
+      }
+    },
+    {
+      "entityId": "osm-way-85585732",
+      "assetId": "osm-way-85585732",
+      "position": {
+        "x": -101.9,
+        "y": 0,
+        "z": -403.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585732"
+      }
+    },
+    {
+      "entityId": "osm-way-85585733",
+      "assetId": "osm-way-85585733",
+      "position": {
+        "x": 7.15,
+        "y": 0,
+        "z": -292.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585733"
+      }
+    },
+    {
+      "entityId": "osm-way-85585744",
+      "assetId": "osm-way-85585744",
+      "position": {
+        "x": 80.05,
+        "y": 0,
+        "z": -338.6
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585744"
+      }
+    },
+    {
+      "entityId": "osm-way-85585749",
+      "assetId": "osm-way-85585749",
+      "position": {
+        "x": -5.72,
+        "y": 0,
+        "z": -450.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585749"
+      }
+    },
+    {
+      "entityId": "osm-way-85585762",
+      "assetId": "osm-way-85585762",
+      "position": {
+        "x": 25.78,
+        "y": 0,
+        "z": -384.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585762"
+      }
+    },
+    {
+      "entityId": "osm-way-85585763",
+      "assetId": "osm-way-85585763",
+      "position": {
+        "x": -115.67,
+        "y": 0,
+        "z": -301.55
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585763"
+      }
+    },
+    {
+      "entityId": "osm-way-85585785",
+      "assetId": "osm-way-85585785",
+      "position": {
+        "x": 162.8,
+        "y": 0,
+        "z": -381.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585785"
+      }
+    },
+    {
+      "entityId": "osm-way-85585795",
+      "assetId": "osm-way-85585795",
+      "position": {
+        "x": -4.7,
+        "y": 0,
+        "z": -201.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585795"
+      }
+    },
+    {
+      "entityId": "osm-way-85585809",
+      "assetId": "osm-way-85585809",
+      "position": {
+        "x": -34.62,
+        "y": 0,
+        "z": -388.35
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585809"
+      }
+    },
+    {
+      "entityId": "osm-way-85585813",
+      "assetId": "osm-way-85585813",
+      "position": {
+        "x": 81.65,
+        "y": 0,
+        "z": -291.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585813"
+      }
+    },
+    {
+      "entityId": "osm-way-85585815",
+      "assetId": "osm-way-85585815",
+      "position": {
+        "x": -17.5,
+        "y": 0,
+        "z": -352.47
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585815"
+      }
+    },
+    {
+      "entityId": "osm-way-85585817",
+      "assetId": "osm-way-85585817",
+      "position": {
+        "x": 88.05,
+        "y": 0,
+        "z": -230.98
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585817"
+      }
+    },
+    {
+      "entityId": "osm-way-85585819",
+      "assetId": "osm-way-85585819",
+      "position": {
+        "x": -151.87,
+        "y": 0,
+        "z": -378.45
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "85585819"
+      }
+    },
+    {
+      "entityId": "osm-way-89626599",
+      "assetId": "osm-way-89626599",
+      "position": {
+        "x": 7.22,
+        "y": 0,
+        "z": 75.98
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "89626599"
+      }
+    },
+    {
+      "entityId": "osm-way-92104475",
+      "assetId": "osm-way-92104475",
+      "position": {
+        "x": -224.75,
+        "y": 0,
+        "z": -280.15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104475"
+      }
+    },
+    {
+      "entityId": "osm-way-92104556",
+      "assetId": "osm-way-92104556",
+      "position": {
+        "x": -185.92,
+        "y": 0,
+        "z": -302.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104556"
+      }
+    },
+    {
+      "entityId": "osm-way-92104623",
+      "assetId": "osm-way-92104623",
+      "position": {
+        "x": -52.15,
+        "y": 0,
+        "z": -253.97
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104623"
+      }
+    },
+    {
+      "entityId": "osm-way-92104637",
+      "assetId": "osm-way-92104637",
+      "position": {
+        "x": -233.51,
+        "y": 0,
+        "z": -190.26
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104637"
+      }
+    },
+    {
+      "entityId": "osm-way-92104657",
+      "assetId": "osm-way-92104657",
+      "position": {
+        "x": -244,
+        "y": 0,
+        "z": -435.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104657"
+      }
+    },
+    {
+      "entityId": "osm-way-92104661",
+      "assetId": "osm-way-92104661",
+      "position": {
+        "x": -78.4,
+        "y": 0,
+        "z": -240.57
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104661"
+      }
+    },
+    {
+      "entityId": "osm-way-92104707",
+      "assetId": "osm-way-92104707",
+      "position": {
+        "x": -230.9,
+        "y": 0,
+        "z": -366.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104707"
+      }
+    },
+    {
+      "entityId": "osm-way-92104742",
+      "assetId": "osm-way-92104742",
+      "position": {
+        "x": -175,
+        "y": 0,
+        "z": -476.52
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "sourceRef": {
+        "provider": "osm",
+        "type": "way",
+        "id": "92104742"
+      }
+    },
+    {
+      "entityId": "monument-trudovaya-slava",
+      "assetId": "trudovaya-slava",
+      "position": {
+        "x": 1.5,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "tree-001",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": -72.8,
+        "y": 0,
+        "z": 107.6
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9928831792754963,
+        "z": 0,
+        "w": 0.11909236882261894
+      }
+    },
+    {
+      "entityId": "tree-002",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 104.7,
+        "y": 0,
+        "z": 49
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.757834614556082,
+        "z": 0,
+        "w": -0.6524467004902658
+      }
+    },
+    {
+      "entityId": "tree-003",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -125.6,
+        "y": 0,
+        "z": 16.1
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.174634268451613,
+        "z": 0,
+        "w": -0.9846333694743288
+      }
+    },
+    {
+      "entityId": "tree-004",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": -246.7,
+        "y": 0,
+        "z": -11.1
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.11159216693711026,
+        "z": 0,
+        "w": 0.9937540884334918
+      }
+    },
+    {
+      "entityId": "tree-005",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 135.1,
+        "y": 0,
+        "z": -2.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.4164550255121991,
+        "z": 0,
+        "w": 0.9091563186414279
+      }
+    },
+    {
+      "entityId": "tree-006",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -247.9,
+        "y": 0,
+        "z": -31.5
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.8308303535383179,
+        "z": 0,
+        "w": -0.5565257618829461
+      }
+    },
+    {
+      "entityId": "tree-007",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -185.6,
+        "y": 0,
+        "z": -47.9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.37299444691170747,
+        "z": 0,
+        "w": -0.9278335748252644
+      }
+    },
+    {
+      "entityId": "tree-008",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 162.6,
+        "y": 0,
+        "z": -156.1
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.22397933297810715,
+        "z": 0,
+        "w": -0.9745938940906013
+      }
+    },
+    {
+      "entityId": "tree-009",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -202.7,
+        "y": 0,
+        "z": -172.5
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.4465498111632629,
+        "z": 0,
+        "w": -0.8947587753970644
+      }
+    },
+    {
+      "entityId": "tree-010",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 144.1,
+        "y": 0,
+        "z": -215.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.7639013057372738,
+        "z": 0,
+        "w": 0.6453330884844571
+      }
+    },
+    {
+      "entityId": "tree-011",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -28.1,
+        "y": 0,
+        "z": -258.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.29441744019377075,
+        "z": 0,
+        "w": 0.9556769176399247
+      }
+    },
+    {
+      "entityId": "tree-012",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": 114.8,
+        "y": 0,
+        "z": -255.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.5096201586640708,
+        "z": 0,
+        "w": -0.8603994966776812
+      }
+    },
+    {
+      "entityId": "tree-013",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -219.6,
+        "y": 0,
+        "z": -304.1
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.8498978909341949,
+        "z": 0,
+        "w": 0.5269474119735359
+      }
+    },
+    {
+      "entityId": "tree-014",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -93.5,
+        "y": 0,
+        "z": -305.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.3934495020379056,
+        "z": 0,
+        "w": -0.9193462293097874
+      }
+    },
+    {
+      "entityId": "tree-015",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -123.1,
+        "y": 0,
+        "z": -373
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9931963178026232,
+        "z": 0,
+        "w": 0.11645202575872511
+      }
+    },
+    {
+      "entityId": "tree-016",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -235.7,
+        "y": 0,
+        "z": -390.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9981612432156348,
+        "z": 0,
+        "w": -0.06061462317146194
+      }
+    },
+    {
+      "entityId": "tree-017",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -113.6,
+        "y": 0,
+        "z": -388
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9811768406909973,
+        "z": 0,
+        "w": -0.19311138571206338
+      }
+    },
+    {
+      "entityId": "tree-018",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 122.7,
+        "y": 0,
+        "z": -388.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9588218649537216,
+        "z": 0,
+        "w": 0.28400815355666686
+      }
+    },
+    {
+      "entityId": "tree-019",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -145.6,
+        "y": 0,
+        "z": -417.9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.5855631114500394,
+        "z": 0,
+        "w": -0.8106268207436446
+      }
+    },
+    {
+      "entityId": "tree-020",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": 156.4,
+        "y": 0,
+        "z": -441.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.7654574033761053,
+        "z": 0,
+        "w": -0.6434865683265738
+      }
+    },
+    {
+      "entityId": "tree-021",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": -146.8,
+        "y": 0,
+        "z": -462.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.27900345543588295,
+        "z": 0,
+        "w": 0.9602900977594413
+      }
+    },
+    {
+      "entityId": "tree-022",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": -128.1,
+        "y": 0,
+        "z": -459.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9998846488566091,
+        "z": 0,
+        "w": -0.015188448929878216
+      }
+    },
+    {
+      "entityId": "tree-023",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": -266.3,
+        "y": 0,
+        "z": -480.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.7920006430402086,
+        "z": 0,
+        "w": 0.6105202547204279
+      }
+    },
+    {
+      "entityId": "tree-024",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 119.8,
+        "y": 0,
+        "z": -484.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.6284856845624058,
+        "z": 0,
+        "w": 0.7778211518724109
+      }
+    },
+    {
+      "entityId": "tree-025",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": -243.3,
+        "y": 0,
+        "z": -496.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.38757358346103865,
+        "z": 0,
+        "w": 0.9218387697440206
+      }
+    },
+    {
+      "entityId": "tree-026",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 106.7,
+        "y": 0,
+        "z": -514.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.49755218563342557,
+        "z": 0,
+        "w": -0.8674340450843517
+      }
+    },
+    {
+      "entityId": "tree-027",
+      "assetId": "tree-spruce-small",
+      "position": {
+        "x": 6.9,
+        "y": 0,
+        "z": -674.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9908031936247719,
+        "z": 0,
+        "w": -0.1353108698625235
+      }
+    },
+    {
+      "entityId": "tree-028",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 151.5,
+        "y": 0,
+        "z": -711.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9991288621604821,
+        "z": 0,
+        "w": 0.04173148449193192
+      }
+    },
+    {
+      "entityId": "tree-029",
+      "assetId": "tree-spruce-large",
+      "position": {
+        "x": 88,
+        "y": 0,
+        "z": -731.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.9986081989699849,
+        "z": 0,
+        "w": 0.05274149173016566
+      }
+    }
+  ]
+}

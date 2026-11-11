@@ -99,6 +99,10 @@ describe('world v2 release', () => {
       await writeJson(source, base);
       const mass = await buildWorld(source, join(root, 'mass'));
       expect(mass.simulationConfigHash).not.toBe(geometry.simulationConfigHash);
+      base.simulation.character.sprintSpeed = 16;
+      await writeJson(source, base);
+      const sprint = await buildWorld(source, join(root, 'sprint'));
+      expect(sprint.simulationConfigHash).not.toBe(mass.simulationConfigHash);
     }));
   it('stores one asset package for one hundred references with independent IDs and transforms', async () =>
     withContent(async (root, source) => {

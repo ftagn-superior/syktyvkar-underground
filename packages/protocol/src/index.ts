@@ -11,6 +11,7 @@ export class MoveInputSchema extends schema(
   {
     moveX: t.float32().default(0),
     moveZ: t.float32().default(0),
+    sprint: t.boolean().default(false),
   },
   'MoveInput',
 ) {}

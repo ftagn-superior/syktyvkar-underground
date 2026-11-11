@@ -24,11 +24,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
   let info: WorldInfo;
   let sdk: Client;
   const rooms = new Set<Room<WorldState>>();
-  async function join(ready = true): Promise<Room<WorldState>> {
+  async function join(ready = true, skinId?: string): Promise<Room<WorldState>> {
     const room = await sdk.joinById<WorldState>(info.roomId, {
       protocolVersion: info.protocolVersion,
       mapVersion: info.mapVersion,
       simulationConfigHash: info.simulationConfigHash,
+      skinId,
     });
     room.reconnection.enabled = false;
     room.onMessage('problem', () => {});
@@ -84,6 +85,16 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     await expect(sdk.create('world')).rejects.toThrow();
     expect(app.room.diagnostics().players).toBe(0);
     expect((await (await fetch(app.url + '/api/world')).json()).roomId).toBe(info.roomId);
+  });
+
+  it('replicates the selected guest skin to everyone and rejects unknown IDs', async () => {
+    const first = await join();
+    const second = await join(true, 'standard');
+    await until(() => first.state.players.has(second.sessionId));
+    expect(first.state.players.get(first.sessionId)!.skinId).toBe('minifigure');
+    expect(first.state.players.get(second.sessionId)!.skinId).toBe('standard');
+    expect(second.state.players.get(second.sessionId)!.skinId).toBe('standard');
+    await expect(join(true, 'missing')).rejects.toThrow('INVALID_SKIN');
   });
 
   it('counts preparing seats toward eight and frees them on timeout', async () => {

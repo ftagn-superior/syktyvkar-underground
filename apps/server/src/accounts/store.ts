@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import pg from 'pg';
-import type { AccountView, PlayerProfile, ProfileUpdate } from '@su/contracts';
+import type pg from 'pg';
+import {
+  resolveAvatarSkinId,
+  type AccountView,
+  type PlayerProfile,
+  type ProfileUpdate,
+} from '@su/contracts';
 
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -16,6 +21,7 @@ interface AccountRow {
   account_id: string;
   display_name: string;
   color_id: PlayerProfile['colorId'];
+  skin_id: string;
   version: number;
   session_id: string;
   expires_at: Date;
@@ -24,7 +30,12 @@ const projection = (row: AccountRow): AuthenticatedAccount => ({
   accountId: row.account_id,
   authSessionId: row.session_id,
   expiresAt: row.expires_at.getTime(),
-  profile: { displayName: row.display_name, colorId: row.color_id, version: row.version },
+  profile: {
+    displayName: row.display_name,
+    colorId: row.color_id,
+    skinId: resolveAvatarSkinId(row.skin_id),
+    version: row.version,
+  },
 });
 
 export class AccountStore {
@@ -113,13 +124,18 @@ export class AccountStore {
     update: ProfileUpdate,
   ): Promise<PlayerProfile | undefined> {
     const result = await this.pool.query<AccountRow>(
-      `UPDATE player_profiles SET display_name=$2,color_id=$3,version=version+1,updated_at=now()
-      WHERE account_id=$1 AND version=$4 RETURNING *`,
-      [accountId, update.displayName, update.colorId, update.version],
+      `UPDATE player_profiles SET display_name=$2,color_id=$3,skin_id=$4,version=version+1,updated_at=now()
+      WHERE account_id=$1 AND version=$5 RETURNING *`,
+      [accountId, update.displayName, update.colorId, update.skinId, update.version],
     );
     const row = result.rows[0];
     return row
-      ? { displayName: row.display_name, colorId: row.color_id, version: row.version }
+      ? {
+          displayName: row.display_name,
+          colorId: row.color_id,
+          skinId: resolveAvatarSkinId(row.skin_id),
+          version: row.version,
+        }
       : undefined;
   }
   async pruneExpiredSessions(): Promise<void> {

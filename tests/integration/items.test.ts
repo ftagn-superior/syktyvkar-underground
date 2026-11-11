@@ -40,7 +40,8 @@ describe.skipIf(!databaseUrl)(
       await fixture.pool
         .query(`DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
       DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
-      DELETE FROM su_schema_migrations WHERE version=2;`);
+      ALTER TABLE player_profiles DROP COLUMN skin_id;
+      DELETE FROM su_schema_migrations WHERE version>=2;`);
       await migrateDatabase(fixture.pool);
       await migrateDatabase(fixture.pool);
       expect((await fixture.pool.query('SELECT id FROM accounts')).rows).toEqual([
@@ -49,7 +50,37 @@ describe.skipIf(!databaseUrl)(
       expect(
         (await fixture.pool.query('SELECT version FROM su_schema_migrations ORDER BY version'))
           .rows,
-      ).toEqual([{ version: 1 }, { version: 2 }]);
+      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      expect(await open()).toHaveLength(1);
+    });
+
+    it('reconciles the old skin-only migration 2 without losing the selected skin or session', async () => {
+      await fixture.pool.query(`
+        DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
+        DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
+        DELETE FROM su_schema_migrations WHERE version=3;
+      `);
+      await fixture.pool.query(
+        `INSERT INTO player_profiles(account_id,display_name,color_id,skin_id,version)
+        VALUES($1,'Старый игрок','sky','standard',7)`,
+        [accountId],
+      );
+      const sessionId = randomUUID();
+      await fixture.pool.query(
+        `INSERT INTO auth_sessions(id,account_id,token_hash,expires_at)
+        VALUES($1,$2,'migration-test-token',now()+interval '1 day')`,
+        [sessionId, accountId],
+      );
+      const profile = (await fixture.pool.query('SELECT * FROM player_profiles')).rows;
+      const sessions = (await fixture.pool.query('SELECT * FROM auth_sessions')).rows;
+      await migrateDatabase(fixture.pool);
+      await migrateDatabase(fixture.pool);
+      expect((await fixture.pool.query('SELECT * FROM player_profiles')).rows).toEqual(profile);
+      expect((await fixture.pool.query('SELECT * FROM auth_sessions')).rows).toEqual(sessions);
+      expect(
+        (await fixture.pool.query('SELECT version FROM su_schema_migrations ORDER BY version'))
+          .rows,
+      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
       expect(await open()).toHaveLength(1);
     });
 

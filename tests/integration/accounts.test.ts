@@ -50,7 +50,11 @@ describe.skipIf(!databaseUrl)(
     async function join(cookie: string, ready = true) {
       const info: WorldInfo = await (await fetch(app.url + '/api/world')).json();
       const sdk = new Client(app.url, { headers: { Cookie: cookie } });
-      const room = await sdk.joinById<WorldState>(info.roomId, { ...info, accountMode: 'account' });
+      const room = await sdk.joinById<WorldState>(info.roomId, {
+        ...info,
+        accountMode: 'account',
+        skinId: 'minifigure',
+      });
       room.reconnection.enabled = false;
       room.onMessage('problem', () => {});
       room.onMessage('resync', () => {});
@@ -94,6 +98,40 @@ describe.skipIf(!databaseUrl)(
       expect((await fixture.pool.query('SELECT current_schema() AS name')).rows[0].name).toBe(
         fixture.schema,
       );
+    });
+
+    it('upgrades existing profiles with a default skin without changing names, colors or versions', async () => {
+      const legacy = await fixture.store.login(
+        { issuer: 'migration-test', subject: 'legacy' },
+        randomBytes(32).toString('base64url'),
+      );
+      await fixture.pool.query(
+        "UPDATE player_profiles SET display_name='Старый игрок',color_id='sky',version=7 WHERE account_id=$1",
+        [legacy.account.accountId],
+      );
+      const items = (await fixture.pool.query('SELECT * FROM item_instances ORDER BY id')).rows;
+      // Reproduce the inventory branch schema v2, then run the real skin upgrade.
+      await fixture.pool.query('ALTER TABLE player_profiles DROP COLUMN skin_id');
+      await fixture.pool.query('DELETE FROM su_schema_migrations WHERE version=3');
+      await migrateDatabase(fixture.pool);
+      await migrateDatabase(fixture.pool);
+      expect((await fixture.store.sessionById(legacy.account.authSessionId))!.profile).toEqual({
+        displayName: 'Старый игрок',
+        colorId: 'sky',
+        version: 7,
+        skinId: 'minifigure',
+      });
+      expect((await fixture.pool.query('SELECT * FROM item_instances ORDER BY id')).rows).toEqual(
+        items,
+      );
+      expect(
+        await fixture.store.updateProfile(legacy.account.accountId, {
+          displayName: 'Старый игрок',
+          colorId: 'sky',
+          skinId: 'standard',
+          version: 7,
+        }),
+      ).toEqual({ displayName: 'Старый игрок', colorId: 'sky', skinId: 'standard', version: 8 });
     });
 
     it('binds a one-use callback to its browser and rejects altered state', async () => {
@@ -151,12 +189,18 @@ describe.skipIf(!databaseUrl)(
             'X-CSRF-Token': state.csrfToken!,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ displayName: name, colorId: 'coral', version }),
+          body: JSON.stringify({
+            displayName: name,
+            colorId: 'coral',
+            skinId: 'standard',
+            version,
+          }),
         });
       const results = await Promise.all([request('Сыктывкарец'), request('Игрок второй')]);
       expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
       const saved = (await me(cookie)).account!;
       expect(saved.profile.colorId).toBe('coral');
+      expect(saved.profile.skinId).toBe('standard');
       await app.close();
       await start();
       expect((await me(cookie)).account).toEqual(saved);
@@ -173,7 +217,21 @@ describe.skipIf(!databaseUrl)(
         'Content-Type': 'application/json',
         'X-CSRF-Token': state.csrfToken!,
       };
-      const body = JSON.stringify({ displayName: 'Игрок', colorId: 'mint', version: 1 });
+      const body = JSON.stringify({
+        displayName: 'Игрок',
+        colorId: 'mint',
+        skinId: 'standard',
+        version: 1,
+      });
+      expect(
+        (
+          await fetch(app.url + '/api/me/profile', {
+            method: 'PATCH',
+            headers,
+            body: body.replace('standard', 'missing'),
+          })
+        ).status,
+      ).toBe(400);
       expect(
         (
           await fetch(app.url + '/api/me/profile', {
@@ -220,7 +278,12 @@ describe.skipIf(!databaseUrl)(
           'X-CSRF-Token': state.csrfToken!,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ displayName: 'Постоянный', colorId: 'coral', version: 1 }),
+        body: JSON.stringify({
+          displayName: 'Постоянный',
+          colorId: 'coral',
+          skinId: 'standard',
+          version: 1,
+        }),
       });
       const attempts = await Promise.allSettled([join(cookie, false), join(cookie, false)]);
       expect(attempts.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
@@ -232,6 +295,7 @@ describe.skipIf(!databaseUrl)(
       const player = first.state.players.get(first.sessionId)!;
       expect(player.name).toBe('Постоянный');
       expect(player.color).toBe('#e98b69');
+      expect(player.skinId).toBe('standard'); // The client requested minifigure; saved profile wins.
       const entityId = player.entityId;
       const reconnectToken = first.reconnectionToken;
       first.connection.close(1000);
@@ -245,6 +309,7 @@ describe.skipIf(!databaseUrl)(
       rooms.add(restored);
       await until(() => !!restored.state?.players?.get(restored.sessionId));
       expect(restored.state.players.get(restored.sessionId)!.entityId).toBe(entityId);
+      expect(restored.state.players.get(restored.sessionId)!.skinId).toBe('standard');
       const lastToken = restored.reconnectionToken;
       restored.connection.close(1000);
       await until(() => app.room.diagnostics().reserved === 1);
@@ -347,6 +412,7 @@ describe.skipIf(!databaseUrl)(
         body: JSON.stringify({
           displayName: 'Горожанин',
           colorId: 'indigo',
+          skinId: 'standard',
           version: state.account!.profile.version,
         }),
       });
@@ -363,6 +429,7 @@ describe.skipIf(!databaseUrl)(
         expect(room.state.players.get(room.sessionId)).toMatchObject({
           name: 'Горожанин',
           color: '#8c9eff',
+          skinId: 'standard',
         });
         expect((await fetch(app.url + '/health/ready')).status).toBe(200);
       } finally {
@@ -386,7 +453,12 @@ describe.skipIf(!databaseUrl)(
               'X-CSRF-Token': state.csrfToken!,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ displayName: 'Не сохранено', colorId: 'coral', version: 1 }),
+            body: JSON.stringify({
+              displayName: 'Не сохранено',
+              colorId: 'coral',
+              skinId: 'standard',
+              version: 1,
+            }),
           }),
           fetch(app.url + '/health/ready'),
         ]);

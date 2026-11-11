@@ -1,0 +1,158 @@
+import { describe, expect, it } from 'vitest';
+import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { Scene } from '@babylonjs/core/scene';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
+import type { DisplayPlayer } from '../../presentation/display-state';
+import { AvatarView } from './avatar-view';
+
+describe('avatar visual ownership', () => {
+  it.each(['minifigure', 'standard'] as const)(
+    'fits and releases %s without affecting another avatar',
+    (skinId) => {
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      const shadow = new ShadowGenerator(
+        128,
+        new DirectionalLight('sun', new Vector3(0, -1, 0), scene),
+      );
+      const config = { height: 1.8, radius: 0.35, speed: 4, sprintSpeed: 14, mass: 70 };
+      const create = (id: string) => {
+        const root = new TransformNode(id, scene);
+        root.rotationQuaternion = Quaternion.Identity();
+        return { root, avatar: new AvatarView(root, scene, shadow, config, skinId) };
+      };
+      const first = create('first');
+      const second = create('second');
+      const player: DisplayPlayer = {
+        entityId: 'first',
+        kind: 'player',
+        skinId,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+        velocity: { x: 0, y: 0, z: 0 },
+        angularVelocity: { x: 0, y: 0, z: 0 },
+        revision: 0,
+        grounded: true,
+        motionRevision: 0,
+        motionEnabled: true,
+      };
+      try {
+        const bounds = first.root.getHierarchyBoundingVectors(true);
+        expect(bounds.min.y).toBeGreaterThanOrEqual(-0.901);
+        expect(bounds.max.y).toBeLessThanOrEqual(0.901);
+        expect(bounds.max.y - bounds.min.y).toBeGreaterThan(1.7);
+        player.color = '#65d6bc';
+        first.avatar.update(player, 1 / 60, true, false);
+        const head = scene.getMeshByName('head-shell-first')!;
+        const face = scene.getMeshByName('face-first')!;
+        const arm = scene.getMeshByName('leftArm-first')!;
+        const headColors = Array.from(head.getVerticesData(VertexBuffer.ColorKind)!);
+        const faceColors = Array.from(face.getVerticesData(VertexBuffer.ColorKind)!);
+        const armColors = Array.from(arm.getVerticesData(VertexBuffer.ColorKind)!);
+        player.color = '#cb93db';
+        first.avatar.update(player, 1 / 60, true, false);
+        if (skinId === 'minifigure')
+          expect(Array.from(head.getVerticesData(VertexBuffer.ColorKind)!)).toEqual(headColors);
+        else
+          expect(Array.from(head.getVerticesData(VertexBuffer.ColorKind)!)).not.toEqual(headColors);
+        expect(Array.from(face.getVerticesData(VertexBuffer.ColorKind)!)).toEqual(faceColors);
+        const recolored = Array.from(arm.getVerticesData(VertexBuffer.ColorKind)!);
+        expect(recolored).not.toEqual(armColors);
+        // The yellow grip shares a mesh with the sleeve and must keep its own color.
+        if (skinId === 'minifigure') expect(recolored.slice(-4)).toEqual(armColors.slice(-4));
+        const stablePosition = first.root.position.clone();
+        player.velocity.z = 14;
+        for (let step = 0; step < 60; step++) first.avatar.update(player, 1 / 60, true, false);
+        expect(first.root.position.equals(stablePosition)).toBe(true);
+        player.connected = false;
+        first.avatar.update(player, 1 / 60, true, false);
+        for (const mesh of first.root.getChildMeshes()) expect(mesh.material!.alpha).toBe(0.45);
+        expect(shadow.getShadowMap()!.renderList).toHaveLength(14);
+        first.avatar.dispose();
+        first.root.dispose();
+        expect(shadow.getShadowMap()!.renderList).toHaveLength(7);
+        expect(second.root.getChildMeshes()).toHaveLength(7);
+        for (const mesh of second.root.getChildMeshes()) {
+          expect(mesh.isDisposed()).toBe(false);
+          expect(scene.materials).toContain(mesh.material);
+        }
+        second.avatar.dispose();
+        second.root.dispose();
+        expect(scene.meshes).toHaveLength(0);
+        expect(scene.transformNodes).toHaveLength(0);
+        expect(shadow.getShadowMap()!.renderList).toHaveLength(0);
+        expect(
+          scene.materials.filter((material) => material.name !== 'default material'),
+        ).toHaveLength(0);
+      } finally {
+        scene.dispose();
+        engine.dispose();
+      }
+    },
+  );
+
+  it('switches skins through one animator without moving the root or retaining old graphics', () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const shadow = new ShadowGenerator(
+      128,
+      new DirectionalLight('sun', new Vector3(0, -1, 0), scene),
+    );
+    const root = new TransformNode('switching', scene);
+    root.rotationQuaternion = Quaternion.Identity();
+    const avatar = new AvatarView(root, scene, shadow, {
+      height: 1.8,
+      radius: 0.35,
+      speed: 4,
+      sprintSpeed: 14,
+      mass: 70,
+    });
+    const player: DisplayPlayer = {
+      entityId: 'switching',
+      kind: 'player',
+      skinId: 'minifigure',
+      revision: 0,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      velocity: { x: 0, y: 0, z: 4 },
+      angularVelocity: { x: 0, y: 0, z: 0 },
+      grounded: true,
+      motionRevision: 0,
+      motionEnabled: true,
+      color: '#65d6bc',
+    };
+    try {
+      for (let step = 0; step < 60; step++) avatar.update(player, 1 / 60, true, false);
+      const nodes = scene.transformNodes.length;
+      const position = root.position.clone();
+      for (let swap = 0; swap < 20; swap++) {
+        const before = avatar.diagnostics().phase;
+        player.skinId = swap % 2 ? 'minifigure' : 'standard';
+        avatar.update(player, 1 / 60, true, false);
+        const state = avatar.diagnostics();
+        expect(state.skinId).toBe(player.skinId);
+        expect(state.movement).toBeGreaterThan(0.99);
+        expect((state.phase - before + Math.PI * 2) % (Math.PI * 2)).toBeLessThan(0.5);
+        expect(root.position.equals(position)).toBe(true);
+        expect(scene.meshes).toHaveLength(8); // rig and the stable own-player marker
+        expect(scene.transformNodes).toHaveLength(nodes);
+        expect(shadow.getShadowMap()!.renderList).toHaveLength(7);
+        const bounds = root.getHierarchyBoundingVectors(true);
+        expect(bounds.max.y).toBeLessThan(1.2);
+      }
+      avatar.dispose();
+      root.dispose();
+      expect(scene.meshes).toHaveLength(0);
+      expect(scene.transformNodes).toHaveLength(0);
+      expect(shadow.getShadowMap()!.renderList).toHaveLength(0);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+});

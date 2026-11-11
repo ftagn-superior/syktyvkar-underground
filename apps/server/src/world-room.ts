@@ -1,10 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { CloseCode, Room, ServerError, type Client, type StepContext } from '@colyseus/core';
+import {
+  CloseCode,
+  Room,
+  ServerError,
+  type Client,
+  type StepContext,
+  type AuthContext,
+} from '@colyseus/core';
 import {
   MAX_PLAYERS,
   MAX_INPUT_QUEUE,
   PATCH_RATE,
   PLAYER_COLORS,
+  PROFILE_COLORS,
   PREPARE_TIMEOUT_MS,
   PROTOCOL_VERSION,
   RECONNECT_SECONDS,
@@ -19,6 +27,8 @@ import {
 } from '@su/contracts';
 import { MoveInputSchema, PlayerSchema, WorldState, applyEntityState } from '@su/protocol';
 import { createAuthoritativeWorld } from '@su/simulation/server';
+import type { AccountHttp } from './accounts/http.js';
+import type { AuthenticatedAccount } from './accounts/store.js';
 
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 interface Session {
@@ -31,12 +41,15 @@ interface Session {
   lastRequest: number;
   lastRespawn: number;
   results: Map<number, ActionResult>;
+  auth?: AuthenticatedAccount;
+  cancelReconnect?: () => void;
 }
 export interface WorldRoomOptions {
   definition: WorldDefinition;
   manifest: WorldManifest;
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
+  accounts?: AccountHttp;
 }
 
 /** Connection lifecycle and replication only; simulation owns all physical state. */
@@ -62,6 +75,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private stepSamples: number[] = [];
   private disposed = false;
   private readonly stepHistogram = new Uint32Array(1001);
+  private accounts?: AccountHttp;
+  private accountPlayers = new Map<string, string>();
   private measuredSteps = 0;
   private maxStepMs = 0;
   private resyncs = 0;
@@ -69,6 +84,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   async onCreate(options: WorldRoomOptions): Promise<void> {
     this.reconnectSeconds = options.reconnectSeconds ?? RECONNECT_SECONDS;
     this.prepareTimeoutMs = options.prepareTimeoutMs ?? PREPARE_TIMEOUT_MS;
+    this.accounts = options.accounts;
     this.state.worldEpoch = randomUUID();
     this.state.protocolVersion = PROTOCOL_VERSION;
     this.state.mapVersion = options.manifest.mapVersion;
@@ -87,9 +103,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       client.send('resync', { serverTick: this.state.serverTick });
     });
     this.setFixedTimestep((context) => this.step(context), TICK_RATE);
+    this.clock.setInterval(() => {
+      for (const session of this.sessions.values())
+        if (session.auth && session.auth.expiresAt <= Date.now())
+          this.revokeAuthSession(session.auth.authSessionId);
+    }, 1000);
   }
 
-  onAuth(_client: Client, options: Record<string, unknown>): boolean {
+  async onAuth(
+    _client: Client,
+    options: Record<string, unknown>,
+    context: AuthContext,
+  ): Promise<true | AuthenticatedAccount> {
     if (
       !options ||
       options.protocolVersion !== PROTOCOL_VERSION ||
@@ -98,24 +123,52 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     ) {
       throw new ServerError(4001, 'VERSION_MISMATCH');
     }
-    return true;
+    if (options.accountMode === 'guest') return true;
+    const token = this.accounts?.readToken(context.headers);
+    if (options.accountMode !== 'account' && !token) return true;
+    if (!this.accounts || !token) throw new ServerError(401, 'AUTH_REQUIRED');
+    try {
+      const account = await this.accounts.store.authenticate(token);
+      if (!account) throw new ServerError(401, 'AUTH_REQUIRED');
+      if (
+        options.expectedAccountId !== undefined &&
+        options.expectedAccountId !== account.accountId
+      )
+        throw new ServerError(401, 'ACCOUNT_CHANGED');
+      return account;
+    } catch (error) {
+      if (error instanceof ServerError) throw error;
+      throw new ServerError(503, 'ACCOUNTS_UNAVAILABLE');
+    }
   }
 
   onJoin(client: Client): void {
+    const auth =
+      typeof client.auth === 'object' && client.auth?.accountId
+        ? (client.auth as AuthenticatedAccount)
+        : undefined;
+    // No await between the uniqueness check and claiming the slot: covers parallel joins and preparing players.
+    if (auth && this.accountPlayers.has(auth.accountId))
+      throw new ServerError(409, 'ACCOUNT_IN_USE');
+    if (auth && (auth.expiresAt <= Date.now() || this.accounts?.wasRevoked(auth.authSessionId)))
+      throw new ServerError(401, 'AUTH_REQUIRED');
     const ordinal = ++this.guestCounter;
     const usedColors = new Set([...this.sessions.values()].map((s) => s.color));
     this.sessions.set(client.sessionId, {
       entityId: `player-${randomUUID()}`,
       joinedAt: performance.now(),
       connected: true,
-      name: `Гость ${ordinal}`,
+      auth,
+      name: auth?.profile.displayName ?? `Гость ${ordinal}`,
       color:
+        (auth ? PROFILE_COLORS.find((c) => c.id === auth.profile.colorId)!.hex : undefined) ??
         PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
         PLAYER_COLORS[ordinal % PLAYER_COLORS.length],
       lastRequest: 0,
       lastRespawn: -Infinity,
       results: new Map(),
     });
+    if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
     this.state.occupancy = this.sessions.size;
   }
 
@@ -263,12 +316,33 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       code === CloseCode.SERVER_SHUTDOWN ||
       code === CloseCode.WITH_ERROR ||
       code === CloseCode.FAILED_TO_RECONNECT;
-    if (terminal || !player) return;
-    void this.allowReconnection(client, this.reconnectSeconds).catch(() => {});
+    if (terminal || !player || (session.auth && session.auth.expiresAt <= Date.now())) return;
+    const reconnection = this.allowReconnection(client, this.reconnectSeconds);
+    const cancel = () => reconnection.reject(new Error('AUTH_REQUIRED'));
+    session.cancelReconnect = cancel;
+    void reconnection
+      .catch(() => {})
+      .finally(() => {
+        if (session.cancelReconnect === cancel) session.cancelReconnect = undefined;
+      });
   }
-  onReconnect(client: Client): void {
+  async onReconnect(client: Client): Promise<void> {
     const session = this.sessions.get(client.sessionId);
     if (!session) throw new ServerError(4002, 'STALE_WORLD');
+    if (session.auth) {
+      let restored: AuthenticatedAccount | undefined;
+      try {
+        restored = await this.accounts?.store.sessionById(session.auth.authSessionId);
+      } catch {
+        throw new ServerError(503, 'ACCOUNTS_UNAVAILABLE');
+      }
+      if (
+        !restored ||
+        restored.accountId !== session.auth.accountId ||
+        session.auth.expiresAt <= Date.now()
+      )
+        throw new ServerError(401, 'AUTH_REQUIRED');
+    }
     session.connected = true;
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
@@ -280,12 +354,27 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.world.removePlayer(session.entityId);
     this.state.players.delete(client.sessionId);
     this.sessions.delete(client.sessionId);
+    if (session.auth && this.accountPlayers.get(session.auth.accountId) === client.sessionId)
+      this.accountPlayers.delete(session.auth.accountId);
     this.state.occupancy = this.sessions.size;
+  }
+  revokeAuthSession(authSessionId: string): void {
+    for (const [sessionId, session] of this.sessions) {
+      if (session.auth?.authSessionId !== authSessionId) continue;
+      session.auth.expiresAt = 0;
+      session.connected = false;
+      this.world.setInput(session.entityId, NEUTRAL_INPUT);
+      session.cancelReconnect?.();
+      const client = this.clients.getById(sessionId);
+      client?.send('problem', { code: 'AUTH_REQUIRED' });
+      void client?.leave(CloseCode.CONSENTED, 'AUTH_REQUIRED');
+    }
   }
   onDispose(): void {
     this.disposed = true;
     this.world?.dispose();
     this.sessions.clear();
+    this.accountPlayers.clear();
     this.stepSamples.length = 0;
   }
   diagnostics() {

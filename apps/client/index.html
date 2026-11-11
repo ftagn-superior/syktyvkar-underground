@@ -41,6 +41,33 @@
       <p id="welcome-description">
         Небольшой мир для общих экспериментов. Двигайтесь, сталкивайтесь и толкайте ящик вместе.
       </p>
+      <section id="account-panel" class="account-panel" aria-label="Аккаунт игрока" hidden>
+        <a id="telegram-login" class="button telegram-login" href="/api/auth/telegram"
+          >Войти через Telegram</a
+        >
+        <form id="profile-form" hidden>
+          <label for="profile-name">Имя в игре</label>
+          <input
+            id="profile-name"
+            name="displayName"
+            type="text"
+            autocomplete="nickname"
+            required
+            minlength="2"
+            maxlength="48"
+          />
+          <label for="profile-color">Цвет персонажа</label>
+          <select id="profile-color" name="colorId"></select>
+          <button id="profile-save" class="button quiet" type="submit">Сохранить профиль</button>
+        </form>
+        <button id="account-logout" class="button quiet" type="button" hidden>
+          Выйти из аккаунта
+        </button>
+        <button id="account-retry" class="button quiet" type="button" hidden>
+          Повторить загрузку аккаунта
+        </button>
+        <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
+      </section>
       <button id="join" class="button primary" disabled>
         <span id="join-label">Загружаем мир…</span><span aria-hidden="true">↗</span>
       </button>

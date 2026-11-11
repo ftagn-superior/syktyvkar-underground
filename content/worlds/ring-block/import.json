@@ -2,31 +2,265 @@
   "formatVersion": 1,
   "worldId": "ring-block",
   "source": "data/syktyvkar-offline.html",
-  "area": { "west": -260, "east": 170, "south": -90, "north": 720 },
+  "osm": {
+    "snapshot": "content/sources/ring-block/osm.json",
+    "origin": {
+      "lat": 61.66386729706631,
+      "lon": 50.815951774241576
+    },
+    "metersPerDegree": {
+      "lon": 52837.29,
+      "lat": 110573.15
+    },
+    "fetchMargin": 40
+  },
+  "area": {
+    "west": -260,
+    "east": 300,
+    "south": -90,
+    "north": 720
+  },
   "margin": 8,
   "spawnClearance": 14,
   "detailedHeightScale": 1.4,
   "spawnPoints": [
-    { "x": -3, "y": 0, "z": 13 },
-    { "x": 3, "y": 0, "z": 13 },
-    { "x": -5, "y": 0, "z": 15 },
-    { "x": 5, "y": 0, "z": 15 },
-    { "x": -7, "y": 0, "z": 13 },
-    { "x": 7, "y": 0, "z": 13 },
-    { "x": -3, "y": 0, "z": 17 },
-    { "x": 3, "y": 0, "z": 17 }
+    {
+      "x": -3,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "x": 5,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "x": -7,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": 7,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 17
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 17
+    }
   ],
-  "crate": { "x": 9.5, "y": 0.52, "z": 9 },
+  "crate": {
+    "x": 9.5,
+    "y": 0.52,
+    "z": 9
+  },
   "landmarks": [
-    { "id": "ring", "name": "Кольцо · «Трудовая слава»", "position": { "x": 0, "y": 29, "z": 0 } },
-    { "id": "school-1", "name": "Школа №1", "osm": "way/111538131" },
-    { "id": "banya-4", "name": "Баня №4", "osm": "way/111493596" }
+    {
+      "id": "ring",
+      "name": "Кольцо · «Трудовая слава»",
+      "position": {
+        "x": 0,
+        "y": 29,
+        "z": 0
+      }
+    },
+    {
+      "id": "school-1",
+      "name": "Школа №1",
+      "osm": "way/111538131"
+    },
+    {
+      "id": "banya-4",
+      "name": "Баня №4",
+      "osm": "way/111493596"
+    },
+    {
+      "id": "opera-theatre",
+      "name": "Театр оперы и балета",
+      "osm": "way/146724915"
+    },
+    {
+      "id": "theatre-square",
+      "name": "Театральная площадь",
+      "position": {
+        "x": 226,
+        "y": 3,
+        "z": -150
+      }
+    }
   ],
   "props": [
     {
       "entityId": "monument-trudovaya-slava",
       "assetId": "trudovaya-slava",
-      "position": { "x": 0, "y": 0, "z": 0 }
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "entityId": "theatre-fountain-west",
+      "assetId": "theatre-fountain",
+      "position": {
+        "x": 193.25,
+        "y": 0,
+        "z": -131.51
+      }
+    },
+    {
+      "entityId": "theatre-fountain-east",
+      "assetId": "theatre-fountain",
+      "position": {
+        "x": 258.58,
+        "y": 0,
+        "z": -163.61
+      }
+    },
+    {
+      "entityId": "monument-kuratov",
+      "assetId": "kuratov-monument",
+      "position": {
+        "x": 217.18,
+        "y": 0,
+        "z": -165.3
+      },
+      "yaw": 25.7
+    },
+    {
+      "entityId": "theatre-lamp-01",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 199.05,
+        "y": 0,
+        "z": -125.71
+      }
+    },
+    {
+      "entityId": "theatre-lamp-02",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 187.45,
+        "y": 0,
+        "z": -125.71
+      }
+    },
+    {
+      "entityId": "theatre-lamp-03",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 187.45,
+        "y": 0,
+        "z": -137.31
+      }
+    },
+    {
+      "entityId": "theatre-lamp-04",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 199.05,
+        "y": 0,
+        "z": -137.31
+      }
+    },
+    {
+      "entityId": "theatre-lamp-05",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 264.38,
+        "y": 0,
+        "z": -157.81
+      }
+    },
+    {
+      "entityId": "theatre-lamp-06",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 252.78,
+        "y": 0,
+        "z": -157.81
+      }
+    },
+    {
+      "entityId": "theatre-lamp-07",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 252.78,
+        "y": 0,
+        "z": -169.41
+      }
+    },
+    {
+      "entityId": "theatre-lamp-08",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 264.38,
+        "y": 0,
+        "z": -169.41
+      }
+    },
+    {
+      "entityId": "theatre-lamp-09",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 200.75,
+        "y": 0,
+        "z": -167.38
+      }
+    },
+    {
+      "entityId": "theatre-lamp-10",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 208.56,
+        "y": 0,
+        "z": -151.16
+      }
+    },
+    {
+      "entityId": "theatre-lamp-11",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 225.8,
+        "y": 0,
+        "z": -179.44
+      }
+    },
+    {
+      "entityId": "theatre-lamp-12",
+      "assetId": "lamp-five-globe",
+      "position": {
+        "x": 233.61,
+        "y": 0,
+        "z": -163.22
+      }
+    },
+    {
+      "entityId": "water-kiosk-okt-54",
+      "assetId": "water-kiosk",
+      "position": {
+        "x": -78.82,
+        "y": 0,
+        "z": -223.61
+      },
+      "yaw": -64.03,
+      "clearRadius": 3
     }
   ],
   "buildings": {
@@ -35,8 +269,13 @@
       "wallColor": "#b06e48",
       "roofColor": "#5e6264",
       "details": {
-        "plinth": { "height": 0.9, "color": "#8b4f36" },
-        "parapet": { "height": 0.6 },
+        "plinth": {
+          "height": 0.9,
+          "color": "#8b4f36"
+        },
+        "parapet": {
+          "height": 0.6
+        },
         "shopfront": {
           "facing": ["S"],
           "height": 4,
@@ -45,8 +284,20 @@
           "signColor": "#3fae49"
         },
         "balconies": [
-          { "facing": ["S"], "at": [0.82], "width": 3, "color": "#e9e6de", "glazing": "#c9d3d6" },
-          { "facing": ["N"], "at": [0.35], "width": 3, "color": "#e9e6de", "glazing": "#c9d3d6" }
+          {
+            "facing": ["S"],
+            "at": [0.82],
+            "width": 3,
+            "color": "#e9e6de",
+            "glazing": "#c9d3d6"
+          },
+          {
+            "facing": ["N"],
+            "at": [0.35],
+            "width": 3,
+            "color": "#e9e6de",
+            "glazing": "#c9d3d6"
+          }
         ],
         "roofSign": {
           "facing": "S",
@@ -76,8 +327,13 @@
       "wallColor": "#c8936a",
       "roofColor": "#5e6264",
       "details": {
-        "plinth": { "height": 0.8, "color": "#9a6b4c" },
-        "parapet": { "height": 0.8 },
+        "plinth": {
+          "height": 0.8,
+          "color": "#9a6b4c"
+        },
+        "parapet": {
+          "height": 0.8
+        },
         "shopfront": {
           "facing": ["SE"],
           "height": 3.6,
@@ -86,16 +342,35 @@
           "signColor": "#c23a2f",
           "awningColor": "#c0392b"
         },
-        "balconies": [{ "facing": ["SE"], "every": 7, "color": "#bfb6a8" }]
+        "balconies": [
+          {
+            "facing": ["SE"],
+            "every": 7,
+            "color": "#bfb6a8"
+          }
+        ]
       }
     },
     "way/56438161": {
       "note": "Октябрьский проспект 42: оштукатуренная пятиэтажка с вальмовой крышей",
       "wallColor": "#e2d6b6",
       "details": {
-        "plinth": { "height": 0.8, "color": "#9a8f7e" },
-        "hippedRoof": { "height": 3, "color": "#6f6b67", "chimneys": 2 },
-        "balconies": [{ "facing": ["SW", "NE"], "every": 9, "color": "#d9cfb4" }]
+        "plinth": {
+          "height": 0.8,
+          "color": "#9a8f7e"
+        },
+        "hippedRoof": {
+          "height": 3,
+          "color": "#6f6b67",
+          "chimneys": 2
+        },
+        "balconies": [
+          {
+            "facing": ["SW", "NE"],
+            "every": 9,
+            "color": "#d9cfb4"
+          }
+        ]
       }
     },
     "way/1303691960": {
@@ -103,7 +378,9 @@
       "wallColor": "#e3e1db",
       "roofColor": "#5e6264",
       "details": {
-        "parapet": { "height": 0.5 },
+        "parapet": {
+          "height": 0.5
+        },
         "shopfront": {
           "facing": ["N", "NE"],
           "height": 4.2,
@@ -111,7 +388,14 @@
           "glassColor": "#2f4652",
           "signColor": "#2c3e8f"
         },
-        "balconies": [{ "facing": ["NE"], "every": 8, "color": "#d6d3cc", "glazing": "#cfd6d9" }]
+        "balconies": [
+          {
+            "facing": ["NE"],
+            "every": 8,
+            "color": "#d6d3cc",
+            "glazing": "#cfd6d9"
+          }
+        ]
       }
     },
     "way/89626599": {
@@ -132,7 +416,10 @@
       "note": "Коммунистическая 33: кирпичная пятиэтажка со скатной крышей и «Магнитом»",
       "wallColor": "#bf9f7a",
       "details": {
-        "plinth": { "height": 0.8, "color": "#8f7558" },
+        "plinth": {
+          "height": 0.8,
+          "color": "#8f7558"
+        },
         "hippedRoof": {
           "height": 3.2,
           "color": "#5f5a55",
@@ -146,7 +433,13 @@
           "glassColor": "#2f4652",
           "signColor": "#d42a2a"
         },
-        "balconies": [{ "facing": ["NW"], "every": 8, "color": "#a89a88" }]
+        "balconies": [
+          {
+            "facing": ["NW"],
+            "every": 8,
+            "color": "#a89a88"
+          }
+        ]
       }
     },
     "way/1291799392": {
@@ -154,7 +447,9 @@
       "wallColor": "#d8d2c2",
       "roofColor": "#5e6264",
       "details": {
-        "parapet": { "height": 0.5 },
+        "parapet": {
+          "height": 0.5
+        },
         "shopfront": {
           "facing": ["NE"],
           "height": 4,
@@ -162,7 +457,14 @@
           "glassColor": "#2f4652",
           "signColor": "#3fae49"
         },
-        "balconies": [{ "facing": ["NE"], "every": 7, "color": "#cfcac0", "glazing": "#b9c3c7" }]
+        "balconies": [
+          {
+            "facing": ["NE"],
+            "every": 7,
+            "color": "#cfcac0",
+            "glazing": "#b9c3c7"
+          }
+        ]
       }
     },
     "way/1317421165": {
@@ -170,8 +472,13 @@
       "wallColor": "#b06e48",
       "roofColor": "#5e6264",
       "details": {
-        "plinth": { "height": 0.9, "color": "#8b4f36" },
-        "parapet": { "height": 0.6 },
+        "plinth": {
+          "height": 0.9,
+          "color": "#8b4f36"
+        },
+        "parapet": {
+          "height": 0.6
+        },
         "shopfront": {
           "facing": ["W"],
           "height": 4,
@@ -180,7 +487,13 @@
           "signColor": "#d42a2a"
         },
         "balconies": [
-          { "facing": ["W"], "at": [0.75], "width": 3, "color": "#e9e6de", "glazing": "#c9d3d6" }
+          {
+            "facing": ["W"],
+            "at": [0.75],
+            "width": 3,
+            "color": "#e9e6de",
+            "glazing": "#c9d3d6"
+          }
         ]
       }
     },
@@ -209,8 +522,13 @@
       "wallColor": "#c8936a",
       "roofColor": "#5e6264",
       "details": {
-        "plinth": { "height": 0.8, "color": "#9a6b4c" },
-        "parapet": { "height": 0.8 },
+        "plinth": {
+          "height": 0.8,
+          "color": "#9a6b4c"
+        },
+        "parapet": {
+          "height": 0.8
+        },
         "shopfront": {
           "facing": ["NW"],
           "height": 3.6,
@@ -218,7 +536,13 @@
           "glassColor": "#2f4652",
           "signColor": "#c23a2f"
         },
-        "balconies": [{ "facing": ["NW"], "every": 8, "color": "#bfb6a8" }]
+        "balconies": [
+          {
+            "facing": ["NW"],
+            "every": 8,
+            "color": "#bfb6a8"
+          }
+        ]
       }
     },
     "way/56438158": {
@@ -226,8 +550,17 @@
       "wallColor": "#d8d2c2",
       "roofColor": "#5e6264",
       "details": {
-        "parapet": { "height": 0.5 },
-        "balconies": [{ "facing": ["SE"], "every": 9, "color": "#cfcac0", "glazing": "#b9c3c7" }]
+        "parapet": {
+          "height": 0.5
+        },
+        "balconies": [
+          {
+            "facing": ["SE"],
+            "every": 9,
+            "color": "#cfcac0",
+            "glazing": "#b9c3c7"
+          }
+        ]
       }
     },
     "way/111538131": {
@@ -245,8 +578,14 @@
             [46.63, -8.94]
           ],
           "details": {
-            "plinth": { "height": 0.9, "color": "#8c6a45" },
-            "hippedRoof": { "height": 2, "color": "#a7aeb0" },
+            "plinth": {
+              "height": 0.9,
+              "color": "#8c6a45"
+            },
+            "hippedRoof": {
+              "height": 2,
+              "color": "#a7aeb0"
+            },
             "porch": {
               "facing": "S",
               "width": 10,
@@ -258,7 +597,14 @@
               "doorColor": "#3a3431"
             },
             "paint": [
-              { "facing": ["W"], "from": 0, "to": 1, "bottom": 0, "top": 10.1, "color": "#86b9df" },
+              {
+                "facing": ["W"],
+                "from": 0,
+                "to": 1,
+                "bottom": 0,
+                "top": 10.1,
+                "color": "#86b9df"
+              },
               {
                 "facing": ["W"],
                 "from": 0,
@@ -327,8 +673,14 @@
             [-18.75, 8.09]
           ],
           "details": {
-            "plinth": { "height": 0.9, "color": "#8c6a45" },
-            "hippedRoof": { "height": 2, "color": "#a7aeb0" }
+            "plinth": {
+              "height": 0.9,
+              "color": "#8c6a45"
+            },
+            "hippedRoof": {
+              "height": 2,
+              "color": "#a7aeb0"
+            }
           }
         },
         {
@@ -339,7 +691,12 @@
             [17.23, 5.66],
             [10.93, -6.74]
           ],
-          "details": { "hippedRoof": { "height": 1.5, "color": "#a7aeb0" } }
+          "details": {
+            "hippedRoof": {
+              "height": 1.5,
+              "color": "#a7aeb0"
+            }
+          }
         },
         {
           "id": "west",
@@ -351,7 +708,10 @@
           ],
           "wallColor": "#dba290",
           "details": {
-            "hippedRoof": { "height": 2, "color": "#a7aeb0" },
+            "hippedRoof": {
+              "height": 2,
+              "color": "#a7aeb0"
+            },
             "pilasters": {
               "facing": ["W"],
               "every": 3.4,
@@ -380,7 +740,12 @@
           "elevation": 3.6,
           "height": 9.4,
           "floors": 2,
-          "details": { "hippedRoof": { "height": 1.5, "color": "#a7aeb0" } }
+          "details": {
+            "hippedRoof": {
+              "height": 1.5,
+              "color": "#a7aeb0"
+            }
+          }
         },
         {
           "id": "pier-north",
@@ -405,6 +770,249 @@
           "height": 3.6,
           "floors": 1,
           "windows": false
+        }
+      ]
+    },
+    "way/146724915": {
+      "note": "Театр оперы и балета, Коммунистическая 32: стеклянное фойе под белой плитой-карнизом, серый корпус и сценическая коробка",
+      "wallColor": "#a9aaa6",
+      "roofColor": "#8c8d89",
+      "sections": [
+        {
+          "id": "lobby",
+          "outline": [
+            [-2.31, 28.91],
+            [6.74, 46.75],
+            [37.04, 31.55],
+            [27.99, 13.71]
+          ],
+          "height": 10.5,
+          "floors": 3,
+          "windows": false,
+          "wallColor": "#c9c9c4",
+          "details": {
+            "plinth": {
+              "height": 0.6,
+              "color": "#b9b4aa"
+            },
+            "roofSlab": {
+              "thickness": 1.6,
+              "overhang": 1.2,
+              "color": "#eeede8"
+            },
+            "pilasters": {
+              "facing": ["S"],
+              "every": 2.2,
+              "width": 0.18,
+              "depth": 0.12,
+              "color": "#e9e8e3"
+            },
+            "paint": [
+              {
+                "facing": ["S"],
+                "from": 0.03,
+                "to": 0.97,
+                "bottom": 0.6,
+                "top": 9,
+                "color": "#5d7383"
+              },
+              {
+                "facing": ["S"],
+                "from": 0.03,
+                "to": 0.97,
+                "bottom": 6,
+                "top": 7,
+                "color": "#cfcac0"
+              },
+              {
+                "facing": ["S"],
+                "from": 0.45,
+                "to": 0.55,
+                "bottom": 5.6,
+                "top": 7.4,
+                "color": "#b0aa9e"
+              },
+              {
+                "facing": ["S"],
+                "from": 0.42,
+                "to": 0.58,
+                "bottom": 2.4,
+                "top": 5.4,
+                "color": "#3f8f74"
+              },
+              {
+                "facing": ["S"],
+                "from": 0.4,
+                "to": 0.6,
+                "bottom": 0,
+                "top": 2,
+                "color": "#2d3338"
+              }
+            ]
+          }
+        },
+        {
+          "id": "body",
+          "outline": [
+            [16.54, -20.75],
+            [11.74, -18.35],
+            [-6.86, -54.85],
+            [-37.16, -39.65],
+            [-18.66, -3.15],
+            [-23.66, -0.55],
+            [-16.26, 14.15],
+            [-12.56, 21.35],
+            [-7.46, 18.75],
+            [-2.31, 28.91],
+            [27.99, 13.71],
+            [22.84, 3.55],
+            [27.74, 1.15]
+          ],
+          "height": 9,
+          "floors": 3,
+          "details": {
+            "plinth": {
+              "height": 0.6,
+              "color": "#8e8f8b"
+            },
+            "parapet": {
+              "height": 0.4
+            }
+          }
+        },
+        {
+          "id": "stage",
+          "outline": [
+            [1.69, 25.85],
+            [23.09, 14.99],
+            [12.69, -5.52],
+            [-8.71, 5.34]
+          ],
+          "height": 15,
+          "floors": 4,
+          "windows": false,
+          "wallColor": "#b3b4b0",
+          "details": {
+            "parapet": {
+              "height": 0.3
+            },
+            "paint": [
+              {
+                "facing": ["all"],
+                "from": 0.1,
+                "to": 0.9,
+                "bottom": 13.2,
+                "top": 14.2,
+                "color": "#5a5d5f"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "way/92104661": {
+      "note": "Октябрьский проспект 54: белый двухэтажный магазин, «Пятёрочка» и «Магнит косметик», малиновая полоса, машинное отделение из кирпича на крыше",
+      "wallColor": "#e9e8e4",
+      "roofColor": "#7d8084",
+      "windowColor": "#3b4d58",
+      "sections": [
+        {
+          "id": "main",
+          "outline": [
+            [14.3, 7.37],
+            [3, -15.73],
+            [-14.3, -7.43],
+            [-3, 15.77]
+          ],
+          "height": 7,
+          "floors": 2,
+          "details": {
+            "shopfront": {
+              "facing": ["SW"],
+              "height": 3.6,
+              "wallColor": "#d9dadc",
+              "glassColor": "#3d5560",
+              "signColor": "#e3262f"
+            },
+            "porch": {
+              "facing": "SW",
+              "at": 0.47,
+              "width": 8,
+              "depth": 2.2,
+              "height": 3.4,
+              "wallColor": "#2fae4a",
+              "roofColor": "#e3262f",
+              "signColor": "#e3262f",
+              "doorColor": "#2b3a33"
+            },
+            "paint": [
+              {
+                "facing": ["SW"],
+                "from": 0,
+                "to": 0.72,
+                "bottom": 2.57,
+                "top": 3.36,
+                "color": "#e3262f"
+              },
+              {
+                "facing": ["all"],
+                "from": 0,
+                "to": 1,
+                "bottom": 6,
+                "top": 7,
+                "color": "#c2185b"
+              }
+            ],
+            "roofSlab": {
+              "thickness": 0.3,
+              "overhang": 0.25,
+              "color": "#9aa0a6"
+            },
+            "roofSigns": [
+              {
+                "facing": "SW",
+                "text": "ПЯТЕРОЧКА",
+                "at": 0.42,
+                "width": 11.5,
+                "height": 2,
+                "color": "#d8322f",
+                "backColor": "#c9cdd1"
+              },
+              {
+                "facing": "SW",
+                "text": "5",
+                "at": 0.08,
+                "width": 2.2,
+                "height": 2.2,
+                "color": "#ffffff",
+                "board": "#d8322f"
+              },
+              {
+                "facing": "SW",
+                "text": "МАГНИТ",
+                "at": 0.82,
+                "width": 6,
+                "height": 1.3,
+                "color": "#c2185b",
+                "board": "#f4f4f2"
+              }
+            ]
+          }
+        },
+        {
+          "id": "machine-room",
+          "outline": [
+            [1.86, -13.52],
+            [4.49, -8.13],
+            [0.44, -6.18],
+            [-2.2, -11.57]
+          ],
+          "elevation": 7,
+          "height": 9.6,
+          "floors": 1,
+          "windows": false,
+          "wallColor": "#9a7a5c",
+          "roofColor": "#6c6f72"
         }
       ]
     }

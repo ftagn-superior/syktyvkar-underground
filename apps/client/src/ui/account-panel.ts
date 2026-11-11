@@ -1,14 +1,26 @@
 import {
   PROFILE_COLORS,
   parseProfileUpdate,
+  resolveAvatarSkinId,
   type AccountResponse,
   type AccountView,
   type PlayerProfile,
 } from '@su/contracts';
+import { AvatarPicker } from './avatar-picker';
+
+const guestSkinKey = 'su:guest-skin:v1';
+function guestSkin() {
+  try {
+    return resolveAvatarSkinId(sessionStorage.getItem(guestSkinKey));
+  } catch {
+    return resolveAvatarSkinId(undefined);
+  }
+}
 
 const errors: Record<string, string> = {
   AUTH_REQUIRED: 'Войдите через Telegram ещё раз.',
-  INVALID_PROFILE: 'Имя должно содержать от 2 до 24 символов. Выберите цвет из палитры.',
+  INVALID_PROFILE:
+    'Имя должно содержать от 2 до 24 символов. Выберите цвет и внешность из каталога.',
   PROFILE_CONFLICT:
     'Профиль изменён в другой вкладке. Загружены актуальные данные; повторите изменение.',
   RATE_LIMITED: 'Слишком много запросов. Подождите минуту и повторите.',
@@ -22,6 +34,7 @@ export class AccountPanel {
   loading = true;
   private csrfToken?: string;
   private saving = false;
+  private readonly skins: AvatarPicker;
   private readonly panel = document.getElementById('account-panel')!;
   private readonly form = document.getElementById('profile-form') as HTMLFormElement;
   private readonly name = document.getElementById('profile-name') as HTMLInputElement;
@@ -37,6 +50,17 @@ export class AccountPanel {
     private readonly onChange: () => void,
     private readonly beforeLogout: () => Promise<void>,
   ) {
+    this.skins = new AvatarPicker(() => {
+      if (!this.account) {
+        try {
+          sessionStorage.setItem(guestSkinKey, this.skins.value);
+        } catch {
+          /* Optional preference. */
+        }
+      }
+      this.onChange();
+    });
+    this.skins.value = guestSkin();
     for (const color of PROFILE_COLORS) {
       const option = document.createElement('option');
       option.value = color.id;
@@ -57,6 +81,7 @@ export class AccountPanel {
   }
   async load(): Promise<void> {
     this.loading = true;
+    this.skins.disabled = true;
     this.retry.hidden = true;
     this.onChange();
     try {
@@ -75,7 +100,7 @@ export class AccountPanel {
       if (result) {
         this.message.textContent =
           result === 'success' && state.account
-            ? 'Вход выполнен. Имя и цвет сохраняются в аккаунте.'
+            ? 'Вход выполнен. Имя, цвет и внешность сохраняются в аккаунте.'
             : result === 'expired'
               ? 'Время входа истекло. Повторите вход через Telegram.'
               : result === 'unavailable'
@@ -94,6 +119,7 @@ export class AccountPanel {
         'Не удалось загрузить аккаунт. Повторите загрузку или войдите гостем.';
     } finally {
       this.loading = false;
+      this.skins.disabled = false;
       this.onChange();
     }
   }
@@ -104,8 +130,9 @@ export class AccountPanel {
     this.logout.hidden = !this.account;
     this.message.textContent = '';
     if (this.account) this.fill(this.account.profile);
+    else this.skins.value = guestSkin();
     this.note.textContent = this.account
-      ? 'Имя и цвет применяются при входе в мир. На аккаунт доступен один персонаж одновременно.'
+      ? 'Имя, цвет и внешность сохраняются перед входом в мир. На аккаунт доступен один персонаж одновременно.'
       : this.enabled
         ? 'Гостю доступны движение и толкание. Для инвентаря войдите через Telegram.'
         : 'Без регистрации. Для второго игрока откройте ещё одну вкладку.';
@@ -113,24 +140,27 @@ export class AccountPanel {
   private fill(profile: PlayerProfile): void {
     this.name.value = profile.displayName;
     this.color.value = profile.colorId;
+    this.skins.value = profile.skinId;
     this.preview();
   }
   private preview(): void {
     this.color.style.borderColor =
       PROFILE_COLORS.find((color) => color.id === this.color.value)?.hex ?? '';
   }
-  private async submit(): Promise<void> {
-    if (!this.account || this.saving) return;
+  private async submit(): Promise<boolean> {
+    if (!this.account || this.saving) return false;
     const update = parseProfileUpdate({
       displayName: this.name.value,
       colorId: this.color.value,
+      skinId: this.skins.value,
       version: this.account.profile.version,
     });
     if (!update) {
       this.message.textContent = errors.INVALID_PROFILE;
-      return;
+      return false;
     }
     this.saving = true;
+    this.skins.disabled = true;
     this.save.disabled = this.logout.disabled = true;
     this.save.textContent = 'Сохраняем…';
     this.onChange();
@@ -150,16 +180,32 @@ export class AccountPanel {
       this.account.profile = result.profile;
       this.fill(result.profile);
       this.message.textContent = 'Профиль сохранён.';
+      return true;
     } catch (error) {
       this.message.textContent =
         errors[(error as Error).message] ??
         'Не удалось подтвердить сохранение. Проверьте соединение и повторите попытку.';
+      return false;
     } finally {
       this.saving = false;
+      this.skins.disabled = false;
       this.save.disabled = this.logout.disabled = false;
       this.save.textContent = 'Сохранить профиль';
       this.onChange();
     }
+  }
+  get selectedSkinId() {
+    return this.skins.value;
+  }
+  async prepareJoin(): Promise<boolean> {
+    if (this.busy) return false;
+    const profile = this.account?.profile;
+    if (!profile) return true;
+    const changed =
+      this.name.value !== profile.displayName ||
+      this.color.value !== profile.colorId ||
+      this.skins.value !== profile.skinId;
+    return changed ? this.submit() : true;
   }
   private async signOut(): Promise<void> {
     if (!this.account || this.saving) return;

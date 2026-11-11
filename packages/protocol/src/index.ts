@@ -1,6 +1,7 @@
 import { schema, t } from '@colyseus/schema';
 import {
   PROTOCOL_VERSION,
+  DEFAULT_AVATAR_SKIN,
   type EntityState,
   type ItemState,
   type PlayerState,
@@ -46,6 +47,7 @@ export class PlayerSchema extends EntitySchema.extend(
     sessionId: t.string().default(''),
     name: t.string().default(''),
     color: t.string().default(''),
+    skinId: t.string().default(DEFAULT_AVATAR_SKIN),
     connected: t.boolean().default(true),
     reactionId: t.string().default(''),
     reactionSequence: t.uint32().default(0),

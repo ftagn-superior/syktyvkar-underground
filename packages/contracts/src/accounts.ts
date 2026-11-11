@@ -1,3 +1,5 @@
+import { findAvatarSkin, type AvatarSkinId } from './avatars.js';
+
 export const PROFILE_COLORS = [
   { id: 'mint', hex: '#65d6bc', label: 'Мятный' },
   { id: 'amber', hex: '#f3b35a', label: 'Янтарный' },
@@ -13,6 +15,7 @@ export type ProfileColorId = (typeof PROFILE_COLORS)[number]['id'];
 export interface PlayerProfile {
   displayName: string;
   colorId: ProfileColorId;
+  skinId: AvatarSkinId;
   version: number;
 }
 export interface AccountView {
@@ -27,18 +30,21 @@ export interface AccountResponse {
 export interface ProfileUpdate {
   displayName: string;
   colorId: ProfileColorId;
+  skinId: AvatarSkinId;
   version: number;
 }
 
 /** Normalize once on the server; the UI uses the same rules for feedback. */
 export function parseProfileUpdate(value: unknown): ProfileUpdate | undefined {
   if (!value || typeof value !== 'object') return;
-  const { displayName, colorId, version } = value as Record<string, unknown>;
+  const { displayName, colorId, skinId, version } = value as Record<string, unknown>;
   if (typeof displayName !== 'string' || displayName.length > 256) return;
   const name = displayName.normalize('NFC').trim();
   const length = Array.from(name).length;
   if (length < 2 || length > 24 || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(name)) return;
   if (!PROFILE_COLORS.some((color) => color.id === colorId)) return;
+  const skin = findAvatarSkin(skinId);
+  if (!skin) return;
   if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) return;
-  return { displayName: name, colorId: colorId as ProfileColorId, version };
+  return { displayName: name, colorId: colorId as ProfileColorId, skinId: skin.id, version };
 }

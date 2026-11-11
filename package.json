@@ -10,6 +10,7 @@
   "scripts": {
     "world:build": "node --import tsx tools/world-build/src/index.ts",
     "world:import": "node --import tsx tools/world-build/src/import-district.ts",
+    "world:fetch-osm": "node --import tsx tools/world-build/src/fetch-osm.ts",
     "dev": "pnpm world:build && node tools/dev.mjs",
     "check": "tsc --noEmit && node tools/check-boundaries.mjs",
     "test": "vitest run",
@@ -34,7 +35,9 @@
     "test:reactions:browser": "node --import tsx tests/browser-reactions.ts",
     "test:chat:browser": "node --import tsx tests/browser-chat.ts",
     "test:items": "node tools/test-database.mjs --items",
-    "test:items:browser": "node tools/test-database.mjs --items --browser"
+    "test:items:browser": "node tools/test-database.mjs --items --browser",
+    "test:avatars:browser": "node tools/test-database.mjs --avatars --browser",
+    "test:avatars:profile": "node --import tsx tests/browser-avatar-profile.ts"
   },
   "devDependencies": {
     "@colyseus/sdk": "0.18.10",

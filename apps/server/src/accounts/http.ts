@@ -144,7 +144,11 @@ export class AccountHttp {
         res.status(error.type === 'entity.too.large' ? 413 : 400).json({ code: 'INVALID_PROFILE' });
         return;
       }
-      console.error('Account request could not reach PostgreSQL.');
+      // SQLSTATE and constraint identify schema failures without logging profile values or tokens.
+      console.error('Account request failed.', {
+        code: typeof error?.code === 'string' ? error.code : 'UNKNOWN',
+        constraint: typeof error?.constraint === 'string' ? error.constraint : undefined,
+      });
       res.status(503).json({ code: 'ACCOUNTS_UNAVAILABLE' });
     };
     this.router.use(onError);

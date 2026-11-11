@@ -9,7 +9,7 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
-import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
@@ -18,9 +18,6 @@ import '@babylonjs/core/Rendering/edgesRenderer';
 import {
   findReaction,
   REACTION_DURATION_MS,
-  type DisplayReaction,
-  type DisplayChat,
-  type EntityState,
   type ItemPose,
   type Vec3,
   type WorldDefinition,
@@ -30,19 +27,14 @@ import { decorateWorld, obstacleAccent } from './world-decoration';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { BuildingViews } from './buildings';
 import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
+import type { DisplayEntity } from '../presentation/display-state';
+import { AvatarView } from './avatars/avatar-view';
 
-export interface DisplayEntity extends EntityState {
-  typeId?: string;
-  name?: string;
-  color?: string;
-  connected?: boolean;
-  reaction?: DisplayReaction;
-  chat?: DisplayChat;
-}
 type EntityView = {
   root: TransformNode;
   label?: HTMLElement;
-  material: StandardMaterial;
+  material?: StandardMaterial;
+  avatar?: AvatarView;
   labelText?: string;
   labelTransform?: string;
   reaction?: HTMLElement;
@@ -94,6 +86,7 @@ export class WorldView {
   private readonly visibilityChanged = () => {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
     this.lastFrame = performance.now();
+    for (const view of this.entities.values()) view.avatar?.resetMotion();
   };
   private followed?: string;
   private ownPosition?: Vector3;
@@ -260,6 +253,11 @@ export class WorldView {
   buildingDiagnostics() {
     return this.buildings.diagnostics();
   }
+  avatarDiagnostics() {
+    return Array.from(this.entities.values()).flatMap((view) =>
+      view.avatar ? [view.avatar.diagnostics()] : [],
+    );
+  }
   renderingDiagnostics() {
     return {
       quality: this.quality,
@@ -316,16 +314,12 @@ export class WorldView {
     this.followed = id;
     if (!id) this.target.setAll(0);
   }
-  update(entities: DisplayEntity[], ownId?: string): void {
+  update(entities: DisplayEntity[], ownId: string | undefined, delta: number): void {
     this.ownPosition = undefined;
     const current = new Set(entities.map((entity) => entity.entityId));
     for (const [id, view] of this.entities)
       if (!current.has(id)) {
-        view.label?.remove();
-        view.reaction?.remove();
-        view.chat?.remove();
-        for (const mesh of view.root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
-        view.root.dispose(false, true);
+        this.disposeEntity(view);
         this.entities.delete(id);
       }
     for (const entity of entities) {
@@ -345,18 +339,29 @@ export class WorldView {
         )
         .normalize();
       if (view.label) {
+        view.label.classList.toggle('own', entity.entityId === ownId);
         const text = `${entity.name ?? 'Гость'}${entity.entityId === ownId ? ' · Вы' : ''}${entity.connected === false ? ' · нет связи' : ''}`;
         if (text !== view.labelText) {
           view.label.textContent = text;
           view.labelText = text;
         }
       }
-      view.material.alpha = entity.connected === false ? 0.45 : 1;
+      if (entity.kind === 'player')
+        view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
+      else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
       this.updateReaction(view, entity);
       this.updateChat(view, entity);
       if (entity.entityId === this.followed)
         this.target.set(entity.position.x, 0, entity.position.z);
     }
+  }
+  private disposeEntity(view: EntityView): void {
+    view.label?.remove();
+    view.reaction?.remove();
+    view.chat?.remove();
+    view.avatar?.dispose();
+    for (const mesh of view.root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
+    view.root.dispose(false, true);
   }
   private updateReaction(view: EntityView, entity: DisplayEntity): void {
     const active = entity.reaction;
@@ -421,69 +426,45 @@ export class WorldView {
   private createEntity(entity: DisplayEntity, own: boolean): EntityView {
     const root = new TransformNode(entity.entityId, this.scene);
     root.rotationQuaternion = Quaternion.Identity();
-    const material = this.material(`material-${entity.entityId}`, entity.color ?? '#d6a15a');
-    let mesh: Mesh;
-    let label: HTMLElement | undefined;
     if (entity.kind === 'player') {
-      const { height, radius } = this.definition.simulation.character;
-      mesh = MeshBuilder.CreateCapsule(
-        `body-${entity.entityId}`,
-        { height, radius, tessellation: 16, subdivisions: 2 },
+      const avatar = new AvatarView(
+        root,
         this.scene,
+        this.shadow,
+        this.definition.simulation.character,
+        entity.skinId,
       );
-      const visor = MeshBuilder.CreateBox(
-        `visor-${entity.entityId}`,
-        { width: radius * 1.05, height: height * 0.072, depth: radius * 0.34 },
-        this.scene,
-      );
-      visor.parent = root;
-      visor.position.set(0, height * 0.26, radius * 0.86);
-      visor.material = this.material(`visor-material-${entity.entityId}`, '#20323a');
-      label = document.createElement('div');
+      const label = document.createElement('div');
       label.className = `player-label${own ? ' own' : ''}`;
       this.labels.append(label);
-      if (own) {
-        const marker = MeshBuilder.CreateTorus(
-          `marker-${entity.entityId}`,
-          { diameter: radius * 3, thickness: 0.028, tessellation: 40 },
-          this.scene,
-        );
-        marker.parent = root;
-        marker.position.y = -height / 2 + 0.04;
-        const markerMaterial = this.material(
-          `marker-material-${entity.entityId}`,
-          entity.color ?? '#65d6bc',
-        );
-        markerMaterial.emissiveColor = Color3.FromHexString(entity.color ?? '#65d6bc').scale(0.35);
-        marker.material = markerMaterial;
-      }
-    } else {
-      const size = this.definition.itemCatalog.types[entity.typeId!].size;
-      mesh = MeshBuilder.CreateBox(
-        'crate',
-        { width: size.x, height: size.y, depth: size.z },
+      return { root, label, avatar };
+    }
+    const material = this.material(`material-${entity.entityId}`, entity.color ?? '#d6a15a');
+    const size = this.definition.itemCatalog.types[entity.typeId].size;
+    const mesh = MeshBuilder.CreateBox(
+      'crate',
+      { width: size.x, height: size.y, depth: size.z },
+      this.scene,
+    );
+    mesh.enableEdgesRendering();
+    mesh.edgesWidth = 1.5;
+    mesh.edgesColor = new Color4(0.24, 0.17, 0.1, 0.6);
+    const strapMaterial = this.material('crate-straps', '#574b39');
+    for (const x of [-size.x * 0.3, size.x * 0.3]) {
+      const strap = MeshBuilder.CreateBox(
+        `strap-${x}`,
+        { width: size.x * 0.07, height: size.y + 0.008, depth: size.z + 0.008 },
         this.scene,
       );
-      mesh.enableEdgesRendering();
-      mesh.edgesWidth = 1.5;
-      mesh.edgesColor = new Color4(0.24, 0.17, 0.1, 0.6);
-      const strapMaterial = this.material('crate-straps', '#574b39');
-      for (const x of [-size.x * 0.3, size.x * 0.3]) {
-        const strap = MeshBuilder.CreateBox(
-          `strap-${x}`,
-          { width: size.x * 0.07, height: size.y + 0.008, depth: size.z + 0.008 },
-          this.scene,
-        );
-        strap.parent = root;
-        strap.position.x = x;
-        strap.material = strapMaterial;
-      }
+      strap.parent = root;
+      strap.position.x = x;
+      strap.material = strapMaterial;
     }
     mesh.parent = root;
     mesh.material = material;
     mesh.receiveShadows = true;
     this.shadow.addShadowCaster(mesh, true);
-    return { root, label, material };
+    return { root, material };
   }
   pointerRay() {
     const ray = this.scene.createPickingRay(
@@ -590,6 +571,8 @@ export class WorldView {
     this.canvas.removeEventListener('wheel', this.wheel);
     document.removeEventListener('visibilitychange', this.visibilityChanged);
     this.engine.stopRenderLoop();
+    for (const view of this.entities.values()) this.disposeEntity(view);
+    this.entities.clear();
     this.labels.replaceChildren();
     this.buildings.dispose();
     this.instrumentation.dispose();

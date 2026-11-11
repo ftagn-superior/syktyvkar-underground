@@ -120,6 +120,7 @@ document.body.append(storageStatus);
 const accounts = new AccountPanel(
   () => {
     session.accountId = accounts.account?.accountId;
+    session.guestSkinId = accounts.selectedSkinId;
     updateState(session.state);
   },
   () => session.leave(),
@@ -275,7 +276,7 @@ async function start(): Promise<void> {
       try {
         const frame = session.frame(now, delta, keyboard.read(view!.cameraAngle));
         view!.follow(frame.ownId);
-        view!.update(frame.entities, frame.ownId);
+        view!.update(frame.entities, frame.ownId, delta);
         inventory?.frame(view!);
       } catch (error) {
         loaded = false;
@@ -309,7 +310,10 @@ async function start(): Promise<void> {
 }
 join.addEventListener('click', () => {
   if (session.reloadRequired) location.reload();
-  else if (loaded) void session.join();
+  else if (loaded)
+    void accounts.prepareJoin().then((ready) => {
+      if (ready) void session.join();
+    });
   else void start();
 });
 cameraLeft.addEventListener('click', () => {
@@ -396,6 +400,7 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
       corrections: () => session.correctionHistory(),
       report: () => diagnosticReport(session, view, graphicsLost),
       buildings: () => structuredClone(view?.buildingDiagnostics() ?? []),
+      avatars: () => view?.avatarDiagnostics() ?? [],
     }),
     writable: false,
   });

@@ -9,10 +9,19 @@ if (!databaseUrl)
     'Set DATABASE_URL or SU_TEST_DATABASE_URL to run isolated PostgreSQL integration tests.',
   );
 const items = process.argv.includes('--items');
+const avatars = process.argv.includes('--avatars');
 const child = spawn(
   process.execPath,
   process.argv.includes('--browser')
-    ? ['--import', 'tsx', items ? 'tests/browser-items.ts' : 'tests/browser-accounts.ts']
+    ? [
+        '--import',
+        'tsx',
+        avatars
+          ? 'tests/browser-avatars.ts'
+          : items
+            ? 'tests/browser-items.ts'
+            : 'tests/browser-accounts.ts',
+      ]
     : [
         'node_modules/vitest/vitest.mjs',
         'run',

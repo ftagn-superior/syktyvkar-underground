@@ -1,6 +1,7 @@
 import type { BuildingPhysicsAsset, StaticCollider } from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
 import { meshPart } from './house.js';
+import { mergeParts } from './merge.js';
 import { addOrientedBox, addOutwardFace } from './facade.js';
 
 /**
@@ -48,6 +49,11 @@ export interface KitRecipe {
     shapes: KitShape[];
   }[];
   colliders: KitCollider[];
+  /**
+   * Объединить части в два меша — исчезающий и постоянный — с цветами вершин.
+   * Резко сокращает вызовы отрисовки для сгенерированных квадратов с мелкими объектами.
+   */
+  merge?: boolean;
 }
 
 const finite = (values: unknown, count: number) =>
@@ -222,5 +228,8 @@ export function generateKit(
         min[axis] = Math.min(min[axis], part.positions[i + j]);
         max[axis] = Math.max(max[axis], part.positions[i + j]);
       }
-  return { parts, physics: { assetId, bounds: { min, max }, colliders } };
+  return {
+    parts: recipe.merge ? mergeParts(parts) : parts,
+    physics: { assetId, bounds: { min, max }, colliders },
+  };
 }

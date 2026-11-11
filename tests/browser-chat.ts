@@ -27,14 +27,27 @@ try {
     [0, 1].map(() => browser.newContext({ viewport: { width: 1280, height: 720 } })),
   );
   const [sender, observer] = await Promise.all(contexts.map((context) => context.newPage()));
-  for (const page of [sender, observer]) {
+  for (const [index, page] of [sender, observer].entries()) {
     page.setDefaultTimeout(10_000);
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`${app.url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').waitFor({ timeout: 45_000 });
+    await page
+      .locator(`input[name="avatar-skin"][value="${index ? 'standard' : 'minifigure'}"]`)
+      .check();
     await page.locator('#join').click();
     await playing(page);
   }
+  const senderId = await sender.evaluate(
+    () => (window as any).__SU_DEBUG__.snapshot().authoritative.entityId,
+  );
+  await observer.waitForFunction(
+    (id) =>
+      (window as any).__SU_DEBUG__
+        .avatars()
+        .some((avatar: any) => avatar.entityId === id && avatar.skinId === 'minifigure'),
+    senderId,
+  );
   await sender.bringToFront();
   await sender.locator('#world').focus();
   await sender.keyboard.down('d');
@@ -83,9 +96,6 @@ try {
   const message = 'Привет, <b>сосед</b>! 🙂';
   await input.fill(message);
   await input.press('Enter');
-  const senderId = await sender.evaluate(
-    () => (window as any).__SU_DEBUG__.snapshot().authoritative.entityId,
-  );
   const bubble = `.player-chat[data-entity-id="${senderId}"]`;
   await Promise.all([sender.locator(bubble).waitFor(), observer.locator(bubble).waitFor()]);
   await sender.locator('#chat-console').waitFor({ state: 'hidden' });
@@ -176,6 +186,16 @@ try {
   await playing(observer);
   assert.equal(await observer.locator('.player-chat').count(), 0);
   checks.push('reloading a session does not replay an expired message');
+  await sender.locator('#chat-toggle').click();
+  await input.fill('До встречи!');
+  await sender.locator('#chat-send:not([disabled])').waitFor();
+  await input.press('Enter');
+  await observer.locator(bubble).waitFor();
+  await sender.locator('#leave').click();
+  await observer.locator(bubble).waitFor({ state: 'detached', timeout: 2000 });
+  checks.push(
+    'chat works with the minifigure skin and is removed with the avatar when its player leaves',
+  );
   assert.deepEqual(errors, []);
   await writeFile(`${output}/checks.json`, JSON.stringify({ checks, errors }, null, 2));
   console.log(JSON.stringify({ checks, errors }, null, 2));

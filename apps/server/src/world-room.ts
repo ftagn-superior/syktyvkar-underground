@@ -30,6 +30,9 @@ import {
   findReaction,
   normalizeChatText,
   chatDurationMs,
+  findAvatarSkin,
+  DEFAULT_AVATAR_SKIN,
+  type AvatarSkinId,
   type ActionResult,
   type ErrorCode,
   type WorldDefinition,
@@ -54,6 +57,7 @@ interface Session {
   connected: boolean;
   name: string;
   color: string;
+  skinId: AvatarSkinId;
   lastRequest: number;
   lastRespawn: number;
   results: Map<number, ActionResult>;
@@ -164,9 +168,17 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       throw new ServerError(4001, 'VERSION_MISMATCH');
     }
     if (!this.isReady()) throw new ServerError(503, 'WORLD_NOT_READY');
-    if (options.accountMode === 'guest') return true;
+    if (options.accountMode === 'guest') {
+      if (options.skinId !== undefined && !findAvatarSkin(options.skinId))
+        throw new ServerError(4001, 'INVALID_SKIN');
+      return true;
+    }
     const token = this.accounts?.readToken(context.headers);
-    if (options.accountMode !== 'account' && !token) return true;
+    if (options.accountMode !== 'account' && !token) {
+      if (options.skinId !== undefined && !findAvatarSkin(options.skinId))
+        throw new ServerError(4001, 'INVALID_SKIN');
+      return true;
+    }
     if (!this.accounts || !token) throw new ServerError(401, 'AUTH_REQUIRED');
     try {
       const account = await this.accounts.store.authenticate(token);
@@ -183,7 +195,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
 
-  onJoin(client: Client): void {
+  onJoin(client: Client, options: { skinId?: unknown } = {}): void {
     const auth =
       typeof client.auth === 'object' && client.auth?.accountId
         ? (client.auth as AuthenticatedAccount)
@@ -201,6 +213,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       connected: true,
       auth,
       name: auth?.profile.displayName ?? `Гость ${ordinal}`,
+      skinId: auth?.profile.skinId ?? findAvatarSkin(options.skinId)?.id ?? DEFAULT_AVATAR_SKIN,
       color:
         (auth ? PROFILE_COLORS.find((c) => c.id === auth.profile.colorId)!.hex : undefined) ??
         PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
@@ -234,6 +247,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     projected.sessionId = sessionId;
     projected.name = session.name;
     projected.color = session.color;
+    projected.skinId = session.skinId;
     projected.connected = session.connected;
     this.state.players.set(sessionId, projected);
   }

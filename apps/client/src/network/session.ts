@@ -31,6 +31,9 @@ import {
   normalizeChatText,
   TICK_RATE,
   findReaction,
+  DEFAULT_AVATAR_SKIN,
+  resolveAvatarSkinId,
+  type AvatarSkinId,
   NEUTRAL_INPUT,
   WORLD_FORMAT_VERSION,
   canonicalJson,
@@ -48,7 +51,7 @@ import {
   type Vec3,
 } from '@su/contracts';
 import wasmUrl from '@babylonjs/havok/lib/esm/HavokPhysics.wasm?url';
-import type { DisplayEntity } from '../rendering/world-view';
+import type { DisplayEntity } from '../presentation/display-state';
 
 export type ConnectionState =
   'loading' | 'ready' | 'connecting' | 'playing' | 'reconnecting' | 'error';
@@ -74,6 +77,7 @@ const messages: Record<string, string> = {
   RATE_LIMITED: 'Возврат на старт доступен раз в 3 секунды.',
   STALE_WORLD: 'Мир был перезапущен. Войдите снова.',
   INVALID_INPUT: 'Сервер отклонил команду. Состояние восстановлено.',
+  INVALID_SKIN: 'Эта внешность недоступна. Выберите вариант из каталога.',
   ALREADY_PROCESSED: 'Этот запрос уже обработан.',
   AUTH_REQUIRED: 'Авторизация истекла. Обновите страницу и войдите через Telegram снова.',
   ACCOUNT_CHANGED: 'Аккаунт изменился в другой вкладке. Обновите страницу перед входом.',
@@ -120,6 +124,7 @@ function percentile(values: number[], percentile: number): number {
 
 export class GameSession {
   accountId?: string;
+  guestSkinId: AvatarSkinId = DEFAULT_AVATAR_SKIN;
   inventory: InventoryView = { slots: [] };
   private pendingItem?: ItemCommand;
   private itemRetryAt = 0;
@@ -160,6 +165,7 @@ export class GameSession {
   private stalled = false;
   private waitingResync = false;
   private generation = 0;
+  private motionRevision = 0;
   private frames: number[] = [];
   private frameWarmupMs = 0;
   private corrections: number[] = [];
@@ -172,6 +178,7 @@ export class GameSession {
     private readonly onNotice: (message: string) => void,
   ) {}
   private setState(state: ConnectionState, message?: string): void {
+    if (state !== this.state) this.motionRevision++;
     if (state !== 'playing') {
       this.clearPendingRespawn();
       this.clearPendingReaction();
@@ -294,6 +301,7 @@ export class GameSession {
               simulationConfigHash: info.simulationConfigHash,
               accountMode: this.accountId ? 'account' : 'guest',
               expectedAccountId: this.accountId,
+              skinId: this.accountId ? undefined : this.guestSkinId,
             },
             WorldState,
           );
@@ -532,6 +540,7 @@ export class GameSession {
     for (const item of room.state.items.values()) this.attach(item);
     if (this.waitingResync) {
       this.simulation!.reset();
+      this.motionRevision++;
       this.waitingResync = false;
       this.lastAck = this.input!.lastProcessed;
       this.lastAckAt = performance.now();
@@ -649,6 +658,7 @@ export class GameSession {
     if (stalled && !this.stalled && this.state === 'playing') {
       this.stalled = true;
       this.simulation.reset();
+      this.motionRevision++;
       room.send('resync');
     }
     if (!stalled && !this.waitingResync && this.state === 'playing') this.stalled = false;
@@ -683,13 +693,23 @@ export class GameSession {
     const entities: DisplayEntity[] = [];
     for (const player of room.state.players.values()) {
       const pose = player === self ? this.simulation.pose() : this.remotePose(player);
+      const state = player === self ? this.physics!.getState() : toPlayerState(player);
       const remainingMs = this.displayRemainingMs(player.reactionExpiresAtTick, now);
       entities.push({
-        ...toPlayerState(player),
+        ...state,
         position: { x: pose.x, y: pose.y, z: pose.z },
-        rotation: player === self ? this.physics!.getState().rotation : this.remoteRotation(player),
+        rotation: player === self ? state.rotation : this.remoteRotation(player),
+        motionRevision: this.motionRevision,
+        motionEnabled:
+          this.state === 'playing' &&
+          !this.persistencePaused &&
+          !this.stalled &&
+          !this.waitingResync &&
+          !document.hidden &&
+          (player !== self || this.inputEnabled),
         name: player.name,
         color: player.color,
+        skinId: resolveAvatarSkinId(player.skinId),
         connected: player.connected,
         reaction:
           this.state === 'playing' && player.reactionId
@@ -826,6 +846,7 @@ export class GameSession {
     if (this.inputEnabled === enabled) return;
     if (!enabled) this.neutral();
     this.inputEnabled = enabled;
+    this.motionRevision++;
     this.simulation?.reset();
     this.discardNextInputFrame = true;
     if (!enabled && this.room && this.state === 'playing') {

@@ -15,6 +15,9 @@ import { runInNewContext } from 'node:vm';
 import type { BuildingInstance, EntityDefinition, Vec3, WorldSource } from '@su/contracts';
 import type { FootprintRecipe, GroundLayer, GroundRecipe, TreeRecipe } from './city.js';
 import { cleanRing, clipRing, signedArea, triangulate, type Point2 } from './triangulate.js';
+import { minimumRectangle } from './facade.js';
+import { toGame as osmToGame, type OsmSettings, type OsmSnapshot } from './fetch-osm.js';
+import { buildDetails } from './osm-details.js';
 
 interface ImportConfig {
   formatVersion: 1;
@@ -33,9 +36,29 @@ interface ImportConfig {
   buildings?: Record<string, BuildingOverride>;
   /** Вертикальное растяжение всех домов из `buildings`, если у дома не задан свой `heightScale`. */
   detailedHeightScale?: number;
-  /** Штучные объекты из `content/buildings/<worldId>/manual/<assetId>/`. */
-  props?: { entityId: string; assetId: string; position: Vec3; yaw?: number }[];
+  /**
+   * Штучные объекты из `content/buildings/<worldId>/manual/<assetId>/`.
+   * `clearRadius` — радиус вокруг объекта без деревьев и кустов (по умолчанию 6 м).
+   */
+  props?: {
+    entityId: string;
+    assetId: string;
+    position: Vec3;
+    yaw?: number;
+    clearRadius?: number;
+  }[];
+  /** Снимок OSM для мелких объектов, входов и тегов домов; см. fetch-osm.ts. */
+  osm?: OsmSettings;
 }
+/** Цвета фасадов по `building:material` для домов без ручных уточнений. */
+const MATERIALS: Record<string, string[]> = {
+  brick: ['#b5794f', '#c08a5e', '#a96f4c', '#c49a6c'],
+  concrete: ['#d8d4c8', '#cfcabd', '#e1ddd2'],
+  panel: ['#d8d4c8', '#cfcabd', '#e1ddd2'],
+  plaster: ['#e6dcc4', '#dcd2bc', '#e9e1cf'],
+  wood: ['#9a7b5c', '#8c6f53'],
+};
+const PITCHED = new Set(['hipped', 'gabled', 'pyramidal', 'half-hipped']);
 const OVERRIDABLE = [
   'height',
   'floors',
@@ -150,9 +173,12 @@ const GROUND = {
     { id: 'green', color: '#9fb98a', elevation: 0.002 },
     { id: 'park', color: '#8fb07a', elevation: 0.003 },
     { id: 'pitch', color: '#7fa56e', elevation: 0.004 },
+    { id: 'playground', color: '#d8c597', elevation: 0.0048 },
     { id: 'footway', color: '#d8d0b8', elevation: 0.006 },
+    { id: 'parking', color: '#7a807a', elevation: 0.007 },
     { id: 'service', color: '#8e948c', elevation: 0.008 },
     { id: 'road', color: '#6f7670', elevation: 0.01 },
+    { id: 'markings', color: '#e9e9e2', elevation: 0.012 },
   ],
 };
 
@@ -200,6 +226,19 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       if (key !== 'note' && !(OVERRIDABLE as readonly string[]).includes(key))
         throw new Error(`Building override ${osm} has unsupported field ${key}`);
   }
+  // Снимок OSM необязателен: без него участок собирается только из прототипа.
+  const snapshot: OsmSnapshot | undefined = config.osm
+    ? await readFile(resolve(root, config.osm.snapshot), 'utf8').then(JSON.parse, () => undefined)
+    : undefined;
+  const osmBuildings = new Map<string, Record<string, string>>();
+  const entrances: Point2[] = [];
+  if (snapshot && config.osm)
+    for (const element of snapshot.elements) {
+      if (element.type === 'way' && element.tags.building)
+        osmBuildings.set(`way/${element.id}`, element.tags);
+      if (element.type === 'node' && element.tags.entrance && element.point)
+        entrances.push(osmToGame(config.osm, ...element.point));
+    }
   const writeAsset = async (assetId: string, kind: string, recipe: unknown) => {
     const directory = join(buildingsDir, assetId);
     await mkdir(directory, { recursive: true });
@@ -252,7 +291,40 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
         : (NAMED_COLORS[b.color ?? ''] ?? pick(`${b.id}:wall`, WALLS)),
       roofColor: NAMED_COLORS[b.roofColor ?? ''] ?? pick(`${b.id}:roof`, ROOFS),
       windowColor: '#3d4d57',
+      // Один меш на группу прозрачности: меньше вызовов отрисовки на слабых видеокартах.
+      merge: true,
     };
+    // Теги OSM уточняют дома без ручных правок: материал стен и форму крыши.
+    const tags = osmBuildings.get(b.id);
+    if (tags && !overrides[b.id]) {
+      const palette = MATERIALS[tags['building:material'] ?? ''];
+      if (palette && !UTILITY.has(b.type)) recipe.wallColor = pick(`${b.id}:material`, palette);
+      if (PITCHED.has(tags['roof:shape'] ?? '')) {
+        const short = minimumRectangle(recipe.outline).half[1];
+        recipe.details = {
+          hippedRoof: {
+            height: round(Math.min(4, Math.max(1.2, short * 0.5))),
+            color: recipe.roofColor,
+          },
+        };
+      }
+    }
+    // Входы OSM в пределах 1,5 м от стены становятся дверями с козырьком.
+    const doors = entrances
+      .filter((p) =>
+        outline.some((a, i) => {
+          const b2 = outline[(i + 1) % outline.length];
+          const dx = b2[0] - a[0],
+            dz = b2[1] - a[1];
+          const t = Math.max(
+            0,
+            Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz)),
+          );
+          return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dz * t) < 1.5;
+        }),
+      )
+      .map(([x, z]) => [round(x - cx), round(z - cz)] as Point2);
+    if (doors.length && !overrides[b.id]?.sections) recipe.doors = doors;
     if (overrides[b.id]) {
       const { note: _note, ...override } = overrides[b.id];
       // Уточнённые дома растягиваются по высоте, если сам override не задаёт масштаб.
@@ -279,11 +351,17 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   const layers: GroundLayer[] = GROUND.layers.map((layer) => ({ ...layer, polygons: [] }));
   const layer = (id: string) => layers.find((l) => l.id === id)!;
   const roadPolygons: Point2[][] = [];
-  const addPolygon = (target: GroundLayer, rings: Ring[]) => {
+  const addPolygon = (
+    target: GroundLayer,
+    rings: readonly (readonly Point2[])[],
+    map: (p: Point2) => Point2 = (p) => toGame(p as [number, number]),
+    // Мелкие обрезки поверхности — шум; у разметки площадь штриха меньше 0,5 м².
+    minArea = 0.5,
+  ) => {
     const [outer, ...holes] = rings.map((ring) =>
-      cleanRing(clipRing(ring.map(toGame), clipMin, clipMax)),
+      cleanRing(clipRing(ring.map(map), clipMin, clipMax)),
     );
-    if (!outer || outer.length < 3 || Math.abs(signedArea(outer)) < 0.5) return;
+    if (!outer || outer.length < 3 || Math.abs(signedArea(outer)) < minArea) return;
     const kept = holes.filter((hole) => hole.length >= 3 && Math.abs(signedArea(hole)) >= 0.5);
     const shape = triangulate(outer, kept);
     report.polygons++;
@@ -303,23 +381,6 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       if (added && !road.walk) roadPolygons.push(added[0]);
     }
   }
-  const groundRecipe: GroundRecipe = {
-    formatVersion: 1,
-    min: clipMin,
-    max: clipMax,
-    depth: 1,
-    color: GROUND.base,
-    layers,
-  };
-  const groundId = `${config.worldId}-ground`;
-  await writeAsset(groundId, 'ground', groundRecipe);
-  instances.unshift({
-    entityId: 'ground',
-    assetId: groundId,
-    position: { x: 0, y: 0, z: 0 },
-    rotation: identity,
-  });
-
   // 3. Штучные объекты: ручные модели из manual/, например памятник в центре кольца.
   for (const prop of config.props ?? []) {
     const descriptor = `${MANUAL_DIRECTORY}/${prop.assetId}/asset.json`;
@@ -364,7 +425,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     ...(config.props ?? []).map((prop) => prop.position),
   ];
   let treeIndex = 0;
-  for (const [sx, sy, size] of data.trees) {
+  // С реальными деревьями из OSM декоративные деревья прототипа не нужны.
+  for (const [sx, sy, size] of snapshot ? [] : data.trees) {
     const [x, z] = toGame([sx, sy]);
     const assetId = size < 8.5 ? 'tree-spruce-small' : 'tree-spruce-large';
     // Габарит повёрнутой модели проверяется по углам её рамки: берём запас √2.
@@ -384,6 +446,64 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   report.trees = treeIndex;
   for (const [assetId, recipe] of Object.entries(trees))
     if (instances.some((i) => i.assetId === assetId)) await writeAsset(assetId, 'tree', recipe);
+
+  // 4б. Мелкие объекты из снимка OSM: ограды, деревья, кусты, скамейки, фонари, остановки.
+  let detailStats: Record<string, number> = {};
+  if (snapshot && config.osm) {
+    const details = buildDetails({
+      settings: config.osm,
+      snapshot,
+      bounds: { minX, maxX, minZ, maxZ },
+      footprints,
+      roads: roadPolygons,
+      clear: [
+        ...[...config.spawnPoints, config.crate].map((p) => ({
+          x: p.x,
+          z: p.z,
+          radius: config.spawnClearance,
+        })),
+        ...(config.props ?? []).map((prop) => ({
+          x: prop.position.x,
+          z: prop.position.z,
+          radius: prop.clearRadius ?? 6,
+        })),
+      ],
+    });
+    for (const chunk of details.chunks) {
+      await writeAsset(chunk.id, 'kit', chunk.recipe);
+      instances.push({
+        entityId: chunk.id,
+        assetId: chunk.id,
+        position: { x: chunk.center[0], y: 0, z: chunk.center[1] },
+        rotation: identity,
+      });
+    }
+    const asIs = (p: Point2) => p;
+    for (const polygon of details.ground.playground) addPolygon(layer('playground'), polygon, asIs);
+    for (const polygon of details.ground.parking) addPolygon(layer('parking'), polygon, asIs);
+    for (const polygon of details.ground.markings)
+      addPolygon(layer('markings'), polygon, asIs, 0.05);
+    detailStats = details.stats;
+  }
+
+  // Земля пишется последней: в неё входят слои площадок и парковок из OSM.
+  const groundRecipe: GroundRecipe = {
+    formatVersion: 1,
+    min: clipMin,
+    max: clipMax,
+    depth: 1,
+    color: GROUND.base,
+    layers,
+    merge: true,
+  };
+  const groundId = `${config.worldId}-ground`;
+  await writeAsset(groundId, 'ground', groundRecipe);
+  instances.unshift({
+    entityId: 'ground',
+    assetId: groundId,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: identity,
+  });
 
   // 5. Точки появления не должны оказаться внутри дома.
   const radius = 0.35;
@@ -456,7 +576,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     join(buildingsDir, 'catalog.json'),
     JSON.stringify({ formatVersion: 1, assets: catalog }, null, 2) + '\n',
   );
-  return { ...report, bounds: world.bounds, instances: instances.length };
+  return { ...report, bounds: world.bounds, instances: instances.length, details: detailStats };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -469,5 +589,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   console.log(
     `Границы X ${report.bounds.min.x}…${report.bounds.max.x}, Z ${report.bounds.min.z}…${report.bounds.max.z}`,
   );
+  if (Object.keys(report.details).length)
+    console.log(
+      'Объекты OSM: ' +
+        Object.entries(report.details)
+          .map(([kind, n]) => `${kind} ${n}`)
+          .join(', '),
+    );
   for (const line of report.skipped) console.log(`Пропущено ${line}`);
 }

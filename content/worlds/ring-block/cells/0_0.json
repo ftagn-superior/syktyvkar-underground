@@ -3238,6 +3238,21 @@
       }
     },
     {
+      "entityId": "details-1-m1",
+      "assetId": "details-1-m1",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
       "entityId": "details-1-m10",
       "assetId": "details-1-m10",
       "position": {
@@ -4624,6 +4639,21 @@
         "x": -160,
         "y": 0,
         "z": -160
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-m3-m6",
+      "assetId": "details-m3-m6",
+      "position": {
+        "x": -160,
+        "y": 0,
+        "z": -352
       },
       "rotation": {
         "x": 0,

@@ -63,7 +63,8 @@ export function overpassQuery(bbox: OsmSnapshot['bbox']): string {
   node["natural"="tree"]${b};
   way["natural"~"^(tree_row|wood|scrub)$"]${b};
   way["landuse"="forest"]${b};
-  node["highway"~"^(street_lamp|bus_stop)$"]${b};
+  node["highway"~"^(street_lamp|bus_stop|crossing|traffic_signals)$"]${b};
+  way["highway"~"^(primary|secondary|tertiary|unclassified|residential|living_street|service)(_link)?$"]${b};
   node["amenity"~"^(bench|waste_basket)$"]${b};
   way["leisure"="playground"]${b};
   way["amenity"="parking"]${b};

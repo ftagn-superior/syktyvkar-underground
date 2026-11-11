@@ -178,6 +178,7 @@ const GROUND = {
     { id: 'parking', color: '#7a807a', elevation: 0.007 },
     { id: 'service', color: '#8e948c', elevation: 0.008 },
     { id: 'road', color: '#6f7670', elevation: 0.01 },
+    { id: 'markings', color: '#e9e9e2', elevation: 0.012 },
   ],
 };
 
@@ -354,11 +355,13 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     target: GroundLayer,
     rings: readonly (readonly Point2[])[],
     map: (p: Point2) => Point2 = (p) => toGame(p as [number, number]),
+    // Мелкие обрезки поверхности — шум; у разметки площадь штриха меньше 0,5 м².
+    minArea = 0.5,
   ) => {
     const [outer, ...holes] = rings.map((ring) =>
       cleanRing(clipRing(ring.map(map), clipMin, clipMax)),
     );
-    if (!outer || outer.length < 3 || Math.abs(signedArea(outer)) < 0.5) return;
+    if (!outer || outer.length < 3 || Math.abs(signedArea(outer)) < minArea) return;
     const kept = holes.filter((hole) => hole.length >= 3 && Math.abs(signedArea(hole)) >= 0.5);
     const shape = triangulate(outer, kept);
     report.polygons++;
@@ -478,6 +481,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     const asIs = (p: Point2) => p;
     for (const polygon of details.ground.playground) addPolygon(layer('playground'), polygon, asIs);
     for (const polygon of details.ground.parking) addPolygon(layer('parking'), polygon, asIs);
+    for (const polygon of details.ground.markings)
+      addPolygon(layer('markings'), polygon, asIs, 0.05);
     detailStats = details.stats;
   }
 

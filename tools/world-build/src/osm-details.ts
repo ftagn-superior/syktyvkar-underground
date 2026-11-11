@@ -7,6 +7,7 @@
 import type { KitRecipe, KitShape } from './kit.js';
 import type { OsmElement, OsmSettings, OsmSnapshot } from './fetch-osm.js';
 import { toGame } from './fetch-osm.js';
+import { roadMarkings, trafficSignals } from './road-markings.js';
 import type { Point2 } from './triangulate.js';
 
 export const CHUNK_SIZE = 64;
@@ -25,7 +26,7 @@ export interface DetailsInput {
 export interface DetailsResult {
   chunks: { id: string; center: [number, number]; recipe: KitRecipe }[];
   /** Плоские слои земли для сборщика поверхности. */
-  ground: { playground: Point2[][][]; parking: Point2[][][] };
+  ground: { playground: Point2[][][]; parking: Point2[][][]; markings: Point2[][][] };
   stats: Record<string, number>;
 }
 
@@ -49,6 +50,10 @@ const PARTS: Record<string, Part> = {
   'crown-birch': { role: 'detail', fade: true, color: '#7aa457' },
   'crown-leaf': { role: 'detail', fade: true, color: '#55813f' },
   'crown-spruce': { role: 'detail', fade: true, color: '#3f6844' },
+  'signal-body': { role: 'detail', fade: false, color: '#1e2124' },
+  'signal-red': { role: 'detail', fade: false, color: '#e0453a' },
+  'signal-yellow': { role: 'detail', fade: false, color: '#e8b94a' },
+  'signal-green': { role: 'detail', fade: false, color: '#4cc26a' },
 };
 
 /** Детерминированное число 0…1 из строки. */
@@ -457,7 +462,30 @@ export function buildDetails(input: DetailsInput): DetailsResult {
   }
 
   // 4. Детские площадки и парковки: слои земли и простой игровой комплекс.
-  const ground: DetailsResult['ground'] = { playground: [], parking: [] };
+  // 4а. Разметка проезжей части — плоский слой земли; светофоры — объекты в квадратах.
+  const marks = roadMarkings({ settings, snapshot, roads });
+  count('marking-line', marks.stats.lines);
+  count('crosswalk', marks.stats.crosswalks);
+  for (const spot of trafficSignals({ settings, snapshot, roads })) {
+    const p = spot.position;
+    if (!within(p, 1) || footprints.some((ring) => inside(p, ring))) continue;
+    const f = spot.facing;
+    const yaw = yawOf(f[0], f[1]);
+    const put = place(p);
+    put.box('metal', [p[0], 1.5, p[1]], [0.14, 3, 0.14], yaw);
+    put.collider([p[0], 1.5, p[1]], [0.14, 3, 0.14], yaw);
+    put.box('signal-body', [p[0], 3.4, p[1]], [0.28, 1, 0.34], yaw);
+    // Три сигнала на лицевой стороне корпуса, обращённой к водителям.
+    for (const [part, y] of [
+      ['signal-red', 3.72],
+      ['signal-yellow', 3.4],
+      ['signal-green', 3.08],
+    ] as const)
+      put.box(part, [p[0] + f[0] * 0.15, y, p[1] + f[1] * 0.15], [0.04, 0.2, 0.2], yaw);
+    count('traffic-light');
+  }
+
+  const ground: DetailsResult['ground'] = { playground: [], parking: [], markings: marks.polygons };
   for (const way of elements) {
     if (way.type !== 'way' || !way.geometry) continue;
     const ring = way.geometry.slice(0, -1).map(([lat, lon]) => project(lat, lon));

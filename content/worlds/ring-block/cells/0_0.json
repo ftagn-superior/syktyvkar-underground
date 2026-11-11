@@ -2998,6 +2998,21 @@
       }
     },
     {
+      "entityId": "water-kiosk-okt-54",
+      "assetId": "water-kiosk",
+      "position": {
+        "x": -78.82,
+        "y": 0,
+        "z": -223.61
+      },
+      "rotation": {
+        "x": 0,
+        "y": -0.5301412600000001,
+        "z": 0,
+        "w": 0.8479093299999999
+      }
+    },
+    {
       "entityId": "details-0-0",
       "assetId": "details-0-0",
       "position": {

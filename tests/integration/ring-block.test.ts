@@ -308,6 +308,46 @@ describe('детали фасадов и модели из конструкто�
     expect(plain.window).toBeCloseTo(1.4, 6);
   });
 
+  it('несколько крышных вывесок: буквы «Пятёрочки», логотип на щите и щит «Магнита»', () => {
+    const { parts } = generateFootprint('test-signs', {
+      ...base,
+      details: {
+        roofSigns: [
+          { facing: 'S', text: 'ПЯТЕРОЧКА', at: 0.42, width: 11.5, height: 2, color: '#d8322f' },
+          {
+            facing: 'S',
+            text: '5',
+            at: 0.08,
+            width: 2.2,
+            height: 2.2,
+            color: '#ffffff',
+            board: '#d8322f',
+          },
+          {
+            facing: 'S',
+            text: 'МАГНИТ',
+            at: 0.82,
+            width: 6,
+            height: 1.3,
+            color: '#c2185b',
+            board: '#f4f4f2',
+          },
+        ],
+      },
+    });
+    const ids = parts.map((p) => p.partId);
+    for (const id of ['sign', 'sign-back', 'sign-1', 'sign-board-1', 'sign-2', 'sign-board-2'])
+      expect(ids).toContain(id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Вывески не наезжают друг на друга: центры по оси X в порядке слева направо для зрителя с юга.
+    const centre = (id: string) => {
+      const xs = parts.find((p) => p.partId === id)!.positions.filter((_, i) => i % 3 === 0);
+      return (Math.min(...xs) + Math.max(...xs)) / 2;
+    };
+    expect(centre('sign-1')).toBeLessThan(centre('sign'));
+    expect(centre('sign')).toBeLessThan(centre('sign-2'));
+  });
+
   it('неизвестная буква вывески останавливает сборку', () => {
     expect(() =>
       generateFootprint('test-sign', {

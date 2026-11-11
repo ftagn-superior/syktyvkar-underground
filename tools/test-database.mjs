@@ -29,6 +29,7 @@ const child = spawn(
           ? [
               'tests/integration/items.test.ts',
               'tests/integration/items-network.test.ts',
+              'tests/integration/world-migration.test.ts',
               'packages/simulation/src/items.test.ts',
             ]
           : ['tests/integration/accounts.test.ts']),

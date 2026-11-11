@@ -101,8 +101,8 @@
         <div>
           <strong>Свободное движение</strong>
           <span
-            >WASD / стрелки · Shift — быстрый бег · Q / E — камера · R — реакции · I — инвентарь · F
-            — подбор</span
+            >WASD / стрелки · Shift — быстрый бег · Q / E — камера · T — чат · R — реакции · I —
+            инвентарь · F — подбор</span
           >
         </div>
       </div>
@@ -127,6 +127,16 @@
             ↷
           </button>
         </div>
+        <button
+          id="chat-toggle"
+          class="button quiet"
+          aria-expanded="false"
+          aria-controls="chat-console"
+          aria-keyshortcuts="T"
+          hidden
+        >
+          Чат <kbd>T</kbd>
+        </button>
         <div class="reactions-control">
           <button
             id="reactions-toggle"
@@ -175,6 +185,34 @@
         </button>
       </div>
     </footer>
+    <form
+      id="chat-console"
+      class="chat-console"
+      aria-labelledby="chat-title"
+      autocomplete="off"
+      hidden
+    >
+      <div class="reactions-heading">
+        <label id="chat-title" for="chat-input">Сообщение рядом с персонажем</label>
+        <button type="button" class="reaction-close" data-close aria-label="Закрыть чат (Escape)">
+          ×
+        </button>
+      </div>
+      <input
+        id="chat-input"
+        type="text"
+        name="message"
+        maxlength="255"
+        placeholder="Что скажем окружающим?"
+        aria-describedby="chat-status chat-counter"
+        spellcheck="false"
+      />
+      <div class="chat-footer">
+        <span id="chat-status" role="status">Enter — отправить · Esc — отменить</span>
+        <span id="chat-counter">0 / 255</span>
+        <button id="chat-send" type="submit" class="button quiet" disabled>Отправить</button>
+      </div>
+    </form>
     <aside id="diagnostics" class="diagnostics" aria-label="Диагностика соединения" hidden>
       <div class="diagnostics-heading">ДИАГНОСТИКА <span>LIVE</span></div>
       <label class="quality-setting" for="quality"

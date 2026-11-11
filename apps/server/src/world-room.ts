@@ -28,6 +28,8 @@ import {
   NEUTRAL_INPUT,
   normalizeInput,
   findReaction,
+  normalizeChatText,
+  chatDurationMs,
   type ActionResult,
   type ErrorCode,
   type WorldDefinition,
@@ -133,6 +135,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('clientReady', (client) => this.ready(client));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
+    this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
     this.onMessage('resync', (client) => {
       this.inputs.get(client.sessionId).clear();
       const session = this.sessions.get(client.sessionId);
@@ -281,6 +284,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         player.reactionId = '';
         player.reactionExpiresAtTick = 0;
       }
+      if (player.chatText && this.state.serverTick >= player.chatExpiresAtTick) {
+        player.chatText = '';
+        player.chatExpiresAtTick = 0;
+      }
     }
     this.projectItems(snapshot.items);
     this.state.serverTick++;
@@ -401,6 +408,39 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
             retryAfterMs: code
               ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
               : REACTION_DURATION_MS,
+          }
+        : {}),
+    });
+  }
+
+  private chat(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const text = normalizeChatText((request as { text?: unknown }).text);
+    const player = this.state.players.get(client.sessionId);
+    const remainingTicks = Math.max(0, (player?.chatExpiresAtTick ?? 0) - this.state.serverTick);
+    if (!code) {
+      if (!text) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else {
+        player!.chatText = text;
+        player!.chatSequence++;
+        player!.chatExpiresAtTick =
+          this.state.serverTick + Math.ceil((chatDurationMs(text) * TICK_RATE) / 1000);
+      }
+    }
+    // Cache only the acknowledgement, never the message body or a history.
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === undefined || code === 'RATE_LIMITED'
+        ? {
+            retryAfterMs: code
+              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
+              : chatDurationMs(text!),
           }
         : {}),
     });

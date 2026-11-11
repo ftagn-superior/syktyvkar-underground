@@ -27,6 +27,8 @@ import {
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
   REACTION_DURATION_MS,
+  CHAT_MAX_DURATION_MS,
+  normalizeChatText,
   TICK_RATE,
   findReaction,
   NEUTRAL_INPUT,
@@ -38,6 +40,7 @@ import {
   worldManifestIdentity,
   type ActionResult,
   type ReactionRequest,
+  type ChatRequest,
   type MoveInput,
   type WorldDefinition,
   type WorldInfo,
@@ -123,6 +126,7 @@ export class GameSession {
   private persistencePaused = false;
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
+  onChatResult?: (result: ActionResult) => void;
   state: ConnectionState = 'loading';
   definition!: WorldDefinition;
   manifest!: WorldManifest;
@@ -145,6 +149,9 @@ export class GameSession {
   private pendingReaction?: number;
   private reactionTimeout?: ReturnType<typeof setTimeout>;
   private reactionAvailableAt = 0;
+  private pendingChat?: number;
+  private chatTimeout?: ReturnType<typeof setTimeout>;
+  private chatAvailableAt = 0;
   private inputEnabled = true;
   private discardNextInputFrame = false;
   private lastAck = 0;
@@ -168,6 +175,7 @@ export class GameSession {
     if (state !== 'playing') {
       this.clearPendingRespawn();
       this.clearPendingReaction();
+      this.clearPendingChat();
     }
     this.state = state;
     this.onState(state, message);
@@ -371,6 +379,24 @@ export class GameSession {
       });
       room.onMessage<ActionResult>('actionResult', (result) => {
         if (this.room !== room) return;
+        if (result.requestId === this.pendingChat) {
+          this.clearPendingChat();
+          if (result.ok || result.code === 'RATE_LIMITED') {
+            const delay =
+              typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
+                ? Math.min(CHAT_MAX_DURATION_MS, Math.max(0, result.retryAfterMs))
+                : CHAT_MAX_DURATION_MS;
+            this.chatAvailableAt = performance.now() + delay;
+          }
+          if (!result.ok && result.code)
+            this.onNotice(
+              result.code === 'RATE_LIMITED'
+                ? 'Дождитесь окончания показа текущего сообщения.'
+                : (messages[result.code] ?? result.code),
+            );
+          this.onChatResult?.(result);
+          return;
+        }
         if (result.requestId === this.pendingReaction) {
           this.clearPendingReaction();
           if (result.ok || result.code === 'RATE_LIMITED') {
@@ -657,7 +683,7 @@ export class GameSession {
     const entities: DisplayEntity[] = [];
     for (const player of room.state.players.values()) {
       const pose = player === self ? this.simulation.pose() : this.remotePose(player);
-      const remainingMs = this.reactionRemainingMs(player.reactionExpiresAtTick, now);
+      const remainingMs = this.displayRemainingMs(player.reactionExpiresAtTick, now);
       entities.push({
         ...toPlayerState(player),
         position: { x: pose.x, y: pose.y, z: pose.z },
@@ -668,6 +694,14 @@ export class GameSession {
         reaction:
           this.state === 'playing' && player.reactionId
             ? { id: player.reactionId, sequence: player.reactionSequence, remainingMs }
+            : undefined,
+        chat:
+          this.state === 'playing' && player.chatText
+            ? {
+                text: player.chatText,
+                sequence: player.chatSequence,
+                remainingMs: this.displayRemainingMs(player.chatExpiresAtTick, now),
+              }
             : undefined,
       });
     }
@@ -806,7 +840,7 @@ export class GameSession {
       remainingMs: Math.max(0, this.respawnAvailableAt - performance.now()),
     };
   }
-  private reactionRemainingMs(expiresAtTick: number, now = performance.now()): number {
+  private displayRemainingMs(expiresAtTick: number, now = performance.now()): number {
     const serverTick = this.room?.state?.serverTick ?? 0;
     return Math.max(
       0,
@@ -820,7 +854,7 @@ export class GameSession {
       remainingMs: Math.max(
         0,
         this.reactionAvailableAt - performance.now(),
-        this.reactionRemainingMs(self?.reactionExpiresAtTick ?? 0),
+        this.displayRemainingMs(self?.reactionExpiresAtTick ?? 0),
       ),
       available: this.state === 'playing' && this.inputEnabled && !this.stalled,
     };
@@ -852,6 +886,43 @@ export class GameSession {
       worldEpoch: this.info.worldEpoch,
       reactionId,
     } satisfies ReactionRequest);
+  }
+  chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
+    const self = this.room?.state?.players?.get(this.room.sessionId);
+    return {
+      pending: this.pendingChat !== undefined,
+      remainingMs: Math.max(
+        0,
+        this.chatAvailableAt - performance.now(),
+        this.displayRemainingMs(self?.chatExpiresAtTick ?? 0),
+      ),
+      available:
+        this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused,
+    };
+  }
+  private clearPendingChat(): void {
+    clearTimeout(this.chatTimeout);
+    this.chatTimeout = undefined;
+    this.pendingChat = undefined;
+  }
+  sendChat(value: string): boolean {
+    const status = this.chatStatus();
+    const text = normalizeChatText(value);
+    if (!status.available || status.pending || status.remainingMs > 0 || !text || document.hidden)
+      return false;
+    this.actionId++;
+    this.pendingChat = this.actionId;
+    this.chatTimeout = setTimeout(() => {
+      this.clearPendingChat();
+      this.onNotice('Ответ на сообщение не получен. Проверьте связь и попробуйте снова.');
+    }, 5000);
+    this.save();
+    this.room!.send('requestChat', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      text,
+    } satisfies ChatRequest);
+    return true;
   }
   private clearPendingRespawn(): void {
     clearTimeout(this.respawnTimeout);
@@ -901,12 +972,14 @@ export class GameSession {
   private cleanup(preserveRecovery = false): void {
     this.clearPendingRespawn();
     this.clearPendingReaction();
+    this.clearPendingChat();
     this.inventory = { slots: [] };
     this.pendingItem = undefined;
     this.persistencePaused = false;
     this.onInventoryChange?.();
     this.respawnAvailableAt = 0;
     this.reactionAvailableAt = 0;
+    this.chatAvailableAt = 0;
     if (!preserveRecovery) this.stopRecoveryCheck();
     this.predictor?.dispose();
     this.predictor = undefined;
@@ -963,6 +1036,7 @@ export class GameSession {
       inputEnabled: this.inputEnabled,
       respawn: this.respawnStatus(),
       reaction: this.reactionStatus(),
+      chat: this.chatStatus(),
       mapVersion: this.info?.mapVersion,
       simulationConfigHash: this.info?.simulationConfigHash,
       authoritative: self ? toPlayerState(self) : null,

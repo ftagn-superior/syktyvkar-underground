@@ -6,6 +6,7 @@ import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
 import { ReactionMenu } from './ui/reactions';
+import { ChatConsole } from './ui/chat';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 
@@ -47,6 +48,7 @@ let starting = false;
 let keyboard: KeyboardInput;
 let graphicsLost = false;
 let reactions: ReactionMenu | undefined;
+let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
 
 function showNotice(message: string): void {
@@ -104,6 +106,7 @@ function updateState(state: ConnectionState, message?: string): void {
   if (message) showNotice(message);
   renderRespawn();
   reactions?.update(session.reactionStatus());
+  renderChat();
   inventory?.update();
 }
 const session = new GameSession(updateState, showNotice);
@@ -137,14 +140,46 @@ reactions = new ReactionMenu(
     reactions!.update(session.reactionStatus());
   },
   () => {
+    chat?.close(false);
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
 );
+chat = new ChatConsole(
+  element<HTMLButtonElement>('chat-toggle'),
+  element<HTMLFormElement>('chat-console'),
+  element<HTMLInputElement>('chat-input'),
+  element('chat-status'),
+  element('chat-counter'),
+  element<HTMLButtonElement>('chat-send'),
+  canvas,
+  (text) => {
+    session.sendChat(text);
+    renderChat();
+  },
+  (open) => {
+    keyboard?.setEnabled(!open && !graphicsLost);
+    session.neutral();
+    if (open) {
+      reactions?.close(false);
+      diagnostics.hidden = true;
+      diagnosticsToggle.setAttribute('aria-expanded', 'false');
+    }
+  },
+);
+session.onChatResult = (result) => {
+  chat?.complete(result.ok);
+  renderChat();
+};
+function renderChat(): void {
+  const state = session.chatStatus();
+  chat?.update({ ...state, available: state.available && !graphicsLost });
+}
 keyboard = new KeyboardInput(
   () => session.neutral(),
   rotateCamera,
   () => reactions!.toggleOpen(),
+  () => chat!.open(),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
@@ -295,6 +330,7 @@ leave.addEventListener('click', () => {
   void session.leave();
 });
 diagnosticsToggle.addEventListener('click', () => {
+  chat?.close(false);
   reactions?.close(false);
   diagnostics.hidden = !diagnostics.hidden;
   diagnosticsToggle.setAttribute('aria-expanded', String(!diagnostics.hidden));
@@ -332,6 +368,7 @@ const uiTimer = setInterval(() => {
   renderRespawn();
   renderMetrics();
   reactions?.update(session.reactionStatus());
+  renderChat();
   inventory?.update();
 }, 250);
 window.addEventListener('pageshow', (event) => {
@@ -347,6 +384,7 @@ window.addEventListener(
     view?.dispose();
     keyboard.dispose();
     reactions?.dispose();
+    chat?.dispose();
     inventory?.dispose();
   },
   { once: true },

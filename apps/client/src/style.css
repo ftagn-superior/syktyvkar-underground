@@ -223,6 +223,70 @@ h1 {
   margin: 17px 0 0;
   color: #879aa6;
 }
+.avatar-skins {
+  border: 0;
+  padding: 0;
+  margin: 0 0 20px;
+  min-width: 0;
+}
+.avatar-skins legend {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.skin-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.skin-choice {
+  display: grid;
+  position: relative;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #20323e;
+  cursor: pointer;
+}
+.skin-choice input {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  accent-color: var(--mint);
+}
+.skin-choice img {
+  justify-self: center;
+  max-width: 100%;
+}
+.skin-choice strong {
+  color: #edf3f4;
+  font-size: 12px;
+}
+.skin-choice small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.skin-choice:has(input:checked) {
+  border-color: var(--mint);
+  background: #24433f;
+}
+.skin-choice:focus-within {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+}
+.avatar-skins:disabled .skin-choice {
+  opacity: 0.6;
+  cursor: wait;
+}
+.welcome:has(#profile-form:not([hidden])) h1 {
+  font-size: 28px;
+  margin: 16px 0 12px;
+}
+.welcome:has(#profile-form:not([hidden])) #welcome-description {
+  display: none;
+}
 .account-panel {
   margin-bottom: 20px;
   padding-bottom: 20px;

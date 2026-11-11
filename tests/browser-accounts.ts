@@ -22,6 +22,7 @@ try {
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   await page.locator('#profile-name').fill('Игрок из Сыктывкара');
   await page.locator('#profile-color').selectOption('indigo');
+  await page.locator('input[name="avatar-skin"][value="standard"]').check();
   await page.locator('#profile-save').click();
   await page.waitForFunction(
     () => document.querySelector('#account-message')?.textContent === 'Профиль сохранён.',
@@ -30,6 +31,7 @@ try {
   await page.screenshot({ path: 'output/playwright/accounts-profile.png' });
   const first = await page.evaluate(async () => (await fetch('/api/me')).json());
   assert.equal(first.account.profile.displayName, 'Игрок из Сыктывкара');
+  assert.equal(first.account.profile.skinId, 'standard');
   await page.locator('#join:not([disabled])').click();
   await page.waitForFunction(
     () => document.querySelector('#connection-status')?.textContent === 'В сети',
@@ -38,6 +40,20 @@ try {
     document.querySelector('.player-label')?.textContent?.includes('Игрок из Сыктывкара'),
   );
   assert.equal([...app.room.state.players.values()][0].color, '#8c9eff');
+  assert.equal([...app.room.state.players.values()][0].skinId, 'standard');
+  await page.locator('#leave').click();
+  await page.locator('#profile-form').waitFor({ state: 'visible' });
+  // Entering saves a changed selection before the server reads the account profile.
+  await page.locator('input[name="avatar-skin"][value="minifigure"]').check();
+  await page.locator('#join:not([disabled])').click();
+  await page.waitForFunction(
+    () => document.querySelector('#connection-status')?.textContent === 'В сети',
+  );
+  assert.equal([...app.room.state.players.values()][0].skinId, 'minifigure');
+  assert.equal(
+    (await page.evaluate(async () => (await fetch('/api/me')).json())).account.profile.skinId,
+    'minifigure',
+  );
   await page.locator('#leave').click();
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   await app.close();
@@ -47,6 +63,7 @@ try {
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#profile-name').inputValue(), 'Игрок из Сыктывкара');
   assert.equal(await page.locator('#profile-color').inputValue(), 'indigo');
+  assert.equal(await page.locator('input[name="avatar-skin"]:checked').inputValue(), 'minifigure');
   const other = await browser.newContext({ viewport: { width: 960, height: 720 } });
   const second = await other.newPage();
   second.on('pageerror', (error) => errors.push(error.message));
@@ -89,6 +106,7 @@ try {
         checks: [
           'login',
           'save profile',
+          'save skin before entry and restore it after restart',
           'appearance in game',
           'restart',
           'second browser',

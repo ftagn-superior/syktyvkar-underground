@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 
-export const DATABASE_SCHEMA_VERSION = 2;
+export const DATABASE_SCHEMA_VERSION = 3;
 
 /** Kept in the server bundle so source and built migration commands use identical SQL. */
 const migrations = [
@@ -122,6 +122,12 @@ const migrations = [
     );
   `,
   },
+  {
+    version: 3,
+    sql: `ALTER TABLE player_profiles
+      ADD COLUMN IF NOT EXISTS skin_id text NOT NULL DEFAULT 'minifigure'
+      CHECK (skin_id ~ '^[a-z][a-z0-9-]{0,47}$');`,
+  },
 ];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {
@@ -137,6 +143,19 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
     );
     if (applied.rows.some((row) => row.version > DATABASE_SCHEMA_VERSION))
       throw new Error('Database schema is newer than this server.');
+    // The unreleased skins branch also used version 2 before inventory was merged.
+    // Complete that branch's missing inventory migration inside this transaction;
+    // migration 3 keeps existing skin choices intact. Partial schemas fail atomically.
+    if (applied.rows.some((row) => row.version === 2)) {
+      const legacy = await client.query<{ has_world: boolean; has_skin: boolean }>(`
+        SELECT to_regclass('persistent_worlds') IS NOT NULL AS has_world,
+          EXISTS(SELECT 1 FROM pg_attribute
+            WHERE attrelid=to_regclass('player_profiles') AND attname='skin_id'
+              AND NOT attisdropped) AS has_skin
+      `);
+      if (!legacy.rows[0].has_world && legacy.rows[0].has_skin)
+        await client.query(migrations[1].sql);
+    }
     for (const migration of migrations) {
       if (applied.rows.some((row) => row.version === migration.version)) continue;
       await client.query(migration.sql);

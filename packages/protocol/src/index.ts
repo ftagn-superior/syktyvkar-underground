@@ -44,6 +44,9 @@ export class PlayerSchema extends EntitySchema.extend(
     name: t.string().default(''),
     color: t.string().default(''),
     connected: t.boolean().default(true),
+    reactionId: t.string().default(''),
+    reactionSequence: t.uint32().default(0),
+    reactionExpiresAtTick: t.uint32().default(0),
   },
   'Player',
 ) {}

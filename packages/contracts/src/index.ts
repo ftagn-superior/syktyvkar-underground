@@ -1,7 +1,7 @@
 import { PROFILE_COLORS } from './accounts.js';
 export * from './accounts.js';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const WORLD_FORMAT_VERSION = 2;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -162,7 +162,7 @@ export interface ActionResult {
   requestId: number;
   ok: boolean;
   code?: ErrorCode;
-  /** Remaining server-enforced delay before another respawn can be accepted. */
+  /** Remaining server-enforced delay before the same kind of action can be accepted. */
   retryAfterMs?: number;
 }
 export interface RespawnRequest {
@@ -186,6 +186,7 @@ export function normalizeInput(value: unknown): MoveInput | undefined {
   return { moveX: moveX / length, moveZ: moveZ / length, sprint };
 }
 export { validateWorld, canonicalJson } from './world.js';
+export * from './reactions.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,

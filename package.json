@@ -30,7 +30,8 @@
     "test:restart:browser": "node --import tsx tests/browser-restart.ts",
     "test:polish:browser": "node --import tsx tests/browser-polish.ts",
     "test:render:browser": "node --import tsx tests/browser-render-profile.ts",
-    "test:buildings:browser": "node --import tsx tests/browser-buildings.ts"
+    "test:buildings:browser": "node --import tsx tests/browser-buildings.ts",
+    "test:reactions:browser": "node --import tsx tests/browser-reactions.ts"
   },
   "devDependencies": {
     "@colyseus/sdk": "0.18.10",

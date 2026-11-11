@@ -16,7 +16,11 @@ export class KeyboardInput {
   private enabled = true;
   private readonly held = new Set<string>();
   private readonly controller = new AbortController();
-  constructor(onRelease: () => void, onRotate?: (direction: -1 | 1) => void) {
+  constructor(
+    onRelease: () => void,
+    onRotate?: (direction: -1 | 1) => void,
+    onReactions?: () => void,
+  ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
       'keydown',
@@ -30,6 +34,11 @@ export class KeyboardInput {
           (event.target instanceof HTMLElement && event.target.isContentEditable)
         )
           return;
+        if (event.code === 'KeyR') {
+          event.preventDefault();
+          onReactions?.();
+          return;
+        }
         if (event.code === 'KeyQ' || event.code === 'KeyE') {
           event.preventDefault();
           onRotate?.(event.code === 'KeyQ' ? -1 : 1);

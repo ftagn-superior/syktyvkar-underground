@@ -14,7 +14,15 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
-import type { EntityState, Vec3, WorldDefinition, WorldManifest } from '@su/contracts';
+import {
+  findReaction,
+  REACTION_DURATION_MS,
+  type DisplayReaction,
+  type EntityState,
+  type Vec3,
+  type WorldDefinition,
+  type WorldManifest,
+} from '@su/contracts';
 import { decorateWorld, obstacleAccent } from './world-decoration';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { BuildingViews } from './buildings';
@@ -24,6 +32,7 @@ export interface DisplayEntity extends EntityState {
   name?: string;
   color?: string;
   connected?: boolean;
+  reaction?: DisplayReaction;
 }
 type EntityView = {
   root: TransformNode;
@@ -31,8 +40,12 @@ type EntityView = {
   material: StandardMaterial;
   labelText?: string;
   labelTransform?: string;
+  reaction?: HTMLElement;
+  reactionImage?: HTMLImageElement;
+  reactionSequence?: number;
+  expiredReactionSequence?: number;
 };
-type LabelAnchor = { label: HTMLElement; labelTransform?: string };
+type LabelAnchor = { label: HTMLElement; labelTransform?: string; reaction?: HTMLElement };
 const vector = (p: Vec3) => new Vector3(p.x, p.y, p.z);
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -56,6 +69,7 @@ export class WorldView {
   private readonly projection = Matrix.Identity();
   private readonly labelPosition = Vector3.Zero();
   private readonly projectedLabel = Vector3.Zero();
+  private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private quality: RenderQuality;
   private zoom = 1;
   private readonly resize = () => {
@@ -293,6 +307,7 @@ export class WorldView {
     for (const [id, view] of this.entities)
       if (!current.has(id)) {
         view.label?.remove();
+        view.reaction?.remove();
         for (const mesh of view.root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
         view.root.dispose(false, true);
         this.entities.delete(id);
@@ -321,9 +336,46 @@ export class WorldView {
         }
       }
       view.material.alpha = entity.connected === false ? 0.45 : 1;
+      this.updateReaction(view, entity);
       if (entity.entityId === this.followed)
         this.target.set(entity.position.x, 0, entity.position.z);
     }
+  }
+  private updateReaction(view: EntityView, entity: DisplayEntity): void {
+    const active = entity.reaction;
+    const definition = findReaction(active?.id);
+    if (!active || !definition || active.remainingMs <= 0) {
+      if (active && active.remainingMs <= 0) view.expiredReactionSequence = active.sequence;
+      view.reaction?.remove();
+      view.reaction = undefined;
+      view.reactionImage = undefined;
+      view.reactionSequence = undefined;
+      return;
+    }
+    // A late patch for the same show must not revive an already expired sticker.
+    if (view.expiredReactionSequence === active.sequence) return;
+    if (!view.reaction) {
+      view.reaction = document.createElement('div');
+      view.reaction.className = 'player-reaction';
+      view.reaction.dataset.entityId = entity.entityId;
+      view.reactionImage = document.createElement('img');
+      view.reactionImage.width = view.reactionImage.height = 44;
+      view.reaction.append(view.reactionImage);
+      this.labels.append(view.reaction);
+    }
+    if (view.reactionSequence !== active.sequence) {
+      view.reactionSequence = active.sequence;
+      view.reaction.dataset.reactionId = definition.id;
+      view.reactionImage!.src = `/reactions/${definition.asset}`;
+      view.reactionImage!.alt = definition.label;
+    }
+    const appear = Math.min(1, (REACTION_DURATION_MS - active.remainingMs) / 150);
+    const disappear = Math.min(1, active.remainingMs / 250);
+    const progress = Math.max(0, Math.min(appear, disappear));
+    view.reaction.style.opacity = this.reducedMotion.matches ? '1' : progress.toFixed(3);
+    view.reactionImage!.style.transform = this.reducedMotion.matches
+      ? ''
+      : `scale(${0.8 + 0.2 * progress})`;
   }
   private createEntity(entity: DisplayEntity, own: boolean): EntityView {
     const root = new TransformNode(entity.entityId, this.scene);
@@ -423,6 +475,10 @@ export class WorldView {
         y < 0 ||
         y > cssHeight;
       if (view.label.hidden !== hidden) view.label.hidden = hidden;
+      if (view.reaction) {
+        view.reaction.hidden = hidden;
+        view.reaction.style.transform = `translate(${(x + 38).toFixed(2)}px, ${(y - 30).toFixed(2)}px) translate(-50%, -100%)`;
+      }
       if (hidden) continue;
       const transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) translate(-50%, -100%)`;
       if (transform !== view.labelTransform) {

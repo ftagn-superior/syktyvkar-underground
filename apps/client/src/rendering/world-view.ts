@@ -39,7 +39,7 @@ const SHADOW_EXTENT = 90;
 const SUN_DISTANCE = 150;
 /** Пределы масштаба колёсиком мыши относительно исходного кадра. */
 const MIN_ZOOM = 0.6;
-const MAX_ZOOM = 3;
+const MAX_ZOOM = 30;
 
 export class WorldView {
   readonly engine: Engine;
@@ -95,7 +95,7 @@ export class WorldView {
       'isometric',
       INITIAL_CAMERA_ANGLE,
       Math.PI / 3.15,
-      // Ортографическая проекция не зависит от расстояния; камера стоит выше 10-этажных домов.
+      // Исходное удаление камеры: выше 10-этажных домов.
       120,
       Vector3.Zero(),
       this.scene,
@@ -258,6 +258,10 @@ export class WorldView {
     this.camera.orthoBottom = -halfHeight;
     this.camera.orthoLeft = -halfHeight * aspect;
     this.camera.orthoRight = halfHeight * aspect;
+    // При отдалении расширяем глубину обзора: ближняя и дальняя плоскости не режут город.
+    const depthScale = Math.max(1, this.zoom);
+    this.camera.radius = 120 * depthScale;
+    this.camera.maxZ = 300 * depthScale;
     // Квадрат теней должен накрывать весь видимый кадр с запасом на высокие дома за краем.
     if (this.sun)
       this.sun.shadowFrustumSize = Math.max(

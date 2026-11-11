@@ -48,6 +48,8 @@ export interface FacadeDetails {
   };
   /** Пилястры: вертикальные выступы на всю высоту стены с шагом `every` метров. */
   pilasters?: { facing: Facing[]; every: number; width?: number; depth?: number; color: string };
+  /** Толстая плита-карниз над стенами, выступающая на `overhang` за описанный прямоугольник. */
+  roofSlab?: { thickness: number; overhang: number; color: string };
   /**
    * Окрашенные прямоугольники на фасаде, например упрощённая роспись.
    * `from`/`to` — доли ширины фасада слева направо для зрителя снаружи, `bottom`/`top` — метры.
@@ -490,6 +492,22 @@ export function buildFacade(
     roofCollider = roof.collider;
   }
   if (details.roofSign) parts.push(...roofSign(edges, height + parapet, details.roofSign));
+  if (details.roofSlab) {
+    const spec = details.roofSlab;
+    if (!(spec.thickness > 0 && spec.thickness < height - elevation) || !(spec.overhang >= 0))
+      throw new Error('Invalid roof slab');
+    const { center, u, half } = minimumRectangle(ring);
+    const slab = meshPart('roof-slab', 'roof', spec.color);
+    // Верх плиты чуть выше плоской крыши, иначе две поверхности мерцают на одной высоте.
+    const top = height + parapet + 0.05;
+    addOrientedBox(
+      slab,
+      [center[0], top - spec.thickness / 2, center[1]],
+      [2 * (half[0] + spec.overhang), spec.thickness, 2 * (half[1] + spec.overhang)],
+      u,
+    );
+    parts.push(slab);
+  }
   if (details.pilasters) {
     const spec = details.pilasters;
     const part = meshPart('pilasters', 'wall', spec.color);

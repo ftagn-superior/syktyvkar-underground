@@ -45,8 +45,18 @@ export function cleanRing(ring: readonly Point2[], tolerance = 1e-3): Point2[] {
   return out.length >= 3 ? out : [];
 }
 
+/**
+ * Точка внутри треугольника или на его границе. Допуск ~1 нм: вершина, лежащая на
+ * диагонали из-за совпадения прямых контура, иначе может оказаться «чуть снаружи»
+ * из-за округления — тогда диагональ проходит через вершину и крышка теряет замкнутость.
+ */
 function insideTriangle(p: Point2, a: Point2, b: Point2, c: Point2): boolean {
-  return cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0;
+  const tolerance = (u: Point2, v: Point2) => -1e-9 * Math.max(1, distance(u, v));
+  return (
+    cross(a, b, p) >= tolerance(a, b) &&
+    cross(b, c, p) >= tolerance(b, c) &&
+    cross(c, a, p) >= tolerance(c, a)
+  );
 }
 
 /** Соединяет отверстие с внешним контуром разрезом нулевой ширины (метод Эберли). */

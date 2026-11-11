@@ -55,6 +55,36 @@ describe('триангуляция контуров', () => {
     expect(result.coverage).toBeCloseTo(1, 9);
     expect(area(result.points, result.triangles)).toBeCloseTo(400 - 36, 9);
   });
+  it('не проводит диагональ через вершину, случайно лежащую на прямой', () => {
+    // Контур корпуса театра: вершины 4, 1 и 0 лежат на одной прямой с разных сторон.
+    const body: Point2[] = [
+      [16.54, -20.75],
+      [11.74, -18.35],
+      [-6.86, -54.85],
+      [-37.16, -39.65],
+      [-18.66, -3.15],
+      [-23.66, -0.55],
+      [-16.26, 14.15],
+      [-12.56, 21.35],
+      [-7.46, 18.75],
+      [-2.31, 28.91],
+      [27.99, 13.71],
+      [22.84, 3.55],
+      [27.74, 1.15],
+    ];
+    const { physics } = generateFootprint('test-theatre', {
+      formatVersion: 1,
+      outline: body,
+      height: 9,
+      floors: 3,
+      windows: true,
+      wallColor: '#a9aaa6',
+      roofColor: '#8c8d89',
+      windowColor: '#3d4d57',
+    });
+    // Без допуска крышка получала Т-образный стык и не проходила проверку замкнутости.
+    validateBuildingPhysicsAsset(physics);
+  });
   it('отбрасывает повторы, иглы и вершины на прямой', () => {
     const result = triangulate([
       [0, 0],
@@ -364,17 +394,27 @@ describe('мир ring-block', () => {
     await rm(temporary, { recursive: true, force: true });
   });
 
-  it('содержит три ориентира, дома, землю и обслуживается по своему worldId', async () => {
+  it('содержит ориентиры, дома, землю и обслуживается по своему worldId', async () => {
     const { definition } = await readWorldDirectory(release);
     expect(definition.landmarks?.map((l) => l.name)).toEqual([
       'Кольцо · «Трудовая слава»',
       'Школа №1',
       'Баня №4',
+      'Театр оперы и балета',
+      'Театральная площадь',
     ]);
     // Памятник из manual/ стоит в центре кольца и имеет собственные столкновения.
     const monument = definition.buildings.find((b) => b.entityId === 'monument-trudovaya-slava');
     expect(monument).toMatchObject({ assetId: 'trudovaya-slava' });
     expect(Math.hypot(monument!.position.x, monument!.position.z)).toBeLessThan(3);
+    // Театральная площадь: два фонтана, памятник Куратову и фонари используют общие модели.
+    const byAsset = (assetId: string) => definition.buildings.filter((b) => b.assetId === assetId);
+    expect(byAsset('theatre-fountain')).toHaveLength(2);
+    expect(byAsset('kuratov-monument')).toHaveLength(1);
+    expect(byAsset('lamp-five-globe').length).toBeGreaterThanOrEqual(8);
+    expect(definition.buildingAssets['osm-way-146724915'].colliders.map((c) => c.id)).toEqual(
+      expect.arrayContaining(['lobby-body', 'body-body', 'stage-body']),
+    );
     expect(definition.buildingAssets['trudovaya-slava'].colliders.length).toBeGreaterThan(2);
     // Ручные уточнения из import.json попали в модель Октябрьского проспекта, 40.
     const taibala = definition.buildingAssets['osm-way-1292842070'];

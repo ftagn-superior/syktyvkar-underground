@@ -3,7 +3,11 @@ import { Client, type Room } from '@colyseus/sdk';
 import { randomBytes } from 'node:crypto';
 import { createGameServer } from '../../apps/server/src/index.js';
 import { migrateAccounts } from '../../apps/server/src/accounts/migrations.js';
-import type { AccountResponse, WorldInfo } from '../../packages/contracts/src/index.js';
+import {
+  PROTOCOL_VERSION,
+  type AccountResponse,
+  type WorldInfo,
+} from '../../packages/contracts/src/index.js';
 import type { WorldState } from '../../packages/protocol/src/index.js';
 import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
 
@@ -23,8 +27,13 @@ describe.skipIf(!databaseUrl)(
     let fixture: Awaited<ReturnType<typeof createAccountFixture>>;
     let app: Awaited<ReturnType<typeof createGameServer>>;
     const rooms = new Set<Room<WorldState>>();
-    async function start() {
-      app = await createGameServer({ port: 0, reconnectSeconds: 1, accounts: fixture });
+    async function start(worldDirectory?: string) {
+      app = await createGameServer({
+        port: 0,
+        reconnectSeconds: 1,
+        accounts: fixture,
+        worldDirectory,
+      });
       fixture.config.publicOrigin = app.url;
     }
     async function me(cookie: string): Promise<AccountResponse> {
@@ -319,6 +328,45 @@ describe.skipIf(!databaseUrl)(
         release();
         await joining?.catch(() => {});
         lookup.mockRestore();
+      }
+    });
+
+    it('serves the city world and joins it with the saved account profile', async () => {
+      await app.close();
+      await start('dist/worlds/ring-block');
+      const { cookie, state } = await login('ring-block');
+      const saved = await fetch(app.url + '/api/me/profile', {
+        method: 'PATCH',
+        headers: {
+          Cookie: cookie,
+          Origin: app.url,
+          'X-CSRF-Token': state.csrfToken!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          displayName: 'Горожанин',
+          colorId: 'indigo',
+          version: state.account!.profile.version,
+        }),
+      });
+      expect(saved.status).toBe(200);
+      const info: WorldInfo = await (await fetch(app.url + '/api/world')).json();
+      expect(info.protocolVersion).toBe(PROTOCOL_VERSION);
+      expect(info.manifestUrl).toBe('/worlds/ring-block/manifest.json');
+      const manifest = await (await fetch(app.url + info.manifestUrl)).json();
+      expect(manifest.worldId).toBe('ring-block');
+      expect(manifest.mapVersion).toBe(info.mapVersion);
+      const room = await join(cookie);
+      try {
+        expect(room.state.protocolVersion).toBe(PROTOCOL_VERSION);
+        expect(room.state.players.get(room.sessionId)).toMatchObject({
+          name: 'Горожанин',
+          color: '#8c9eff',
+        });
+        expect((await fetch(app.url + '/health/ready')).status).toBe(200);
+      } finally {
+        await room.leave();
+        rooms.delete(room);
       }
     });
 

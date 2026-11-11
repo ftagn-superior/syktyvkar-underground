@@ -2,3 +2,8 @@ node_modules
 dist
 output
 pnpm-lock.yaml
+# Сгенерировано pnpm world:import; правьте content/worlds/ring-block/import.json
+content/buildings/ring-block/*
+!content/buildings/ring-block/manual
+content/worlds/ring-block/cells
+content/worlds/ring-block/world.json

@@ -32,22 +32,32 @@ type EntityView = {
   labelText?: string;
   labelTransform?: string;
 };
+type LabelAnchor = { label: HTMLElement; labelTransform?: string };
 const vector = (p: Vec3) => new Vector3(p.x, p.y, p.z);
+/** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
+const SHADOW_EXTENT = 90;
+const SUN_DISTANCE = 150;
+/** Пределы масштаба колёсиком мыши относительно исходного кадра. */
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 30;
 
 export class WorldView {
   readonly engine: Engine;
   readonly scene: Scene;
   private readonly camera: ArcRotateCamera;
+  private readonly sun: DirectionalLight;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly cameraTurn = new CameraTurn();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
+  private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
   private readonly target = Vector3.Zero();
   private readonly projection = Matrix.Identity();
   private readonly labelPosition = Vector3.Zero();
   private readonly projectedLabel = Vector3.Zero();
   private quality: RenderQuality;
+  private zoom = 1;
   private readonly resize = () => {
     this.applyQuality();
     this.sizeCamera();
@@ -85,13 +95,14 @@ export class WorldView {
       'isometric',
       INITIAL_CAMERA_ANGLE,
       Math.PI / 3.15,
-      48,
+      // Исходное удаление камеры: выше 10-этажных домов.
+      120,
       Vector3.Zero(),
       this.scene,
     );
     this.camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.minZ = 0.1;
-    this.camera.maxZ = 150;
+    this.camera.maxZ = 300;
     this.camera.inputs.clear();
     this.sizeCamera();
     const sky = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
@@ -102,6 +113,12 @@ export class WorldView {
     sun.position.set(20, 35, 15);
     sun.intensity = 1.25;
     sun.diffuse = Color3.FromHexString('#fff2da');
+    // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
+    sun.shadowFrustumSize = SHADOW_EXTENT;
+    sun.shadowMinZ = 0;
+    sun.shadowMaxZ = SUN_DISTANCE * 2;
+    this.sun = sun;
+    this.sizeCamera();
     this.shadow = new ShadowGenerator(1024, sun);
     this.shadow.useBlurExponentialShadowMap = true;
     this.shadow.blurKernel = 16;
@@ -136,7 +153,16 @@ export class WorldView {
       }
     }
     decorateWorld(this.scene, definition);
+    for (const landmark of definition.landmarks ?? []) {
+      const label = document.createElement('div');
+      label.className = 'landmark-label';
+      label.textContent = landmark.name;
+      label.hidden = true;
+      this.labels.append(label);
+      this.landmarks.push({ label, position: vector(landmark.position) });
+    }
     window.addEventListener('resize', this.resize);
+    canvas.addEventListener('wheel', this.wheel, { passive: false });
     document.addEventListener('visibilitychange', this.visibilityChanged);
     this.engine.runRenderLoop(() => {
       const now = performance.now();
@@ -150,6 +176,12 @@ export class WorldView {
         false,
         true, // Following translates the rig; pitch, orbit angle and radius remain fixed.
       );
+      // Солнце движется вместе с целью камеры; направление лучей не меняется.
+      this.sun.position
+        .copyFrom(this.sun.direction)
+        .normalize()
+        .scaleInPlace(-SUN_DISTANCE)
+        .addInPlace(this.camera.target);
       // Update the orbit before casting parallel orthographic rays; alpha may be mid-turn.
       this.camera.getViewMatrix(true);
       this.buildings.update(
@@ -221,11 +253,32 @@ export class WorldView {
   private sizeCamera(): void {
     // Quality changes raster resolution, never the world visible through the camera.
     const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-    const halfHeight = aspect < 1 ? 20 : 15;
+    const halfHeight = (aspect < 1 ? 20 : 15) * this.zoom;
     this.camera.orthoTop = halfHeight;
     this.camera.orthoBottom = -halfHeight;
     this.camera.orthoLeft = -halfHeight * aspect;
     this.camera.orthoRight = halfHeight * aspect;
+    // При отдалении расширяем глубину обзора: ближняя и дальняя плоскости не режут город.
+    const depthScale = Math.max(1, this.zoom);
+    this.camera.radius = 120 * depthScale;
+    this.camera.maxZ = 300 * depthScale;
+    // Квадрат теней должен накрывать весь видимый кадр с запасом на высокие дома за краем.
+    if (this.sun)
+      this.sun.shadowFrustumSize = Math.max(
+        SHADOW_EXTENT,
+        2 * halfHeight * Math.max(1, aspect) + 40,
+      );
+  }
+  private readonly wheel = (event: WheelEvent) => {
+    event.preventDefault();
+    const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * Math.exp(event.deltaY * 0.001)));
+    if (zoom === this.zoom) return;
+    this.zoom = zoom;
+    this.sizeCamera();
+  };
+  /** Масштаб кадра: 1 — исходный ракурс, больше — дальше. */
+  get cameraZoom(): number {
+    return this.zoom;
   }
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
@@ -346,10 +399,13 @@ export class WorldView {
     const cssWidth = this.canvas.clientWidth;
     const cssHeight = this.canvas.clientHeight;
     const labelHeight = this.definition.simulation.character.height / 2 + 0.5;
-    for (const view of this.entities.values()) {
-      if (!view.label) continue;
-      this.labelPosition.copyFrom(view.root.position);
-      this.labelPosition.y += labelHeight;
+    const anchors: [LabelAnchor, Vector3, number][] = [];
+    for (const view of this.entities.values())
+      if (view.label) anchors.push([view as LabelAnchor, view.root.position, labelHeight]);
+    for (const landmark of this.landmarks) anchors.push([landmark, landmark.position, 0]);
+    for (const [view, position, lift] of anchors) {
+      this.labelPosition.copyFrom(position);
+      this.labelPosition.y += lift;
       Vector3.ProjectToRef(
         this.labelPosition,
         this.projection,
@@ -379,6 +435,7 @@ export class WorldView {
     if (this.disposed) return;
     this.disposed = true;
     window.removeEventListener('resize', this.resize);
+    this.canvas.removeEventListener('wheel', this.wheel);
     document.removeEventListener('visibilitychange', this.visibilityChanged);
     this.engine.stopRenderLoop();
     this.labels.replaceChildren();

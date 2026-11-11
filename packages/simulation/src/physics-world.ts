@@ -173,7 +173,7 @@ export class PhysicsWorld {
     );
     controller.characterMass = config.mass;
     controller.characterStrength = 500;
-    controller.maxCharacterSpeedForSolver = config.speed;
+    controller.maxCharacterSpeedForSolver = config.sprintSpeed;
     controller.keepDistance = 0.015;
     controller.keepContactTolerance = 0.05;
     controller.maxStepHeight = 0;
@@ -322,17 +322,15 @@ export class PhysicsWorld {
     if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) throw new Error('Invalid physics timestep');
     for (const record of this.characters.values()) {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
+      const config = this.definition.simulation.character;
+      const speed = input.sprint ? config.sprintSpeed : config.speed;
       const support = record.controller.checkSupport(dt, down);
       record.grounded = support.supportedState === CharacterSupportedState.SUPPORTED;
       const vertical = record.grounded
         ? Math.min(0, support.averageSurfaceVelocity.y)
         : record.controller.getVelocity().y + this.gravity.y * dt;
       record.controller.setVelocity(
-        new Vector3(
-          input.moveX * this.definition.simulation.character.speed,
-          vertical,
-          input.moveZ * this.definition.simulation.character.speed,
-        ),
+        new Vector3(input.moveX * speed, vertical, input.moveZ * speed),
       );
       if (Math.hypot(input.moveX, input.moveZ) > 0.001)
         record.yaw = Math.atan2(input.moveX, input.moveZ);

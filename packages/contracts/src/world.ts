@@ -36,12 +36,13 @@ export function validateWorld(value: unknown): WorldDefinition {
   vector(world.simulation.gravity, 'gravity');
   const character = world.simulation.character;
   invariant(character && typeof character === 'object', 'character');
-  for (const key of ['height', 'radius', 'speed', 'mass'] as const) {
+  for (const key of ['height', 'radius', 'speed', 'sprintSpeed', 'mass'] as const) {
     invariant(
       Number.isFinite(character[key]) && character[key] > 0 && character[key] <= 1000,
       `character.${key}`,
     );
   }
+  invariant(character.sprintSpeed >= character.speed, 'sprintSpeed must be at least speed');
   invariant(character.height >= 2 * character.radius, 'capsule height');
   invariant(
     Array.isArray(world.entities) && world.entities.length > 0 && world.entities.length <= 1000,
@@ -128,6 +129,28 @@ export function validateWorld(value: unknown): WorldDefinition {
         Math.abs(spawn.z - entity.position.z) < entity.size.z / 2 + character.radius &&
         Math.abs(centerY - entity.position.y) < (entity.size.y + character.height) / 2 - 0.01;
       invariant(!intersects, `spawn intersects ${entity.entityId}`);
+    }
+  }
+  if (world.landmarks !== undefined) {
+    invariant(Array.isArray(world.landmarks) && world.landmarks.length <= 256, 'landmarks');
+    const landmarkIds = new Set<string>();
+    for (const landmark of world.landmarks) {
+      invariant(
+        landmark &&
+          typeof landmark === 'object' &&
+          typeof landmark.id === 'string' &&
+          /^[a-z0-9-]{1,64}$/.test(landmark.id) &&
+          !landmarkIds.has(landmark.id),
+        'landmark id',
+      );
+      landmarkIds.add(landmark.id);
+      invariant(
+        typeof landmark.name === 'string' &&
+          landmark.name.trim().length > 0 &&
+          landmark.name.length <= 80,
+        `landmark ${landmark.id} name`,
+      );
+      vector(landmark.position, `landmark ${landmark.id} position`);
     }
   }
   for (let i = 0; i < world.spawnPoints.length; i++)

@@ -456,6 +456,25 @@ dd {
   color: var(--mint);
   border-color: #72e0c544;
 }
+/* Подписи заметных мест города. Создаются раньше подписей игроков, поэтому лежат под ними. */
+.landmark-label {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 6px 11px;
+  background: rgba(12, 20, 26, 0.72);
+  color: #f3d9a4;
+  border: 1px solid #f3b35a55;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  transform: translate(-50%, -100%);
+  will-change: transform;
+}
 #labels {
   position: fixed;
   inset: 0;

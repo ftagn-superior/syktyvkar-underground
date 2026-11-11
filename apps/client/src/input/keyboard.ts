@@ -11,6 +11,7 @@ const movementKeys = new Set([
   'ArrowDown',
   'ArrowRight',
 ]);
+const sprintKeys = new Set(['ShiftLeft', 'ShiftRight']);
 export class KeyboardInput {
   private enabled = true;
   private readonly held = new Set<string>();
@@ -34,7 +35,7 @@ export class KeyboardInput {
           onRotate?.(event.code === 'KeyQ' ? -1 : 1);
           return;
         }
-        if (!movementKeys.has(event.code)) return;
+        if (!movementKeys.has(event.code) && !sprintKeys.has(event.code)) return;
         event.preventDefault();
         this.held.add(event.code);
       },
@@ -68,7 +69,10 @@ export class KeyboardInput {
     const forward =
       Number(this.held.has('KeyW') || this.held.has('ArrowUp')) -
       Number(this.held.has('KeyS') || this.held.has('ArrowDown'));
-    return screenMovement(right, forward, cameraAngle);
+    return {
+      ...screenMovement(right, forward, cameraAngle),
+      sprint: this.held.has('ShiftLeft') || this.held.has('ShiftRight'),
+    };
   }
   clear(): void {
     this.held.clear();

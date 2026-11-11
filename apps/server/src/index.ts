@@ -24,6 +24,8 @@ export async function createGameServer(options: GameServerOptions = {}) {
   const worldDirectory = resolve(options.worldDirectory ?? 'dist/worlds/physics-lab');
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const { manifest, definition } = await readWorldDirectory(worldDirectory);
+  // worldId проверен по шаблону [a-z0-9-] и безопасен как сегмент URL.
+  const worldPath = `/worlds/${manifest.worldId}`;
   if (options.accounts) await checkAccountSchema(options.accounts.store.pool);
   let room: WorldRoom | undefined;
   const accounts = options.accounts
@@ -86,7 +88,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           protocolVersion: PROTOCOL_VERSION,
           mapVersion: manifest.mapVersion,
           simulationConfigHash: manifest.simulationConfigHash,
-          manifestUrl: '/worlds/physics-lab/manifest.json',
+          manifestUrl: `${worldPath}/manifest.json`,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
         };
@@ -100,7 +102,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
         }
         res.json(room.diagnostics());
       });
-      app.use('/worlds/physics-lab', (req, res) => {
+      app.use(worldPath, (req, res) => {
         const file = req.path.slice(1);
         if (
           (req.method !== 'GET' && req.method !== 'HEAD') ||

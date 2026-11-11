@@ -1,0 +1,233 @@
+{
+  "formatVersion": 1,
+  "worldId": "ring-block",
+  "source": "data/syktyvkar-offline.html",
+  "area": { "west": -260, "east": 170, "south": -90, "north": 720 },
+  "margin": 8,
+  "spawnClearance": 14,
+  "spawnPoints": [
+    { "x": -3, "y": 0, "z": 13 },
+    { "x": 3, "y": 0, "z": 13 },
+    { "x": -5, "y": 0, "z": 15 },
+    { "x": 5, "y": 0, "z": 15 },
+    { "x": -7, "y": 0, "z": 13 },
+    { "x": 7, "y": 0, "z": 13 },
+    { "x": -3, "y": 0, "z": 17 },
+    { "x": 3, "y": 0, "z": 17 }
+  ],
+  "crate": { "x": 9.5, "y": 0.52, "z": 9 },
+  "landmarks": [
+    { "id": "ring", "name": "Кольцо · «Трудовая слава»", "position": { "x": 0, "y": 29, "z": 0 } },
+    { "id": "school-1", "name": "Школа №1", "osm": "way/111538131" },
+    { "id": "banya-4", "name": "Баня №4", "osm": "way/111493596" }
+  ],
+  "props": [
+    {
+      "entityId": "monument-trudovaya-slava",
+      "assetId": "trudovaya-slava",
+      "position": { "x": 1.5, "y": 0, "z": 0 }
+    }
+  ],
+  "buildings": {
+    "way/1292842070": {
+      "note": "Октябрьский проспект 40: кирпичная девятиэтажка, лоджии, вывеска «Тайбала»",
+      "wallColor": "#b06e48",
+      "roofColor": "#5e6264",
+      "details": {
+        "plinth": { "height": 0.9, "color": "#8b4f36" },
+        "parapet": { "height": 0.6 },
+        "shopfront": {
+          "facing": ["S"],
+          "height": 4,
+          "wallColor": "#7d8a8f",
+          "glassColor": "#2f4652",
+          "signColor": "#3fae49"
+        },
+        "balconies": [
+          { "facing": ["S"], "at": [0.82], "width": 3, "color": "#e9e6de", "glazing": "#c9d3d6" },
+          { "facing": ["N"], "at": [0.35], "width": 3, "color": "#e9e6de", "glazing": "#c9d3d6" }
+        ],
+        "roofSign": {
+          "facing": "S",
+          "text": "ТАЙБАЛА",
+          "width": 16,
+          "height": 2.4,
+          "color": "#d8322f",
+          "backColor": "#2e5fb0"
+        }
+      }
+    },
+    "way/648612399": {
+      "note": "Коммунистическая 38/1: торговый павильон у кольца",
+      "wallColor": "#e6e3dc",
+      "roofColor": "#6c7072",
+      "details": {
+        "shopfront": {
+          "facing": ["all"],
+          "height": 3.6,
+          "glassColor": "#2f4652",
+          "signColor": "#d9302c"
+        }
+      }
+    },
+    "way/1277836302": {
+      "note": "Коммунистическая 38: длинная кирпичная пятиэтажка с магазинами",
+      "wallColor": "#c8936a",
+      "roofColor": "#5e6264",
+      "details": {
+        "plinth": { "height": 0.8, "color": "#9a6b4c" },
+        "parapet": { "height": 0.8 },
+        "shopfront": {
+          "facing": ["SE"],
+          "height": 3.6,
+          "wallColor": "#e2ded5",
+          "glassColor": "#2f4652",
+          "signColor": "#c23a2f",
+          "awningColor": "#c0392b"
+        },
+        "balconies": [{ "facing": ["SE"], "every": 7, "color": "#bfb6a8" }]
+      }
+    },
+    "way/56438161": {
+      "note": "Октябрьский проспект 42: оштукатуренная пятиэтажка с вальмовой крышей",
+      "wallColor": "#e2d6b6",
+      "details": {
+        "plinth": { "height": 0.8, "color": "#9a8f7e" },
+        "hippedRoof": { "height": 3, "color": "#6f6b67", "chimneys": 2 },
+        "balconies": [{ "facing": ["SW", "NE"], "every": 9, "color": "#d9cfb4" }]
+      }
+    },
+    "way/1303691960": {
+      "note": "Октябрьский проспект 51: белая облицованная плиткой башня",
+      "wallColor": "#e3e1db",
+      "roofColor": "#5e6264",
+      "details": {
+        "parapet": { "height": 0.5 },
+        "shopfront": {
+          "facing": ["N", "NE"],
+          "height": 4.2,
+          "wallColor": "#7a4a3c",
+          "glassColor": "#2f4652",
+          "signColor": "#2c3e8f"
+        },
+        "balconies": [{ "facing": ["NE"], "every": 8, "color": "#d6d3cc", "glazing": "#cfd6d9" }]
+      }
+    },
+    "way/89626599": {
+      "note": "Октябрьский проспект 49/1: стеклянный угловой магазин «Л'Этуаль»",
+      "wallColor": "#c9c3b5",
+      "roofColor": "#6c7072",
+      "details": {
+        "shopfront": {
+          "facing": ["all"],
+          "height": 5.5,
+          "wallColor": "#7a4a3c",
+          "glassColor": "#2f4652",
+          "signColor": "#2c3e8f"
+        }
+      }
+    },
+    "way/1303693231": {
+      "note": "Коммунистическая 33: кирпичная пятиэтажка со скатной крышей и «Магнитом»",
+      "wallColor": "#bf9f7a",
+      "details": {
+        "plinth": { "height": 0.8, "color": "#8f7558" },
+        "hippedRoof": {
+          "height": 3.2,
+          "color": "#5f5a55",
+          "chimneys": 3,
+          "chimneyColor": "#8a5a48"
+        },
+        "shopfront": {
+          "facing": ["NW"],
+          "height": 3.6,
+          "wallColor": "#e5e1d8",
+          "glassColor": "#2f4652",
+          "signColor": "#d42a2a"
+        },
+        "balconies": [{ "facing": ["NW"], "every": 8, "color": "#a89a88" }]
+      }
+    },
+    "way/1291799392": {
+      "note": "Октябрьский проспект 53: панельная десятиэтажка с «Пятёрочкой»",
+      "wallColor": "#d8d2c2",
+      "roofColor": "#5e6264",
+      "details": {
+        "parapet": { "height": 0.5 },
+        "shopfront": {
+          "facing": ["NE"],
+          "height": 4,
+          "wallColor": "#e2e0da",
+          "glassColor": "#2f4652",
+          "signColor": "#3fae49"
+        },
+        "balconies": [{ "facing": ["NE"], "every": 7, "color": "#cfcac0", "glazing": "#b9c3c7" }]
+      }
+    },
+    "way/1317421165": {
+      "note": "Октябрьский проспект 38: кирпичная девятиэтажка с магазином",
+      "wallColor": "#b06e48",
+      "roofColor": "#5e6264",
+      "details": {
+        "plinth": { "height": 0.9, "color": "#8b4f36" },
+        "parapet": { "height": 0.6 },
+        "shopfront": {
+          "facing": ["W"],
+          "height": 4,
+          "wallColor": "#7d8a8f",
+          "glassColor": "#2f4652",
+          "signColor": "#d42a2a"
+        },
+        "balconies": [
+          { "facing": ["W"], "at": [0.75], "width": 3, "color": "#e9e6de", "glazing": "#c9d3d6" }
+        ]
+      }
+    },
+    "way/1317422735": {
+      "note": "Коммунистическая 31/1: павильон с рекламным щитом на крыше",
+      "wallColor": "#d9d6cf",
+      "roofColor": "#6c7072",
+      "details": {
+        "shopfront": {
+          "facing": ["all"],
+          "height": 3.6,
+          "glassColor": "#2f4652",
+          "signColor": "#2f6db5"
+        },
+        "roofSign": {
+          "facing": "W",
+          "width": 7,
+          "height": 3,
+          "color": "#e8c547",
+          "backColor": "#3a3a3a"
+        }
+      }
+    },
+    "way/1317554464": {
+      "note": "Коммунистическая 31: кирпичная пятиэтажка с магазинами",
+      "wallColor": "#c8936a",
+      "roofColor": "#5e6264",
+      "details": {
+        "plinth": { "height": 0.8, "color": "#9a6b4c" },
+        "parapet": { "height": 0.8 },
+        "shopfront": {
+          "facing": ["NW"],
+          "height": 3.6,
+          "wallColor": "#e2ded5",
+          "glassColor": "#2f4652",
+          "signColor": "#c23a2f"
+        },
+        "balconies": [{ "facing": ["NW"], "every": 8, "color": "#bfb6a8" }]
+      }
+    },
+    "way/56438158": {
+      "note": "Коммунистическая 44: панельная девятиэтажка",
+      "wallColor": "#d8d2c2",
+      "roofColor": "#5e6264",
+      "details": {
+        "parapet": { "height": 0.5 },
+        "balconies": [{ "facing": ["SE"], "every": 9, "color": "#cfcac0", "glazing": "#b9c3c7" }]
+      }
+    }
+  }
+}

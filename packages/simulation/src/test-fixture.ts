@@ -8,7 +8,7 @@ export function physicsFixture(): WorldDefinition {
     simulation: {
       tickRate: 60,
       gravity: { x: 0, y: -9.81, z: 0 },
-      character: { height: 1.8, radius: 0.35, speed: 4, mass: 70 },
+      character: { height: 1.8, radius: 0.35, speed: 4, sprintSpeed: 14, mass: 70 },
     },
     spawnPoints: [
       { x: 0, y: 0, z: 0 },

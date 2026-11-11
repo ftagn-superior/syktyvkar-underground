@@ -2,6 +2,7 @@ import type { Bounds, BuildingPhysicsAsset, StaticCollider, Vec3 } from '@su/con
 import type { StaticMeshPart } from './glb.js';
 import { addBox, addFace, meshPart } from './house.js';
 import { triangulate, type Point2 } from './triangulate.js';
+import { buildFacade, type FacadeDetails } from './facade.js';
 
 /**
  * Генераторы городских моделей по контурам: здание-призма, поверхность земли и дерево.
@@ -71,6 +72,8 @@ export interface FootprintRecipe {
   wallColor: string;
   roofColor: string;
   windowColor: string;
+  /** Необязательные детали фасада и крыши; см. facade.ts. */
+  details?: FacadeDetails;
 }
 
 /** Здание с плоской крышей: вертикальная призма по контуру и замкнутый коллайдер той же формы. */
@@ -96,6 +99,8 @@ export function generateFootprint(
   const walls = meshPart('walls', 'wall', recipe.wallColor);
   const roof = meshPart('roof', 'roof', recipe.roofColor);
   const windows = meshPart('windows', 'detail', recipe.windowColor);
+  const facade = buildFacade(ring, h, recipe.floors, recipe.details);
+  const top = h + facade.parapet;
   // triangulate возвращает контур с положительной площадью в осях (x, z);
   // для такого обхода внешняя нормаль ребра p → q равна up × (q − p).
   for (let i = 0; i < n; i++) {
@@ -103,10 +108,18 @@ export function generateFootprint(
       [qx, qz] = ring[(i + 1) % n];
     addFace(walls, [
       [px, 0, pz],
-      [px, h, pz],
-      [qx, h, qz],
+      [px, top, pz],
+      [qx, top, qz],
       [qx, 0, qz],
     ]);
+    // Внутренняя сторона парапета видна сверху, когда камера смотрит через крышу.
+    if (top > h)
+      addFace(walls, [
+        [qx, h, qz],
+        [qx, top, qz],
+        [px, top, pz],
+        [px, h, pz],
+      ]);
     const length = Math.hypot(qx - px, qz - pz);
     if (!recipe.windows || length < 3) continue;
     const dx = (qx - px) / length,
@@ -118,6 +131,7 @@ export function generateFootprint(
     const width = Math.min(1.3, storey * 0.5),
       height = Math.min(1.4, storey * 0.48);
     for (let floor = 0; floor < recipe.floors; floor++) {
+      if (facade.skipWindow(i, floor)) continue;
       const bottom = floor * storey + storey * 0.32;
       for (let k = 0; k < count; k++) {
         const center = (length / count) * (k + 0.5);
@@ -153,16 +167,19 @@ export function generateFootprint(
     // Обход (a, b, c) положительный в осях (x, z), то есть его нормаль направлена вниз.
     indices.push(a, b, c, n + a, n + c, n + b);
   }
-  const parts = [walls, roof, ...(windows.indices.length ? [windows] : [])];
-  const collider: StaticCollider = {
-    id: 'body',
-    kind: 'mesh',
-    position: { x: 0, y: 0, z: 0 },
-    ...fixed,
-    vertices,
-    indices,
-  };
-  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders: [collider] } };
+  const parts = [walls, roof, ...(windows.indices.length ? [windows] : []), ...facade.parts];
+  const colliders: StaticCollider[] = [
+    { id: 'body', kind: 'mesh', position: { x: 0, y: 0, z: 0 }, ...fixed, vertices, indices },
+  ];
+  if (facade.roofCollider)
+    colliders.push({
+      id: 'roof',
+      kind: 'mesh',
+      position: { x: 0, y: 0, z: 0 },
+      ...fixed,
+      ...facade.roofCollider,
+    });
+  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders } };
 }
 
 export interface GroundLayer {

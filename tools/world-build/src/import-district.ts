@@ -8,7 +8,7 @@
  *   pnpm world:import            # content/worlds/ring-block/import.json
  *   pnpm world:import -- <путь к import.json>
  */
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
@@ -29,7 +29,26 @@ interface ImportConfig {
   crate: Vec3;
   /** Подпись над зданием по OSM-ID или в точке мира (игровые координаты). */
   landmarks?: { id: string; name: string; osm?: string; position?: Vec3 }[];
+  /** Ручные уточнения домов по OSM-ID: цвета, этажность и детали фасада. */
+  buildings?: Record<string, BuildingOverride>;
+  /** Штучные объекты из `content/buildings/<worldId>/manual/<assetId>/`. */
+  props?: { entityId: string; assetId: string; position: Vec3; yaw?: number }[];
 }
+const OVERRIDABLE = [
+  'height',
+  'floors',
+  'windows',
+  'wallColor',
+  'roofColor',
+  'windowColor',
+  'details',
+] as const;
+type BuildingOverride = Partial<Pick<FootprintRecipe, (typeof OVERRIDABLE)[number]>> & {
+  /** Пояснение для людей; в модель не попадает. */
+  note?: string;
+};
+/** Каталог ручных моделей внутри папки участка; импорт его не удаляет. */
+const MANUAL_DIRECTORY = 'manual';
 type Ring = [number, number][];
 interface SourceBuilding {
   id: string;
@@ -161,9 +180,21 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   const report = { buildings: 0, skipped: [] as string[], polygons: 0, poorCoverage: 0, trees: 0 };
   const buildingsDir = resolve(root, 'content/buildings', config.worldId);
   const worldDir = dirname(resolve(configPath));
-  await rm(buildingsDir, { recursive: true, force: true });
+  // Сгенерированные модели пересоздаются целиком; ручные из manual/ сохраняются.
+  await mkdir(buildingsDir, { recursive: true });
+  for (const entry of await readdir(buildingsDir))
+    if (entry !== MANUAL_DIRECTORY)
+      await rm(join(buildingsDir, entry), { recursive: true, force: true });
   await rm(join(worldDir, 'cells'), { recursive: true, force: true });
   const catalog: Record<string, string> = {};
+  const overrides = config.buildings ?? {};
+  for (const [osm, override] of Object.entries(overrides)) {
+    if (!selected.some((b) => b.id === osm))
+      throw new Error(`Building override ${osm} refers to a building outside the area`);
+    for (const key of Object.keys(override))
+      if (key !== 'note' && !(OVERRIDABLE as readonly string[]).includes(key))
+        throw new Error(`Building override ${osm} has unsupported field ${key}`);
+  }
   const writeAsset = async (assetId: string, kind: string, recipe: unknown) => {
     const directory = join(buildingsDir, assetId);
     await mkdir(directory, { recursive: true });
@@ -215,6 +246,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       roofColor: NAMED_COLORS[b.roofColor ?? ''] ?? pick(`${b.id}:roof`, ROOFS),
       windowColor: '#3d4d57',
     };
+    const { note: _note, ...override } = overrides[b.id] ?? {};
+    Object.assign(recipe, override);
     await writeAsset(assetId, 'footprint', recipe);
     const [kind, osmId] = b.id.split('/');
     instances.push({
@@ -225,7 +258,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       sourceRef: { provider: 'osm', type: kind, id: osmId },
     });
     footprints.push(outline);
-    if (!roofs.has(b.id)) roofs.set(b.id, { x: cx, y: round(height + 3), z: cz });
+    if (!roofs.has(b.id)) roofs.set(b.id, { x: cx, y: round(recipe.height + 3), z: cz });
     report.buildings++;
   }
 
@@ -274,7 +307,28 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     rotation: identity,
   });
 
-  // 3. Декоративные деревья из прототипа, кроме стоящих в домах, на проезжей части и у старта.
+  // 3. Штучные объекты: ручные модели из manual/, например памятник в центре кольца.
+  for (const prop of config.props ?? []) {
+    const descriptor = `${MANUAL_DIRECTORY}/${prop.assetId}/asset.json`;
+    await readFile(join(buildingsDir, descriptor)).catch(() => {
+      throw new Error(`Manual asset ${prop.assetId} not found in ${MANUAL_DIRECTORY}/`);
+    });
+    catalog[prop.assetId] = descriptor;
+    const yaw = ((prop.yaw ?? 0) * Math.PI) / 180;
+    instances.push({
+      entityId: prop.entityId,
+      assetId: prop.assetId,
+      position: prop.position,
+      rotation: {
+        x: 0,
+        y: round(Math.sin(yaw / 2) * 1e6) / 1e6,
+        z: 0,
+        w: round(Math.cos(yaw / 2) * 1e6) / 1e6,
+      },
+    });
+  }
+
+  // 4. Декоративные деревья из прототипа, кроме стоящих в домах, на проезжей части и у старта.
   const trees: Record<string, TreeRecipe> = {
     'tree-spruce-small': {
       formatVersion: 1,
@@ -291,7 +345,11 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       crownColor: '#456e47',
     },
   };
-  const clear = [...config.spawnPoints, config.crate];
+  const clear = [
+    ...config.spawnPoints,
+    config.crate,
+    ...(config.props ?? []).map((prop) => prop.position),
+  ];
   let treeIndex = 0;
   for (const [sx, sy, size] of data.trees) {
     const [x, z] = toGame([sx, sy]);
@@ -314,7 +372,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   for (const [assetId, recipe] of Object.entries(trees))
     if (instances.some((i) => i.assetId === assetId)) await writeAsset(assetId, 'tree', recipe);
 
-  // 4. Точки появления не должны оказаться внутри дома.
+  // 5. Точки появления не должны оказаться внутри дома.
   const radius = 0.35;
   for (const spawn of config.spawnPoints)
     for (const ring of footprints)
@@ -324,7 +382,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       )
         throw new Error(`Spawn point ${spawn.x},${spawn.z} is inside a building`);
 
-  // 5. Мир: границы, ограждение по краю, ящик и ссылки на ячейку и каталог.
+  // 6. Мир: границы, ограждение по краю, ящик и ссылки на ячейку и каталог.
   const tallest = Math.max(...selected.map((b) => b.h), 10);
   const wall = (entityId: string, position: Vec3, size: Vec3): EntityDefinition => ({
     entityId,

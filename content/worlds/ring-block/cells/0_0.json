@@ -2158,6 +2158,21 @@
       }
     },
     {
+      "entityId": "monument-trudovaya-slava",
+      "assetId": "trudovaya-slava",
+      "position": {
+        "x": 1.5,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
       "entityId": "tree-001",
       "assetId": "tree-spruce-small",
       "position": {

@@ -29,6 +29,7 @@ import {
   type GroundRecipe,
   type TreeRecipe,
 } from './city.js';
+import { generateKit, type KitRecipe } from './kit.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
 export const WORLDS = ['ring-block', 'physics-lab'] as const;
@@ -37,6 +38,7 @@ const generators = {
   footprint: (id: string, recipe: unknown) => generateFootprint(id, recipe as FootprintRecipe),
   ground: (id: string, recipe: unknown) => generateGround(id, recipe as GroundRecipe),
   tree: (id: string, recipe: unknown) => generateTree(id, recipe as TreeRecipe),
+  kit: (id: string, recipe: unknown) => generateKit(id, recipe as KitRecipe),
 };
 
 const hash = (input: string | Uint8Array) => createHash('sha256').update(input).digest('hex');

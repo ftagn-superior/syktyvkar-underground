@@ -49,8 +49,8 @@ export class AuthoritativeWorld {
       ? this.world.canReach(playerId, item.node.position, itemId)
       : ('ITEM_UNAVAILABLE' as const);
   }
-  checkPlacement(typeId: string, pose: ItemPose, playerId?: string) {
-    return this.world.checkPlacement(typeId, pose, playerId);
+  checkPlacement(typeId: string, pose: ItemPose, playerId?: string, ignoreId?: string) {
+    return this.world.checkPlacement(typeId, pose, playerId, ignoreId);
   }
   respawnPlayer(id: string): boolean {
     const character = this.world.characters.get(id);

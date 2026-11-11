@@ -18,6 +18,8 @@
     "start": "node dist/server/main.mjs",
     "db:migrate": "node --import tsx apps/server/src/migrate.ts",
     "db:migrate:built": "node dist/server/migrate.mjs",
+    "world:migrate": "node --import tsx apps/server/src/migrate-world.ts",
+    "world:migrate:built": "node dist/server/migrate-world.mjs",
     "test:accounts": "node tools/test-database.mjs",
     "test:accounts:browser": "node tools/test-database.mjs --browser",
     "load": "node --import tsx tools/load-test/src/index.ts",

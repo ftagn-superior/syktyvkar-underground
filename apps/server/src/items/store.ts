@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { createAuthoritativeWorld } from '@su/simulation/server';
 import {
   canonicalJson,
   initialItemState,
@@ -119,7 +120,9 @@ export class ItemStore {
       const hash = worldCompatibility(this.definition),
         catalog = physicsCatalog(this.definition.itemCatalog);
       if (found.rowCount && found.rows[0].compatibility_hash !== hash)
-        throw new Error('Saved world geometry is incompatible; explicit migration required');
+        throw new Error(
+          'Saved world geometry is incompatible. Stop the server and run pnpm world:migrate after pnpm build.',
+        );
       const used = new Set(
         (
           await this.db.query<{ type_id: string }>('SELECT DISTINCT type_id FROM item_instances')
@@ -167,6 +170,50 @@ export class ItemStore {
     });
     this.started = true;
     return this.worldItems();
+  }
+  /** Explicit offline upgrade: preserve every item and accept only poses valid in the new map. */
+  async migrateGeometry() {
+    if (this.started) throw new Error('Stop the world before migrating its geometry.');
+    await this.connect();
+    return this.transaction(async () => {
+      const found = await this.db.query<{ compatibility_hash: string }>(
+        'SELECT compatibility_hash FROM persistent_worlds WHERE id=$1 FOR UPDATE',
+        [this.definition.worldId],
+      );
+      if (!found.rowCount) throw new Error('World has no saved state. Start the server first.');
+      const from = found.rows[0].compatibility_hash,
+        to = worldCompatibility(this.definition);
+      if (from === to) return { from, to, changed: false };
+
+      const catalog = physicsCatalog(this.definition.itemCatalog);
+      const used = await this.db.query<{ id: string; physics: unknown }>(
+        'SELECT id,physics FROM item_types WHERE id IN (SELECT type_id FROM item_instances)',
+      );
+      for (const type of used.rows)
+        if (
+          !Object.hasOwn(catalog, type.id) ||
+          canonicalJson(type.physics) !== canonicalJson(catalog[type.id])
+        )
+          throw new Error(`Saved item type is incompatible: ${type.id}`);
+
+      const items = await this.worldItems();
+      const world = await createAuthoritativeWorld({ ...this.definition, initialItems: [] });
+      try {
+        world.replaceItems(items);
+        for (const item of items) {
+          const error = world.checkPlacement(item.typeId, item, undefined, item.entityId);
+          if (error)
+            throw new Error(`Saved item ${item.entityId} cannot stay in the new map: ${error}`);
+        }
+      } finally {
+        world.dispose();
+      }
+      await this.db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
+        this.definition.worldId,
+        to,
+      ]);
+      return { from, to, changed: true };
+    });
   }
   private async transaction<T>(run: () => Promise<T>): Promise<T> {
     const client = this.db;

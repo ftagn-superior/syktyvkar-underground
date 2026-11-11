@@ -3,10 +3,21 @@ import { readFile } from 'node:fs/promises';
 import { validateWorld, canonicalJson, normalizeInput } from './index.js';
 const source = {
   ...JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')),
+  itemCatalog: JSON.parse(await readFile('content/items/catalog.json', 'utf8')),
   buildings: [],
   buildingAssets: {},
 };
 describe('world contract', () => {
+  it('accepts zero, one and several initial items without a mandatory crate identity', () => {
+    const world = structuredClone(source);
+    world.initialItems = [];
+    expect(validateWorld(world).initialItems).toEqual([]);
+    world.initialItems = Array.from({ length: 3 }, (_, index) => ({
+      ...source.initialItems[0],
+      seedId: `item-${index}`,
+    }));
+    expect(validateWorld(world).initialItems).toHaveLength(3);
+  });
   it('accepts the shipped scene and rejects identity collisions', () => {
     expect(validateWorld(source).spawnPoints).toHaveLength(8);
     const duplicate = structuredClone(source);

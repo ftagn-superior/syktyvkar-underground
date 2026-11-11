@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { REACTIONS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
 

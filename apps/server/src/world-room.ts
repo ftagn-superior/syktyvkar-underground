@@ -1,3 +1,6 @@
+import type { Pool } from 'pg';
+import { ItemStore } from './items/store.js';
+import { ItemRuntime } from './items/runtime.js';
 import { randomUUID } from 'node:crypto';
 import {
   CloseCode,
@@ -9,6 +12,9 @@ import {
 } from '@colyseus/core';
 import {
   MAX_PLAYERS,
+  parseItemCommand,
+  type ItemResult,
+  type ItemState,
   MAX_INPUT_QUEUE,
   PATCH_RATE,
   PLAYER_COLORS,
@@ -27,7 +33,13 @@ import {
   type WorldDefinition,
   type WorldManifest,
 } from '@su/contracts';
-import { MoveInputSchema, PlayerSchema, WorldState, applyEntityState } from '@su/protocol';
+import {
+  EntitySchema,
+  MoveInputSchema,
+  PlayerSchema,
+  WorldState,
+  applyEntityState,
+} from '@su/protocol';
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
@@ -52,6 +64,7 @@ export interface WorldRoomOptions {
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
   accounts?: AccountHttp;
+  pool: Pool;
 }
 
 /** Connection lifecycle and replication only; simulation owns all physical state. */
@@ -70,6 +83,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     },
   });
   private world!: PhysicsWorld;
+  private items!: ItemRuntime;
+  private itemRequests = 0;
+  private shutdown?: Promise<void>;
   private sessions = new Map<string, Session>();
   private guestCounter = 0;
   private reconnectSeconds = RECONNECT_SECONDS;
@@ -94,8 +110,26 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.seatReservationTimeout = 10;
     this.setPatchRate(1000 / PATCH_RATE);
     await this.setPrivate(true);
-    this.world = await createAuthoritativeWorld(options.definition);
-    applyEntityState(this.state.crate, this.world.getSnapshot().crate);
+    this.world = await createAuthoritativeWorld({ ...options.definition, initialItems: [] });
+    this.items = new ItemRuntime(
+      new ItemStore(options.pool, options.definition, this.state.worldEpoch),
+      this.world,
+      () => this.persistenceStatus(),
+    );
+    try {
+      await this.items.initialize();
+    } catch (error) {
+      await this.items.store.close();
+      this.world.dispose();
+      throw error;
+    }
+    this.projectItems(this.world.getSnapshot().items);
+    this.onMessage('itemCommand', (client, request: unknown) => {
+      void this.itemCommand(client, request);
+    });
+    this.onMessage('inventoryRequest', (client) => {
+      void this.sendInventory(client);
+    });
     this.onMessage('clientReady', (client) => this.ready(client));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
@@ -126,6 +160,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     ) {
       throw new ServerError(4001, 'VERSION_MISMATCH');
     }
+    if (!this.isReady()) throw new ServerError(503, 'WORLD_NOT_READY');
     if (options.accountMode === 'guest') return true;
     const token = this.accounts?.readToken(context.headers);
     if (options.accountMode !== 'account' && !token) return true;
@@ -177,11 +212,15 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
 
   private ready(client: Client): void {
     const session = this.sessions.get(client.sessionId);
-    if (!session || this.state.players.has(client.sessionId) || session.readyAt !== undefined)
+    if (!session) return;
+    if (this.state.players.has(client.sessionId) || session.readyAt !== undefined) {
+      void this.sendInventory(client);
       return;
+    }
     session.readyAt = performance.now();
     this.inputs.get(client.sessionId).clear();
-    this.trySpawn(client.sessionId, session);
+    if (!this.items.paused) this.trySpawn(client.sessionId, session);
+    void this.sendInventory(client);
   }
 
   private trySpawn(sessionId: string, session: Session): void {
@@ -203,6 +242,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   private step(ctx: StepContext): void {
+    if (this.items.paused) {
+      for (const id of this.sessions.keys()) this.inputs.get(id).clear();
+      return;
+    }
     const start = performance.now();
     for (const [sessionId, session] of this.sessions) {
       const client = this.clients.getById(sessionId);
@@ -234,13 +277,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
       if (actual) applyEntityState(player, actual);
-      if (player.reactionId && ctx.tick >= player.reactionExpiresAtTick) {
+      if (player.reactionId && this.state.serverTick >= player.reactionExpiresAtTick) {
         player.reactionId = '';
         player.reactionExpiresAtTick = 0;
       }
     }
-    applyEntityState(this.state.crate, snapshot.crate);
-    this.state.serverTick = ctx.tick;
+    this.projectItems(snapshot.items);
+    this.state.serverTick++;
+    this.items.step(this.state.serverTick);
     const duration = performance.now() - start;
     // Diagnostics update at the patch rate rather than churning a field at 60Hz.
     if (ctx.tick % 3 === 0) this.state.stepMs = duration;
@@ -287,7 +331,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     session.lastRequest = requestId;
     let code: ErrorCode | undefined;
     if (data.worldEpoch !== this.state.worldEpoch) code = 'STALE_WORLD';
-    else if (!session.connected || !this.state.players.has(client.sessionId))
+    else if (this.items.paused || !session.connected || !this.state.players.has(client.sessionId))
       code = 'WORLD_NOT_READY';
     return { session, requestId, code };
   }
@@ -405,6 +449,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         throw new ServerError(401, 'AUTH_REQUIRED');
     }
     session.connected = true;
+    void this.sendInventory(client);
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
     if (player) player.connected = true;
@@ -431,12 +476,113 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       void client?.leave(CloseCode.CONSENTED, 'AUTH_REQUIRED');
     }
   }
-  onDispose(): void {
-    this.disposed = true;
-    this.world?.dispose();
-    this.sessions.clear();
-    this.accountPlayers.clear();
-    this.stepSamples.length = 0;
+  isReady() {
+    return !!this.items && !this.items.unavailable && !this.items.closing;
+  }
+  private projectItems(items: ItemState[]) {
+    const ids = new Set(items.map((i) => i.entityId));
+    for (const id of this.state.items.keys()) if (!ids.has(id)) this.state.items.delete(id);
+    for (const item of items) {
+      let schema = this.state.items.get(item.entityId);
+      if (!schema) {
+        schema = new EntitySchema();
+        this.state.items.set(item.entityId, schema);
+      }
+      applyEntityState(schema, item);
+    }
+  }
+  private persistenceStatus() {
+    const wasPaused = this.state.paused;
+    this.state.paused = this.items.paused;
+    this.state.pauseReason = this.items.unavailable
+      ? 'STORAGE_UNAVAILABLE'
+      : this.items.closing
+        ? 'WORLD_NOT_READY'
+        : '';
+    if (wasPaused && !this.state.paused) {
+      this.projectItems(this.world.getSnapshot().items);
+      for (const id of this.sessions.keys()) this.inputs.get(id).clear();
+      this.broadcast('resync', { serverTick: this.state.serverTick });
+    }
+  }
+  private async sendInventory(client: Client) {
+    const session = this.sessions.get(client.sessionId);
+    if (!session?.auth || session.auth.expiresAt <= Date.now()) return;
+    try {
+      const inventory = await this.items.inventory(session.auth.accountId);
+      if (
+        session.connected &&
+        session.auth.expiresAt > Date.now() &&
+        this.sessions.get(client.sessionId) === session
+      )
+        client.send('inventory', inventory);
+    } catch {
+      /* Shutdown closes pending reads along with the connection. */
+    }
+  }
+  private async itemCommand(client: Client, request: unknown) {
+    const command = parseItemCommand(request);
+    if (!command) {
+      client.send('problem', { code: 'INVALID_INPUT' });
+      return;
+    }
+    const session = this.sessions.get(client.sessionId);
+    const respond = (result: ItemResult) => {
+      if (session?.connected) client.send('itemResult', result);
+    };
+    if (!session?.auth || session.auth.expiresAt <= Date.now()) {
+      respond({ operationId: command.operationId, ok: false, code: 'AUTH_REQUIRED' });
+      return;
+    }
+    if (!this.isReady() || this.itemRequests >= 32) {
+      respond({
+        operationId: command.operationId,
+        ok: false,
+        code: this.items.unavailable ? 'STORAGE_UNAVAILABLE' : 'RATE_LIMITED',
+      });
+      return;
+    }
+    this.itemRequests++;
+    try {
+      const result = await this.items.command(
+        session.auth.accountId,
+        session.entityId,
+        command,
+        () => {
+          if (
+            session.auth!.expiresAt <= Date.now() ||
+            this.accounts?.wasRevoked(session.auth!.authSessionId)
+          )
+            return 'AUTH_REQUIRED';
+          if (command.worldEpoch !== this.state.worldEpoch) return 'STALE_WORLD';
+          if (!session.connected || !this.state.players.has(client.sessionId))
+            return 'WORLD_NOT_READY';
+        },
+      );
+      this.projectItems(this.world.getSnapshot().items);
+      await this.sendInventory(client);
+      respond(result);
+    } catch {
+      /* Uncertain operations stay queued until recovered; shutdown disconnects. */
+    } finally {
+      this.itemRequests--;
+    }
+  }
+  shutdownWorld(): Promise<void> {
+    return (this.shutdown ??= this.items?.close() ?? Promise.resolve());
+  }
+  async onDispose(): Promise<void> {
+    try {
+      await this.shutdownWorld();
+    } catch {
+      console.error('World disposal follows an incomplete final save.');
+    } finally {
+      this.disposed = true;
+      this.world?.dispose();
+      this.sessions.clear();
+      this.accountPlayers.clear();
+      this.stepSamples.length = 0;
+    }
   }
   diagnostics() {
     const sorted = [...this.stepSamples].sort((a, b) => a - b);
@@ -469,6 +615,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       memory: { rss, heapUsed },
       resyncs: this.resyncs,
       disposed: this.disposed,
+      items: this.state.items.size,
+      persistence: { paused: this.state.paused, unavailable: this.items.unavailable },
     };
   }
 }

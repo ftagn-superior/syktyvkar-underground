@@ -3,17 +3,18 @@ import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import * as oidc from 'openid-client';
-import { AccountStore, createAccountPool } from '../../apps/server/src/accounts/store.js';
-import { migrateAccounts } from '../../apps/server/src/accounts/migrations.js';
+import { AccountStore } from '../../apps/server/src/accounts/store.js';
+import { createDatabasePool } from '../../apps/server/src/database.js';
+import { migrateDatabase } from '../../apps/server/src/migrations.js';
 import { createTelegramLogin } from '../../apps/server/src/accounts/telegram.js';
 import type { AccountConfig } from '../../apps/server/src/config.js';
 
 /** Real SQL and real OIDC signatures; all test writes stay in a newly-created private schema. */
 export async function createAccountFixture(databaseUrl: string) {
   const schema = 'su_test_' + randomBytes(12).toString('hex');
-  const admin = createAccountPool(databaseUrl);
+  const admin = createDatabasePool(databaseUrl);
   await admin.query(`CREATE SCHEMA ${schema}`);
-  const pool = createAccountPool(databaseUrl, { options: `-c search_path=${schema}` });
+  const pool = createDatabasePool(databaseUrl, { options: `-c search_path=${schema}` });
   pool.on('error', () => {});
   const keys = await generateKeyPair('RS256');
   const wrongKeys = await generateKeyPair('RS256');
@@ -107,7 +108,7 @@ export async function createAccountFixture(databaseUrl: string) {
   });
   try {
     assert.equal((await pool.query('SELECT current_schema() AS name')).rows[0].name, schema);
-    await migrateAccounts(pool);
+    await migrateDatabase(pool);
     await new Promise<void>((resolve) => providerServer.listen(0, '127.0.0.1', resolve));
     const address = providerServer.address();
     assert(address && typeof address !== 'string');

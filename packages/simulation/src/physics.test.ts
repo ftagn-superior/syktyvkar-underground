@@ -103,7 +103,7 @@ describe('Havok shared world', () => {
   it('keeps the same elapsed time with one and eight characters', async () => {
     const definition = fixture();
     definition.spawnPoints = Array.from({ length: 8 }, (_, n) => ({ x: -8 + n * 2, y: 0, z: -8 }));
-    definition.entities[2].position.y = 5;
+    definition.initialItems[0].position.y = 5;
     const one = await createAuthoritativeWorld(definition);
     const eight = await createAuthoritativeWorld(definition);
     try {
@@ -113,8 +113,8 @@ describe('Havok shared world', () => {
         one.step();
         eight.step();
       }
-      expect(eight.getSnapshot().crate.position.y).toBeCloseTo(
-        one.getSnapshot().crate.position.y,
+      expect(eight.getSnapshot().items[0].position.y).toBeCloseTo(
+        one.getSnapshot().items[0].position.y,
         5,
       );
     } finally {
@@ -154,7 +154,7 @@ describe('Havok shared world', () => {
         world.setInput('a', { moveX: 0, moveZ: 1, sprint });
         // Sample sprint contact before the fast crate can leave the test world and reset.
         for (let i = 0; i < (sprint ? 60 : 120); i++) world.step();
-        expect(world.getSnapshot().crate.position.z).toBeGreaterThan(7);
+        expect(world.getSnapshot().items[0].position.z).toBeGreaterThan(7);
         expect(world.respawnPlayer('a')).toBe(true);
         expect(world.getSnapshot().players[0].revision).toBe(1);
         world.step();
@@ -165,39 +165,33 @@ describe('Havok shared world', () => {
       }
     },
   );
-  it.each([false, true])(
-    'returns a lost crate only when its starting position is free (occupied: %s)',
-    async (occupied) => {
-      const definition = fixture();
-      const world = await createPhysicsWorld(definition, await loadServerWasm(), false);
-      try {
-        const crate = world.objects.get('crate-01')!;
-        const start = crate.definition.position;
-        world.teleport(crate.body, crate.node, {
-          x: definition.bounds.max.x + 2,
-          y: 2,
-          z: start.z,
-        });
-        if (occupied) {
-          world.createCharacter('occupant', world.spawnPosition({ x: start.x, y: 0, z: start.z }));
-          for (let i = 0; i < 30; i++) world.advance(1 / 60);
-          expect(world.snapshot().crate.position.x).toBeGreaterThan(definition.bounds.max.x);
-          expect(world.snapshot().crate.revision).toBe(0);
-          world.removeCharacter('occupant');
-        }
-        world.advance(1 / 60);
-        const returned = world.snapshot().crate;
-        expect(returned.position).toEqual(start);
-        expect(returned.velocity).toEqual({ x: 0, y: 0, z: 0 });
-        expect(returned.revision).toBe(1);
-        for (let i = 0; i < 30; i++) world.advance(1 / 60);
-        expect(world.snapshot().crate.revision).toBe(1);
-        expect(world.physics.getBodies()).toHaveLength(definition.entities.length);
-      } finally {
-        world.dispose();
-      }
-    },
-  );
+  it('returns a lost instance near an occupied safe pose without replacing its ID', async () => {
+    const definition = fixture();
+    const world = await createPhysicsWorld(definition, await loadServerWasm(), false);
+    try {
+      const item = world.objects.get('crate-01')!;
+      const start = { ...item.definition.position };
+      world.teleport(item.body, item.node, { x: definition.bounds.max.x + 2, y: 2, z: start.z });
+      world.createCharacter('occupant', world.spawnPosition({ x: start.x, y: 0, z: start.z }));
+      world.advance(1 / 60);
+      const returned = world.snapshot().items[0];
+      expect(returned.entityId).toBe('crate-01');
+      expect(returned.position.x).toBeLessThan(definition.bounds.max.x);
+      expect(returned.position).not.toEqual(start);
+      expect(returned.revision).toBe(1);
+      expect(world.snapshot().items).toHaveLength(1);
+      expect(
+        world.checkPlacement(
+          returned.typeId,
+          { position: returned.position, rotation: returned.rotation },
+          undefined,
+          returned.entityId,
+        ),
+      ).toBeUndefined();
+    } finally {
+      world.dispose();
+    }
+  });
   it.each([false, true])(
     'restores and replays at a wall without accumulating drift (sprint: %s)',
     async (sprint) => {
@@ -318,7 +312,7 @@ describe('Havok shared world', () => {
         expect(corrections[Math.floor(corrections.length * 0.95)]).toBeLessThan(
           steps === 12 ? 1 : 0.5,
         );
-        expect(server.getSnapshot().crate.position.z).toBeGreaterThan(6);
+        expect(server.getSnapshot().items[0].position.z).toBeGreaterThan(6);
       } finally {
         server.dispose();
         prediction.dispose();

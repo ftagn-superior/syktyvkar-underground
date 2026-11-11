@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
 

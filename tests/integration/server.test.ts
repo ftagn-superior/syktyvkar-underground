@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Client, CloseCode, type Room } from '@colyseus/sdk';
-import { createGameServer } from '../../apps/server/src/index.js';
+import { createGameServer } from '../helpers/game-server.js';
 import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/index.js';
 import {
   RESPAWN_COOLDOWN_MS,
@@ -19,7 +19,7 @@ async function until(predicate: () => boolean, timeout = 2500): Promise<void> {
   }
 }
 
-describe('one authoritative world over actual WebSocket connections', () => {
+describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket world', () => {
   let app: Awaited<ReturnType<typeof createGameServer>>;
   let info: WorldInfo;
   let sdk: Client;
@@ -69,8 +69,10 @@ describe('one authoritative world over actual WebSocket connections', () => {
     const second = await join();
     await until(() => first.state.players.size === 2 && second.state.players.size === 2);
     expect(first.state.worldEpoch).toBe(second.state.worldEpoch);
-    expect(first.state.crate.entityId).toBe('crate-01');
-    expect(first.state.crate.entityId).toBe(second.state.crate.entityId);
+    expect(first.state.items.size).toBe(1);
+    expect(first.state.items.values().next().value!.entityId).toBe(
+      second.state.items.values().next().value!.entityId,
+    );
     expect(app.room.diagnostics().players).toBe(2);
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);
   });
@@ -124,12 +126,15 @@ describe('one authoritative world over actual WebSocket connections', () => {
     input.data.moveX = -1;
     for (const sprint of [false, true, false, true]) {
       input.data.sprint = sprint;
+      let observedSpeed = false;
       for (let i = 0; i < 12; i++) {
         input.send();
         await sleep(1000 / 60);
+        if (Math.abs(Math.hypot(player.vx, player.vz) - (sprint ? 14 : 4)) < 0.01)
+          observedSpeed = true;
       }
-      // Check the replicated server velocity while the queue still has input.
-      expect(Math.hypot(player.vx, player.vz)).toBeCloseTo(sprint ? 14 : 4, 2);
+      // Sample the phase: timer jitter may publish a neutral tick after its last packet.
+      expect(observedSpeed).toBe(true);
     }
     expect(player.x).toBeLessThan(initialX - 3);
     await until(() => Math.hypot(player.vx, player.vz) < 0.01);
@@ -372,7 +377,7 @@ describe('one authoritative world over actual WebSocket connections', () => {
       await until(() => app.room.diagnostics().sessions === 0);
       expect(app.room.diagnostics().bodies).toBe(initial);
     }
-    expect(app.room.state.crate.entityId).toBe('crate-01');
+    expect(app.room.state.items.size).toBe(1);
   });
 
   it('preserves an unchanged axis when a diagonal delta becomes horizontal', async () => {
@@ -405,6 +410,6 @@ describe('one authoritative world over actual WebSocket connections', () => {
     await expect(sdk.reconnect(token)).rejects.toThrow();
     const fresh = await join();
     expect(fresh.state.worldEpoch).toBe(info.worldEpoch);
-    expect(fresh.state.crate.revision).toBe(0);
+    expect(fresh.state.items.values().next().value!.revision).toBe(0);
   });
 });

@@ -1,10 +1,11 @@
 import { createGameServer } from './index.js';
-import { loadEnvironment, readAccountConfig } from './config.js';
-import { AccountStore, createAccountPool } from './accounts/store.js';
+import { loadEnvironment, readAccountConfig, readDatabaseUrl } from './config.js';
+import { AccountStore } from './accounts/store.js';
+import { createDatabasePool } from './database.js';
 
 loadEnvironment();
 const config = readAccountConfig();
-const pool = config ? createAccountPool(config.databaseUrl) : undefined;
+const pool = createDatabasePool(readDatabaseUrl());
 const port = Number(process.env.PORT ?? 2567);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error('PORT must be an integer between 1 and 65535');
@@ -15,6 +16,7 @@ let app: Awaited<ReturnType<typeof createGameServer>>;
 try {
   app = await createGameServer({
     port,
+    pool,
     host: process.env.HOST ?? '127.0.0.1',
     worldDirectory: `dist/worlds/${world}`,
     ...(config && pool ? { accounts: { config, store: new AccountStore(pool) } } : {}),
@@ -29,9 +31,15 @@ let stopping = false;
 async function stop() {
   if (stopping) return;
   stopping = true;
-  await app.close();
   clearInterval(maintenance);
-  await pool?.end();
+  try {
+    await app.close();
+  } catch {
+    console.error('Server stopped without a complete final world save.');
+    process.exitCode = 1;
+  } finally {
+    await pool.end();
+  }
 }
 const maintenance = setInterval(
   () => {

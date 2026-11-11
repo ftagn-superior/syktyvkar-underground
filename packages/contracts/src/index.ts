@@ -1,8 +1,10 @@
 import { PROFILE_COLORS } from './accounts.js';
 export * from './accounts.js';
+export * from './items.js';
+import type { ItemCatalog, InitialItem, ItemState } from './items.js';
 
-export const PROTOCOL_VERSION = 3;
-export const WORLD_FORMAT_VERSION = 2;
+export const PROTOCOL_VERSION = 4;
+export const WORLD_FORMAT_VERSION = 3;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
 export const PATCH_RATE = 20;
@@ -79,7 +81,7 @@ export interface SimulationConfig {
 }
 export interface EntityDefinition {
   entityId: string;
-  kind: 'obstacle' | 'crate';
+  kind: 'obstacle';
   position: Vec3;
   size: Vec3;
   mass: number;
@@ -94,6 +96,8 @@ export interface WorldDefinition {
   simulation: SimulationConfig;
   spawnPoints: Vec3[];
   entities: EntityDefinition[];
+  itemCatalog: ItemCatalog;
+  initialItems: InitialItem[];
   buildings: BuildingInstance[];
   buildingAssets: Record<string, BuildingPhysicsAsset>;
   /** Подписи заметных мест. Только отображение: в физический хеш не входят. */
@@ -106,7 +110,8 @@ export interface Landmark {
   position: Vec3;
 }
 export type WorldBase = Omit<WorldDefinition, 'buildings' | 'buildingAssets'>;
-export interface WorldSource extends WorldBase {
+export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
+  itemCatalog: string;
   cells: string[];
   assetCatalog: string;
 }
@@ -123,7 +128,7 @@ export interface WorldManifest {
 }
 export interface EntityState {
   entityId: string;
-  kind: 'player' | 'crate';
+  kind: 'player' | 'item';
   revision: number;
   position: Vec3;
   rotation: Quat;
@@ -136,7 +141,7 @@ export interface PlayerState extends EntityState {
 }
 export interface SimulationSnapshot {
   players: PlayerState[];
-  crate: EntityState;
+  items: ItemState[];
 }
 export interface WorldInfo {
   roomId: string;

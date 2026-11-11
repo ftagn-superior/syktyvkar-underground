@@ -1,9 +1,19 @@
+import catalog from '../../../content/items/catalog.json';
 import type { BuildingPhysicsAsset, StaticCollider, Vec3, WorldDefinition } from '@su/contracts';
 
 export function physicsFixture(): WorldDefinition {
   return {
-    formatVersion: 2,
+    formatVersion: 3,
     worldId: 'test',
+    itemCatalog: structuredClone(catalog) as WorldDefinition['itemCatalog'],
+    initialItems: [
+      {
+        seedId: 'crate-01',
+        typeId: 'wooden-crate',
+        position: { x: 0, y: 0.52, z: 6 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    ],
     bounds: { min: { x: -20, y: -10, z: -20 }, max: { x: 20, y: 10, z: 20 } },
     simulation: {
       tickRate: 60,
@@ -36,16 +46,6 @@ export function physicsFixture(): WorldDefinition {
         mass: 0,
         friction: 0.6,
         restitution: 0,
-        color: '#fff',
-      },
-      {
-        entityId: 'crate-01',
-        kind: 'crate',
-        position: { x: 0, y: 0.52, z: 6 },
-        size: { x: 1, y: 1, z: 1 },
-        mass: 10,
-        friction: 0.6,
-        restitution: 0.05,
         color: '#fff',
       },
     ],
@@ -107,7 +107,7 @@ function archMesh(): StaticCollider {
 export function buildingFixture(kind: 'courtyard' | 'arch'): WorldDefinition {
   const definition = physicsFixture();
   definition.entities = definition.entities.filter((entity) => entity.entityId !== 'wall');
-  definition.entities.find((entity) => entity.kind === 'crate')!.position = {
+  definition.initialItems[0].position = {
     x: -15,
     y: 0.52,
     z: -15,

@@ -5,6 +5,9 @@ import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/in
 import {
   RESPAWN_COOLDOWN_MS,
   REACTION_DURATION_MS,
+  CHAT_MAX_LENGTH,
+  CHAT_MIN_DURATION_MS,
+  CHAT_MAX_DURATION_MS,
   TICK_RATE,
   type ActionResult,
   type WorldInfo,
@@ -79,9 +82,13 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
   });
 
   it('rejects incompatible versions and room creation', async () => {
-    await expect(sdk.joinById(info.roomId, { protocolVersion: -1 })).rejects.toThrow(
-      'VERSION_MISMATCH',
-    );
+    await expect(
+      sdk.joinById(info.roomId, {
+        protocolVersion: info.protocolVersion - 1,
+        mapVersion: info.mapVersion,
+        simulationConfigHash: info.simulationConfigHash,
+      }),
+    ).rejects.toThrow('VERSION_MISMATCH');
     await expect(sdk.create('world')).rejects.toThrow();
     expect(app.room.diagnostics().players).toBe(0);
     expect((await (await fetch(app.url + '/api/world')).json()).roomId).toBe(info.roomId);
@@ -320,6 +327,87 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     await until(() => recovered.state.players.get(sender.sessionId)!.reactionId === '', 4500);
     const after = await join();
     expect(after.state.players.get(sender.sessionId)!.reactionId).toBe('');
+  });
+
+  it('shares bounded chat text, protects the author and reading time, and never replays expired requests', async () => {
+    const sender = await join();
+    const observer = await join();
+    const results: ActionResult[] = [];
+    sender.onMessage('actionResult', (result: ActionResult) => results.push(result));
+    const send = (requestId: number, text: unknown, worldEpoch = info.worldEpoch) =>
+      sender.send('requestChat', {
+        requestId,
+        worldEpoch,
+        text,
+        entityId: observer.sessionId,
+        durationMs: 999_999,
+      });
+    send(1, '  Привет,\n <b>сосед</b>! 🙂  ');
+    await until(() => observer.state.players.get(sender.sessionId)?.chatSequence === 1);
+    const player = observer.state.players.get(sender.sessionId)!;
+    const expires = player.chatExpiresAtTick;
+    expect(player.chatText).toBe('Привет, <b>сосед</b>! 🙂');
+    expect(observer.state.players.get(observer.sessionId)!.chatText).toBe('');
+    expect(results[0]).toMatchObject({ ok: true, retryAfterMs: CHAT_MIN_DURATION_MS });
+    expect(expires - observer.state.serverTick).toBeGreaterThan(0);
+    expect(expires - observer.state.serverTick).toBeLessThanOrEqual(
+      (CHAT_MIN_DURATION_MS * TICK_RATE) / 1000,
+    );
+    send(1, 'Повтор');
+    send(2, 'Следующее');
+    sender.send('requestReaction', {
+      requestId: 3,
+      worldEpoch: info.worldEpoch,
+      reactionId: 'hello',
+    });
+    send(4, 'Старый мир', 'old-world');
+    for (const [index, text] of [null, {}, '', ' \n\t ', 'я'.repeat(CHAT_MAX_LENGTH + 1)].entries())
+      send(5 + index, text);
+    await until(() => results.length === 10);
+    expect(results[1]).toEqual(results[0]);
+    expect(results[2]).toMatchObject({ ok: false, code: 'RATE_LIMITED' });
+    expect(results[2].retryAfterMs).toBeGreaterThan(0);
+    expect(results[3].ok).toBe(true);
+    expect(results[4].code).toBe('STALE_WORLD');
+    expect(results.slice(5).every((result) => result.code === 'INVALID_INPUT')).toBe(true);
+    expect(player.chatExpiresAtTick).toBe(expires);
+    expect(player.chatSequence).toBe(1);
+    expect(JSON.stringify(results)).not.toContain('сосед');
+
+    const late = await join();
+    expect(late.state.players.get(sender.sessionId)!.chatExpiresAtTick).toBe(expires);
+    await until(
+      () => player.chatText === '' && sender.state.players.get(sender.sessionId)!.chatText === '',
+      CHAT_MIN_DURATION_MS + 1500,
+    );
+    expect(player.chatExpiresAtTick).toBe(0);
+    send(1, 'Повтор после окончания');
+    await until(() => results.length === 11);
+    expect(app.room.state.players.get(sender.sessionId)!.chatText).toBe('');
+    send(10, 'я'.repeat(CHAT_MAX_LENGTH));
+    await until(() => player.chatSequence === 2);
+    expect(player.chatText).toHaveLength(CHAT_MAX_LENGTH);
+    expect(results.at(-1)).toMatchObject({ ok: true, retryAfterMs: CHAT_MAX_DURATION_MS });
+  });
+
+  it('rejects malformed chat requests and chat before the character is ready', async () => {
+    const room = await join(false);
+    const results: ActionResult[] = [];
+    const problems: string[] = [];
+    room.onMessage('actionResult', (result: ActionResult) => results.push(result));
+    room.onMessage('problem', ({ code }: { code: string }) => problems.push(code));
+    for (const request of [null, {}, { requestId: -1 }, { requestId: 1.5 }, { requestId: '1' }])
+      room.send('requestChat', request);
+    room.send('requestChat', { requestId: 1, worldEpoch: info.worldEpoch, text: 'Рано' });
+    await until(() => problems.length === 5 && results.length === 1);
+    expect(problems.every((code) => code === 'INVALID_INPUT')).toBe(true);
+    expect(results[0].code).toBe('WORLD_NOT_READY');
+    room.send('clientReady');
+    await until(() => room.state.players.has(room.sessionId));
+    room.send('requestChat', { requestId: 2, worldEpoch: info.worldEpoch });
+    await until(() => results.length === 2);
+    expect(results[1].code).toBe('INVALID_INPUT');
+    expect(app.room.state.players.get(room.sessionId)!.chatSequence).toBe(0);
   });
 
   it('automatically restores a connection closed with the SDK offline code', async () => {

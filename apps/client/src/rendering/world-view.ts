@@ -41,8 +41,16 @@ type EntityView = {
   reactionImage?: HTMLImageElement;
   reactionSequence?: number;
   expiredReactionSequence?: number;
+  chat?: HTMLElement;
+  chatSequence?: number;
+  expiredChatSequence?: number;
 };
-type LabelAnchor = { label: HTMLElement; labelTransform?: string; reaction?: HTMLElement };
+type LabelAnchor = {
+  label: HTMLElement;
+  labelTransform?: string;
+  reaction?: HTMLElement;
+  chat?: HTMLElement;
+};
 const vector = (p: Vec3) => new Vector3(p.x, p.y, p.z);
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -342,6 +350,7 @@ export class WorldView {
         view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
       else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
       this.updateReaction(view, entity);
+      this.updateChat(view, entity);
       if (entity.entityId === this.followed)
         this.target.set(entity.position.x, 0, entity.position.z);
     }
@@ -349,6 +358,7 @@ export class WorldView {
   private disposeEntity(view: EntityView): void {
     view.label?.remove();
     view.reaction?.remove();
+    view.chat?.remove();
     view.avatar?.dispose();
     for (const mesh of view.root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
     view.root.dispose(false, true);
@@ -388,6 +398,30 @@ export class WorldView {
     view.reactionImage!.style.transform = this.reducedMotion.matches
       ? ''
       : `scale(${0.8 + 0.2 * progress})`;
+  }
+  private updateChat(view: EntityView, entity: DisplayEntity): void {
+    const active = entity.chat;
+    if (!active || active.remainingMs <= 0) {
+      if (active) view.expiredChatSequence = active.sequence;
+      view.chat?.remove();
+      view.chat = undefined;
+      view.chatSequence = undefined;
+      return;
+    }
+    if (view.expiredChatSequence === active.sequence) return;
+    if (!view.chat) {
+      view.chat = document.createElement('div');
+      view.chat.className = 'player-chat';
+      view.chat.dataset.entityId = entity.entityId;
+      this.labels.append(view.chat);
+    }
+    if (view.chatSequence !== active.sequence) {
+      view.chatSequence = active.sequence;
+      view.chat.textContent = active.text;
+    }
+    view.chat.style.opacity = this.reducedMotion.matches
+      ? '1'
+      : Math.min(1, active.remainingMs / 250).toFixed(3);
   }
   private createEntity(entity: DisplayEntity, own: boolean): EntityView {
     const root = new TransformNode(entity.entityId, this.scene);
@@ -512,6 +546,15 @@ export class WorldView {
       if (view.reaction) {
         view.reaction.hidden = hidden;
         view.reaction.style.transform = `translate(${(x + 38).toFixed(2)}px, ${(y - 30).toFixed(2)}px) translate(-50%, -100%)`;
+      }
+      if (view.chat) {
+        view.chat.hidden = hidden;
+        // Keep text above the name and any simultaneous reaction. Clamp horizontally
+        // so a long line near the edge of the viewport remains readable.
+        const halfWidth = view.chat.offsetWidth / 2;
+        const chatX = Math.min(cssWidth - halfWidth - 8, Math.max(halfWidth + 8, x));
+        const chatY = Math.max(view.chat.offsetHeight + 8, y - (view.reaction ? 104 : 34));
+        view.chat.style.transform = `translate(${chatX.toFixed(2)}px, ${chatY.toFixed(2)}px) translate(-50%, -100%)`;
       }
       if (hidden) continue;
       const transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) translate(-50%, -100%)`;

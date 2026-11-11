@@ -4,7 +4,7 @@ export * from './items.js';
 export * from './avatars.js';
 import type { ItemCatalog, InitialItem, ItemState } from './items.js';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const WORLD_FORMAT_VERSION = 3;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -194,6 +194,7 @@ export function normalizeInput(value: unknown): MoveInput | undefined {
 }
 export { validateWorld, canonicalJson } from './world.js';
 export * from './reactions.js';
+export * from './chat.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,

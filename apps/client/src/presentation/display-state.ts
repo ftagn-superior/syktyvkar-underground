@@ -1,10 +1,17 @@
-import type { AvatarSkinId, DisplayReaction, ItemState, PlayerState } from '@su/contracts';
+import type {
+  AvatarSkinId,
+  DisplayChat,
+  DisplayReaction,
+  ItemState,
+  PlayerState,
+} from '@su/contracts';
 
 interface Appearance {
   name?: string;
   color?: string;
   connected?: boolean;
   reaction?: DisplayReaction;
+  chat?: DisplayChat;
 }
 
 export interface DisplayPlayer extends PlayerState, Appearance {

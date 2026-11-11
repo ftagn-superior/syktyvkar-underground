@@ -20,6 +20,7 @@ export class KeyboardInput {
     onRelease: () => void,
     onRotate?: (direction: -1 | 1) => void,
     onReactions?: () => void,
+    onChat?: () => void,
   ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
@@ -37,6 +38,11 @@ export class KeyboardInput {
         if (event.code === 'KeyR') {
           event.preventDefault();
           onReactions?.();
+          return;
+        }
+        if (event.code === 'KeyT') {
+          event.preventDefault();
+          onChat?.();
           return;
         }
         if (event.code === 'KeyQ' || event.code === 'KeyE') {

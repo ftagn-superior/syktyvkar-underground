@@ -74,14 +74,75 @@ export interface FootprintRecipe {
   windowColor: string;
   /** Необязательные детали фасада и крыши; см. facade.ts. */
   details?: FacadeDetails;
+  /** Высота низа стен, например у перехода над аркой. Этажи считаются от неё. */
+  elevation?: number;
+  /**
+   * Корпуса сложного здания: каждый — своя призма с собственными цветами, этажностью
+   * и деталями. Незаданные поля берутся из рецепта; общий `outline` тогда не строится.
+   */
+  sections?: FootprintSection[];
+  /**
+   * Вертикальное растяжение стен: высота, низ корпуса и роспись умножаются на него.
+   * Окна, витрины, крыльцо, вывески и цоколь остаются в человеческом масштабе.
+   */
+  heightScale?: number;
 }
+export type FootprintSection = Partial<Omit<FootprintRecipe, 'formatVersion' | 'sections'>> & {
+  id: string;
+  outline: Point2[];
+};
 
-/** Здание с плоской крышей: вертикальная призма по контуру и замкнутый коллайдер той же формы. */
+/** Здание по контуру: призма или несколько корпусов и замкнутые коллайдеры той же формы. */
 export function generateFootprint(
   assetId: string,
   recipe: FootprintRecipe,
 ): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
-  if (recipe.formatVersion !== 1) throw new Error('Unsupported footprint recipe version');
+  if (!recipe.sections?.length) return generatePrism(assetId, recipe);
+  const parts: StaticMeshPart[] = [];
+  const colliders: StaticCollider[] = [];
+  const ids = new Set<string>();
+  for (const section of recipe.sections) {
+    if (!/^[a-z0-9-]{1,24}$/.test(section.id) || ids.has(section.id))
+      throw new Error(`Invalid footprint section ${section.id}`);
+    ids.add(section.id);
+    const { id, ...fields } = section;
+    const built = generatePrism(assetId, { ...recipe, sections: undefined, ...fields });
+    for (const part of built.parts) parts.push({ ...part, partId: `${id}-${part.partId}` });
+    for (const collider of built.physics.colliders)
+      colliders.push({ ...collider, id: `${id}-${collider.id}` });
+  }
+  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders } };
+}
+
+/** Применяет heightScale к размерам, которые растягиваются вместе со стенами. */
+function stretched(recipe: FootprintRecipe): FootprintRecipe {
+  const scale = recipe.heightScale ?? 1;
+  if (!Number.isFinite(scale) || scale < 0.5 || scale > 3)
+    throw new Error('Invalid footprint heightScale');
+  if (scale === 1) return recipe;
+  const paint = recipe.details?.paint?.map((layer) => ({
+    ...layer,
+    bottom: layer.bottom * scale,
+    top: layer.top * scale,
+  }));
+  return {
+    ...recipe,
+    heightScale: 1,
+    height: recipe.height * scale,
+    ...(recipe.elevation !== undefined ? { elevation: recipe.elevation * scale } : {}),
+    ...(recipe.details ? { details: { ...recipe.details, ...(paint ? { paint } : {}) } } : {}),
+  };
+}
+
+function generatePrism(
+  assetId: string,
+  source: FootprintRecipe,
+): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
+  if (source.formatVersion !== 1) throw new Error('Unsupported footprint recipe version');
+  const recipe = stretched(source);
+  const e = recipe.elevation ?? 0;
+  if (!Number.isFinite(e) || e < 0 || e > recipe.height - 2)
+    throw new Error('Invalid footprint elevation');
   requirePoints(recipe.outline, 'footprint outline');
   if (!Number.isFinite(recipe.height) || recipe.height < 2 || recipe.height > 200)
     throw new Error('Invalid footprint height');
@@ -99,7 +160,7 @@ export function generateFootprint(
   const walls = meshPart('walls', 'wall', recipe.wallColor);
   const roof = meshPart('roof', 'roof', recipe.roofColor);
   const windows = meshPart('windows', 'detail', recipe.windowColor);
-  const facade = buildFacade(ring, h, recipe.floors, recipe.details);
+  const facade = buildFacade(ring, h, recipe.floors, recipe.details, e);
   const top = h + facade.parapet;
   // triangulate возвращает контур с положительной площадью в осях (x, z);
   // для такого обхода внешняя нормаль ребра p → q равна up × (q − p).
@@ -107,10 +168,10 @@ export function generateFootprint(
     const [px, pz] = ring[i],
       [qx, qz] = ring[(i + 1) % n];
     addFace(walls, [
-      [px, 0, pz],
+      [px, e, pz],
       [px, top, pz],
       [qx, top, qz],
-      [qx, 0, qz],
+      [qx, e, qz],
     ]);
     // Внутренняя сторона парапета видна сверху, когда камера смотрит через крышу.
     if (top > h)
@@ -126,13 +187,13 @@ export function generateFootprint(
       dz = (qz - pz) / length;
     const ox = dz * 0.03,
       oz = -dx * 0.03;
-    const storey = h / recipe.floors;
+    const storey = (h - e) / recipe.floors;
     const count = Math.floor((length - 1) / 2.8);
     const width = Math.min(1.3, storey * 0.5),
       height = Math.min(1.4, storey * 0.48);
     for (let floor = 0; floor < recipe.floors; floor++) {
       if (facade.skipWindow(i, floor)) continue;
-      const bottom = floor * storey + storey * 0.32;
+      const bottom = e + floor * storey + storey * 0.32;
       for (let k = 0; k < count; k++) {
         const center = (length / count) * (k + 0.5);
         const s0 = center - width / 2,
@@ -148,7 +209,7 @@ export function generateFootprint(
     }
   }
   const vertices: number[] = [];
-  for (const [x, z] of ring) vertices.push(x, 0, z);
+  for (const [x, z] of ring) vertices.push(x, e, z);
   for (const [x, z] of ring) vertices.push(x, h, z);
   const indices: number[] = [];
   for (let i = 0; i < n; i++) {
@@ -166,6 +227,15 @@ export function generateFootprint(
     );
     // Обход (a, b, c) положительный в осях (x, z), то есть его нормаль направлена вниз.
     indices.push(a, b, c, n + a, n + c, n + b);
+    // Поднятый корпус виден снизу: потолок арки.
+    if (e > 0)
+      addHorizontal(
+        walls,
+        [ring[a][0], e, ring[a][1]],
+        [ring[b][0], e, ring[b][1]],
+        [ring[c][0], e, ring[c][1]],
+        -1,
+      );
   }
   const parts = [walls, roof, ...(windows.indices.length ? [windows] : []), ...facade.parts];
   const colliders: StaticCollider[] = [
@@ -179,6 +249,19 @@ export function generateFootprint(
       ...fixed,
       ...facade.roofCollider,
     });
+  facade.boxes.forEach((box, index) => {
+    // Ось u — локальная X коробки: поворот вокруг Y на угол atan2(−u.z, u.x).
+    const half = Math.atan2(-box.u[1], box.u[0]) / 2;
+    colliders.push({
+      id: `detail-${index}`,
+      kind: 'box',
+      position: { x: box.center[0], y: box.center[1], z: box.center[2] },
+      rotation: { x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) },
+      size: { x: box.size[0], y: box.size[1], z: box.size[2] },
+      friction: fixed.friction,
+      restitution: fixed.restitution,
+    });
+  });
   return { parts, physics: { assetId, bounds: boundsOf(parts), colliders } };
 }
 

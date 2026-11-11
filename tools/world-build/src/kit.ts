@@ -4,11 +4,19 @@ import { meshPart } from './house.js';
 import { addOrientedBox, addOutwardFace } from './facade.js';
 
 /**
- * Модель «из конструктора»: части из параллелепипедов и цилиндров, отдельно —
- * коробки столкновений. Подходит для памятников и других штучных объектов.
+ * Модель «из конструктора»: части из простых фигур, отдельно — тела столкновений.
+ * Подходит для памятников и других штучных объектов.
  * Координаты локальные: X — восток, Y — вверх, Z — юг; `yaw` — поворот вокруг Y в градусах.
  */
 type Triple = [number, number, number];
+type Cone = {
+  /** Центр основания. */
+  center: Triple;
+  radiusBottom: number;
+  radiusTop: number;
+  height: number;
+  sides?: number;
+};
 export type KitShape =
   | { box: { center: Triple; size: Triple; yaw?: number } }
   | {
@@ -19,7 +27,16 @@ export type KitShape =
         axis: 'x' | 'y' | 'z';
         sides?: number;
       };
-    };
+    }
+  /** Вертикальный усечённый конус: холм, куст, постамент. */
+  | { cone: Cone }
+  /**
+   * Клин: коробка `size` с основанием в `center`, верх которой понижается
+   * от полной высоты на −X до `low` на +X. Подходит для пандусов.
+   */
+  | { wedge: { center: Triple; size: Triple; low: number; yaw?: number } };
+export type KitCollider =
+  { id: string; center: Triple; size: Triple; yaw?: number } | { id: string; cone: Cone };
 export interface KitRecipe {
   formatVersion: 1;
   parts: {
@@ -30,7 +47,7 @@ export interface KitRecipe {
     color: string;
     shapes: KitShape[];
   }[];
-  colliders: { id: string; center: Triple; size: Triple; yaw?: number }[];
+  colliders: KitCollider[];
 }
 
 const finite = (values: unknown, count: number) =>
@@ -41,14 +58,16 @@ const axisOf = (yaw = 0): [number, number] => {
   const a = (yaw * Math.PI) / 180;
   return [Math.cos(a), -Math.sin(a)];
 };
+const checkSides = (sides: number) => {
+  if (!Number.isInteger(sides) || sides < 3 || sides > 64) throw new Error('Invalid kit sides');
+  return sides;
+};
 
 function addCylinder(
   part: StaticMeshPart,
   shape: Extract<KitShape, { cylinder: unknown }>['cylinder'],
 ) {
-  const sides = shape.sides ?? 12;
-  if (!Number.isInteger(sides) || sides < 3 || sides > 64)
-    throw new Error('Invalid cylinder sides');
+  const sides = checkSides(shape.sides ?? 12);
   const [cx, cy, cz] = shape.center;
   // Локальный круг в плоскости (a, b); ось цилиндра — третья координата.
   const place = (a: number, b: number, c: number): number[] =>
@@ -72,6 +91,66 @@ function addCylinder(
   }
   addOutwardFace(part, near, center);
   addOutwardFace(part, far, center);
+}
+
+/** Выпуклое тело усечённого конуса; одна функция строит и вид, и столкновение. */
+function addCone(part: StaticMeshPart, cone: Cone) {
+  if (
+    !finite(cone.center, 3) ||
+    !(cone.radiusBottom > 0) ||
+    !(cone.radiusTop >= 0) ||
+    !(cone.height > 0)
+  )
+    throw new Error('Invalid kit cone');
+  const sides = checkSides(cone.sides ?? 16);
+  const [cx, cy, cz] = cone.center;
+  const ring = (radius: number, y: number) =>
+    Array.from({ length: sides }, (_, k) => {
+      const angle = (k / sides) * Math.PI * 2;
+      return [cx + Math.cos(angle) * radius, y, cz + Math.sin(angle) * radius];
+    });
+  const bottom = ring(cone.radiusBottom, cy),
+    top = ring(Math.max(cone.radiusTop, 0.001), cy + cone.height);
+  const center = [cx, cy + cone.height / 3, cz];
+  for (let k = 0; k < sides; k++) {
+    const j = (k + 1) % sides;
+    addOutwardFace(part, [bottom[k], bottom[j], top[j], top[k]], center);
+  }
+  addOutwardFace(part, bottom, center);
+  addOutwardFace(part, top, center);
+}
+
+function addWedge(part: StaticMeshPart, wedge: Extract<KitShape, { wedge: unknown }>['wedge']) {
+  if (
+    !finite(wedge.center, 3) ||
+    !finite(wedge.size, 3) ||
+    !(wedge.low > 0 && wedge.low < wedge.size[1])
+  )
+    throw new Error('Invalid kit wedge');
+  const [cx, cy, cz] = wedge.center;
+  const [length, high, width] = wedge.size;
+  const u = axisOf(wedge.yaw),
+    v = [-u[1], u[0]];
+  const point = (a: number, b: number, y: number) => [
+    cx + u[0] * a + v[0] * b,
+    cy + y,
+    cz + u[1] * a + v[1] * b,
+  ];
+  const [l, w] = [length / 2, width / 2];
+  const base = [point(-l, -w, 0), point(l, -w, 0), point(l, w, 0), point(-l, w, 0)];
+  const lid = [
+    point(-l, -w, high),
+    point(l, -w, wedge.low),
+    point(l, w, wedge.low),
+    point(-l, w, high),
+  ];
+  const center = [cx, cy + (high + wedge.low) / 4, cz];
+  for (let k = 0; k < 4; k++) {
+    const j = (k + 1) % 4;
+    addOutwardFace(part, [base[k], base[j], lid[j], lid[k]], center);
+  }
+  addOutwardFace(part, base, center);
+  addOutwardFace(part, lid, center);
 }
 
 export function generateKit(
@@ -104,22 +183,35 @@ export function generateKit(
         )
           throw new Error(`Invalid kit cylinder in ${spec.id}`);
         addCylinder(part, c);
-      } else throw new Error(`Unknown kit shape in ${spec.id}`);
+      } else if ('cone' in shape) addCone(part, shape.cone);
+      else if ('wedge' in shape) addWedge(part, shape.wedge);
+      else throw new Error(`Unknown kit shape in ${spec.id}`);
     }
     return part;
   });
-  const colliders: StaticCollider[] = recipe.colliders.map((box) => {
-    if (!finite(box.center, 3) || !finite(box.size, 3))
-      throw new Error(`Invalid kit collider ${box.id}`);
-    const a = ((box.yaw ?? 0) * Math.PI) / 360;
-    return {
-      id: box.id,
-      kind: 'box',
-      position: { x: box.center[0], y: box.center[1], z: box.center[2] },
-      rotation: { x: 0, y: Math.sin(a), z: 0, w: Math.cos(a) },
-      size: { x: box.size[0], y: box.size[1], z: box.size[2] },
+  const colliders: StaticCollider[] = recipe.colliders.map((spec) => {
+    const common = {
+      id: spec.id,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
       friction: 0.6,
       restitution: 0.05,
+    };
+    if ('cone' in spec) {
+      // Холм — замкнутая треугольная форма: по пологому склону можно подняться.
+      const shell = meshPart('collider', 'detail', '#000000');
+      addCone(shell, spec.cone);
+      return { ...common, kind: 'mesh', vertices: shell.positions, indices: shell.indices };
+    }
+    if (!finite(spec.center, 3) || !finite(spec.size, 3))
+      throw new Error(`Invalid kit collider ${spec.id}`);
+    const a = ((spec.yaw ?? 0) * Math.PI) / 360;
+    return {
+      ...common,
+      kind: 'box',
+      position: { x: spec.center[0], y: spec.center[1], z: spec.center[2] },
+      rotation: { x: 0, y: Math.sin(a), z: 0, w: Math.cos(a) },
+      size: { x: spec.size[0], y: spec.size[1], z: spec.size[2] },
     };
   });
   const min = { x: Infinity, y: Infinity, z: Infinity },

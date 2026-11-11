@@ -46,6 +46,33 @@ export interface FacadeDetails {
     backColor?: string;
     text?: string;
   };
+  /** Пилястры: вертикальные выступы на всю высоту стены с шагом `every` метров. */
+  pilasters?: { facing: Facing[]; every: number; width?: number; depth?: number; color: string };
+  /**
+   * Окрашенные прямоугольники на фасаде, например упрощённая роспись.
+   * `from`/`to` — доли ширины фасада слева направо для зрителя снаружи, `bottom`/`top` — метры.
+   * Слои рисуются в порядке списка, окна остаются поверх.
+   */
+  paint?: {
+    facing: Facing[];
+    from: number;
+    to: number;
+    bottom: number;
+    top: number;
+    color: string;
+  }[];
+  /** Входной тамбур с навесом, вывеской и ступенями; `at` — доля ширины фасада слева. */
+  porch?: {
+    facing: Facing;
+    at?: number;
+    width: number;
+    depth: number;
+    height: number;
+    wallColor: string;
+    roofColor: string;
+    signColor?: string;
+    doorColor?: string;
+  };
 }
 
 const R = Math.SQRT1_2;
@@ -361,6 +388,15 @@ export interface FacadeResult {
   parapet: number;
   /** Замкнутое тело крыши для столкновений. */
   roofCollider?: { vertices: number[]; indices: number[] };
+  /** Повёрнутые коробки столкновений деталей: ось u — ширина. */
+  boxes: { center: number[]; size: number[]; u: Point2 }[];
+}
+
+/** Самый длинный фасад, обращённый в заданную сторону. */
+function widestFacing(edges: Edge[], facing: Facing, label: string): Edge {
+  const candidates = edges.filter((edge) => faces(edge, [facing]));
+  if (!candidates.length) throw new Error(`No facade faces ${facing} for the ${label}`);
+  return candidates.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
 export function buildFacade(
@@ -368,11 +404,13 @@ export function buildFacade(
   height: number,
   floors: number,
   details: FacadeDetails | undefined,
+  elevation = 0,
 ): FacadeResult {
-  if (!details) return { parts: [], skipWindow: () => false, parapet: 0 };
+  if (!details) return { parts: [], skipWindow: () => false, parapet: 0, boxes: [] };
   const edges = edgesOf(ring);
   const parts: StaticMeshPart[] = [];
-  const storey = height / floors;
+  const boxes: FacadeResult['boxes'] = [];
+  const storey = (height - elevation) / floors;
   const shopEdges = new Set<number>();
   const shop = details.shopfront;
   if (shop) {
@@ -429,7 +467,7 @@ export function buildFacade(
       for (const s of positions) {
         const clamped = Math.min(edge.length - width / 2 - 0.2, Math.max(width / 2 + 0.2, s));
         for (let floor = group.fromFloor ?? 1; floor < floors; floor++) {
-          const y = floor * storey;
+          const y = elevation + floor * storey;
           addOrientedBox(slab, along(edge, clamped, y + 0.5, depth / 2), [width, 1, depth], edge.d);
           if (group.glazing)
             addOrientedBox(
@@ -452,10 +490,95 @@ export function buildFacade(
     roofCollider = roof.collider;
   }
   if (details.roofSign) parts.push(...roofSign(edges, height + parapet, details.roofSign));
+  if (details.pilasters) {
+    const spec = details.pilasters;
+    const part = meshPart('pilasters', 'wall', spec.color);
+    const width = spec.width ?? 0.8,
+      depth = spec.depth ?? 0.3;
+    if (!(spec.every >= width + 0.5)) throw new Error('Pilaster spacing is too small');
+    for (const edge of edges) {
+      if (edge.length < spec.every || !faces(edge, spec.facing)) continue;
+      const count = Math.floor(edge.length / spec.every) + 1;
+      const step = (edge.length - width) / (count - 1);
+      for (let k = 0; k < count; k++)
+        addOrientedBox(
+          part,
+          along(edge, width / 2 + k * step, (elevation + height + parapet) / 2, depth / 2),
+          [width, height + parapet - elevation, depth],
+          edge.d,
+        );
+    }
+    if (part.indices.length) parts.push(part);
+  }
+  details.paint?.forEach((layer, index) => {
+    if (!(layer.from >= 0 && layer.to <= 1 && layer.from < layer.to && layer.bottom < layer.top))
+      throw new Error(`Invalid facade paint layer ${index}`);
+    // Слои лежат между стеной и окнами: от 12 до 28 мм от стены.
+    const out = 0.012 + Math.min(index, 8) * 0.002;
+    const part = meshPart(`paint-${index}`, 'detail', layer.color);
+    for (const edge of edges)
+      if (faces(edge, layer.facing))
+        facadeQuad(
+          part,
+          edge,
+          edge.length * (1 - layer.to),
+          edge.length * (1 - layer.from),
+          layer.bottom,
+          Math.min(layer.top, height + parapet),
+          out,
+        );
+    if (part.indices.length) parts.push(part);
+  });
+  if (details.porch) {
+    const spec = details.porch;
+    const edge = widestFacing(edges, spec.facing, 'porch');
+    const s = edge.length * (1 - (spec.at ?? 0.5));
+    const walls = meshPart('porch', 'detail', spec.wallColor);
+    const roof = meshPart('porch-roof', 'detail', spec.roofColor);
+    const sign = meshPart('porch-sign', 'detail', spec.signColor ?? spec.roofColor);
+    const door = meshPart('porch-door', 'detail', spec.doorColor ?? '#2e2a28');
+    const steps = meshPart('porch-steps', 'detail', '#9a968e');
+    const body = { width: spec.width * 0.6, depth: spec.depth * 0.75 };
+    const center = along(edge, s, spec.height / 2, body.depth / 2);
+    addOrientedBox(walls, center, [body.width, spec.height, body.depth], edge.d);
+    boxes.push({ center, size: [body.width, spec.height, body.depth], u: edge.d });
+    addOrientedBox(
+      roof,
+      along(edge, s, spec.height + 0.3, spec.depth / 2),
+      [spec.width, 0.6, spec.depth],
+      edge.d,
+    );
+    // Вывеска на торце навеса и дверь на фасаде тамбура.
+    facadeQuad(
+      sign,
+      edge,
+      s - spec.width / 2 + 0.2,
+      s + spec.width / 2 - 0.2,
+      spec.height + 0.05,
+      spec.height + 0.55,
+      spec.depth + 0.02,
+    );
+    facadeQuad(door, edge, s - 0.9, s + 0.9, 0, 2.3, body.depth + 0.02);
+    for (const side of [-1, 1])
+      addOrientedBox(
+        walls,
+        along(edge, s + side * (spec.width / 2 - 0.3), spec.height / 2, spec.depth - 0.3),
+        [0.3, spec.height, 0.3],
+        edge.d,
+      );
+    addOrientedBox(
+      steps,
+      along(edge, s, 0.12, body.depth + 0.8),
+      [body.width + 1, 0.24, 1.6],
+      edge.d,
+    );
+    parts.push(walls, roof, sign, door, steps);
+  }
   return {
     parts,
     skipWindow: (edge, floor) => floor === 0 && shopEdges.has(edge),
     parapet,
     roofCollider,
+    boxes,
   };
 }

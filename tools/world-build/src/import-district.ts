@@ -31,6 +31,8 @@ interface ImportConfig {
   landmarks?: { id: string; name: string; osm?: string; position?: Vec3 }[];
   /** Ручные уточнения домов по OSM-ID: цвета, этажность и детали фасада. */
   buildings?: Record<string, BuildingOverride>;
+  /** Вертикальное растяжение всех домов из `buildings`, если у дома не задан свой `heightScale`. */
+  detailedHeightScale?: number;
   /** Штучные объекты из `content/buildings/<worldId>/manual/<assetId>/`. */
   props?: { entityId: string; assetId: string; position: Vec3; yaw?: number }[];
 }
@@ -42,6 +44,9 @@ const OVERRIDABLE = [
   'roofColor',
   'windowColor',
   'details',
+  'elevation',
+  'sections',
+  'heightScale',
 ] as const;
 type BuildingOverride = Partial<Pick<FootprintRecipe, (typeof OVERRIDABLE)[number]>> & {
   /** Пояснение для людей; в модель не попадает. */
@@ -214,6 +219,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   const footprints: Point2[][] = [];
   const roofs = new Map<string, Vec3>();
   const usedIds = new Set<string>();
+  // Высота самого высокого дома с учётом растяжения: по ней выбирается верх границ мира.
+  let tallest = 10;
   const identity = { x: 0, y: 0, z: 0, w: 1 };
   for (const b of selected.sort((a, z) => (a.id < z.id ? -1 : 1))) {
     const outline = cleanRing(b.p[0].map(toGame));
@@ -246,9 +253,15 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       roofColor: NAMED_COLORS[b.roofColor ?? ''] ?? pick(`${b.id}:roof`, ROOFS),
       windowColor: '#3d4d57',
     };
-    const { note: _note, ...override } = overrides[b.id] ?? {};
-    Object.assign(recipe, override);
+    if (overrides[b.id]) {
+      const { note: _note, ...override } = overrides[b.id];
+      // Уточнённые дома растягиваются по высоте, если сам override не задаёт масштаб.
+      if (config.detailedHeightScale !== undefined) recipe.heightScale = config.detailedHeightScale;
+      Object.assign(recipe, override);
+    }
     await writeAsset(assetId, 'footprint', recipe);
+    const wallTop = recipe.height * (recipe.heightScale ?? 1);
+    tallest = Math.max(tallest, wallTop);
     const [kind, osmId] = b.id.split('/');
     instances.push({
       entityId: assetId,
@@ -258,7 +271,7 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       sourceRef: { provider: 'osm', type: kind, id: osmId },
     });
     footprints.push(outline);
-    if (!roofs.has(b.id)) roofs.set(b.id, { x: cx, y: round(recipe.height + 3), z: cz });
+    if (!roofs.has(b.id)) roofs.set(b.id, { x: cx, y: round(wallTop + 3), z: cz });
     report.buildings++;
   }
 
@@ -383,7 +396,6 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
         throw new Error(`Spawn point ${spawn.x},${spawn.z} is inside a building`);
 
   // 6. Мир: границы, ограждение по краю, ящик и ссылки на ячейку и каталог.
-  const tallest = Math.max(...selected.map((b) => b.h), 10);
   const wall = (entityId: string, position: Vec3, size: Vec3): EntityDefinition => ({
     entityId,
     kind: 'obstacle',

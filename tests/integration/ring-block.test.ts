@@ -201,6 +201,83 @@ describe('детали фасадов и модели из конструкто�
     expect(detailed.indices.length).toBeLessThan(plain.indices.length);
   });
 
+  it('корпуса, арка, пилястры, роспись и крыльцо собираются в одну модель', () => {
+    const { parts, physics } = generateFootprint('test-sections', {
+      ...base,
+      sections: [
+        {
+          id: 'main',
+          outline: rectangle,
+          details: {
+            pilasters: { facing: ['W'], every: 3.4, color: '#e6b3a1' },
+            paint: [{ facing: ['E'], from: 0, to: 1, bottom: 0, top: 15, color: '#86b9df' }],
+            porch: {
+              facing: 'S',
+              width: 8,
+              depth: 4,
+              height: 3.4,
+              wallColor: '#e7c548',
+              roofColor: '#e9e6df',
+              signColor: '#d9452f',
+            },
+          },
+        },
+        {
+          id: 'bridge',
+          outline: [
+            [15, -3],
+            [25, -3],
+            [25, 3],
+            [15, 3],
+          ],
+          elevation: 3.6,
+          height: 9,
+          floors: 2,
+          wallColor: '#7fb0dc',
+        },
+      ],
+    });
+    const ids = parts.map((part) => part.partId);
+    for (const id of [
+      'main-pilasters',
+      'main-paint-0',
+      'main-porch',
+      'main-porch-sign',
+      'bridge-walls',
+    ])
+      expect(ids).toContain(id);
+    validateBuildingPhysicsAsset(physics);
+    // Крыльцо получает коробку столкновений, корпус над аркой начинается на высоте 3,6 м.
+    expect(physics.colliders.map((c) => c.id)).toEqual([
+      'main-body',
+      'main-detail-0',
+      'bridge-body',
+    ]);
+    const bridge = physics.colliders.find((c) => c.id === 'bridge-body')!;
+    if (bridge.kind !== 'mesh') throw new Error('mesh expected');
+    const heights = bridge.vertices.filter((_, i) => i % 3 === 1);
+    expect(Math.min(...heights)).toBeCloseTo(3.6, 9);
+    expect(pointInsideClosedMesh({ x: 20, y: 1, z: 0 }, bridge.vertices, bridge.indices)).toBe(
+      false,
+    );
+  });
+
+  it('heightScale растягивает стены, но не окна', () => {
+    const measure = (recipe: Parameters<typeof generateFootprint>[1]) => {
+      const { parts, physics } = generateFootprint('test-scale', recipe);
+      const windows = parts.find((p) => p.partId === 'windows')!;
+      // Первое окно — первые четыре вершины части.
+      const ys = windows.positions.slice(0, 12).filter((_, i) => i % 3 === 1);
+      return { top: physics.bounds.max.y, window: Math.max(...ys) - Math.min(...ys) };
+    };
+    const plain = measure(base);
+    const tall = measure({ ...base, heightScale: 1.4 });
+    expect(tall.top).toBeCloseTo(plain.top * 1.4, 6);
+    // Окно остаётся 1,4 м: растёт только простенок между рядами.
+    expect(tall.window).toBeCloseTo(1.4, 6);
+    expect(plain.window).toBeCloseTo(1.4, 6);
+  });
+
   it('неизвестная буква вывески останавливает сборку', () => {
     expect(() =>
       generateFootprint('test-sign', {
@@ -237,6 +314,41 @@ describe('детали фасадов и модели из конструкто�
     ]);
     validateBuildingPhysicsAsset(physics);
     expect(physics.colliders[0].rotation.y).toBeCloseTo(Math.sin(Math.PI / 8), 9);
+  });
+
+  it('холм из усечённого конуса проходим, пандус-клин понижается наружу', () => {
+    const mound = { center: [0, 0, 0], radiusBottom: 9.5, radiusTop: 3.6, height: 0.45, sides: 24 };
+    const { parts, physics } = generateKit('test-mound', {
+      formatVersion: 1,
+      parts: [
+        { id: 'mound', role: 'detail', fade: false, color: '#7da467', shapes: [{ cone: mound }] },
+        {
+          id: 'ramp',
+          role: 'detail',
+          fade: false,
+          color: '#bdb7aa',
+          shapes: [{ wedge: { center: [6, 0, 0], size: [6, 0.5, 2], low: 0.04 } }],
+        },
+      ],
+      colliders: [{ id: 'mound', cone: mound }],
+    } as Parameters<typeof generateKit>[1]);
+    // Замкнутая треугольная форма холма проходит общую проверку коллайдеров.
+    validateBuildingPhysicsAsset(physics);
+    const shell = physics.colliders[0];
+    if (shell.kind !== 'mesh') throw new Error('mesh expected');
+    expect(pointInsideClosedMesh({ x: 0, y: 0.2, z: 0 }, shell.vertices, shell.indices)).toBe(true);
+    expect(pointInsideClosedMesh({ x: 9, y: 0.4, z: 0 }, shell.vertices, shell.indices)).toBe(
+      false,
+    );
+    const ramp = parts.find((p) => p.partId === 'ramp')!;
+    const top = (x: number) =>
+      Math.max(
+        ...ramp.positions.flatMap((_, i) =>
+          i % 3 === 0 && Math.abs(ramp.positions[i] - x) < 1e-6 ? [ramp.positions[i + 1]] : [],
+        ),
+      );
+    expect(top(3)).toBeCloseTo(0.5, 9);
+    expect(top(9)).toBeCloseTo(0.04, 9);
   });
 });
 

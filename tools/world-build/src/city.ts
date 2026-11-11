@@ -2,7 +2,8 @@ import type { Bounds, BuildingPhysicsAsset, StaticCollider, Vec3 } from '@su/con
 import type { StaticMeshPart } from './glb.js';
 import { addBox, addFace, meshPart } from './house.js';
 import { triangulate, type Point2 } from './triangulate.js';
-import { buildFacade, type FacadeDetails } from './facade.js';
+import { addOrientedBox, buildFacade, type FacadeDetails } from './facade.js';
+import { mergeParts } from './merge.js';
 
 /**
  * Генераторы городских моделей по контурам: здание-призма, поверхность земли и дерево.
@@ -86,6 +87,50 @@ export interface FootprintRecipe {
    * Окна, витрины, крыльцо, вывески и цоколь остаются в человеческом масштабе.
    */
   heightScale?: number;
+  /** Точки входов [x, z] у стен: дверь с козырьком на ближайшем фасаде. */
+  doors?: Point2[];
+  /** Слить части в один меш на группу прозрачности (цвета — в вершинах). */
+  merge?: boolean;
+}
+
+/** Двери с козырьками у ближайших к точкам входов рёбер контура. */
+function addDoors(ring: Point2[], base: number, points: Point2[]): StaticMeshPart[] {
+  const doors = meshPart('doors', 'detail', '#4b3d33');
+  const canopies = meshPart('door-canopies', 'detail', '#8c9196');
+  for (const point of points) {
+    if (!Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite))
+      throw new Error('Invalid footprint door');
+    let best: { s: number; distance: number; p: Point2; d: Point2; length: number } | undefined;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i],
+        q = ring[(i + 1) % ring.length];
+      const length = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (length < 2) continue;
+      const d: Point2 = [(q[0] - p[0]) / length, (q[1] - p[1]) / length];
+      const s = Math.max(
+        1,
+        Math.min(length - 1, (point[0] - p[0]) * d[0] + (point[1] - p[1]) * d[1]),
+      );
+      const distance = Math.hypot(p[0] + d[0] * s - point[0], p[1] + d[1] * s - point[1]);
+      if (!best || distance < best.distance) best = { s, distance, p, d, length };
+    }
+    if (!best) continue;
+    const { s, p, d } = best;
+    // Внешняя нормаль ребра контура с положительной площадью: up × d = (d.z, −d.x).
+    const at = (offset: number, y: number, out: number) => [
+      p[0] + d[0] * (s + offset) + d[1] * out,
+      y,
+      p[1] + d[1] * (s + offset) - d[0] * out,
+    ];
+    addFace(doors, [
+      at(-0.65, base, 0.035),
+      at(-0.65, base + 2.2, 0.035),
+      at(0.65, base + 2.2, 0.035),
+      at(0.65, base, 0.035),
+    ]);
+    addOrientedBox(canopies, at(0, base + 2.55, 0.55), [1.9, 0.12, 1.1], d);
+  }
+  return doors.indices.length ? [doors, canopies] : [];
 }
 export type FootprintSection = Partial<Omit<FootprintRecipe, 'formatVersion' | 'sections'>> & {
   id: string;
@@ -97,11 +142,21 @@ export function generateFootprint(
   assetId: string,
   recipe: FootprintRecipe,
 ): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
-  if (!recipe.sections?.length) return generatePrism(assetId, recipe);
+  const built = recipe.sections?.length
+    ? generateSections(assetId, recipe)
+    : generatePrism(assetId, recipe);
+  // Слияние частей с цветами вершин: один меш на группу прозрачности вместо десятка.
+  return recipe.merge ? { ...built, parts: mergeParts(built.parts) } : built;
+}
+
+function generateSections(
+  assetId: string,
+  recipe: FootprintRecipe,
+): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
   const parts: StaticMeshPart[] = [];
   const colliders: StaticCollider[] = [];
   const ids = new Set<string>();
-  for (const section of recipe.sections) {
+  for (const section of recipe.sections ?? []) {
     if (!/^[a-z0-9-]{1,24}$/.test(section.id) || ids.has(section.id))
       throw new Error(`Invalid footprint section ${section.id}`);
     ids.add(section.id);
@@ -237,7 +292,13 @@ function generatePrism(
         -1,
       );
   }
-  const parts = [walls, roof, ...(windows.indices.length ? [windows] : []), ...facade.parts];
+  const parts = [
+    walls,
+    roof,
+    ...(windows.indices.length ? [windows] : []),
+    ...facade.parts,
+    ...(recipe.doors?.length ? addDoors(ring, e, recipe.doors) : []),
+  ];
   const colliders: StaticCollider[] = [
     { id: 'body', kind: 'mesh', position: { x: 0, y: 0, z: 0 }, ...fixed, vertices, indices },
   ];
@@ -280,6 +341,8 @@ export interface GroundRecipe {
   depth: number;
   color: string;
   layers: GroundLayer[];
+  /** Слить плиту и слои в один меш с цветами вершин. */
+  merge?: boolean;
 }
 
 /** Плита земли с плоскими слоями покрытия. Слои только визуальные; столкновение — одна плита. */
@@ -328,7 +391,10 @@ export function generateGround(
     if (part.indices.length) parts.push(part);
   }
   const collider: StaticCollider = { id: 'slab', kind: 'box', position: center, ...fixed, size };
-  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders: [collider] } };
+  return {
+    parts: recipe.merge ? mergeParts(parts) : parts,
+    physics: { assetId, bounds: boundsOf(parts), colliders: [collider] },
+  };
 }
 
 export interface TreeRecipe {

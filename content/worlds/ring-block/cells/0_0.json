@@ -2998,1008 +2998,1983 @@
       }
     },
     {
-      "entityId": "tree-001",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-0-0",
+      "assetId": "details-0-0",
       "position": {
-        "x": 308.7,
+        "x": 32,
         "y": 0,
-        "z": 123.2
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.6719552660305943,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-1",
+      "assetId": "details-0-1",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": 96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m1",
+      "assetId": "details-0-m1",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m10",
+      "assetId": "details-0-m10",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -608
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m11",
+      "assetId": "details-0-m11",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -672
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m12",
+      "assetId": "details-0-m12",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -736
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m2",
+      "assetId": "details-0-m2",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m3",
+      "assetId": "details-0-m3",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -160
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m4",
+      "assetId": "details-0-m4",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -224
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m5",
+      "assetId": "details-0-m5",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -288
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m6",
+      "assetId": "details-0-m6",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -352
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m7",
+      "assetId": "details-0-m7",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -416
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m8",
+      "assetId": "details-0-m8",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -480
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-0-m9",
+      "assetId": "details-0-m9",
+      "position": {
+        "x": 32,
+        "y": 0,
+        "z": -544
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-0",
+      "assetId": "details-1-0",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": 32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-1",
+      "assetId": "details-1-1",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": 96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m10",
+      "assetId": "details-1-m10",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -608
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m11",
+      "assetId": "details-1-m11",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -672
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m12",
+      "assetId": "details-1-m12",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -736
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m2",
+      "assetId": "details-1-m2",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m3",
+      "assetId": "details-1-m3",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -160
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m4",
+      "assetId": "details-1-m4",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -224
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m5",
+      "assetId": "details-1-m5",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -288
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m6",
+      "assetId": "details-1-m6",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -352
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m7",
+      "assetId": "details-1-m7",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -416
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m8",
+      "assetId": "details-1-m8",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -480
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-1-m9",
+      "assetId": "details-1-m9",
+      "position": {
+        "x": 96,
+        "y": 0,
+        "z": -544
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-0",
+      "assetId": "details-2-0",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": 32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-1",
+      "assetId": "details-2-1",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": 96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m1",
+      "assetId": "details-2-m1",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m10",
+      "assetId": "details-2-m10",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -608
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m11",
+      "assetId": "details-2-m11",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -672
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m12",
+      "assetId": "details-2-m12",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -736
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m2",
+      "assetId": "details-2-m2",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m3",
+      "assetId": "details-2-m3",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -160
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m4",
+      "assetId": "details-2-m4",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -224
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m5",
+      "assetId": "details-2-m5",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -288
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m6",
+      "assetId": "details-2-m6",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -352
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m7",
+      "assetId": "details-2-m7",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -416
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m8",
+      "assetId": "details-2-m8",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -480
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-2-m9",
+      "assetId": "details-2-m9",
+      "position": {
+        "x": 160,
+        "y": 0,
+        "z": -544
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-0",
+      "assetId": "details-3-0",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": 32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-1",
+      "assetId": "details-3-1",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": 96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m1",
+      "assetId": "details-3-m1",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m10",
+      "assetId": "details-3-m10",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -608
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m11",
+      "assetId": "details-3-m11",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -672
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m12",
+      "assetId": "details-3-m12",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -736
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m2",
+      "assetId": "details-3-m2",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -96
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m3",
+      "assetId": "details-3-m3",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -160
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m4",
+      "assetId": "details-3-m4",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -224
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m5",
+      "assetId": "details-3-m5",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -288
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m6",
+      "assetId": "details-3-m6",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -352
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m7",
+      "assetId": "details-3-m7",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -416
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m8",
+      "assetId": "details-3-m8",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -480
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-3-m9",
+      "assetId": "details-3-m9",
+      "position": {
+        "x": 224,
+        "y": 0,
+        "z": -544
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-0",
+      "assetId": "details-4-0",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": 32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m1",
+      "assetId": "details-4-m1",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -32
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m10",
+      "assetId": "details-4-m10",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -608
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m11",
+      "assetId": "details-4-m11",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -672
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m12",
+      "assetId": "details-4-m12",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -736
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m3",
+      "assetId": "details-4-m3",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -160
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m4",
+      "assetId": "details-4-m4",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -224
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m5",
+      "assetId": "details-4-m5",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -288
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m6",
+      "assetId": "details-4-m6",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -352
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m7",
+      "assetId": "details-4-m7",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -416
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    {
+      "entityId": "details-4-m8",
+      "assetId": "details-4-m8",
+      "position": {
+        "x": 288,
+        "y": 0,
+        "z": -480
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
         "z": 0,
-        "w": 0.740591736690164
+        "w": 1
       }
     },
     {
-      "entityId": "tree-002",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-4-m9",
+      "assetId": "details-4-m9",
       "position": {
-        "x": -72.8,
+        "x": 288,
         "y": 0,
-        "z": 107.6
+        "z": -544
       },
       "rotation": {
         "x": 0,
-        "y": 0.9928831792754963,
+        "y": 0,
         "z": 0,
-        "w": 0.11909236882261894
+        "w": 1
       }
     },
     {
-      "entityId": "tree-003",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-0",
+      "assetId": "details-5-0",
       "position": {
-        "x": 228.6,
+        "x": 352,
         "y": 0,
-        "z": 105.3
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.953234498510781,
+        "y": 0,
         "z": 0,
-        "w": -0.302231684058604
+        "w": 1
       }
     },
     {
-      "entityId": "tree-004",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-m1",
+      "assetId": "details-5-m1",
       "position": {
-        "x": 252.1,
+        "x": 352,
         "y": 0,
-        "z": 110.1
+        "z": -32
       },
       "rotation": {
         "x": 0,
-        "y": 0.16289375553352048,
+        "y": 0,
         "z": 0,
-        "w": 0.986643615703353
+        "w": 1
       }
     },
     {
-      "entityId": "tree-005",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-m10",
+      "assetId": "details-5-m10",
       "position": {
-        "x": 270.1,
+        "x": 352,
         "y": 0,
-        "z": 114.8
+        "z": -608
       },
       "rotation": {
         "x": 0,
-        "y": 0.24821491450684124,
+        "y": 0,
         "z": 0,
-        "w": 0.9687049892595586
+        "w": 1
       }
     },
     {
-      "entityId": "tree-006",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-m2",
+      "assetId": "details-5-m2",
       "position": {
-        "x": 290,
+        "x": 352,
         "y": 0,
-        "z": 105.1
+        "z": -96
       },
       "rotation": {
         "x": 0,
-        "y": 0.29762483437926357,
+        "y": 0,
         "z": 0,
-        "w": -0.9546829096410577
+        "w": 1
       }
     },
     {
-      "entityId": "tree-007",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-m4",
+      "assetId": "details-5-m4",
       "position": {
-        "x": 312.2,
+        "x": 352,
         "y": 0,
-        "z": 107.8
+        "z": -224
       },
       "rotation": {
         "x": 0,
-        "y": 0.5922126922544214,
+        "y": 0,
         "z": 0,
-        "w": -0.805781687017501
+        "w": 1
       }
     },
     {
-      "entityId": "tree-008",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-m7",
+      "assetId": "details-5-m7",
       "position": {
-        "x": 323.1,
+        "x": 352,
         "y": 0,
-        "z": 102.3
+        "z": -416
       },
       "rotation": {
         "x": 0,
-        "y": 0.8852392729931622,
+        "y": 0,
         "z": 0,
-        "w": 0.46513592588676456
+        "w": 1
       }
     },
     {
-      "entityId": "tree-009",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-5-m8",
+      "assetId": "details-5-m8",
       "position": {
-        "x": 233.1,
+        "x": 352,
         "y": 0,
-        "z": 83.8
+        "z": -480
       },
       "rotation": {
         "x": 0,
-        "y": 0.05013580657298204,
+        "y": 0,
         "z": 0,
-        "w": 0.9987424096829355
+        "w": 1
       }
     },
     {
-      "entityId": "tree-010",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-0",
+      "assetId": "details-m1-0",
       "position": {
-        "x": 290.3,
+        "x": -32,
         "y": 0,
-        "z": 84.2
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.9965013542323633,
+        "y": 0,
         "z": 0,
-        "w": -0.0835766176215934
+        "w": 1
       }
     },
     {
-      "entityId": "tree-011",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-1",
+      "assetId": "details-m1-1",
       "position": {
-        "x": 307.2,
+        "x": -32,
         "y": 0,
-        "z": 88.9
+        "z": 96
       },
       "rotation": {
         "x": 0,
-        "y": 0.6963390328900603,
+        "y": 0,
         "z": 0,
-        "w": 0.7177130006302906
+        "w": 1
       }
     },
     {
-      "entityId": "tree-012",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m1-m1",
+      "assetId": "details-m1-m1",
       "position": {
-        "x": 326.4,
+        "x": -32,
         "y": 0,
-        "z": 83.4
+        "z": -32
       },
       "rotation": {
         "x": 0,
-        "y": 0.07885176871557613,
+        "y": 0,
         "z": 0,
-        "w": -0.9968863518829141
+        "w": 1
       }
     },
     {
-      "entityId": "tree-013",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m1-m10",
+      "assetId": "details-m1-m10",
       "position": {
-        "x": 233.4,
+        "x": -32,
         "y": 0,
-        "z": 72.7
+        "z": -608
       },
       "rotation": {
         "x": 0,
-        "y": 0.8774880455133244,
+        "y": 0,
         "z": 0,
-        "w": -0.4795985091524014
+        "w": 1
       }
     },
     {
-      "entityId": "tree-014",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m11",
+      "assetId": "details-m1-m11",
       "position": {
-        "x": 259.8,
+        "x": -32,
         "y": 0,
-        "z": 73.3
+        "z": -672
       },
       "rotation": {
         "x": 0,
-        "y": 0.5673076804531323,
+        "y": 0,
         "z": 0,
-        "w": -0.8235059172215381
+        "w": 1
       }
     },
     {
-      "entityId": "tree-015",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m1-m12",
+      "assetId": "details-m1-m12",
       "position": {
-        "x": 284.2,
+        "x": -32,
         "y": 0,
-        "z": 70.6
+        "z": -736
       },
       "rotation": {
         "x": 0,
-        "y": 0.9852571539892434,
+        "y": 0,
         "z": 0,
-        "w": -0.171079924342444
+        "w": 1
       }
     },
     {
-      "entityId": "tree-016",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m1-m2",
+      "assetId": "details-m1-m2",
       "position": {
-        "x": 306.6,
+        "x": -32,
         "y": 0,
-        "z": 67.7
+        "z": -96
       },
       "rotation": {
         "x": 0,
-        "y": 0.22311400785267646,
+        "y": 0,
         "z": 0,
-        "w": 0.9747923571201796
+        "w": 1
       }
     },
     {
-      "entityId": "tree-017",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m3",
+      "assetId": "details-m1-m3",
       "position": {
-        "x": 104.7,
+        "x": -32,
         "y": 0,
-        "z": 49
+        "z": -160
       },
       "rotation": {
         "x": 0,
-        "y": 0.757834614556082,
+        "y": 0,
         "z": 0,
-        "w": -0.6524467004902658
+        "w": 1
       }
     },
     {
-      "entityId": "tree-018",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m4",
+      "assetId": "details-m1-m4",
       "position": {
-        "x": -125.6,
+        "x": -32,
         "y": 0,
-        "z": 16.1
+        "z": -224
       },
       "rotation": {
         "x": 0,
-        "y": 0.174634268451613,
+        "y": 0,
         "z": 0,
-        "w": -0.9846333694743288
+        "w": 1
       }
     },
     {
-      "entityId": "tree-019",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m1-m5",
+      "assetId": "details-m1-m5",
       "position": {
-        "x": -246.7,
+        "x": -32,
         "y": 0,
-        "z": -11.1
+        "z": -288
       },
       "rotation": {
         "x": 0,
-        "y": 0.11159216693711026,
+        "y": 0,
         "z": 0,
-        "w": 0.9937540884334918
+        "w": 1
       }
     },
     {
-      "entityId": "tree-020",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m6",
+      "assetId": "details-m1-m6",
       "position": {
-        "x": 135.1,
+        "x": -32,
         "y": 0,
-        "z": -2.2
+        "z": -352
       },
       "rotation": {
         "x": 0,
-        "y": 0.4164550255121991,
+        "y": 0,
         "z": 0,
-        "w": 0.9091563186414279
+        "w": 1
       }
     },
     {
-      "entityId": "tree-021",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m7",
+      "assetId": "details-m1-m7",
       "position": {
-        "x": -247.9,
+        "x": -32,
         "y": 0,
-        "z": -31.5
+        "z": -416
       },
       "rotation": {
         "x": 0,
-        "y": 0.8308303535383179,
+        "y": 0,
         "z": 0,
-        "w": -0.5565257618829461
+        "w": 1
       }
     },
     {
-      "entityId": "tree-022",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m8",
+      "assetId": "details-m1-m8",
       "position": {
-        "x": -185.6,
+        "x": -32,
         "y": 0,
-        "z": -47.9
+        "z": -480
       },
       "rotation": {
         "x": 0,
-        "y": 0.37299444691170747,
+        "y": 0,
         "z": 0,
-        "w": -0.9278335748252644
+        "w": 1
       }
     },
     {
-      "entityId": "tree-023",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m1-m9",
+      "assetId": "details-m1-m9",
       "position": {
-        "x": 275.6,
+        "x": -32,
         "y": 0,
-        "z": -41.4
+        "z": -544
       },
       "rotation": {
         "x": 0,
-        "y": 0.4074969629625297,
+        "y": 0,
         "z": 0,
-        "w": 0.9132065621623153
+        "w": 1
       }
     },
     {
-      "entityId": "tree-024",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-0",
+      "assetId": "details-m2-0",
       "position": {
-        "x": 162.6,
+        "x": -96,
         "y": 0,
-        "z": -156.1
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.22397933297810715,
+        "y": 0,
         "z": 0,
-        "w": -0.9745938940906013
+        "w": 1
       }
     },
     {
-      "entityId": "tree-025",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-1",
+      "assetId": "details-m2-1",
       "position": {
-        "x": -202.7,
+        "x": -96,
         "y": 0,
-        "z": -172.5
+        "z": 96
       },
       "rotation": {
         "x": 0,
-        "y": 0.4465498111632629,
+        "y": 0,
         "z": 0,
-        "w": -0.8947587753970644
+        "w": 1
       }
     },
     {
-      "entityId": "tree-026",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m1",
+      "assetId": "details-m2-m1",
       "position": {
-        "x": 144.1,
+        "x": -96,
         "y": 0,
-        "z": -215.3
+        "z": -32
       },
       "rotation": {
         "x": 0,
-        "y": 0.7639013057372738,
+        "y": 0,
         "z": 0,
-        "w": 0.6453330884844571
+        "w": 1
       }
     },
     {
-      "entityId": "tree-027",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m10",
+      "assetId": "details-m2-m10",
       "position": {
-        "x": 252.7,
+        "x": -96,
         "y": 0,
-        "z": -209.6
+        "z": -608
       },
       "rotation": {
         "x": 0,
-        "y": 0.6272920847970316,
+        "y": 0,
         "z": 0,
-        "w": -0.7787840781314124
+        "w": 1
       }
     },
     {
-      "entityId": "tree-028",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m11",
+      "assetId": "details-m2-m11",
       "position": {
-        "x": -28.1,
+        "x": -96,
         "y": 0,
-        "z": -258.7
+        "z": -672
       },
       "rotation": {
         "x": 0,
-        "y": 0.29441744019377075,
+        "y": 0,
         "z": 0,
-        "w": 0.9556769176399247
+        "w": 1
       }
     },
     {
-      "entityId": "tree-029",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m2-m12",
+      "assetId": "details-m2-m12",
       "position": {
-        "x": 114.8,
+        "x": -96,
         "y": 0,
-        "z": -255.7
+        "z": -736
       },
       "rotation": {
         "x": 0,
-        "y": 0.5096201586640708,
+        "y": 0,
         "z": 0,
-        "w": -0.8603994966776812
+        "w": 1
       }
     },
     {
-      "entityId": "tree-030",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m2-m2",
+      "assetId": "details-m2-m2",
       "position": {
-        "x": 216.8,
+        "x": -96,
         "y": 0,
-        "z": -271.7
+        "z": -96
       },
       "rotation": {
         "x": 0,
-        "y": 0.7935543179948995,
+        "y": 0,
         "z": 0,
-        "w": 0.6084994202065027
+        "w": 1
       }
     },
     {
-      "entityId": "tree-031",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m3",
+      "assetId": "details-m2-m3",
       "position": {
-        "x": -219.6,
+        "x": -96,
         "y": 0,
-        "z": -304.1
+        "z": -160
       },
       "rotation": {
         "x": 0,
-        "y": 0.8498978909341949,
+        "y": 0,
         "z": 0,
-        "w": 0.5269474119735359
+        "w": 1
       }
     },
     {
-      "entityId": "tree-032",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m5",
+      "assetId": "details-m2-m5",
       "position": {
-        "x": -93.5,
+        "x": -96,
         "y": 0,
-        "z": -305.2
+        "z": -288
       },
       "rotation": {
         "x": 0,
-        "y": 0.3934495020379056,
+        "y": 0,
         "z": 0,
-        "w": -0.9193462293097874
+        "w": 1
       }
     },
     {
-      "entityId": "tree-033",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m6",
+      "assetId": "details-m2-m6",
       "position": {
-        "x": -123.1,
+        "x": -96,
         "y": 0,
-        "z": -373
+        "z": -352
       },
       "rotation": {
         "x": 0,
-        "y": 0.9931963178026232,
+        "y": 0,
         "z": 0,
-        "w": 0.11645202575872511
+        "w": 1
       }
     },
     {
-      "entityId": "tree-034",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m7",
+      "assetId": "details-m2-m7",
       "position": {
-        "x": -235.7,
+        "x": -96,
         "y": 0,
-        "z": -390.3
+        "z": -416
       },
       "rotation": {
         "x": 0,
-        "y": 0.9981612432156348,
+        "y": 0,
         "z": 0,
-        "w": -0.06061462317146194
+        "w": 1
       }
     },
     {
-      "entityId": "tree-035",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m8",
+      "assetId": "details-m2-m8",
       "position": {
-        "x": -113.6,
+        "x": -96,
         "y": 0,
-        "z": -388
+        "z": -480
       },
       "rotation": {
         "x": 0,
-        "y": 0.9811768406909973,
+        "y": 0,
         "z": 0,
-        "w": -0.19311138571206338
+        "w": 1
       }
     },
     {
-      "entityId": "tree-036",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m2-m9",
+      "assetId": "details-m2-m9",
       "position": {
-        "x": 122.7,
+        "x": -96,
         "y": 0,
-        "z": -388.4
+        "z": -544
       },
       "rotation": {
         "x": 0,
-        "y": 0.9588218649537216,
+        "y": 0,
         "z": 0,
-        "w": 0.28400815355666686
+        "w": 1
       }
     },
     {
-      "entityId": "tree-037",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m3-0",
+      "assetId": "details-m3-0",
       "position": {
-        "x": -145.6,
+        "x": -160,
         "y": 0,
-        "z": -417.9
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.5855631114500394,
+        "y": 0,
         "z": 0,
-        "w": -0.8106268207436446
+        "w": 1
       }
     },
     {
-      "entityId": "tree-038",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m3-1",
+      "assetId": "details-m3-1",
       "position": {
-        "x": 276.6,
+        "x": -160,
         "y": 0,
-        "z": -423.8
+        "z": 96
       },
       "rotation": {
         "x": 0,
-        "y": 0.5599540677304018,
+        "y": 0,
         "z": 0,
-        "w": -0.8285236520656345
+        "w": 1
       }
     },
     {
-      "entityId": "tree-039",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m3-m1",
+      "assetId": "details-m3-m1",
       "position": {
-        "x": 156.4,
+        "x": -160,
         "y": 0,
-        "z": -441.2
+        "z": -32
       },
       "rotation": {
         "x": 0,
-        "y": 0.7654574033761053,
+        "y": 0,
         "z": 0,
-        "w": -0.6434865683265738
+        "w": 1
       }
     },
     {
-      "entityId": "tree-040",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m3-m10",
+      "assetId": "details-m3-m10",
       "position": {
-        "x": 229.6,
+        "x": -160,
         "y": 0,
-        "z": -439.7
+        "z": -608
       },
       "rotation": {
         "x": 0,
-        "y": 0.9417279320680091,
+        "y": 0,
         "z": 0,
-        "w": -0.33637553710534795
+        "w": 1
       }
     },
     {
-      "entityId": "tree-041",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m3-m11",
+      "assetId": "details-m3-m11",
       "position": {
-        "x": 253.4,
+        "x": -160,
         "y": 0,
-        "z": -444.3
+        "z": -672
       },
       "rotation": {
         "x": 0,
-        "y": 0.21446126876018556,
+        "y": 0,
         "z": 0,
-        "w": -0.9767324936756079
+        "w": 1
       }
     },
     {
-      "entityId": "tree-042",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m3-m12",
+      "assetId": "details-m3-m12",
       "position": {
-        "x": 266.5,
+        "x": -160,
         "y": 0,
-        "z": -438.8
+        "z": -736
       },
       "rotation": {
         "x": 0,
-        "y": 0.9992817463966989,
+        "y": 0,
         "z": 0,
-        "w": -0.03789447609300934
+        "w": 1
       }
     },
     {
-      "entityId": "tree-043",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m3-m2",
+      "assetId": "details-m3-m2",
       "position": {
-        "x": 304.9,
+        "x": -160,
         "y": 0,
-        "z": -439.9
+        "z": -96
       },
       "rotation": {
         "x": 0,
-        "y": 0.9348140184783293,
+        "y": 0,
         "z": 0,
-        "w": 0.35513765057565727
+        "w": 1
       }
     },
     {
-      "entityId": "tree-044",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m3-m3",
+      "assetId": "details-m3-m3",
       "position": {
-        "x": -146.8,
+        "x": -160,
         "y": 0,
-        "z": -462.3
+        "z": -160
       },
       "rotation": {
         "x": 0,
-        "y": 0.27900345543588295,
+        "y": 0,
         "z": 0,
-        "w": 0.9602900977594413
+        "w": 1
       }
     },
     {
-      "entityId": "tree-045",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m3-m7",
+      "assetId": "details-m3-m7",
       "position": {
-        "x": -128.1,
+        "x": -160,
         "y": 0,
-        "z": -459.3
+        "z": -416
       },
       "rotation": {
         "x": 0,
-        "y": 0.9998846488566091,
+        "y": 0,
         "z": 0,
-        "w": -0.015188448929878216
+        "w": 1
       }
     },
     {
-      "entityId": "tree-046",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m3-m8",
+      "assetId": "details-m3-m8",
       "position": {
-        "x": 219.8,
+        "x": -160,
         "y": 0,
-        "z": -462.8
+        "z": -480
       },
       "rotation": {
         "x": 0,
-        "y": 0.8799655811691829,
+        "y": 0,
         "z": 0,
-        "w": 0.47503744690032834
+        "w": 1
       }
     },
     {
-      "entityId": "tree-047",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m3-m9",
+      "assetId": "details-m3-m9",
       "position": {
-        "x": 254.2,
+        "x": -160,
         "y": 0,
-        "z": -455.6
+        "z": -544
       },
       "rotation": {
         "x": 0,
-        "y": 0.9079437721605895,
+        "y": 0,
         "z": 0,
-        "w": -0.41909200254216206
+        "w": 1
       }
     },
     {
-      "entityId": "tree-048",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-0",
+      "assetId": "details-m4-0",
       "position": {
-        "x": 271.6,
+        "x": -224,
         "y": 0,
-        "z": -465.1
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.983572973552237,
+        "y": 0,
         "z": 0,
-        "w": 0.1805109572785273
+        "w": 1
       }
     },
     {
-      "entityId": "tree-049",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-1",
+      "assetId": "details-m4-1",
       "position": {
-        "x": 287.2,
+        "x": -224,
         "y": 0,
-        "z": -464.3
+        "z": 96
       },
       "rotation": {
         "x": 0,
-        "y": 0.9968504502276787,
+        "y": 0,
         "z": 0,
-        "w": -0.07930434969706401
+        "w": 1
       }
     },
     {
-      "entityId": "tree-050",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m1",
+      "assetId": "details-m4-m1",
       "position": {
-        "x": 314.6,
+        "x": -224,
         "y": 0,
-        "z": -467.4
+        "z": -32
       },
       "rotation": {
         "x": 0,
-        "y": 0.6234638457834345,
+        "y": 0,
         "z": 0,
-        "w": -0.78185218104251
+        "w": 1
       }
     },
     {
-      "entityId": "tree-051",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-m10",
+      "assetId": "details-m4-m10",
       "position": {
-        "x": -266.3,
+        "x": -224,
         "y": 0,
-        "z": -480.3
+        "z": -608
       },
       "rotation": {
         "x": 0,
-        "y": 0.7920006430402086,
+        "y": 0,
         "z": 0,
-        "w": 0.6105202547204279
+        "w": 1
       }
     },
     {
-      "entityId": "tree-052",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m11",
+      "assetId": "details-m4-m11",
       "position": {
-        "x": 119.8,
+        "x": -224,
         "y": 0,
-        "z": -484.8
+        "z": -672
       },
       "rotation": {
         "x": 0,
-        "y": 0.6284856845624058,
+        "y": 0,
         "z": 0,
-        "w": 0.7778211518724109
+        "w": 1
       }
     },
     {
-      "entityId": "tree-053",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m12",
+      "assetId": "details-m4-m12",
       "position": {
-        "x": 239.5,
+        "x": -224,
         "y": 0,
-        "z": -476.9
+        "z": -736
       },
       "rotation": {
         "x": 0,
-        "y": 0.999984178969475,
+        "y": 0,
         "z": 0,
-        "w": -0.005625105398564094
+        "w": 1
       }
     },
     {
-      "entityId": "tree-054",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m2",
+      "assetId": "details-m4-m2",
       "position": {
-        "x": 253.7,
+        "x": -224,
         "y": 0,
-        "z": -485.1
+        "z": -96
       },
       "rotation": {
         "x": 0,
-        "y": 0.9997423613067926,
+        "y": 0,
         "z": 0,
-        "w": -0.02269826003724983
+        "w": 1
       }
     },
     {
-      "entityId": "tree-055",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-m3",
+      "assetId": "details-m4-m3",
       "position": {
-        "x": -243.3,
+        "x": -224,
         "y": 0,
-        "z": -496.3
+        "z": -160
       },
       "rotation": {
         "x": 0,
-        "y": 0.38757358346103865,
+        "y": 0,
         "z": 0,
-        "w": 0.9218387697440206
+        "w": 1
       }
     },
     {
-      "entityId": "tree-056",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-m4",
+      "assetId": "details-m4-m4",
       "position": {
-        "x": 237.6,
+        "x": -224,
         "y": 0,
-        "z": -503.1
+        "z": -224
       },
       "rotation": {
         "x": 0,
-        "y": 0.987188015042547,
+        "y": 0,
         "z": 0,
-        "w": 0.15956134543289552
+        "w": 1
       }
     },
     {
-      "entityId": "tree-057",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m5",
+      "assetId": "details-m4-m5",
       "position": {
-        "x": 248.5,
+        "x": -224,
         "y": 0,
-        "z": -500.2
+        "z": -288
       },
       "rotation": {
         "x": 0,
-        "y": 0.5561460925237834,
+        "y": 0,
         "z": 0,
-        "w": -0.8310845467042011
+        "w": 1
       }
     },
     {
-      "entityId": "tree-058",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m6",
+      "assetId": "details-m4-m6",
       "position": {
-        "x": 267,
+        "x": -224,
         "y": 0,
-        "z": -493.7
+        "z": -352
       },
       "rotation": {
         "x": 0,
-        "y": 0.9791073623024622,
+        "y": 0,
         "z": 0,
-        "w": 0.20334397725311396
+        "w": 1
       }
     },
     {
-      "entityId": "tree-059",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m4-m7",
+      "assetId": "details-m4-m7",
       "position": {
-        "x": 106.7,
+        "x": -224,
         "y": 0,
-        "z": -514.4
+        "z": -416
       },
       "rotation": {
         "x": 0,
-        "y": 0.49755218563342557,
+        "y": 0,
         "z": 0,
-        "w": -0.8674340450843517
+        "w": 1
       }
     },
     {
-      "entityId": "tree-060",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-m8",
+      "assetId": "details-m4-m8",
       "position": {
-        "x": 258.7,
+        "x": -224,
         "y": 0,
-        "z": -516
+        "z": -480
       },
       "rotation": {
         "x": 0,
-        "y": 0.9994425932390705,
+        "y": 0,
         "z": 0,
-        "w": -0.033384170194298596
+        "w": 1
       }
     },
     {
-      "entityId": "tree-061",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m4-m9",
+      "assetId": "details-m4-m9",
       "position": {
-        "x": 274.6,
+        "x": -224,
         "y": 0,
-        "z": -518.9
+        "z": -544
       },
       "rotation": {
         "x": 0,
-        "y": 0.41113178156804026,
+        "y": 0,
         "z": 0,
-        "w": 0.9115759201430724
+        "w": 1
       }
     },
     {
-      "entityId": "tree-062",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m5-0",
+      "assetId": "details-m5-0",
       "position": {
-        "x": 310.3,
+        "x": -288,
         "y": 0,
-        "z": -516.4
+        "z": 32
       },
       "rotation": {
         "x": 0,
-        "y": 0.475169793863084,
+        "y": 0,
         "z": 0,
-        "w": 0.8798941226080069
+        "w": 1
       }
     },
     {
-      "entityId": "tree-063",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m5-m10",
+      "assetId": "details-m5-m10",
       "position": {
-        "x": 306.5,
+        "x": -288,
         "y": 0,
-        "z": -534.5
+        "z": -608
       },
       "rotation": {
         "x": 0,
-        "y": 0.6255044652799028,
+        "y": 0,
         "z": 0,
-        "w": 0.7802205867028266
+        "w": 1
       }
     },
     {
-      "entityId": "tree-064",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m5-m2",
+      "assetId": "details-m5-m2",
       "position": {
-        "x": 255.8,
+        "x": -288,
         "y": 0,
-        "z": -627.8
+        "z": -96
       },
       "rotation": {
         "x": 0,
-        "y": 0.722088883135402,
+        "y": 0,
         "z": 0,
-        "w": -0.6918002926078217
+        "w": 1
       }
     },
     {
-      "entityId": "tree-065",
-      "assetId": "tree-spruce-small",
+      "entityId": "details-m5-m3",
+      "assetId": "details-m5-m3",
       "position": {
-        "x": 6.9,
+        "x": -288,
         "y": 0,
-        "z": -674.8
+        "z": -160
       },
       "rotation": {
         "x": 0,
-        "y": 0.9908031936247719,
+        "y": 0,
         "z": 0,
-        "w": -0.1353108698625235
+        "w": 1
       }
     },
     {
-      "entityId": "tree-066",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m5-m6",
+      "assetId": "details-m5-m6",
       "position": {
-        "x": 151.5,
+        "x": -288,
         "y": 0,
-        "z": -711.8
+        "z": -352
       },
       "rotation": {
         "x": 0,
-        "y": 0.9991288621604821,
+        "y": 0,
         "z": 0,
-        "w": 0.04173148449193192
+        "w": 1
       }
     },
     {
-      "entityId": "tree-067",
-      "assetId": "tree-spruce-large",
+      "entityId": "details-m5-m8",
+      "assetId": "details-m5-m8",
       "position": {
-        "x": 88,
+        "x": -288,
         "y": 0,
-        "z": -731.7
+        "z": -480
       },
       "rotation": {
         "x": 0,
-        "y": 0.9986081989699849,
+        "y": 0,
         "z": 0,
-        "w": 0.05274149173016566
+        "w": 1
       }
     }
   ]

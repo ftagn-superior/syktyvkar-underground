@@ -2,6 +2,12 @@
   "formatVersion": 1,
   "worldId": "ring-block",
   "source": "data/syktyvkar-offline.html",
+  "osm": {
+    "snapshot": "content/sources/ring-block/osm.json",
+    "origin": { "lat": 61.66386729706631, "lon": 50.815951774241576 },
+    "metersPerDegree": { "lon": 52837.29, "lat": 110573.15 },
+    "fetchMargin": 40
+  },
   "area": {
     "west": -260,
     "east": 300,

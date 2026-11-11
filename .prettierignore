@@ -7,3 +7,5 @@ content/buildings/ring-block/*
 !content/buildings/ring-block/manual
 content/worlds/ring-block/cells
 content/worlds/ring-block/world.json
+# Снимок OSM: один объект на строку, обновляется pnpm world:fetch-osm
+content/sources

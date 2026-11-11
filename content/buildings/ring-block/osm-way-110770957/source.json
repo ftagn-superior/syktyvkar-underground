@@ -1,1 +1,1 @@
-{"formatVersion":1,"outline":[[-4.55,20.82],[10.65,18.52],[4.55,-20.88],[-10.65,-18.48]],"height":13.2,"floors":4,"windows":true,"wallColor":"#ccbfaa","roofColor":"#a7aaa2","windowColor":"#3d4d57"}
+{"formatVersion":1,"outline":[[-4.55,20.82],[10.65,18.52],[4.55,-20.88],[-10.65,-18.48]],"height":13.2,"floors":4,"windows":true,"wallColor":"#c49a6c","roofColor":"#a7aaa2","windowColor":"#3d4d57","merge":true,"details":{"hippedRoof":{"height":3.85,"color":"#a7aaa2"}},"doors":[[-9.1,-8.67],[-5.83,12.51]]}

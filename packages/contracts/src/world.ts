@@ -130,6 +130,28 @@ export function validateWorld(value: unknown): WorldDefinition {
       invariant(!intersects, `spawn intersects ${entity.entityId}`);
     }
   }
+  if (world.landmarks !== undefined) {
+    invariant(Array.isArray(world.landmarks) && world.landmarks.length <= 256, 'landmarks');
+    const landmarkIds = new Set<string>();
+    for (const landmark of world.landmarks) {
+      invariant(
+        landmark &&
+          typeof landmark === 'object' &&
+          typeof landmark.id === 'string' &&
+          /^[a-z0-9-]{1,64}$/.test(landmark.id) &&
+          !landmarkIds.has(landmark.id),
+        'landmark id',
+      );
+      landmarkIds.add(landmark.id);
+      invariant(
+        typeof landmark.name === 'string' &&
+          landmark.name.trim().length > 0 &&
+          landmark.name.length <= 80,
+        `landmark ${landmark.id} name`,
+      );
+      vector(landmark.position, `landmark ${landmark.id} position`);
+    }
+  }
   for (let i = 0; i < world.spawnPoints.length; i++)
     for (let j = i + 1; j < world.spawnPoints.length; j++) {
       const a = world.spawnPoints[i],

@@ -36,13 +36,16 @@ export function decorateWorld(scene: Scene, world: WorldDefinition): void {
       return point(x + Math.cos(angle) * radius, z + Math.sin(angle) * radius);
     });
 
-  const grid: Vector3[][] = [];
-  const { min, max } = world.bounds;
-  for (let x = Math.ceil(min.x / 2) * 2; x <= max.x; x += 2)
-    grid.push([point(x, min.z), point(x, max.z)]);
-  for (let z = Math.ceil(min.z / 2) * 2; z <= max.z; z += 2)
-    grid.push([point(min.x, z), point(max.x, z)]);
-  lineSystem('floor-grid', grid, '#4c6573', 0.22);
+  // Метровая сетка нужна только тестовой площадке; в городе пол — это улицы и дворы.
+  if (world.worldId === 'physics-lab') {
+    const grid: Vector3[][] = [];
+    const { min, max } = world.bounds;
+    for (let x = Math.ceil(min.x / 2) * 2; x <= max.x; x += 2)
+      grid.push([point(x, min.z), point(x, max.z)]);
+    for (let z = Math.ceil(min.z / 2) * 2; z <= max.z; z += 2)
+      grid.push([point(min.x, z), point(max.x, z)]);
+    lineSystem('floor-grid', grid, '#4c6573', 0.22);
+  }
 
   const labels: FloorLabel[] = [];
   const spawnMinX = Math.min(...world.spawnPoints.map((p) => p.x));

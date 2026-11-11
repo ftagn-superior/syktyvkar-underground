@@ -89,6 +89,14 @@ export interface WorldDefinition {
   entities: EntityDefinition[];
   buildings: BuildingInstance[];
   buildingAssets: Record<string, BuildingPhysicsAsset>;
+  /** Подписи заметных мест. Только отображение: в физический хеш не входят. */
+  landmarks?: Landmark[];
+}
+export interface Landmark {
+  id: string;
+  name: string;
+  /** Точка привязки подписи в мире, обычно над крышей. */
+  position: Vec3;
 }
 export type WorldBase = Omit<WorldDefinition, 'buildings' | 'buildingAssets'>;
 export interface WorldSource extends WorldBase {

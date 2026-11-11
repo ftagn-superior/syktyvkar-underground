@@ -21,6 +21,23 @@ import {
 } from '@su/contracts';
 import { encodeStaticGlb, inspectStaticGlb } from './glb.js';
 import { generateHouse, type HouseRecipe } from './house.js';
+import {
+  generateFootprint,
+  generateGround,
+  generateTree,
+  type FootprintRecipe,
+  type GroundRecipe,
+  type TreeRecipe,
+} from './city.js';
+
+/** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
+export const WORLDS = ['ring-block', 'physics-lab'] as const;
+const generators = {
+  house: (id: string, recipe: unknown) => generateHouse(id, recipe as HouseRecipe),
+  footprint: (id: string, recipe: unknown) => generateFootprint(id, recipe as FootprintRecipe),
+  ground: (id: string, recipe: unknown) => generateGround(id, recipe as GroundRecipe),
+  tree: (id: string, recipe: unknown) => generateTree(id, recipe as TreeRecipe),
+};
 
 const hash = (input: string | Uint8Array) => createHash('sha256').update(input).digest('hex');
 const jsonBytes = (value: unknown) => new TextEncoder().encode(canonicalJson(value) + '\n');
@@ -45,9 +62,13 @@ async function compileAsset(assetId: string, descriptorPath: string) {
     throw new Error(`Invalid asset descriptor: ${assetId}`);
   const directory = dirname(descriptorPath);
   let model: Uint8Array, physics: BuildingPhysicsAsset;
-  if (descriptor.source?.kind === 'house') {
-    const recipe = (await readJson(sourceFile(directory, descriptor.source.file))) as HouseRecipe;
-    const generated = generateHouse(assetId, recipe);
+  const kind = descriptor.source?.kind;
+  const generator = Object.hasOwn(generators, kind)
+    ? generators[kind as keyof typeof generators]
+    : undefined;
+  if (generator) {
+    const recipe = await readJson(sourceFile(directory, descriptor.source.file));
+    const generated = generator(assetId, recipe);
     model = encodeStaticGlb(generated.parts);
     physics = generated.physics;
   } else if (descriptor.source?.kind === 'glb') {
@@ -104,6 +125,8 @@ export async function buildWorld(
     simulation: authored.simulation,
     spawnPoints: authored.spawnPoints,
     entities: authored.entities,
+    // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
+    ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
   };
   validateWorld({ ...base, buildings: [], buildingAssets: {} });
   const sourceDirectory = dirname(resolve(source));
@@ -189,8 +212,13 @@ export async function buildWorld(
   return manifest;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const manifest = await buildWorld();
-  console.log(
-    `World ${manifest.worldId}: ${manifest.mapVersion.slice(0, 12)} (${Object.keys(manifest.assets).length} building assets)`,
-  );
+  for (const worldId of WORLDS) {
+    const manifest = await buildWorld(
+      `content/worlds/${worldId}/world.json`,
+      `dist/worlds/${worldId}`,
+    );
+    console.log(
+      `World ${manifest.worldId}: ${manifest.mapVersion.slice(0, 12)} (${Object.keys(manifest.assets).length} building assets)`,
+    );
+  }
 }

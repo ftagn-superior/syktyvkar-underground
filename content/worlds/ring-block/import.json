@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "worldId": "ring-block",
+  "source": "data/syktyvkar-offline.html",
+  "area": { "west": -260, "east": 170, "south": -90, "north": 720 },
+  "margin": 8,
+  "spawnClearance": 14,
+  "spawnPoints": [
+    { "x": -3, "y": 0, "z": 4 },
+    { "x": 3, "y": 0, "z": 4 },
+    { "x": -5, "y": 0, "z": 6 },
+    { "x": 5, "y": 0, "z": 6 },
+    { "x": -7, "y": 0, "z": 4 },
+    { "x": 7, "y": 0, "z": 4 },
+    { "x": -3, "y": 0, "z": 8 },
+    { "x": 3, "y": 0, "z": 8 }
+  ],
+  "crate": { "x": 0, "y": 0.52, "z": 0 },
+  "landmarks": [
+    { "id": "ring", "name": "Кольцо", "position": { "x": 0, "y": 3, "z": -12 } },
+    { "id": "school-1", "name": "Школа №1", "osm": "way/111538131" },
+    { "id": "banya-4", "name": "Баня №4", "osm": "way/111493596" }
+  ]
+}

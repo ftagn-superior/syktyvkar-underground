@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 // Functional SwiftShader integration evidence, with economy rasterization for the 12-view matrix.
 // A standard-quality screenshot also compiles both material families. The 90s background wait
@@ -37,7 +38,7 @@ try {
     ms: performance.now() - coldStart,
     snapshot: await snapshot(),
   });
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().connection === 'ready');
 
   await page.waitForFunction(
@@ -107,15 +108,15 @@ try {
     return Math.hypot(p.x - origin.x, p.z - origin.z) > 1;
   }, joined.authoritative.position);
   await page.keyboard.up('w');
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   await page.locator('#quality').selectOption('standard');
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${output}/playing.png` });
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   await page.locator('#quality').selectOption('economy');
-  await page.locator('#diagnostics-toggle').click();
-  await page.locator('#leave').click();
+  await hudClick(page, '#diagnostics-toggle');
+  await hudClick(page, '#leave');
   await page.waitForFunction(
     () => {
       const debug = (window as any).__SU_DEBUG__,

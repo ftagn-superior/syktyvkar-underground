@@ -4,6 +4,7 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 // Exercise the built application and real prediction/interpolation in two sessions.
 const app = await createGameServer({ port: 0 });
@@ -116,7 +117,7 @@ try {
   checks.push('Shift switches both displayed characters into the running pose');
 
   const previousRevision = (await snapshot(sender)).authoritative.revision;
-  await sender.locator('#respawn').click();
+  await hudClick(sender, '#respawn');
   await sender.waitForFunction(
     (revision) => (window as any).__SU_DEBUG__.snapshot().authoritative.revision > revision,
     previousRevision,
@@ -157,12 +158,12 @@ try {
   await mode(sender, id, 'idle');
   checks.push('reduced motion preserves the gait while removing secondary bob and roll');
 
-  await sender.locator('#leave').click();
+  await hudClick(sender, '#leave');
   await observer.waitForFunction(
     (id) => !(window as any).__SU_DEBUG__.avatars().some((item: any) => item.entityId === id),
     id,
   );
-  await observer.locator('#leave').click();
+  await hudClick(observer, '#leave');
   assert.deepEqual(errors, []);
   const report = {
     date: new Date().toISOString(),

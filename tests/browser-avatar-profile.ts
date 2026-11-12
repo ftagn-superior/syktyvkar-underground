@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { launchTestBrowser } from './helpers/browser.js';
+import { ANIMATIONS } from '../packages/contracts/src/index.js';
 
 // Isolate the cost of eight moving visual rigs. This is not a network load test.
 const output = 'output/playwright/avatars';
@@ -41,7 +42,7 @@ window.avatarProfile = view;
 </script></body></html>`;
 
 const gallery = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#101820;color:white;font:18px sans-serif">
-<div style="position:absolute;top:12px;width:100%;display:flex;justify-content:space-around"><span>Помахать рукой</span><span>Хлопать</span><span>Танцевать</span></div>
+<div id="gallery-titles" style="position:absolute;top:12px;width:100%;display:flex;justify-content:space-around"></div>
 <canvas style="width:1200px;height:800px;display:block"></canvas>
 <script type="module" src="/tests/helpers/animation-gallery.ts"></script></body></html>`;
 
@@ -55,10 +56,10 @@ const server = await createServer({
       name: 'isolated-avatar-profile',
       configureServer(vite) {
         vite.middlewares.use((request, response, next) => {
-          if (request.url !== '/avatar-profile' && request.url !== '/animation-gallery')
-            return next();
+          const path = request.url?.split('?')[0];
+          if (path !== '/avatar-profile' && path !== '/animation-gallery') return next();
           response.setHeader('content-type', 'text/html');
-          response.end(request.url === '/animation-gallery' ? gallery : html);
+          response.end(path === '/animation-gallery' ? gallery : html);
         });
       },
     },
@@ -130,16 +131,20 @@ try {
     }
   }
   await page.setViewportSize({ width: 1200, height: 800 });
-  await page.goto(`${server.resolvedUrls!.local[0]}animation-gallery`);
-  await page.waitForFunction(() => (window as any).galleryReady);
-  await page.waitForFunction(() => (window as any).galleryDiagnostics().active > 0);
-  for (const [name, ms] of [
-    ['contact', 825],
-    ['open', 1100],
-  ] as const) {
-    await page.evaluate((ms) => (window as any).galleryPose(ms), ms);
-    await page.waitForTimeout(200);
-    await page.screenshot({ path: `output/playwright/animations/gallery-${name}.png` });
+  for (let offset = 0; offset < ANIMATIONS.length; offset += 3) {
+    await page.goto(`${server.resolvedUrls!.local[0]}animation-gallery?offset=${offset}`);
+    await page.waitForFunction(() => (window as any).galleryReady);
+    await page.waitForFunction(() => (window as any).galleryDiagnostics().active > 0);
+    for (const [name, ms] of [
+      ['contact', 825],
+      ['open', 1100],
+    ] as const) {
+      await page.evaluate((ms) => (window as any).galleryPose(ms), ms);
+      await page.waitForTimeout(200);
+      await page.screenshot({
+        path: `output/playwright/animations/gallery-${offset ? `${offset}-` : ''}${name}.png`,
+      });
+    }
   }
   assert.deepEqual(errors, []);
   const report = {
@@ -147,7 +152,7 @@ try {
     browser: browser.version(),
     experiment: profiles.length
       ? 'isolated eight moving avatars, both skins, base/wave/clap/dance, SwiftShader, 1280x720; not hardware acceptance'
-      : 'six static clip poses on both skins, SwiftShader, 1200x800',
+      : `${ANIMATIONS.length} clips on both skins at two phases, SwiftShader, 1200x800`,
     profiles,
     errors,
   };

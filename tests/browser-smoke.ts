@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
 import { Client } from '@colyseus/sdk';
+import { hudClick } from './helpers/hud.js';
 
 const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
 const browser = await launchTestBrowser();
@@ -89,7 +90,7 @@ try {
     ) < 0.3,
     'remote state converges',
   );
-  await pages[0].locator('#respawn').click();
+  await hudClick(pages[0], '#respawn');
   await pages[0].waitForFunction(
     (revision) => (window as any).__SU_DEBUG__.snapshot().authoritative.revision > revision,
     moved.authoritative.revision,
@@ -116,12 +117,12 @@ try {
     identity,
     'short interruption preserves identity',
   );
-  await pages[0].locator('#diagnostics-toggle').click();
+  await hudClick(pages[0], '#diagnostics-toggle');
   await pages[0].screenshot({ path: 'output/playwright/two-players.png' });
   const final = await snapshot(pages[0]);
-  await pages[0].locator('#leave').click();
+  await hudClick(pages[0], '#leave');
   await pages[1].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 1);
-  await pages[1].locator('#leave').click();
+  await hudClick(pages[1], '#leave');
   assert.deepEqual(errors, [], 'no uncaught browser errors');
   const report = {
     date: new Date().toISOString(),

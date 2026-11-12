@@ -4,6 +4,7 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { hudClick } from './helpers/hud.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('Use pnpm test:giveme:browser.');
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
@@ -25,7 +26,7 @@ async function inventoryCount(page: Page, expected: number) {
 }
 async function command(page: Page, text: string) {
   await page.bringToFront();
-  await page.locator('#chat-toggle').click();
+  await hudClick(page, '#chat-toggle');
   await page.locator('#chat-input').fill(text);
   await page.locator('#chat-send:not([disabled])').click();
 }
@@ -69,7 +70,7 @@ try {
   assert.equal(await observer.locator('.player-chat').count(), 0);
   assert.equal(app.room.state.items.size, initialWorldCount);
 
-  await owner.locator('#chat-toggle').click();
+  await hudClick(owner, '#chat-toggle');
   await owner.locator('#chat-input').fill('/giveme wooden-crate');
   assert.equal(
     await owner.locator('#chat-send').isDisabled(),
@@ -170,7 +171,7 @@ try {
   )!.entityId;
   await owner.screenshot({ path: 'output/playwright/giveme-placed.png' });
 
-  for (const page of [owner, observer]) await page.locator('#leave').click();
+  for (const page of [owner, observer]) await hudClick(page, '#leave');
   await app.close();
   app = await createGameServer({ port, accounts: fixture, itemCreationEnabled: false });
   fixture.config.publicOrigin = app.url;

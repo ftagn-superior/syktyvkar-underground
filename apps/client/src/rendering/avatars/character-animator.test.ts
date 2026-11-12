@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CharacterAnimator, type AvatarMotion } from './character-animator';
 import { ANIMATION_CLIPS } from './animation-clips';
-import type { AnimationId } from '@su/contracts';
+import { ANIMATIONS, type AnimationId } from '@su/contracts';
+import { restingPose, type AvatarPose } from './locomotion';
 
 function frame(): AvatarMotion {
   return {
@@ -40,20 +41,49 @@ describe('character animation from displayed motion', () => {
     displayTick: tick,
   });
 
-  it.each(['wave', 'clap'] as const)('keeps unmasked locomotion under %s', (id) => {
-    const base = new CharacterAnimator(4, 14),
-      selected = new CharacterAnimator(4, 14);
-    const input = frame();
-    input.velocity.z = 4;
-    advance(base, input, 1);
-    const other = frame();
-    other.velocity.z = 4;
-    other.animation = playback(id);
-    advance(selected, other, 1);
-    expect(selected.pose.leftLeg).toBeCloseTo(base.pose.leftLeg);
-    expect(selected.pose.rightLeg).toBeCloseTo(base.pose.rightLeg);
-    if (id === 'wave') expect(selected.pose.leftArm).toBeCloseTo(base.pose.leftArm);
-    expect(selected.pose.rightArmRoll).not.toBeCloseTo(base.pose.rightArmRoll);
+  it.each(ANIMATIONS.filter((entry) => entry.mode === 'upperBody').map((entry) => entry.id))(
+    'keeps unmasked locomotion under %s',
+    (id) => {
+      const base = new CharacterAnimator(4, 14),
+        selected = new CharacterAnimator(4, 14);
+      const input = frame();
+      input.velocity.z = 4;
+      advance(base, input, 1);
+      const other = frame();
+      other.velocity.z = 4;
+      other.animation = playback(id);
+      advance(selected, other, 1);
+      const mask: readonly (keyof AvatarPose)[] = ANIMATION_CLIPS[id].mask;
+      for (const joint of Object.keys(base.pose) as (keyof AvatarPose)[])
+        if (!mask.includes(joint)) expect(selected.pose[joint]).toBeCloseTo(base.pose[joint]);
+      expect(mask.some((joint) => Math.abs(selected.pose[joint] - base.pose[joint]) > 0.05)).toBe(
+        true,
+      );
+    },
+  );
+  it.each(ANIMATIONS)('samples finite, bounded joint poses for $id within its mask', (entry) => {
+    const clip = ANIMATION_CLIPS[entry.id];
+    expect(clip.rig).toBe(entry.rig);
+    expect(clip.mask).not.toContain('facingOffset');
+    for (const reduced of [false, true]) {
+      for (let ms = 0; ms < 6400; ms += 80) {
+        const pose = restingPose();
+        // Every masked channel must be written even when another clip played before it.
+        for (const joint of clip.mask) pose[joint] = NaN;
+        clip.sample(pose, ms, reduced);
+        for (const joint of Object.keys(pose) as (keyof AvatarPose)[]) {
+          expect(Number.isFinite(pose[joint])).toBe(true);
+          expect(Math.abs(pose[joint])).toBeLessThanOrEqual(joint === 'lift' ? 0.1 : Math.PI);
+          if (!clip.mask.includes(joint)) expect(pose[joint]).toBe(restingPose()[joint]);
+        }
+        if (reduced) {
+          const normal = restingPose();
+          clip.sample(normal, ms, false);
+          for (const joint of ['lean', 'roll', 'lift'] as const)
+            expect(Math.abs(pose[joint])).toBeLessThanOrEqual(Math.abs(normal[joint]));
+        }
+      }
+    }
   });
   it('uses absolute phase at all frame rates, survives motion resets, and expires without a patch', () => {
     const poses = [30, 60, 120].map((fps) => {
@@ -78,7 +108,7 @@ describe('character animation from displayed motion', () => {
     expect(poses[0]).toEqual(poses[1]);
     expect(poses[1]).toEqual(poses[2]);
   });
-  it.each(['wave', 'clap', 'dance'] as const)(
+  it.each(ANIMATIONS.map((entry) => entry.id))(
     'cycles %s indefinitely until a movement deadline, with falling priority',
     (id) => {
       const animator = new CharacterAnimator(4, 14),

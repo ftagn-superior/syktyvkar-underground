@@ -6,6 +6,7 @@ import { connect, type Socket } from 'node:net';
 import { createGameServer } from './helpers/game-server.js';
 import { build } from 'esbuild';
 import type { WorldManifest } from '../packages/contracts/src/index.js';
+import { hudClick } from './helpers/hud.js';
 
 // This proxy can corrupt a real immutable response while preserving its cache headers.
 // Browser routing disables HTTP caching, so route.fulfill cannot cover this regression.
@@ -130,13 +131,13 @@ try {
     'static preview replaces corrupt cached bytes with one verified network reload',
   );
   assert.equal(matchmakingRequests, 0, 'the header alone cannot reserve a guest seat');
-  assert.equal(await page.locator('#join-label').textContent(), 'Войти');
+  assert.equal(await page.locator('#join-label').textContent(), 'Войти в мир');
   await page.locator('#join').click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
   );
   assert.equal(assetRequests, 2, 'cached corruption is replaced by one network reload');
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().connection === 'ready');
   await context.close();
 

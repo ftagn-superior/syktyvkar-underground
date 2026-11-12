@@ -11,6 +11,9 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
@@ -37,6 +40,7 @@ import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 
 type EntityView = {
   root: TransformNode;
@@ -74,6 +78,7 @@ export class WorldView {
   private readonly camera: ArcRotateCamera;
   private readonly sun: DirectionalLight;
   private readonly shadow: ShadowGenerator;
+  private pipeline?: DefaultRenderingPipeline;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
   private manifest?: WorldManifest;
@@ -97,6 +102,7 @@ export class WorldView {
   private readonly cameraOrbit = new CameraOrbit();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
+  private ring?: { mesh: Mesh; material: StandardMaterial; target?: string };
   private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
   private readonly target = Vector3.Zero();
   private readonly projection = Matrix.Identity();
@@ -156,24 +162,31 @@ export class WorldView {
     this.camera.maxZ = 300;
     this.camera.inputs.clear();
     this.sizeCamera();
+    // Вечернее освещение: низкое тёплое солнце, холодное небо в тенях, отражённый тёплый свет от земли.
     const sky = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
-    sky.intensity = 0.86;
-    sky.diffuse = Color3.FromHexString('#c7e0e9');
-    sky.groundColor = Color3.FromHexString('#27333f');
-    const sun = new DirectionalLight('sun', new Vector3(-0.6, -1, -0.35), this.scene);
+    sky.intensity = 0.85;
+    sky.diffuse = Color3.FromHexString('#bcd4f0');
+    sky.groundColor = Color3.FromHexString('#8a7058');
+    sky.specular = Color3.Black();
+    // Высота солнца около 32°: длинные мягкие тени, фасады с разной освещённостью сторон.
+    const sun = new DirectionalLight('sun', new Vector3(-1.1, -0.8, -0.65), this.scene);
     sun.position.set(20, 35, 15);
-    sun.intensity = 1.25;
-    sun.diffuse = Color3.FromHexString('#fff2da');
+    sun.intensity = 2.4;
+    sun.diffuse = Color3.FromHexString('#ffd9a0');
     // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
     sun.shadowFrustumSize = SHADOW_EXTENT;
     sun.shadowMinZ = 0;
     sun.shadowMaxZ = SUN_DISTANCE * 2;
     this.sun = sun;
     this.sizeCamera();
-    this.shadow = new ShadowGenerator(1024, sun);
-    this.shadow.useBlurExponentialShadowMap = true;
-    this.shadow.blurKernel = 16;
-    this.shadow.setDarkness(0.25);
+    this.shadow = new ShadowGenerator(2048, sun);
+    // PCF даёт чёткий край у основания и мягкий на расстоянии, в отличие от размытой ESM.
+    this.shadow.usePercentageCloserFiltering = true;
+    this.shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+    this.shadow.bias = 0.0012;
+    this.shadow.normalBias = 0.08;
+    this.shadow.setDarkness(0.3);
+    this.applyQuality();
     this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
     this.statics = new StaticViews(this.scene, this.shadow);
     if ('entities' in definition) {
@@ -263,6 +276,38 @@ export class WorldView {
     this.scene.shadowsEnabled = settings.shadows;
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
+    this.updatePipeline(settings.postProcessing);
+  }
+  /** Тональная компрессия, лёгкое свечение и MSAA; в режиме экономии отключены целиком. */
+  private updatePipeline(enabled: boolean): void {
+    if (!this.camera) return;
+    if (!enabled) {
+      this.pipeline?.dispose();
+      this.pipeline = undefined;
+      return;
+    }
+    if (this.pipeline) return;
+    const pipeline = new DefaultRenderingPipeline('lighting', true, this.scene, [this.camera]);
+    pipeline.samples = 4;
+    pipeline.fxaaEnabled = false;
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.95;
+    pipeline.bloomWeight = 0.15;
+    pipeline.bloomKernel = 48;
+    pipeline.bloomScale = 0.5;
+    const ip = pipeline.imageProcessing;
+    ip.toneMappingEnabled = true;
+    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    ip.exposure = 1.55;
+    ip.contrast = 1.12;
+    ip.colorCurvesEnabled = true;
+    ip.colorCurves = new ColorCurves();
+    ip.colorCurves.globalSaturation = 25;
+    ip.vignetteEnabled = true;
+    ip.vignetteWeight = 0.9;
+    ip.vignetteStretch = 0.2;
+    ip.vignetteColor = new Color4(0.12, 0.08, 0.05, 0);
+    this.pipeline = pipeline;
   }
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
@@ -491,6 +536,7 @@ export class WorldView {
   }
   update(entities: DisplayEntity[], ownId: string | undefined, delta: number): void {
     this.ownPosition = undefined;
+    this.updateRing();
     const current = new Set(entities.map((entity) => entity.entityId));
     for (const [id, view] of this.entities)
       if (!current.has(id)) {
@@ -517,10 +563,27 @@ export class WorldView {
         .normalize();
       if (view.label) {
         view.label.classList.toggle('own', entity.entityId === ownId);
-        const text = `${entity.name ?? 'Гость'}${entity.entityId === ownId ? ' · Вы' : ''}${entity.connected === false ? ' · нет связи' : ''}`;
-        if (text !== view.labelText) {
-          view.label.textContent = text;
-          view.labelText = text;
+        const own = entity.entityId === ownId;
+        const name = entity.name ?? 'Гость';
+        const offline = entity.connected === false;
+        const key = `${name}|${own}|${offline}|${entity.color ?? ''}`;
+        if (key !== view.labelText) {
+          // Each tag carries the player's own colour as its gem; own tag adds "· Вы".
+          const gem = document.createElement('span');
+          gem.className = 'su-gem sm';
+          if (entity.color) gem.style.setProperty('--gem', entity.color);
+          const text = document.createElement('span');
+          text.textContent = name;
+          const suffixes = [...(own ? ['· Вы'] : []), ...(offline ? ['· нет связи'] : [])].map(
+            (suffix) => {
+              const node = document.createElement('span');
+              node.className = 'you';
+              node.textContent = suffix;
+              return node;
+            },
+          );
+          view.label.replaceChildren(gem, text, ...suffixes);
+          view.labelText = key;
         }
       }
       if (entity.kind === 'player')
@@ -688,6 +751,81 @@ export class WorldView {
     material.alpha = 0.45;
     material.diffuseColor = Color3.FromHexString(valid ? '#65d6bc' : '#ed7272');
     material.emissiveColor = material.diffuseColor.scale(0.3);
+  }
+  /** Projects a world point to CSS pixels of the canvas. `visible` is false behind the camera or off-screen. */
+  project(position: Vec3, out: { x: number; y: number; visible: boolean }): void {
+    const width = this.engine.getRenderWidth(true);
+    const height = this.engine.getRenderHeight(true);
+    const viewport = this.camera.viewport.toGlobal(width, height);
+    this.labelPosition.set(position.x, position.y, position.z);
+    Vector3.ProjectToRef(
+      this.labelPosition,
+      this.projection,
+      this.scene.getTransformMatrix(),
+      viewport,
+      this.projectedLabel,
+    );
+    const cssWidth = this.canvas.clientWidth;
+    const cssHeight = this.canvas.clientHeight;
+    out.x = (this.projectedLabel.x * cssWidth) / width;
+    out.y = (this.projectedLabel.y * cssHeight) / height;
+    out.visible =
+      this.projectedLabel.z >= 0 &&
+      this.projectedLabel.z <= 1 &&
+      out.x >= 0 &&
+      out.x <= cssWidth &&
+      out.y >= 0 &&
+      out.y <= cssHeight;
+  }
+  /** Pulsing hexagon decal on the ground under an interactable item; pass undefined to clear. */
+  setItemRing(entityId: string | undefined, hex = '#6ee0c4'): void {
+    if (!entityId) {
+      if (this.ring) {
+        this.ring.target = undefined;
+        this.ring.mesh.setEnabled(false);
+      }
+      return;
+    }
+    if (!this.ring) {
+      const mesh = MeshBuilder.CreateDisc('item-ring', { radius: 1, tessellation: 6 }, this.scene);
+      mesh.rotation.x = Math.PI / 2;
+      mesh.isPickable = false;
+      const material = new StandardMaterial('item-ring', this.scene);
+      material.disableLighting = true;
+      material.backFaceCulling = false;
+      mesh.material = material;
+      this.ring = { mesh, material };
+    }
+    this.ring.target = entityId;
+    this.ring.material.emissiveColor = Color3.FromHexString(hex);
+    this.ring.mesh.setEnabled(true);
+  }
+  private updateRing(): void {
+    const ring = this.ring;
+    if (!ring?.target) return;
+    const bounds = this.itemBounds(ring.target);
+    if (!bounds) return ring.mesh.setEnabled(false);
+    const radius = 0.55 + Math.max(0, bounds.top - bounds.bottom) * 0.6;
+    ring.mesh.position.set(bounds.x, bounds.bottom + 0.04, bounds.z);
+    ring.mesh.scaling.setAll(radius);
+    ring.mesh.setEnabled(true);
+    ring.material.alpha = this.reducedMotion.matches
+      ? 0.5
+      : 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(performance.now() / 255));
+  }
+  /** World-space extent of a replicated item, used to anchor prompts and ground rings. */
+  itemBounds(entityId: string): { x: number; z: number; top: number; bottom: number } | undefined {
+    const view = this.entities.get(entityId);
+    if (!view) return;
+    let top = -Infinity;
+    let bottom = Infinity;
+    for (const mesh of view.root.getChildMeshes()) {
+      const box = mesh.getBoundingInfo().boundingBox;
+      top = Math.max(top, box.maximumWorld.y);
+      bottom = Math.min(bottom, box.minimumWorld.y);
+    }
+    if (!Number.isFinite(top)) return;
+    return { x: view.root.position.x, z: view.root.position.z, top, bottom };
   }
   private positionLabels(): void {
     const width = this.engine.getRenderWidth(true);

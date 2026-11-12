@@ -2,6 +2,7 @@ import { launchTestBrowser } from './helpers/browser.js';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
+import { hudClick } from './helpers/hud.js';
 
 const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
 // Headless shell treats every tab as focused; full Chromium provides native tab activation.
@@ -123,7 +124,7 @@ try {
 
   const revision = (await snapshot(page)).authoritative.revision;
   const respawnAt = Date.now();
-  await page.locator('#respawn').click();
+  await hudClick(page, '#respawn');
   await page.waitForFunction(
     () => (document.querySelector('#respawn') as HTMLButtonElement).disabled,
   );
@@ -147,7 +148,7 @@ try {
   assert.ok(Date.now() - respawnAt >= 2800, 'cooldown covers the server interval');
   checks.push('respawn confirms once, displays cooldown, and becomes available again');
 
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   const standard = await report(page);
   await page.locator('#quality').selectOption('economy');
   await page.waitForFunction(
@@ -161,7 +162,7 @@ try {
   await playing(page);
   assert.equal((await snapshot(page)).authoritative.entityId, identity);
   assert.equal((await report(page)).rendering.quality, 'economy');
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   assert.equal(await page.locator('#quality').inputValue(), 'economy');
   const [download] = await Promise.all([
     page.waitForEvent('download'),
@@ -196,16 +197,16 @@ try {
   checks.push(
     'economy changes render settings, survives reload, and exports a bounded diagnostic report',
   );
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
 
   await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle']);
   await page.screenshot({ path: 'output/playwright/polish/playing-1280x600.png' });
   await page.setViewportSize({ width: 640, height: 300 });
   await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle']);
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   await reachable(page, ['#quality', '#download-report']);
   await page.screenshot({ path: 'output/playwright/polish/diagnostics-640x300.png' });
-  await page.locator('#diagnostics-toggle').click();
+  await hudClick(page, '#diagnostics-toggle');
   await page.setViewportSize({ width: 1280, height: 600 });
   checks.push(
     'playing controls and diagnostics remain reachable in 1280×600 and 640×300 viewports',
@@ -242,7 +243,7 @@ try {
     'graphics recovery persists beyond seven seconds, blocks held input, and restores the same character',
   );
 
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await page.setViewportSize({ width: 640, height: 300 });
   await reachable(page, ['#join']);
   await page.screenshot({ path: 'output/playwright/polish/welcome-640x300.png' });

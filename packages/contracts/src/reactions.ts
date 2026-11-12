@@ -13,6 +13,21 @@ export const REACTIONS: readonly ReactionDefinition[] = [
   { id: 'laugh', label: 'Смешно', category: 'Эмоции', asset: 'laugh.svg' },
   { id: 'love', label: 'Любовь', category: 'Эмоции', asset: 'love.svg' },
   { id: 'question', label: 'Вопрос', category: 'Общение', asset: 'question.svg' },
+  { id: 'work', label: 'Работаю', category: 'Занятия', asset: 'work.svg' },
+  { id: 'sleep', label: 'Сплюс', category: 'Занятия', asset: 'sleep.svg' },
+  { id: 'eat', label: 'Кушаю', category: 'Занятия', asset: 'eat.svg' },
+  { id: 'coffee', label: 'Кофе', category: 'Занятия', asset: 'coffee.svg' },
+  { id: 'away', label: 'Отошёл', category: 'Статус', asset: 'away.svg' },
+  { id: 'busy', label: 'Занят', category: 'Статус', asset: 'busy.svg' },
+  { id: 'music', label: 'Музыка', category: 'Занятия', asset: 'music.svg' },
+  { id: 'game', label: 'Играю', category: 'Занятия', asset: 'game.svg' },
+  { id: 'read', label: 'Читаю', category: 'Занятия', asset: 'read.svg' },
+  { id: 'think', label: 'Думаю', category: 'Эмоции', asset: 'think.svg' },
+  { id: 'sad', label: 'Грущу', category: 'Эмоции', asset: 'sad.svg' },
+  { id: 'angry', label: 'Злюсь', category: 'Эмоции', asset: 'angry.svg' },
+  { id: 'surprise', label: 'Ого!', category: 'Эмоции', asset: 'surprise.svg' },
+  { id: 'celebrate', label: 'Ура!', category: 'Эмоции', asset: 'celebrate.svg' },
+  { id: 'thanks', label: 'Спасибо', category: 'Общение', asset: 'thanks.svg' },
 ];
 
 const byId = new Map(REACTIONS.map((reaction) => [reaction.id, reaction]));

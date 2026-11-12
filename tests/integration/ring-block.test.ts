@@ -13,8 +13,15 @@ import { buildWorld } from '../../tools/world-build/src/index.js';
 import {
   clampOutOfIsland,
   replacedByRoundabout,
+  roundaboutApproaches,
+  roundaboutCrosswalks,
+  roundaboutCurbPatches,
+  roundaboutFillets,
   roundaboutIslands,
+  roundaboutTracedLines,
   roundaboutMarkings,
+  smoothTrace,
+  tracedGeometry,
   validateRoundabout,
   type RoundaboutConfig,
 } from '../../tools/world-build/src/roundabout.js';
@@ -499,6 +506,359 @@ describe('кольцевая развязка', () => {
     expect(triangulate(islands[0]).coverage).toBeCloseTo(1, 9);
   });
 
+  it('скругление касается края подъезда и кольца и лежит снаружи проезжей части', () => {
+    const arm = { ...config.arms[0], fillet: { left: 20, right: 20 } };
+    const fillets = roundaboutFillets({ ...config, arms: [arm] });
+    expect(fillets).toHaveLength(2);
+    for (const polygon of fillets) {
+      // Край подъезда x = ±9, внешний радиус кольца 42: асфальт скругления не заходит ни в подъезд, ни в кольцо.
+      for (const p of polygon) {
+        expect(Math.abs(p[0])).toBeGreaterThanOrEqual(9 - 1e-6);
+        expect(radius(p)).toBeGreaterThanOrEqual(42 - 1e-6);
+      }
+      expect(triangulate(polygon).coverage).toBeCloseTo(1, 6);
+    }
+    // Без поля fillet край дороги не трогается; слишком маленькая дуга, не достающая до кольца, останавливает сборку.
+    expect(roundaboutFillets(config)).toHaveLength(0);
+    expect(() =>
+      roundaboutFillets({ ...config, arms: [{ ...arm, at: [200, -80], fillet: { left: 1 } }] }),
+    ).toThrow(/fillet/);
+  });
+
+  it('линии между полосами можно задать радиусами', () => {
+    const marks = roundaboutMarkings({ ...config, lines: [35.5], arms: [] });
+    const radii = marks.map((m) => radius(m[0]));
+    expect(marks.length).toBe(Math.round((2 * Math.PI * 35.5) / 9));
+    for (const r of radii) expect(Math.abs(r - 35.5)).toBeLessThan(0.2);
+    expect(() => validateRoundabout({ ...config, lines: [50] })).toThrow(/lane lines/);
+  });
+
+  it('«зебра» ложится полосами вдоль движения поперёк отрезка', () => {
+    const stripes = roundaboutCrosswalks({
+      ...config,
+      crosswalks: [{ from: [60, -6], to: [60, 6] }],
+    });
+    // Отрезок идёт по оси z, значит полосы вытянуты по x (3 м) и стоят с шагом около 1,1 м.
+    expect(stripes.length).toBe(Math.floor(12 / 1.1));
+    for (const stripe of stripes) {
+      const xs = stripe.map((p) => p[0]);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(3, 9);
+      expect(triangulate(stripe).coverage).toBeCloseTo(1, 9);
+    }
+    const zs = stripes.map((s) => s.reduce((sum, p) => sum + p[1], 0) / 4);
+    expect(Math.min(...zs)).toBeGreaterThan(-6);
+    expect(Math.max(...zs)).toBeLessThan(6);
+    expect(roundaboutCrosswalks(config)).toHaveLength(0);
+    expect(() =>
+      roundaboutCrosswalks({ ...config, crosswalks: [{ from: [0, 0], to: [1, 0] }] }),
+    ).toThrow(/crosswalk/);
+  });
+
+  describe('трассировка по снимку', () => {
+    // Северный подъезд (ось x = 0): края x = ±13, островок шире расчётного, «зебра» поперёк подъезда.
+    const traced = tracedGeometry({
+      traces: [
+        {
+          name: 'north:edge-east',
+          points: [
+            [13, -90],
+            [14, -60],
+            [45, -45],
+            [90, -20],
+          ],
+        },
+        {
+          name: 'north:island',
+          points: [
+            [-6, -70],
+            [0, -45],
+            [6, -70],
+          ],
+        },
+        {
+          name: 'north:crosswalk',
+          points: [
+            [-13, -80],
+            [13, -80],
+            [13, -84],
+          ],
+        },
+        {
+          name: 'ring:lane-dashed',
+          points: [
+            [0, 0],
+            [1, 1],
+          ],
+        },
+      ],
+    });
+    const withTrace: RoundaboutConfig = { ...config, traced };
+
+    it('разбирает края, островки и «зебры», остальные трассы пропускает', () => {
+      expect(traced.curbs).toHaveLength(1);
+      expect(traced.islands).toHaveLength(1);
+      expect(traced.islands[0].arm).toBe('north');
+      expect(traced.crosswalks).toHaveLength(1);
+      expect(() =>
+        tracedGeometry({
+          traces: [
+            {
+              name: 'north:island',
+              points: [
+                [0, 0],
+                [1, 1],
+              ],
+            },
+          ],
+        }),
+      ).toThrow(/at least 3/);
+    });
+
+    it('обведённый островок заменяет расчётный треугольник', () => {
+      const islands = roundaboutIslands(withTrace);
+      expect(islands).toHaveLength(1);
+      expect(islands[0].map((p) => p[0])).toContain(-6);
+      // Запас для очистки разметки раздвигает контур во все стороны.
+      const grown = roundaboutIslands(withTrace, 1)[0];
+      expect(Math.min(...grown.map((p) => p[0]))).toBeLessThan(-6);
+      // Островок без трассы остаётся расчётным: у восточного подъезда его нет совсем.
+      expect(roundaboutIslands({ ...withTrace, traced: { ...traced, islands: [] } })).toHaveLength(
+        1,
+      );
+    });
+
+    it('продолжение подъезда держит реальную ширину, затем сужается до прежней', () => {
+      const both = tracedGeometry({
+        traces: [
+          {
+            name: 'a:edge-east',
+            points: [
+              [13, -90],
+              [45, -45],
+              [90, -20],
+            ],
+          },
+          {
+            name: 'a:edge-west',
+            points: [
+              [-13, -90],
+              [-45, -45],
+              [-90, 0],
+            ],
+          },
+        ],
+      });
+      const arms = [{ ...config.arms[0], approach: { length: 20, taper: 30 } }, config.arms[1]];
+      const [straight, taper] = roundaboutApproaches({ ...config, arms, traced: both });
+      // Прямой участок: ширина обводки 26 м на 20 м длины; сужение — до ширины подъезда 18 м.
+      expect(Math.min(...straight.map((p) => p[0]))).toBeCloseTo(-13, 9);
+      expect(Math.min(...straight.map((p) => p[1]))).toBeCloseTo(-110, 9);
+      expect(Math.min(...taper.map((p) => p[1]))).toBeCloseTo(-140, 9);
+      const far = taper.filter((p) => p[1] < -139);
+      expect(far.map((p) => Math.abs(p[0])).sort()).toEqual([9, 9]);
+      // Подъезд без поля approach не трогается.
+      expect(roundaboutApproaches({ ...config, traced: both })).toHaveLength(0);
+      for (const shape of [straight, taper]) expect(triangulate(shape).coverage).toBeCloseTo(1, 9);
+    });
+
+    it('сглаживание сохраняет концы ломаной и замкнутый контур остаётся замкнутым', () => {
+      const line: Point2[] = [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+      ];
+      const smooth = smoothTrace(line, 2);
+      expect(smooth[0]).toEqual([0, 0]);
+      expect(smooth[smooth.length - 1]).toEqual([10, 10]);
+      expect(smooth.length).toBeGreaterThan(line.length);
+      // Угол срезан: ни одна точка не лежит в самом углу (10, 0).
+      expect(smooth.some((p) => p[0] === 10 && p[1] === 0)).toBe(false);
+      const ring = smoothTrace(line, 1, true);
+      expect(ring.length).toBe(6);
+    });
+
+    it('замкнутая повторной точкой обводка островка теряет дубль', () => {
+      const repeated = tracedGeometry({
+        traces: [
+          {
+            name: 'x:island',
+            points: [
+              [0, 0],
+              [10, 0],
+              [5, 8],
+              [0.2, 0.1],
+            ],
+          },
+        ],
+      });
+      expect(repeated.islands[0].ring).toHaveLength(3);
+    });
+
+    it('линии разметки: прерывистая 3 + 6 м, сплошная и двойная', () => {
+      const lines = tracedGeometry({
+        traces: [
+          {
+            name: 'north:lane-dashed',
+            points: [
+              [0, 0],
+              [0, -20],
+            ],
+          },
+          {
+            name: 'north:lane-line',
+            points: [
+              [2, 0],
+              [2, -20],
+            ],
+          },
+          {
+            name: 'north:lane-solid',
+            points: [
+              [4, 0],
+              [4, -20],
+            ],
+          },
+          {
+            name: 'north:lane-double',
+            points: [
+              [6, 0],
+              [6, -20],
+            ],
+          },
+          {
+            name: 'ring:lane-dashed',
+            points: [
+              [8, 0],
+              [8, -20],
+            ],
+          },
+        ],
+      });
+      // Подпись «ring» обслуживает окружность кольца из `lines`, а не трасса.
+      expect(lines.lines.map((l) => l.style)).toEqual(['dashed', 'dashed', 'solid', 'double']);
+      const marks = (index: number) =>
+        roundaboutTracedLines({ ...config, traced: { ...lines, lines: [lines.lines[index]] } });
+      const dashes = marks(0);
+      expect(dashes).toHaveLength(3);
+      const span = (ring: Point2[]) =>
+        Math.max(...ring.map((p) => p[1])) - Math.min(...ring.map((p) => p[1]));
+      expect(span(dashes[0])).toBeCloseTo(3, 9);
+      expect(Math.min(...dashes[1].map((p) => p[1]))).toBeCloseTo(-12, 9);
+      expect(marks(2)).toHaveLength(1);
+      expect(span(marks(2)[0])).toBeCloseTo(20, 9);
+      expect(marks(3)).toHaveLength(2);
+      for (const ring of [...dashes, ...marks(2), ...marks(3)])
+        expect(triangulate(ring).coverage).toBeCloseTo(1, 9);
+    });
+
+    it('разметка OSM внутри обведённой дороги и рядом с обведённой «зеброй» заменяется', () => {
+      const both = tracedGeometry({
+        traces: [
+          {
+            name: 'a:edge-east',
+            points: [
+              [13, -90],
+              [45, -45],
+              [90, -20],
+            ],
+          },
+          {
+            name: 'a:edge-west',
+            points: [
+              [-13, -90],
+              [-45, -45],
+              [-90, 0],
+            ],
+          },
+          {
+            name: 'a:crosswalk',
+            points: [
+              [-13, -80],
+              [13, -80],
+              [13, -84],
+            ],
+          },
+        ],
+      });
+      const cfg: RoundaboutConfig = { ...config, traced: both };
+      const dash = (x: number, z: number): Point2[] => [
+        [x - 0.1, z - 1],
+        [x + 0.1, z - 1],
+        [x + 0.1, z + 1],
+        [x - 0.1, z + 1],
+      ];
+      // Между обведёнными краями и у «зебры» OSM-линии лишние; дальше по подъезду остаются.
+      expect(replacedByRoundabout(dash(0, -60), cfg)).toBe(true);
+      expect(replacedByRoundabout(dash(0, -86), cfg)).toBe(true);
+      expect(replacedByRoundabout(dash(0, -140), cfg)).toBe(false);
+      expect(replacedByRoundabout(dash(0, -140), config)).toBe(false);
+    });
+
+    it('островок относится к подъезду по месту, а не по имени трассы', () => {
+      // Подпись «east» неверна: контур лежит у северного подъезда, значит заменит его треугольник.
+      const mislabeled: RoundaboutConfig = {
+        ...config,
+        traced: { ...traced, islands: [{ arm: 'east', ring: traced.islands[0].ring }] },
+      };
+      const islands = roundaboutIslands(mislabeled);
+      expect(islands).toHaveLength(1);
+      expect(islands[0].map((p) => p[0])).toContain(-6);
+    });
+
+    it('«зебра» не зависит от того, с какой стороны начата обводка', () => {
+      const longFirst = roundaboutCrosswalks({
+        ...config,
+        traced: {
+          ...traced,
+          crosswalks: [
+            [
+              [-13, -80],
+              [13, -80],
+              [13, -84],
+            ],
+          ],
+        },
+      });
+      const shortFirst = roundaboutCrosswalks({
+        ...config,
+        traced: {
+          ...traced,
+          crosswalks: [
+            [
+              [-13, -84],
+              [-13, -80],
+              [13, -80],
+            ],
+          ],
+        },
+      });
+      expect(shortFirst.length).toBe(longFirst.length);
+      const xs = shortFirst.map((s) => s.reduce((sum, p) => sum + p[0], 0) / 4);
+      expect(Math.min(...xs)).toBeLessThan(-12);
+      expect(Math.max(...xs)).toBeGreaterThan(12);
+    });
+
+    it('участок края замыкается по осям подъездов и дугой по острову', () => {
+      const [patch] = roundaboutCurbPatches(withTrace);
+      expect(triangulate(patch).coverage).toBeCloseTo(1, 6);
+      // Край идёт снаружи дороги, а замыкающая дуга лежит на внутреннем радиусе острова кольца.
+      const arc = patch.filter((p) => Math.abs(radius(p) - 30) < 1e-6);
+      expect(arc.length).toBeGreaterThan(5);
+      // Начало края (x = 13, ось север) замыкается на оси x = 0, а не на соседнем подъезде.
+      expect(patch.some((p) => Math.abs(p[0]) < 1e-6 && p[1] < -80)).toBe(true);
+    });
+
+    it('«зебра» по снимку: полосы поперёк подъезда, под островком пропуска полос', () => {
+      const stripes = roundaboutCrosswalks(withTrace);
+      expect(stripes.length).toBeGreaterThan(15);
+      for (const stripe of stripes) expect(triangulate(stripe).coverage).toBeCloseTo(1, 9);
+      // Островок лежит дальше от кольца, чем «зебра» (z < −45 … −70, зебра на z = −82): полосы не пропадают.
+      const centres = stripes.map((s) => s.reduce((sum, p) => sum + p[0], 0) / 4);
+      expect(Math.min(...centres)).toBeLessThan(-12);
+      expect(Math.max(...centres)).toBeGreaterThan(12);
+    });
+  });
+
   it('разметка: штрихи по всему кругу и «зубы» справа по ходу въезда', () => {
     const marks = roundaboutMarkings(config);
     const centroid = (ring: Point2[]): Point2 => [
@@ -591,7 +951,7 @@ describe('мир ring-block', () => {
       await readFile('content/buildings/ring-block/ring-block-ground/source.json', 'utf8'),
     ) as { layers: { id: string; elevation: number; polygons: unknown[] }[] };
     const groundLayer = (id: string) => ground.layers.find((l) => l.id === id)!;
-    expect(groundLayer('islands').polygons).toHaveLength(3);
+    expect(groundLayer('islands').polygons).toHaveLength(4);
     expect(groundLayer('islands').elevation).toBeGreaterThan(groundLayer('road').elevation);
     expect(groundLayer('islands').elevation).toBeLessThan(groundLayer('markings').elevation);
     // Памятник из manual/ стоит в центре кольца и имеет собственные столкновения.

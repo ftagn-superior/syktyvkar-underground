@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "version": "2",
   "types": {
     "wooden-crate": {
       "typeId": "wooden-crate",
@@ -15,6 +15,54 @@
       "friction": 0.6,
       "restitution": 0.05,
       "color": "#d6a15a",
+      "maxStack": 10
+    },
+    "confidence-monument": {
+      "typeId": "confidence-monument",
+      "name": "Памятник уверенности · 4 м",
+      "icon": "🗿",
+      "model": "monument",
+      "size": { "x": 1.8, "y": 4, "z": 1.2 },
+      "mass": 65,
+      "friction": 0.7,
+      "restitution": 0.03,
+      "color": "#17191e",
+      "maxStack": 1
+    },
+    "giant-soap": {
+      "typeId": "giant-soap",
+      "name": "Гигантское мыло",
+      "icon": "🧼",
+      "model": "soap",
+      "size": { "x": 1.6, "y": 0.45, "z": 0.9 },
+      "mass": 4,
+      "friction": 0.01,
+      "restitution": 0.05,
+      "color": "#ee8fb5",
+      "maxStack": 10
+    },
+    "giant-domino": {
+      "typeId": "giant-domino",
+      "name": "Домино ростом с человека",
+      "icon": "🁣",
+      "model": "domino",
+      "size": { "x": 1, "y": 2, "z": 0.3 },
+      "mass": 8,
+      "friction": 0.65,
+      "restitution": 0.05,
+      "color": "#f4eedc",
+      "maxStack": 20
+    },
+    "watermelon-ball": {
+      "typeId": "watermelon-ball",
+      "name": "Мяч-арбуз",
+      "icon": "🍉",
+      "model": "watermelon",
+      "size": { "x": 1.2, "y": 1.2, "z": 1.2 },
+      "mass": 2,
+      "friction": 0.35,
+      "restitution": 0.75,
+      "color": "#58a447",
       "maxStack": 10
     }
   }

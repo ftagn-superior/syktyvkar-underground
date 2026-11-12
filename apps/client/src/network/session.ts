@@ -37,6 +37,7 @@ import {
   NEUTRAL_INPUT,
   WORLD_FORMAT_VERSION,
   canonicalJson,
+  itemSupportDistance,
   loadWorldBundle,
   simulationProjection,
   validateWorldManifest,
@@ -808,24 +809,12 @@ export class GameSession {
   ): { pose?: ItemPose; error?: ItemError } {
     const hit = this.physics?.surfaceRay(from, to);
     if (!hit) return { error: 'NO_SUPPORT' };
-    const size = this.definition.itemCatalog.types[typeId].size;
-    // Projection of the rotated box half extents onto the support normal.
-    const { x, y, z, w } = rotation,
-      n = hit.normal;
-    const radius =
-      (Math.abs(
-        n.x * (1 - 2 * (y * y + z * z)) + n.y * 2 * (x * y + w * z) + n.z * 2 * (x * z - w * y),
-      ) *
-        size.x +
-        Math.abs(
-          n.x * 2 * (x * y - w * z) + n.y * (1 - 2 * (x * x + z * z)) + n.z * 2 * (y * z + w * x),
-        ) *
-          size.y +
-        Math.abs(
-          n.x * 2 * (x * z + w * y) + n.y * 2 * (y * z - w * x) + n.z * (1 - 2 * (x * x + y * y)),
-        ) *
-          size.z) /
-      2;
+    const n = hit.normal;
+    const radius = itemSupportDistance(this.definition.itemCatalog.types[typeId], rotation, {
+      x: -n.x,
+      y: -n.y,
+      z: -n.z,
+    });
     const pose = {
       position: {
         x: hit.point.x + n.x * (radius + 0.015),

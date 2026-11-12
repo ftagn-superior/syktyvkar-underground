@@ -25,10 +25,14 @@ import { ProximityCastResult } from '@babylonjs/core/Physics/proximityCastResult
 import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
+import { createItemShape } from './item-shapes.js';
 import {
   NEUTRAL_INPUT,
   ITEM_REACH,
   initialItemState,
+  itemShapeParts,
+  itemSupportDistance,
+  type ItemType,
   type ItemState,
   type ItemPose,
   type ItemError,
@@ -124,7 +128,8 @@ export class PhysicsWorld {
     );
     this.buildings = new BuildingColliders(this.scene);
     try {
-      for (const item of definition.entities) this.objects.set(item.entityId, this.createBox(item));
+      for (const item of definition.entities)
+        this.objects.set(item.entityId, this.createBody(item));
       for (const seed of definition.initialItems) this.addItem(initialItemState(seed));
       for (const instance of definition.buildings) {
         const asset = definition.buildingAssets[instance.assetId];
@@ -136,8 +141,9 @@ export class PhysicsWorld {
       throw error;
     }
   }
-  createBox(
+  private createBody(
     definition: Omit<EntityDefinition, 'kind'> & { kind: 'obstacle' | 'item' },
+    itemType?: ItemType,
   ): BodyRecord {
     const node = new TransformNode(definition.entityId, this.scene);
     node.position.copyFrom(vector(definition.position));
@@ -153,12 +159,14 @@ export class PhysicsWorld {
       false,
       this.scene,
     );
-    const shape = new PhysicsShapeBox(
-      Vector3.Zero(),
-      Quaternion.Identity(),
-      vector(definition.size),
-      this.scene,
-    );
+    const shape = itemType
+      ? createItemShape(itemType, this.scene)
+      : new PhysicsShapeBox(
+          Vector3.Zero(),
+          Quaternion.Identity(),
+          vector(definition.size),
+          this.scene,
+        );
     shape.material = { friction: definition.friction, restitution: definition.restitution };
     body.shape = shape;
     if (dynamic && !this.prediction) {
@@ -355,12 +363,15 @@ export class PhysicsWorld {
     if (this.objects.has(state.entityId)) throw new Error('Duplicate physical item');
     const type = this.definition.itemCatalog.types[state.typeId];
     if (!type) throw new Error(`Unknown item type ${state.typeId}`);
-    const record = this.createBox({
-      ...type,
-      entityId: state.entityId,
-      kind: 'item',
-      position: state.position,
-    });
+    const record = this.createBody(
+      {
+        ...type,
+        entityId: state.entityId,
+        kind: 'item',
+        position: state.position,
+      },
+      type,
+    );
     record.item = structuredClone(state);
     record.revision = state.revision;
     this.teleport(record.body, record.node, state.position, state.rotation);
@@ -424,31 +435,42 @@ export class PhysicsWorld {
         pose.rotation.z,
         pose.rotation.w,
       ).normalize();
-    for (const x of [-0.5, 0.5])
-      for (const y of [-0.5, 0.5])
-        for (const z of [-0.5, 0.5]) {
-          const corner = new Vector3(x * type.size.x, y * type.size.y, z * type.size.z)
-            .applyRotationQuaternion(q)
-            .add(p);
-          for (const axis of ['x', 'y', 'z'] as const)
-            if (
-              corner[axis] < this.definition.bounds.min[axis] ||
-              corner[axis] > this.definition.bounds.max[axis]
-            )
-              return 'OUT_OF_BOUNDS';
-          if (this.buildings.contains(corner)) return 'BLOCKED';
-        }
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const direction = { x: 0, y: 0, z: 0 };
+      direction[axis] = 1;
+      if (
+        p[axis] + itemSupportDistance(type, rotation(q), direction) >
+        this.definition.bounds.max[axis]
+      )
+        return 'OUT_OF_BOUNDS';
+      direction[axis] = -1;
+      if (
+        p[axis] - itemSupportDistance(type, rotation(q), direction) <
+        this.definition.bounds.min[axis]
+      )
+        return 'OUT_OF_BOUNDS';
+    }
+    // Triangle queries do not detect a shape wholly enclosed by a solid mesh.
+    for (const part of itemShapeParts(type)) {
+      const center = vector(part.center).applyRotationQuaternion(q).add(p);
+      if (this.buildings.contains(center)) return 'BLOCKED';
+      if (part.kind === 'box')
+        for (const x of [-0.5, 0.5])
+          for (const y of [-0.5, 0.5])
+            for (const z of [-0.5, 0.5]) {
+              const corner = new Vector3(x * part.size.x, y * part.size.y, z * part.size.z)
+                .add(vector(part.center))
+                .applyRotationQuaternion(q)
+                .add(p);
+              if (this.buildings.contains(corner)) return 'BLOCKED';
+            }
+    }
     if (this.buildings.contains(p)) return 'BLOCKED';
     if (playerId) {
       const error = this.canReach(playerId, pose.position, ignoreId);
       if (error) return error;
     }
-    const shape = new PhysicsShapeBox(
-      Vector3.Zero(),
-      Quaternion.Identity(),
-      vector(type.size),
-      this.scene,
-    );
+    const shape = createItemShape(type, this.scene);
     try {
       const input = new ProximityCastResult(),
         hit = new ProximityCastResult();

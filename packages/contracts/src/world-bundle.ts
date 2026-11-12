@@ -14,6 +14,7 @@ import {
 import { validateWorld } from './world.js';
 import { canonicalJson } from './world.js';
 import { validateClosedMeshTopology } from './mesh-volume.js';
+import { itemPhysicsDefinition } from './item-shapes.js';
 
 const idPattern = /^[a-zA-Z0-9_-]{1,80}$/;
 const assetPattern = /^[a-z0-9][a-z0-9-]{0,79}$/;
@@ -322,16 +323,7 @@ export function simulationProjection(world: WorldDefinition) {
     bounds: { min: vector(world.bounds.min), max: vector(world.bounds.max) },
     spawnPoints: world.spawnPoints.map(vector),
     itemCatalog: Object.fromEntries(
-      Object.entries(world.itemCatalog.types).map(([id, t]) => [
-        id,
-        {
-          model: t.model,
-          size: vector(t.size),
-          mass: t.mass,
-          friction: t.friction,
-          restitution: t.restitution,
-        },
-      ]),
+      Object.entries(world.itemCatalog.types).map(([id, t]) => [id, itemPhysicsDefinition(t)]),
     ),
     initialItems: world.initialItems,
     entities: world.entities.map((e) => ({

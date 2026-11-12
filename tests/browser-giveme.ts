@@ -90,13 +90,60 @@ try {
   assert.equal(await observer.locator('.player-chat').count(), 0);
   await owner.keyboard.press('Escape');
 
+  const newTypes = [
+    ['confidence-monument', '🗿 Памятник уверенности · 4 м'],
+    ['giant-soap', '🧼 Гигантское мыло'],
+    ['giant-domino', '🁣 Домино ростом с человека'],
+    ['watermelon-ball', '🍉 Мяч-арбуз'],
+  ] as const;
+  for (const [index, [typeId, label]] of newTypes.entries()) {
+    await command(owner, `/giveme ${typeId}`);
+    await inventoryCount(owner, 3 + index);
+    await owner.locator('#chat-console').waitFor({ state: 'hidden' });
+    await owner.getByRole('button', { name: 'Инвентарь · I', exact: true }).click();
+    await owner.getByRole('button', { name: `${label} × 1`, exact: true }).click();
+    // A rotated sphere must still sit on the ground, rather than hover on box half extents.
+    if (typeId === 'watermelon-ball')
+      for (let turn = 0; turn < 3; turn++)
+        await owner.getByRole('button', { name: 'X +15°', exact: true }).click();
+    const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
+    let found = false;
+    for (const y of [420, 400, 440, 460, 480, 500, 380]) {
+      for (const x of [580, 600, 620, 660, 680, 700, 540, 740]) {
+        await owner.mouse.move(x, y);
+        await owner.waitForTimeout(50);
+        if (await confirm.isEnabled()) {
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+    assert.ok(found, `${typeId} has supported placement within reach`);
+    await owner.screenshot({ path: `output/playwright/catalog-${typeId}-preview.png` });
+    await confirm.click();
+    await inventoryCount(owner, 2 + index);
+    await observer.bringToFront();
+    await observer.waitForFunction(
+      (id) => (window as any).__SU_DEBUG__.snapshot().items.some((item: any) => item.typeId === id),
+      typeId,
+    );
+    await observer.screenshot({ path: `output/playwright/catalog-${typeId}-world.png` });
+    await owner.bringToFront();
+    await owner.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
+    await inventoryCount(owner, 3 + index);
+  }
+
   const issuedIds: string[] = await owner.evaluate(() =>
     (window as any).__SU_DEBUG__
       .snapshot()
       .inventory.slots.flatMap((s: any) => s.items.map((i: any) => i.itemId)),
   );
   await owner.getByRole('button', { name: 'Инвентарь · I', exact: true }).click();
-  await owner.getByRole('button', { name: '📦 Деревянный ящик × 2', exact: true }).click();
+  // Keep the compound item placed across a full server restart.
+  await owner
+    .getByRole('button', { name: '🗿 Памятник уверенности · 4 м × 1', exact: true })
+    .click();
   const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
   let found = false;
   for (const y of [420, 400, 440, 460, 480]) {
@@ -112,7 +159,7 @@ try {
   }
   assert.ok(found, 'issued item has a valid placement preview');
   await confirm.click();
-  await inventoryCount(owner, 1);
+  await inventoryCount(owner, 5);
   await observer.waitForFunction(
     (expected) => (window as any).__SU_DEBUG__.snapshot().items.length === expected,
     initialWorldCount + 1,
@@ -129,17 +176,19 @@ try {
   await owner.goto(app.url + '/?diagnostics=1');
   await owner.locator('#join:not([disabled])').click();
   await playing(owner);
-  await inventoryCount(owner, 1);
+  await inventoryCount(owner, 5);
   assert.equal(app.room.state.items.has(placedId), true, 'placed grant survives restart');
+  assert.equal(app.room.state.items.get(placedId)!.typeId, 'confidence-monument');
+  await owner.screenshot({ path: 'output/playwright/catalog-monument-restored.png' });
   await command(owner, '/giveme wooden-crate');
   await owner
     .locator('#notice')
     .filter({ hasText: 'Создание предметов отключено на сервере.' })
     .waitFor();
-  await inventoryCount(owner, 1);
+  await inventoryCount(owner, 5);
   await owner.keyboard.press('Escape');
   await owner.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
-  await inventoryCount(owner, 2);
+  await inventoryCount(owner, 6);
   assert.equal(
     app.room.state.items.has(placedId),
     false,

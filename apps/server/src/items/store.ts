@@ -5,6 +5,7 @@ import {
   canonicalJson,
   ITEM_GIVE_COOLDOWN_MS,
   initialItemState,
+  itemPhysicsDefinition,
   validPose,
   validVector,
   type InventoryView,
@@ -51,16 +52,7 @@ export function worldCompatibility(definition: WorldDefinition): string {
 }
 function physicsCatalog(catalog: ItemCatalog) {
   return Object.fromEntries(
-    Object.entries(catalog.types).map(([id, t]) => [
-      id,
-      {
-        model: t.model,
-        size: t.size,
-        mass: t.mass,
-        friction: t.friction,
-        restitution: t.restitution,
-      },
-    ]),
+    Object.entries(catalog.types).map(([id, t]) => [id, itemPhysicsDefinition(t)]),
   );
 }
 

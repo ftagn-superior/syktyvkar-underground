@@ -4,14 +4,33 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer, request } from 'node:http';
 import { connect, type Socket } from 'node:net';
 import { createGameServer } from './helpers/game-server.js';
+import { build } from 'esbuild';
+import type { WorldManifest } from '../packages/contracts/src/index.js';
 
 // This proxy can corrupt a real immutable response while preserving its cache headers.
 // Browser routing disables HTTP caching, so route.fulfill cannot cover this regression.
 const app = await createGameServer({ port: 0 });
 const info = await fetch(`${app.url}/api/world`).then((response) => response.json());
-const manifest = await fetch(app.url + info.manifestUrl).then((response) => response.json());
-const modelFile = (Object.values(manifest.assets)[0] as { modelFile: string }).modelFile;
-const modelPath = `/worlds/physics-lab/${modelFile}`;
+const manifest: WorldManifest = await fetch(app.url + info.manifestUrl).then((response) =>
+  response.json(),
+);
+const modelFile = Object.values(manifest.assets)[0].modelFile;
+const packFile = manifest.cells.flatMap((cell) => cell.graphicsPacks ?? [])[0];
+assert.ok(packFile, 'Current publisher must provide an actual graphics pack for this test');
+let targetPath = `/worlds/physics-lab/${packFile}`;
+// A tiny browser fixture exercises the actual legacy resource loader independently
+// of the production manifest identity and multiplayer handshake.
+const legacyLoader = await build({
+  stdin: {
+    contents: "export { VerifiedResources } from './apps/client/src/streaming/resources.ts';",
+    resolveDir: process.cwd(),
+  },
+  bundle: true,
+  write: false,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+});
 let corrupt = true;
 let assetRequests = 0;
 let matchmakingRequests = 0;
@@ -24,7 +43,12 @@ const proxy = createServer((incoming, outgoing) => {
     );
     return;
   }
-  const targetModel = incoming.url === modelPath;
+  if (incoming.url === '/resource-loader-fixture.js') {
+    outgoing.setHeader('content-type', 'text/javascript');
+    outgoing.end(legacyLoader.outputFiles[0].text);
+    return;
+  }
+  const targetModel = incoming.url === targetPath;
   if (targetModel) assetRequests++;
   if (incoming.url?.startsWith('/matchmake/')) matchmakingRequests++;
   const upstream = request(
@@ -90,8 +114,8 @@ try {
       .map((value) => value.toString(16).padStart(2, '0'))
       .join('');
     return { hash, cache: response.headers.get('cache-control') };
-  }, modelPath);
-  assert.notEqual(seed.hash, manifest.files[modelFile], 'fixture must seed corrupted bytes');
+  }, targetPath);
+  assert.notEqual(seed.hash, manifest.files[packFile], 'fixture must seed corrupted bytes');
   assert.ok(seed.cache?.includes('immutable'));
   assert.equal(assetRequests, 1);
   corrupt = false;
@@ -147,24 +171,84 @@ try {
   assert.equal(
     app.room.state.players.size,
     0,
-    'a corrupt model never activates a character after reload',
+    'a corrupt graphics pack never activates a character after reload',
   );
+  await brokenContext.close();
+
+  // Legacy manifests still use independently hashed GLB files. The same actual
+  // browser HTTP cache must recover once, and reject permanently damaged bytes.
+  targetPath = `/worlds/physics-lab/${modelFile}`;
+  const legacyManifest = {
+    ...manifest,
+    cells: manifest.cells.map(({ graphicsPacks: _packs, ...cell }) => cell),
+  };
+  const legacyContext = await browser.newContext();
+  const legacy = await legacyContext.newPage();
+  legacy.on('pageerror', (error) => errors.push(`legacy resources: ${error.message}`));
+  await legacy.goto(url + '/cache-fixture');
+  const beforeLegacy = assetRequests;
+  await legacy.evaluate(async (path) => {
+    await (await fetch(path, { cache: 'force-cache' })).arrayBuffer();
+  }, targetPath);
+  assert.equal(assetRequests, beforeLegacy + 1);
+  corrupt = false;
+  const verifyLegacy = async (target: typeof legacy) =>
+    target.evaluate(
+      async ({ manifest, modelFile }) => {
+        const moduleUrl = '/resource-loader-fixture.js';
+        const { VerifiedResources } = await import(moduleUrl);
+        const resources = new VerifiedResources(manifest, '/worlds/physics-lab/');
+        try {
+          await resources.prefetchGraphics(manifest.cells[0].cellId);
+          const bytes = await resources.read(modelFile);
+          return { ok: true, bytes: bytes.byteLength, diagnostics: resources.diagnostics() };
+        } catch (error) {
+          return { ok: false, error: String(error), diagnostics: resources.diagnostics() };
+        } finally {
+          resources.dispose();
+        }
+      },
+      { manifest: legacyManifest, modelFile },
+    );
+  const legacyRecovery = await verifyLegacy(legacy);
+  assert.equal(legacyRecovery.ok, true);
+  assert.equal(legacyRecovery.diagnostics.integrityRetries, 1);
+  assert.equal(
+    assetRequests,
+    beforeLegacy + 2,
+    'legacy cached GLB is replaced by one network reload',
+  );
+  await legacyContext.close();
+  corrupt = true;
+  const brokenLegacyContext = await browser.newContext();
+  const brokenLegacy = await brokenLegacyContext.newPage();
+  brokenLegacy.on('pageerror', (error) => errors.push(`legacy permanent damage: ${error.message}`));
+  await brokenLegacy.goto(url + '/cache-fixture');
+  const beforeBrokenLegacy = assetRequests;
+  const legacyFailure = await verifyLegacy(brokenLegacy);
+  assert.equal(legacyFailure.ok, false);
+  assert.match(legacyFailure.error ?? '', /SHA-256 mismatch/);
+  assert.equal(legacyFailure.diagnostics.integrityRetries, 1);
+  assert.equal(legacyFailure.diagnostics.cacheBytes, 0);
+  assert.equal(assetRequests, beforeBrokenLegacy + 2, 'legacy permanent damage receives one retry');
+  await brokenLegacyContext.close();
   assert.deepEqual(errors, []);
   const result = {
     date: new Date().toISOString(),
     browser: browser.version(),
     result: 'passed',
     checks: [
-      'A corrupt immutable HTTP cache entry is replaced by one verified network retry.',
+      'A corrupt immutable graphics pack in the HTTP cache is replaced by one verified network retry.',
       'The recovered world can enter and leave a real multiplayer session.',
-      'Persistent GLB corruption leaves static preview without reserving a seat or spawning, including after reload.',
+      'Persistent graphics pack corruption leaves static preview without reserving a seat or spawning, including after reload.',
+      'Legacy individual GLB files recover from cached corruption with one reload and reject persistent corruption with one retry.',
     ],
+    legacy: { recovered: legacyRecovery.ok, rejectedPermanentDamage: !legacyFailure.ok },
     browserErrors: errors,
   };
   await mkdir('output/playwright', { recursive: true });
   await writeFile('output/playwright/assets.json', JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify(result, null, 2));
-  await brokenContext.close();
 } finally {
   await browser?.close();
   for (const tunnel of tunnels) tunnel.destroy();

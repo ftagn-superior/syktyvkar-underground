@@ -389,6 +389,12 @@ describe('independent whole static objects', () => {
 
   it('does not activate an abandoned corner when a cancelled real GLB finishes after the camera has moved', async () => {
     const view = graphics(before.definition);
+    // Exercise the legacy individual-GLB path explicitly; published packs have
+    // their own cancellation/integrity checks and would bypass this read hook.
+    const legacyManifest = {
+      ...before.manifest,
+      cells: before.manifest.cells.map(({ graphicsPacks: _packs, ...cell }) => cell),
+    };
     let unblock!: () => void;
     let requested!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -397,7 +403,7 @@ describe('independent whole static objects', () => {
     const started = new Promise<void>((resolve) => {
       requested = resolve;
     });
-    const resources = new VerifiedResources(before.manifest, '/', {
+    const resources = new VerifiedResources(legacyManifest, '/', {
       fetch: async (url) => {
         const path = String(url).slice(1);
         if (path === before.manifest.assets.signal.modelFile) {
@@ -410,7 +416,7 @@ describe('independent whole static objects', () => {
     });
     let now = 0;
     const stream = new CellStreamer(
-      before.manifest,
+      legacyManifest,
       resources,
       {
         retainStatic: () => {

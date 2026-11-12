@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path';
 import {
   WORLD_FORMAT_VERSION,
   WORLD_RESOURCE_LIMITS,
+  GRAPHICS_PACK_LIMITS,
+  encodeGraphicsPack,
   canonicalJson,
   validateWorld,
   validateWorldManifest,
@@ -16,6 +18,7 @@ import {
   type WorldDefinition,
   type WorldGrid,
   type WorldCell,
+  type WorldCellManifest,
   type WorldManifest,
   type BuildingAssetManifest,
   type BuildingPhysicsAsset,
@@ -100,7 +103,7 @@ export function createWorldPublication(
       partsFile: put(`${prefix}/parts.json`, asset.parts, WORLD_RESOURCE_LIMITS.partsBytes),
     };
   }
-  const cellEntries = [...cells.values()].map((cell) => {
+  const cellEntries: WorldCellManifest[] = [...cells.values()].map((cell) => {
     cell.statics.sort(byId);
     cell.buildings.sort(byId);
     const bytes = jsonBytes(cell);
@@ -111,6 +114,53 @@ export function createWorldPublication(
       assetIds: [...new Set(cell.buildings.map((building) => building.assetId))].sort(),
     };
   });
+  // Border-crossing buildings belong to several cells. Pack equal membership sets together:
+  // every requested entry is relevant, and shared models have only one transport copy.
+  const memberships = new Map<string, WorldCellManifest[]>();
+  for (const cell of cellEntries)
+    for (const id of cell.assetIds) {
+      const owners = memberships.get(id) ?? [];
+      owners.push(cell);
+      memberships.set(id, owners);
+    }
+  const groups = new Map<string, { owners: WorldCellManifest[]; assetIds: string[] }>();
+  for (const [id, owners] of memberships) {
+    const key = owners.map((cell) => cell.cellId).join(',');
+    let group = groups.get(key);
+    if (!group) groups.set(key, (group = { owners, assetIds: [] }));
+    group.assetIds.push(id);
+  }
+  for (const { owners, assetIds } of groups.values()) {
+    const paths = [
+      ...new Set(assetIds.sort().flatMap((id) => [assets[id].modelFile, assets[id].partsFile])),
+    ];
+    let pending: [string, Uint8Array][] = [];
+    let pendingBytes = 10; // magic, header length, JSON brackets
+    const flush = () => {
+      if (!pending.length) return;
+      const packed = encodeGraphicsPack(pending);
+      const path = put(`graphics/${hash(packed)}.pack`, packed, GRAPHICS_PACK_LIMITS.bytes);
+      for (const cell of owners) {
+        cell.graphicsPacks ??= [];
+        if (!cell.graphicsPacks.includes(path)) cell.graphicsPacks.push(path);
+      }
+      pending = [];
+      pendingBytes = 10;
+    };
+    for (const path of paths) {
+      const resource = payloads.get(path)!;
+      const entryBytes = resource.length + JSON.stringify([path, resource.length]).length + 1;
+      if (entryBytes + 10 > GRAPHICS_PACK_LIMITS.bytes) continue;
+      if (
+        pendingBytes + entryBytes > GRAPHICS_PACK_LIMITS.bytes ||
+        pending.length >= GRAPHICS_PACK_LIMITS.entries
+      )
+        flush();
+      pending.push([path, resource]);
+      pendingBytes += entryBytes;
+    }
+    flush();
+  }
   const manifest: WorldManifest = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: world.worldId,

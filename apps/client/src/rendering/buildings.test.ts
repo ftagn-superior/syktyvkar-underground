@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +8,9 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Material } from '@babylonjs/core/Materials/material';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { AssetContainer } from '@babylonjs/core/assetContainer';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { loadWorldBundle, type WorldDefinition, type WorldManifest } from '@su/contracts';
 import { buildWorld } from '../../../../tools/world-build/src/index.js';
@@ -43,6 +45,33 @@ function fixture(world = definition) {
       scene.dispose();
       engine.dispose();
     },
+  };
+}
+
+async function modelBatch(count = 10) {
+  const source = manifest.assets['house-a'];
+  const model = await readBytes(source.modelFile);
+  const parts = JSON.parse((await readBytes(source.partsFile)).toString());
+  const ids = Array.from({ length: count }, (_, index) => `batch-${index}`);
+  const assets = Object.fromEntries(
+    ids.map((assetId, index) => [
+      assetId,
+      {
+        ...source,
+        assetId,
+        version: (index + 1).toString(16).padStart(64, '0'),
+        modelFile: `${assetId}/model.glb`,
+        partsFile: `${assetId}/parts.json`,
+      },
+    ]),
+  );
+  return {
+    ids,
+    manifest: { ...manifest, assets },
+    bytes: (path: string) =>
+      path.endsWith('.glb')
+        ? model
+        : new TextEncoder().encode(JSON.stringify({ ...parts, assetId: path.split('/')[0] })),
   };
 }
 
@@ -188,27 +217,134 @@ describe('building rendering from the real world bundle', () => {
     }
   });
 
-  it('does not start distant models after an earlier model fails', async () => {
+  it('drains concurrent loaders after a failure without starting queued models or leaking late containers', async () => {
     const view = fixture();
+    const batch = await modelBatch();
     const reads: string[] = [];
-    try {
-      await expect(
-        view.buildings.prepare(manifest, async (path) => {
+    const signals: AbortSignal[] = [];
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const pending = view.buildings.prepareAssets(
+      batch.manifest,
+      batch.ids,
+      async (path, signal) => {
+        if (path.endsWith('.glb')) {
           reads.push(path);
-          if (path === manifest.assets['house-a'].modelFile) throw new Error('model hash mismatch');
-          return readBytes(path);
-        }),
-      ).rejects.toThrow('model hash mismatch');
-      expect(reads).not.toContain(manifest.assets['house-b'].modelFile);
+          signals.push(signal!);
+          if (path === batch.manifest.assets[batch.ids[0]].modelFile)
+            throw new Error('model hash mismatch');
+          // Exercise loaders whose response arrives even after its last user cancelled.
+          await gate;
+        }
+        return batch.bytes(path);
+      },
+    );
+    let settled = false;
+    const rejected = expect(pending).rejects.toThrow('model hash mismatch');
+    void pending.catch(() => {
+      settled = true;
+    });
+    try {
+      await vi.waitFor(() => expect(signals.every((signal) => signal.aborted)).toBe(true));
+      expect(reads).toHaveLength(4);
+      expect(settled).toBe(false);
+      finish();
+      await rejected;
+      expect(reads).toHaveLength(4);
       expect(view.scene.meshes).toHaveLength(0);
+      expect(view.scene.materials).toHaveLength(0);
       expect(view.buildings.aggregateDiagnostics().assets).toBe(0);
     } finally {
+      finish();
+      await rejected;
+      view.dispose();
+    }
+  });
+
+  it('releases partial unparented clones after a Babylon failure without removing existing scene nodes', async () => {
+    const view = fixture();
+    const sentinel = new Mesh('existing-mesh', view.scene);
+    const sentinelRoot = new TransformNode('existing-transform', view.scene);
+    const original = AssetContainer.prototype.instantiateModelsToScene;
+    let restore: (() => void) | undefined;
+    let release: (() => void) | undefined;
+    try {
+      release = await view.buildings.prepareAssets(manifest, ['house-a'], readBytes);
+      const spy = vi
+        .spyOn(AssetContainer.prototype, 'instantiateModelsToScene')
+        .mockImplementationOnce(function (this: AssetContainer, ...args) {
+          original.apply(this, args);
+          new Mesh('orphaned-clone', view.scene);
+          new TransformNode('orphaned-transform', view.scene);
+          throw new Error('clone interrupted');
+        });
+      restore = () => spy.mockRestore();
+      const instance = definition.buildings.find((building) => building.assetId === 'house-a')!;
+      expect(() => view.buildings.add(instance, manifest.assets['house-a'].version)).toThrow(
+        'clone interrupted',
+      );
+      expect(view.scene.meshes).toEqual([sentinel]);
+      expect(view.scene.transformNodes).toEqual([sentinelRoot]);
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 0, assets: 1 });
+      restore();
+      view.buildings.add(instance, manifest.assets['house-a'].version);
+      expect(view.buildings.aggregateDiagnostics().instances).toBe(1);
+      view.buildings.remove(instance.entityId);
+      release();
+      expect(view.scene.meshes).toEqual([sentinel]);
+      expect(view.scene.transformNodes).toEqual([sentinelRoot]);
+      expect(view.scene.materials).toHaveLength(0);
+      expect(view.scene.geometries).toHaveLength(0);
+    } finally {
+      restore?.();
+      view.buildings.dispose();
+      release?.();
       view.dispose();
     }
   });
 });
 
 describe('incremental building ownership', () => {
+  it('prepares a bounded window of models concurrently and refills it as individual models finish', async () => {
+    const view = fixture();
+    const batch = await modelBatch();
+    const started: string[] = [];
+    const gates = new Map<string, () => void>();
+    let blocked = true;
+    const pending = view.buildings.prepareAssets(batch.manifest, batch.ids, async (path) => {
+      if (path.endsWith('.glb')) {
+        started.push(path);
+        if (blocked)
+          await new Promise<void>((resolve) => {
+            gates.set(path, resolve);
+          });
+      }
+      return batch.bytes(path);
+    });
+    try {
+      await vi.waitFor(() => expect(started).toHaveLength(4));
+      gates.get(started[0])!();
+      await vi.waitFor(() => expect(started).toHaveLength(5));
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(1);
+      blocked = false;
+      for (const finish of gates.values()) finish();
+      const release = await pending;
+      expect(started).toHaveLength(batch.ids.length);
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(batch.ids.length);
+      release();
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(0);
+      expect(view.scene.materials).toHaveLength(0);
+      expect(view.scene.geometries).toHaveLength(0);
+    } finally {
+      blocked = false;
+      for (const finish of gates.values()) finish();
+      await pending.catch(() => {});
+      view.dispose();
+    }
+  });
+
   it('pins one shared template across cells, keeps seam instances and disposes its last user', async () => {
     const view = fixture();
     const id = 'house-a',
@@ -259,6 +395,7 @@ describe('incremental building ownership', () => {
     };
     const cancelled = view.buildings.prepareAssets(manifest, ['house-a'], read, controller.signal);
     const retained = view.buildings.prepareAssets(manifest, ['house-a'], read);
+    await vi.waitFor(() => expect(signals).toHaveLength(2));
     controller.abort();
     expect(signals.every((signal) => !signal.aborted)).toBe(true);
     finish();

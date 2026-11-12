@@ -56,6 +56,7 @@ export const STREAMING_LIMITS = {
   http: 4,
   preparations: 4,
   frameMs: 2,
+  preparationFrameMs: 6,
   releaseMs: 5000,
   cacheBytes: 64 * 1024 * 1024,
   // The manifest validates the finite grid; even the entire 256-cell reference is legal.
@@ -140,14 +141,13 @@ export class CellStreamer {
   setVisualArea(center: Vec3, drawRadius: number, explicit = true): void {
     if (explicit) this.visualExplicit = true;
     if (this.disposed) return;
-    this.visual = { center: { ...center }, radius: Math.max(500, drawRadius) };
+    this.visual = { center: { ...center }, radius: Math.max(125, drawRadius) };
     const next = new Set([
       ...this.critical,
       ...circularCells(this.manifest, center, this.visual.radius + 125),
     ]);
     for (const id of this.graphicsWanted)
-      if (cellDistance(this.manifest, id, center) <= Math.max(800, this.visual.radius + 300))
-        next.add(id);
+      if (cellDistance(this.manifest, id, center) <= this.visual.radius + 300) next.add(id);
     this.graphicsWanted = next;
     this.refresh();
   }
@@ -252,6 +252,8 @@ export class CellStreamer {
         const graphicsSignal = AbortSignal.any([signal, controller.signal]);
         try {
           const descriptor = this.manifest.cells.find((item) => item.cellId === cell.id)!;
+          await this.resources.prefetchGraphics(cell.id, graphicsSignal, this.priority(cell));
+          if (!valid() || graphicsSignal.aborted) return;
           const release = await this.graphics.prepareCellAssets(
             this.manifest,
             descriptor.assetIds,
@@ -428,6 +430,18 @@ export class CellStreamer {
       !cell.error &&
       cell.graphics.size === cell.set.cell.statics.length + cell.set.cell.buildings.length
     );
+  }
+  /** Spend a bounded share of a frame on preparation while movement is not yet active. */
+  pumpFrame(deltaSeconds: number) {
+    const preparing = this.critical.size === 0 || !this.criticalReady;
+    const budget =
+      preparing && Number.isFinite(deltaSeconds) && deltaSeconds > 0
+        ? Math.min(
+            STREAMING_LIMITS.preparationFrameMs,
+            Math.max(STREAMING_LIMITS.frameMs, deltaSeconds * 1000 * 0.25),
+          )
+        : STREAMING_LIMITS.frameMs;
+    this.pump(budget);
   }
   pump(budgetMs: number = STREAMING_LIMITS.frameMs) {
     if (this.disposed) return;

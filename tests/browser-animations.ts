@@ -72,11 +72,25 @@ try {
     const id = (await snapshot(sender)).authoritative.entityId;
     await idle(sender);
     await sender.keyboard.press('f');
-    assert.equal(await sender.locator('.animation-choice').count(), 3);
+    assert.equal(await sender.locator('.animation-choice').count(), ANIMATIONS.length);
+    assert.equal(
+      await sender.locator('#animations-panel [data-catalog-count]').textContent(),
+      String(ANIMATIONS.length),
+    );
     assert.equal(await sender.locator('.animation-choice:focus').count(), 1);
+    assert.equal(await sender.locator('.animation-choice[aria-keyshortcuts]').count(), 9);
+    assert.equal(
+      await sender.locator('.animation-choice:nth-child(n + 10) .catalog-choice-key').count(),
+      0,
+    );
+    for (let choice = 1; choice < ANIMATIONS.length; choice++) await sender.keyboard.press('Tab');
+    assert.equal(await sender.locator('.animation-choice:last-child:focus').count(), 1);
+    assert.ok(await sender.locator('#animations-panel').evaluate((panel) => panel.scrollTop > 0));
     await sender.keyboard.press('f');
     assert.equal(await sender.locator('#world:focus').count(), 1);
     await sender.keyboard.press('f');
+    assert.equal(await sender.locator('#animations-panel').evaluate((panel) => panel.scrollTop), 0);
+    assert.equal(await sender.locator('.animation-choice:first-child:focus').count(), 1);
     await sender.keyboard.press('t');
     await sender.locator('#chat-input:focus').waitFor();
     assert.equal(await sender.locator('#animations-panel').isVisible(), false);
@@ -84,7 +98,7 @@ try {
     assert.equal(await sender.locator('#chat-console').isVisible(), false);
     assert.equal(await sender.locator('#animations-panel').isVisible(), true);
     await sender.keyboard.press('Escape');
-    for (const definition of ANIMATIONS) {
+    for (const [clipIndex, definition] of ANIMATIONS.entries()) {
       await idle(sender);
       if (definition.id === 'wave') {
         await sender.locator('#chat-toggle').click();
@@ -93,7 +107,7 @@ try {
         await sender.locator('#chat-console').waitFor({ state: 'hidden' });
       }
       await sender.locator('#animations-toggle').click();
-      if (definition.id === 'wave') await sender.keyboard.press('1');
+      if (clipIndex < 9) await sender.keyboard.press(String(clipIndex + 1));
       else await sender.locator(`[data-animation-id="${definition.id}"]`).click();
       await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
       await sender.locator('#animations-panel').waitFor({ state: 'hidden' });
@@ -110,7 +124,7 @@ try {
       }
       const a = await avatar(sender, id);
       assert.equal(a.skinId, index ? 'standard' : 'minifigure');
-      if (index === 0) {
+      if (index === 0 && (definition.id === 'wave' || definition.id === 'dance')) {
         await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 200);
         await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
         assert.ok((await avatar(sender, id)).animation.elapsedMs > WORLD_ACTIVITY_MOVE_DURATION_MS);
@@ -165,11 +179,19 @@ try {
           path: `${output}/${index ? 'standard' : 'minifigure'}-${definition.id}.png`,
         });
       }
-      if (definition.id === 'clap') {
+      if (definition.id !== 'wave' && definition.id !== 'dance') {
         await sender.locator('#world').focus();
-        await sender.keyboard.down('s');
-        await sender.waitForTimeout(200);
-        await sender.keyboard.up('s');
+        const origin = (await snapshot(sender)).authoritative.position;
+        const key = clipIndex % 2 ? 'w' : 's';
+        await sender.keyboard.down(key);
+        try {
+          await sender.waitForFunction((origin) => {
+            const position = (window as any).__SU_DEBUG__.snapshot().authoritative.position;
+            return Math.hypot(position.x - origin.x, position.z - origin.z) > 0.15;
+          }, origin);
+        } finally {
+          await sender.keyboard.up(key);
+        }
       }
       await Promise.all(
         [sender, observer].map((page) =>
@@ -187,15 +209,17 @@ try {
     }
   }
   checks.push(
-    'three clips on both skins reach independent clients, including an observer with 100ms RTT and jitter',
+    `all ${ANIMATIONS.length} clips on both skins reach independent clients, including an observer with 100ms RTT and jitter`,
   );
   checks.push(
-    'all clips loop beyond five seconds while idle and permit another selection after the cooldown; wave preserves walking legs and shares the reaction sticker',
+    'upper-body and full-body clips loop beyond five seconds while idle and permit another selection after the cooldown; wave preserves walking legs and shares the reaction sticker',
   );
   checks.push(
     'movement starts a five-second countdown for every clip including dance; stopping does not cancel it and sprint alone does not start it',
   );
-  checks.push('catalog, keyboard focus, Escape, successful close and pending/busy recovery');
+  checks.push(
+    'Tab reaches the last choice and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges; Escape and successful selection close the menu',
+  );
   checks.push(
     'chat and animation panels close each other; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
   );
@@ -205,8 +229,10 @@ try {
   assert.equal(await sender.locator('#animations-panel').isVisible(), false);
   await sender.keyboard.press('Escape');
   for (const size of [
+    { width: 1280, height: 720 },
+    { width: 800, height: 600 },
     { width: 390, height: 844 },
-    { width: 844, height: 390 },
+    { width: 640, height: 360 },
   ]) {
     await sender.setViewportSize(size);
     await sender.locator('#animations-toggle').click();
@@ -222,11 +248,55 @@ try {
       const actions = await sender.locator('.actions').boundingBox();
       assert.ok(actions && box.y + box.height < actions.y);
     }
-    await sender.screenshot({ path: `${output}/menu-${size.width}.png` });
+    const panel = sender.locator('#animations-panel');
+    const layout = await panel.evaluate((node) => ({
+      scrollTop: node.scrollTop,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+      overflowY: getComputedStyle(node).overflowY,
+      horizontalOverflow: node.scrollWidth > node.clientWidth,
+    }));
+    assert.equal(layout.scrollTop, 0);
+    assert.equal(layout.overflowY, 'auto');
+    assert.equal(layout.horizontalOverflow, false);
+    assert.ok(layout.scrollHeight > layout.clientHeight);
+    await sender.screenshot({ path: `${output}/menu-${size.width}-top.png` });
+    await sender.locator('.animation-choice:first-child').hover();
+    await sender.mouse.wheel(0, layout.scrollHeight);
+    await sender.waitForFunction(() => {
+      const panel = document.querySelector('#animations-panel')!;
+      const last = panel.querySelector('.animation-choice:last-child')!.getBoundingClientRect();
+      const bounds = panel.getBoundingClientRect();
+      const hit = document.elementFromPoint(last.x + last.width / 2, last.y + last.height / 2);
+      return (
+        panel.scrollTop > 0 &&
+        last.top >= bounds.top &&
+        last.bottom <= bounds.bottom &&
+        hit?.closest('.animation-choice') === panel.querySelector('.animation-choice:last-child')
+      );
+    });
+    for (const selector of ['#animations-toggle', '#respawn', '#leave']) {
+      assert.ok(
+        await sender.locator(selector).evaluate((node) => {
+          const rect = node.getBoundingClientRect();
+          const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+          return (
+            rect.x >= 0 &&
+            rect.y >= 0 &&
+            rect.right <= innerWidth &&
+            rect.bottom <= innerHeight &&
+            hit !== null &&
+            node.contains(hit)
+          );
+        }),
+        `${selector} remains reachable at ${size.width}x${size.height}`,
+      );
+    }
+    await sender.screenshot({ path: `${output}/menu-${size.width}-bottom.png` });
     await sender.keyboard.press('Escape');
   }
   checks.push(
-    'panels close each other and the animation menu fits portrait and landscape viewports',
+    'mouse wheel reaches the last animation without horizontal overflow; catalog and gameplay controls fit desktop, tablet, portrait and short viewports',
   );
   await sender.setViewportSize({ width: 1280, height: 720 });
   await sender.emulateMedia({ reducedMotion: 'reduce' });

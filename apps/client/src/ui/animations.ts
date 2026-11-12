@@ -7,6 +7,18 @@ const poses: Record<AnimationId, string> = {
   wave: 'M12 9v7m0-5-5 3-3-3m8 0 5-3V3m-5 13-4 6m4-6 5 6',
   clap: 'M12 9v7m0-6-5 4 4-6m1 2 5 4-4-6m-1 8-4 6m4-6 4 6',
   dance: 'm12 9-2 7m2-5-6-1-2-4m8 5 5 2 3-4m-10 7-4 4m4-4 6 2 2 4',
+  point: 'M12 9v7m0-5-5 3m5-3h9m-9 5-4 6m4-6 4 6',
+  cheer: 'M12 9v7m0-5-5-4-2-4m7 8 5-4 2-4m-7 13-4 6m4-6 4 6',
+  shrug: 'M12 9v7m0-5-5 3-3-3m8 0 5 3 3-3m-8 5-4 6m4-6 4 6',
+  bow: 'm12 9 4 6-5 3m5-3 4-2m-9 5-4 4m4-4 4 4',
+  stretch: 'M12 9v7m0-5-4-4V2m4 9 4-4V2m-4 14-4 6m4-6 4 6',
+  march: 'M12 9v7m0-5-6 4m6-4 6-2m-6 7-5 2 2 4m3-6 4 6',
+  balance: 'm12 9 2 7m-2-5H3m9 0h9m-7 5-2 6m2-6 7 2',
+  boxing: 'M12 9v7m0-5-5 2 1-5m4 3h9m-9 5-5 6m5-6 5 6',
+  disco: 'm12 9-1 7m1-5-6 3m6-3 5-5 2-3m-8 13-5 6m5-6 7 6',
+  robot: 'M12 9v7m0-5H6V7m6 4h6v4m-6 1H8v6m4-6h4v6',
+  sway: 'm12 9 3 7m-2-5-5 4m5-4 5 3m-3 2-5 6m5-6 3 6',
+  conduct: 'M12 9v7m0-5-5 1-2-5m7 4 5 1 2-5m-7 9-4 6m4-6 4 6',
 };
 
 export class AnimationMenu {
@@ -47,7 +59,7 @@ export class AnimationMenu {
       title.textContent = animation.label;
       const detail = document.createElement('span');
       detail.className = 'animation-category';
-      detail.textContent = `${animation.mode === 'fullBody' ? 'Танец' : 'Жест'} · до движения`;
+      detail.textContent = `${animation.category} · до движения`;
       const duration = document.createElement('span');
       duration.className = 'animation-duration';
       duration.textContent = `+ ${WORLD_ACTIVITY_MOVE_DURATION_MS / 1000} с`;
@@ -103,6 +115,7 @@ export class AnimationMenu {
     if (!this.panel.hidden) return this.close();
     this.onOpen();
     this.panel.hidden = false;
+    this.panel.scrollTop = 0;
     this.toggle.setAttribute('aria-expanded', 'true');
     (
       this.choices.find(({ button }) => !button.disabled)?.button ??
@@ -139,13 +152,13 @@ export class AnimationMenu {
             ? 'Дождитесь, прежде чем выбрать другую анимацию.'
             : !state.grounded
               ? 'Дождитесь опоры'
-              : 'Выберите жест или танец');
+              : 'Выберите анимацию');
     if (this.status.textContent !== message) this.status.textContent = message;
     for (const { button, hint, fullBody } of this.choices) {
       const reason = !state.grounded
         ? 'Дождитесь опоры'
         : fullBody && state.moving
-          ? 'Остановитесь, чтобы танцевать'
+          ? 'Остановитесь, чтобы начать'
           : '';
       const description =
         reason ||

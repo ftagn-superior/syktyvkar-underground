@@ -11,6 +11,17 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { AvatarView } from '../../apps/client/src/rendering/avatars/avatar-view';
 import type { DisplayPlayer } from '../../apps/client/src/presentation/display-state';
+import { ANIMATIONS } from '../../packages/contracts/src/index';
+
+const offset = Number(new URLSearchParams(location.search).get('offset') ?? 0);
+const selection = ANIMATIONS.slice(offset, offset + 3);
+document.querySelector('#gallery-titles')!.replaceChildren(
+  ...selection.map(({ label }) => {
+    const title = document.createElement('span');
+    title.textContent = label;
+    return title;
+  }),
+);
 
 const preview = window as unknown as {
   galleryReady: boolean;
@@ -41,7 +52,7 @@ const shadow = new ShadowGenerator(
 );
 const avatars: { avatar: AvatarView; player: DisplayPlayer }[] = [];
 (['minifigure', 'standard'] as const).forEach((skinId, row) => {
-  (['wave', 'clap', 'dance'] as const).forEach((animationId, col) => {
+  selection.forEach(({ id: animationId }, col) => {
     const root = new TransformNode(skinId + animationId, scene);
     root.position.set((1 - col) * 3, (0.5 - row) * 2.7, 0);
     const avatar = new AvatarView(

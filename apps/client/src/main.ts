@@ -32,8 +32,6 @@ const diagnosticsToggle = element<HTMLButtonElement>('diagnostics-toggle');
 const qualitySelect = element<HTMLSelectElement>('quality');
 const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
-const cameraLeft = element<HTMLButtonElement>('camera-left');
-const cameraRight = element<HTMLButtonElement>('camera-right');
 const actions = document.querySelector<HTMLElement>('.actions')!;
 const actionsResize = new ResizeObserver(() => {
   actions.style.setProperty('--game-actions-height', `${actions.getBoundingClientRect().height}px`);
@@ -215,7 +213,8 @@ keyboard = new KeyboardInput(
   () => session.neutral(),
   rotateCamera,
   () => reactions!.toggleOpen(),
-  () => chat!.open(),
+  (initialText) => chat!.open(initialText),
+  () => animations!.toggleOpen(),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
@@ -226,7 +225,6 @@ function renderRespawn(): void {
     : remainingMs > 0
       ? `На старт · ${Math.ceil(remainingMs / 1000)} с`
       : 'На старт';
-  cameraLeft.disabled = cameraRight.disabled = !loaded || graphicsLost;
 }
 function renderMetrics(): void {
   element('player-count').textContent = `${session.playerCount} / 8`;
@@ -350,14 +348,6 @@ join.addEventListener('click', () => {
       if (ready) void session.join();
     });
   else void start();
-});
-cameraLeft.addEventListener('click', () => {
-  rotateCamera(-1);
-  canvas.focus({ preventScroll: true });
-});
-cameraRight.addEventListener('click', () => {
-  rotateCamera(1);
-  canvas.focus({ preventScroll: true });
 });
 respawn.addEventListener('click', () => {
   session.respawn();

@@ -104,33 +104,10 @@
         </div>
         <div>
           <strong>Свободное движение</strong>
-          <span
-            >WASD / стрелки · Shift — быстрый бег · Q / E — камера · T — чат · R — реакции · I —
-            инвентарь · F — подбор</span
-          >
+          <span>WASD / стрелки · Shift — быстрый бег · Q / E — камера</span>
         </div>
       </div>
       <div class="actions">
-        <div class="camera-controls" role="group" aria-label="Поворот камеры">
-          <button
-            id="camera-left"
-            class="icon-button"
-            aria-label="Повернуть камеру влево (Q)"
-            title="Повернуть камеру влево (Q)"
-            disabled
-          >
-            ↶
-          </button>
-          <button
-            id="camera-right"
-            class="icon-button"
-            aria-label="Повернуть камеру вправо (E)"
-            title="Повернуть камеру вправо (E)"
-            disabled
-          >
-            ↷
-          </button>
-        </div>
         <button
           id="chat-toggle"
           class="button quiet"
@@ -179,9 +156,10 @@
             class="button quiet"
             aria-expanded="false"
             aria-controls="animations-panel"
+            aria-keyshortcuts="F"
             hidden
           >
-            Анимации
+            Анимации <kbd>F</kbd>
           </button>
           <section
             id="animations-panel"

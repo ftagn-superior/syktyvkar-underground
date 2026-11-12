@@ -26,11 +26,13 @@ export class InventoryPanel {
     private readonly onOpen?: () => void,
   ) {
     this.toggle.className = this.pickup.className = 'button quiet';
-    this.toggle.textContent = 'Инвентарь · I';
+    this.toggle.textContent = 'Инвентарь · X';
     this.toggle.hidden = true;
     this.toggle.setAttribute('aria-controls', 'inventory-panel');
     this.toggle.setAttribute('aria-expanded', 'false');
-    this.pickup.textContent = 'Подобрать · F';
+    this.toggle.setAttribute('aria-keyshortcuts', 'X');
+    this.pickup.textContent = 'Подобрать · Z';
+    this.pickup.setAttribute('aria-keyshortcuts', 'Z');
     this.pickup.hidden = true;
     document.querySelector('.actions')!.prepend(this.pickup, this.toggle);
     this.panel.id = 'inventory-panel';
@@ -92,11 +94,11 @@ export class InventoryPanel {
             (event.target.matches('input,textarea,select') || event.target.isContentEditable))
         )
           return;
-        if (event.code === 'KeyI') {
+        if (event.code === 'KeyX') {
           event.preventDefault();
           this.open(this.panel.hidden);
         }
-        if (event.code === 'KeyF') {
+        if (event.code === 'KeyZ') {
           event.preventDefault();
           this.collect();
         }
@@ -177,7 +179,7 @@ export class InventoryPanel {
         ? 'Выберите ячейку для обмена местами или объединения.'
         : this.session.inventory.slots.length
           ? 'Выберите предмет для размещения. Подбор дополняет стопки автоматически.'
-          : 'Здесь пока пусто. Подойдите к предмету и нажмите F.';
+          : 'Здесь пока пусто. Подойдите к предмету и нажмите Z.';
     this.grid.replaceChildren();
     for (const slot of this.session.inventory.slots) {
       const item = slot.items[0],

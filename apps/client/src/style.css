@@ -401,17 +401,6 @@ kbd {
   gap: 8px;
   align-items: center;
 }
-.camera-controls {
-  display: flex;
-  gap: 4px;
-  padding-right: 8px;
-  margin-right: 2px;
-  border-right: 1px solid var(--line);
-}
-.camera-controls .icon-button {
-  width: 34px;
-  font-size: 21px;
-}
 .quiet,
 .icon-button {
   background: rgba(15, 24, 32, 0.85);

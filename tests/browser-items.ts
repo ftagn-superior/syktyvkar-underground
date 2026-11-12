@@ -48,19 +48,24 @@ try {
       .sort(),
   );
   for (let count = 1; count <= 3; count++) {
-    await page.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
     await page.waitForFunction(
-      (expected) =>
-        (window as any).__SU_DEBUG__.snapshot().inventory.slots.flatMap((s: any) => s.items)
-          .length === expected,
-      count,
+      () =>
+        document.querySelector<HTMLButtonElement>('[aria-keyshortcuts="Z"]')?.disabled === false,
     );
+    await page.keyboard.press('z');
+    await page.waitForFunction((expected) => {
+      const state = (window as any).__SU_DEBUG__.snapshot();
+      return (
+        state.inventory.slots.flatMap((s: any) => s.items).length === expected &&
+        state.items.length === 3 - expected
+      );
+    }, count);
     await page.waitForFunction(
       () => (window as any).__SU_DEBUG__.snapshot().storagePaused === false,
     );
   }
   assert.equal(app.room.state.items.size, 0);
-  await page.keyboard.press('i');
+  await page.keyboard.press('x');
   await page.getByRole('button', { name: 'Разделить пополам', exact: true }).click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 2,
@@ -124,7 +129,7 @@ try {
   await page.waitForFunction(
     () => (document.querySelector('.placement-toolbar') as HTMLElement).hidden,
   );
-  await page.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
+  await page.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
   await page.waitForFunction(
     () =>
       (window as any).__SU_DEBUG__.snapshot().items.length === 0 &&
@@ -147,7 +152,7 @@ try {
       .sort(),
   );
   assert.deepEqual(restored, originalIds);
-  await page.getByRole('button', { name: 'Инвентарь · I', exact: true }).click();
+  await page.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
   await page.locator('#inventory-panel').waitFor({ state: 'visible' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'output/playwright/items-inventory-small.png' });

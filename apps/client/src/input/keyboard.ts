@@ -20,7 +20,8 @@ export class KeyboardInput {
     onRelease: () => void,
     onRotate?: (direction: -1 | 1) => void,
     onReactions?: () => void,
-    onChat?: () => void,
+    onChat?: (initialText: string) => void,
+    onAnimations?: () => void,
   ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
@@ -40,9 +41,14 @@ export class KeyboardInput {
           onReactions?.();
           return;
         }
-        if (event.code === 'KeyT') {
+        if (event.code === 'KeyT' || event.key === '/') {
           event.preventDefault();
-          onChat?.();
+          onChat?.(event.key === '/' ? '/' : '');
+          return;
+        }
+        if (event.code === 'KeyF') {
+          event.preventDefault();
+          onAnimations?.();
           return;
         }
         if (event.code === 'KeyQ' || event.code === 'KeyE') {

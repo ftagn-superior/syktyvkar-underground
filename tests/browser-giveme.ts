@@ -100,7 +100,7 @@ try {
     await command(owner, `/giveme ${typeId}`);
     await inventoryCount(owner, 3 + index);
     await owner.locator('#chat-console').waitFor({ state: 'hidden' });
-    await owner.getByRole('button', { name: 'Инвентарь · I', exact: true }).click();
+    await owner.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
     await owner.getByRole('button', { name: `${label} × 1`, exact: true }).click();
     // A rotated sphere must still sit on the ground, rather than hover on box half extents.
     if (typeId === 'watermelon-ball')
@@ -130,7 +130,7 @@ try {
     );
     await observer.screenshot({ path: `output/playwright/catalog-${typeId}-world.png` });
     await owner.bringToFront();
-    await owner.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
+    await owner.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
     await inventoryCount(owner, 3 + index);
   }
 
@@ -139,7 +139,7 @@ try {
       .snapshot()
       .inventory.slots.flatMap((s: any) => s.items.map((i: any) => i.itemId)),
   );
-  await owner.getByRole('button', { name: 'Инвентарь · I', exact: true }).click();
+  await owner.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
   // Keep the compound item placed across a full server restart.
   await owner
     .getByRole('button', { name: '🗿 Памятник уверенности · 4 м × 1', exact: true })
@@ -187,7 +187,7 @@ try {
     .waitFor();
   await inventoryCount(owner, 5);
   await owner.keyboard.press('Escape');
-  await owner.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
+  await owner.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
   await inventoryCount(owner, 6);
   assert.equal(
     app.room.state.items.has(placedId),

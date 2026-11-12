@@ -153,8 +153,6 @@ try {
       '#reactions-toggle',
       '#respawn',
       '#leave',
-      '#camera-left',
-      '#camera-right',
     ]) {
       const fits = await sender.locator(selector).evaluate((node) => {
         const rect = node.getBoundingClientRect();

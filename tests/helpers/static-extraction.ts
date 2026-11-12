@@ -74,7 +74,11 @@ export function glbTriangles(bytes: Uint8Array, instance: BuildingInstance): Evi
         vertices: indices.slice(i * 3, i * 3 + 3).map((id: number) => {
           const [x, y, z] = positions[id];
           const world = transformWorldPoint({ x, y, z }, instance.position, instance.rotation);
-          return [world.x, world.y, world.z, ...(colors?.[id] ?? material.slice(0, 3))];
+          // glTF multiplies linear vertex colors by the material base color.
+          const color = material
+            .slice(0, 3)
+            .map((channel: number, c: number) => channel * (colors?.[id]?.[c] ?? 1));
+          return [world.x, world.y, world.z, ...color];
         }),
       }));
     });
@@ -103,6 +107,7 @@ export function compareTriangles(
   before: EvidenceTriangle[],
   after: EvidenceTriangle[],
   tolerance = 0.001,
+  minimumAmbientFactor = 1,
 ) {
   if (before.length !== after.length)
     throw new Error(`Triangle count: ${before.length} != ${after.length}`);
@@ -116,10 +121,13 @@ export function compareTriangles(
     list.push(triangle);
     buckets.set(k, list);
   }
-  let maxVertexDelta = 0;
+  let maxVertexDelta = 0,
+    minColorFactor = 1,
+    shadedVertices = 0;
   for (const triangle of after) {
     const p = location(triangle);
-    let best: { list: EvidenceTriangle[]; index: number; delta: number } | undefined;
+    let best:
+      { list: EvidenceTriangle[]; index: number; delta: number; factors: number[] } | undefined;
     for (const x of [0, -1, 1])
       for (const y of [0, -1, 1])
         for (const z of [0, -1, 1]) {
@@ -129,22 +137,35 @@ export function compareTriangles(
             for (let shift = 0; shift < 3; shift++) {
               let delta = 0,
                 colorDelta = 0;
+              const factors: number[] = [];
               for (let v = 0; v < 3; v++) {
                 const a = triangle.vertices[v],
                   b = list[i].vertices[(v + shift) % 3];
                 delta = Math.max(delta, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]));
+                // One neutral multiplier per vertex permits baked AO, while
+                // still rejecting palette changes, brightening and deep shade.
+                const squared = b[3] ** 2 + b[4] ** 2 + b[5] ** 2;
+                const factor = squared
+                  ? Math.max(
+                      minimumAmbientFactor,
+                      Math.min(1, (a[3] * b[3] + a[4] * b[4] + a[5] * b[5]) / squared),
+                    )
+                  : 1;
+                factors.push(factor);
                 for (let c = 3; c < 6; c++)
-                  colorDelta = Math.max(colorDelta, Math.abs(a[c] - b[c]));
+                  colorDelta = Math.max(colorDelta, Math.abs(a[c] - b[c] * factor));
               }
               if (delta <= tolerance && colorDelta <= 1e-6 && (!best || delta < best.delta))
-                best = { list, index: i, delta };
+                best = { list, index: i, delta, factors };
             }
         }
     if (!best) throw new Error(`Unmatched world triangle: ${JSON.stringify(triangle)}`);
     maxVertexDelta = Math.max(maxVertexDelta, best.delta);
+    minColorFactor = Math.min(minColorFactor, ...best.factors);
+    shadedVertices += best.factors.filter((factor) => factor < 0.9999).length;
     best.list.splice(best.index, 1);
   }
-  return { triangles: before.length, maxVertexDelta };
+  return { triangles: before.length, maxVertexDelta, minColorFactor, shadedVertices };
 }
 
 function multiplyQuaternion(a: any, b: any) {

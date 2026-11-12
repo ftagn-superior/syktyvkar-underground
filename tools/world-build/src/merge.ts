@@ -26,7 +26,12 @@ export function mergeParts(parts: StaticMeshPart[]): StaticMeshPart[] {
     const [r, g, b] = linear(part.color);
     target.positions.push(...part.positions);
     target.normals.push(...part.normals);
-    for (let i = 0; i < part.positions.length; i += 3) target.colors!.push(r, g, b);
+    for (let i = 0; i < part.positions.length; i += 3)
+      target.colors!.push(
+        r * (part.colors?.[i] ?? 1),
+        g * (part.colors?.[i + 1] ?? 1),
+        b * (part.colors?.[i + 2] ?? 1),
+      );
     for (const index of part.indices) target.indices.push(index + offset);
   }
   return [...merged.values()];

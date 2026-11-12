@@ -1,0 +1,109 @@
+{
+  "date": "2026-11-12",
+  "direction": "Солнечный изометрический город",
+  "reference": "docs/art/references/syktyvkar-style-reference.png",
+  "mapVersion": "8a5981392b9d524499546c42a3cabc97594e819c004a13b42517942127ad2748",
+  "implementation": {
+    "architectureRecipes": 140,
+    "broadleafTrees": 817,
+    "conifersPreserved": 12,
+    "shrubRecipes": 277,
+    "monument": "Тёплый камень, объёмные кусты и бело-розовые цветочные группы на прежних местах посадок",
+    "items": "Небольшие фаски и дощатые швы; тот же меш для предмета и предпросмотра",
+    "lighting": {
+      "sun": "#ffe6bd",
+      "intensity": 3,
+      "skyIntensity": 0.45,
+      "exposure": 1.5,
+      "saturation": 8,
+      "bloom": false,
+      "vignette": false
+    },
+    "quality": "Одна тональная кривая при запуске и переключении standard/economy",
+    "instancing": "Общие шаблоны и материалы, отдельный shader define для формы кроны; GLB fallback и ray picking используют тот же профиль",
+    "invariants": [
+      "Планировка, размещение, входы, этажность и характерные вывески",
+      "Все 1888 прежних коллайдеров, их материалы и преобразования",
+      "Параметры физики предметов и персонажей",
+      "Историческая extraction fixture остаётся неизменной"
+    ]
+  },
+  "validation": {
+    "build": "Миры, клиент и сервер собраны",
+    "typecheck": "passed",
+    "boundaries": "passed",
+    "treeBrowser": [
+      {
+        "shadows": false,
+        "faded": false,
+        "instances": 144,
+        "drawCalls": {
+          "glb": 145,
+          "instanced": 17
+        },
+        "modelLoads": 0,
+        "comparison": {
+          "changed": 0,
+          "meanError": 0,
+          "maxError": 0
+        }
+      },
+      {
+        "shadows": true,
+        "faded": false,
+        "instances": 144,
+        "drawCalls": {
+          "glb": 290,
+          "instanced": 34
+        },
+        "modelLoads": 0,
+        "comparison": {
+          "changed": 0,
+          "meanError": 0.062420833333333335,
+          "maxError": 4
+        }
+      },
+      {
+        "shadows": true,
+        "faded": true,
+        "instances": 144,
+        "drawCalls": {
+          "glb": 289,
+          "instanced": 35
+        },
+        "modelLoads": 0,
+        "comparison": {
+          "changed": 0,
+          "meanError": 0.0622125,
+          "maxError": 4
+        }
+      }
+    ],
+    "browserEvidence": "output/art-style/final/result.json",
+    "screenshot": "output/art-style/final/ring-standard.png",
+    "reproduction": ["pnpm build", "pnpm test:art:browser", "pnpm test:trees:browser"],
+    "tests": {
+      "files": 21,
+      "passed": 190,
+      "failed": 0
+    },
+    "visualReview": {
+      "status": "passed",
+      "shots": 9,
+      "qualityChecks": "passed",
+      "browserErrors": 0,
+      "ringDrawCalls": 227
+    }
+  },
+  "knownLimitations": [
+    "В headless Chromium доступен только SwiftShader, включая попытку штатного renderer. Аппаратная производительность не измерена.",
+    "У близких слоёв покрытий в SwiftShader сохраняются прежние артефакты интерполяции глубины; они зафиксированы также в before. Разведение высот уменьшает их, но не устраняет полностью.",
+    "Экспериментальная тесселяция покрытия не дала нужного улучшения и полностью удалена. Смещение depth относительно реальной поверхности не применялось, чтобы не перекрывать ноги и мелкие предметы."
+  ],
+  "followup": {
+    "step": "Локальное AO и модуль освещения",
+    "report": "reports/baked-ao.json",
+    "mapVersion": "d0454ae6bdc256403dcf6bdf96a85cfa44b501bf135179d49ef7f549671f1d31",
+    "screenshot": "output/art-style/ao-after/ring-standard.png"
+  }
+}

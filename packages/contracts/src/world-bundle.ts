@@ -250,6 +250,12 @@ export function validateBuildingParts(value: unknown): BuildingParts {
       v.length === 4 &&
       v.every((n: unknown) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1000);
     requireValue(object(tree) && tree.formatVersion === 1, 'tree render version');
+    requireValue(tree.foliage === undefined || tree.foliage === 'broadleaf', 'tree render foliage');
+    requireValue(
+      tree.ambientOcclusion === undefined ||
+        (tree.ambientOcclusion === 'foliage-v1' && tree.foliage === 'broadleaf'),
+      'tree render ambient occlusion',
+    );
     requireValue(
       value.parts.length === 1 && value.parts[0].occlusionGroup === 'shell',
       'tree render semantic group',

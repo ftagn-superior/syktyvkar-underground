@@ -1,0 +1,33 @@
+{
+  "reference_accepted_on": "2026-11-12",
+  "project": "Syktyvkar Underground",
+  "style_name": "Солнечный изометрический город",
+  "generator": "Built-in image_gen.imagegen",
+  "status": "Художественное направление принято владельцем проекта в этом разговоре. Численные параметры реализации в гайде — стартовые ориентиры, а не восстановленные настройки рендерера.",
+  "files": [
+    {
+      "file": "syktyvkar-style-reference.png",
+      "role": "Главный референс принятого визуального стиля",
+      "sha256": "2764f6176274ea52c72cb676c761a546c057a675b5bb1da5f9156e2dbd2ca684",
+      "bytes": 2165946,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "file": "syktyvkar-original-frame.png",
+      "role": "Исходный игровой кадр до художественной обработки",
+      "sha256": "f5af8fc2d568462bbbd0c80316da1c7be809a5b2366bbc8b86ea0d6b178ba1b8",
+      "bytes": 909498,
+      "width": 1920,
+      "height": 1080,
+      "mode": "RGB"
+    },
+    {
+      "file": "syktyvkar-style-reference.prompt.txt",
+      "role": "Точный исходный запрос генерации изображения",
+      "sha256": "d0f67c094347ba9ab649a3b6b103db7375d100243c93d34c2402e5e6db9cc887",
+      "bytes": 1850
+    }
+  ]
+}

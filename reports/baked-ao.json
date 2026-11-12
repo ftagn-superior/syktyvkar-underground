@@ -1,0 +1,286 @@
+{
+  "date": "2026-11-12",
+  "scope": "Вынос освещения и локальное vertex AO внутри ассетов",
+  "beforeMapVersion": "8a5981392b9d524499546c42a3cabc97594e819c004a13b42517942127ad2748",
+  "mapVersion": "d0454ae6bdc256403dcf6bdf96a85cfa44b501bf135179d49ef7f549671f1d31",
+  "lighting": {
+    "module": "apps/client/src/rendering/lighting.ts",
+    "behavior": "Параметры, тональная кривая, качество и следование солнца сохранены; модуль владеет ресурсами света, теней и pipeline"
+  },
+  "ambientOcclusion": {
+    "module": "tools/world-build/src/ambient-occlusion.ts",
+    "architecture": "24 детерминированных cosine-weighted луча на общую вершину, BVH, радиус 0.75 м, максимум 30% нейтрального затемнения в linear RGB",
+    "sparseFaces": "Сила уменьшается с длиной граней; согласованные значения на совпадающих position+normal устраняют швы между треугольниками и материалами",
+    "scope": "Генерируемые дома, footprint-здания и твердые части kit-ассетов; запекание до mergeParts",
+    "fade": "Только поверхности одной occlusionGroup участвуют во взаимном AO",
+    "foliage": "Общий профиль foliage-v1 для 817 лиственных деревьев и кустов; вычисляется один раз на профиль и кэшируется в runtime template. Нет AO вычислений на кадр",
+    "compatibility": "TreeRenderRecipe.ambientOcclusion отделяет новый профиль от старых bundles; конусы хвойных деревьев и стволы сохранены",
+    "colors": "mergeParts сохраняет linear material × vertex color; glTF evidence reader исправлен на ту же формулу",
+    "unchanged": [
+      "Позиции, нормали, индексы и число вершин",
+      "Коллайдеры и transforms",
+      "Количество runtime meshes, материалов, draw calls и tree batches"
+    ],
+    "exclusions": [
+      "Земля и AO от соседних объектов мира",
+      "Взаимное AO независимо исчезающих групп",
+      "Дополнительные проходы SSAO, glow и смена времени суток"
+    ]
+  },
+  "validation": {
+    "tests": {
+      "files": 24,
+      "passed": 202,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "boundaries": "passed",
+    "formatting": "passed",
+    "diffCheck": "passed",
+    "build": {
+      "worlds": 3,
+      "worldBuildSeconds": 8.44,
+      "client": "passed",
+      "server": "passed",
+      "log": "output/art-style/build-ao.log"
+    },
+    "invariants": {
+      "historicalNonPlantTriangles": 43096,
+      "originalColliders": 1888,
+      "treeGlbTemplateRecipes": 829,
+      "unchangedHistoricalFixtures": true,
+      "sharedRoofVertexMismatches": 0
+    },
+    "browser": {
+      "evidence": "output/art-style/ao-after/result.json",
+      "screenshots": 8,
+      "errors": [],
+      "comparisons": [
+        {
+          "name": "ring-standard",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 227,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 227,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "monument-standard",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 163,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 163,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "ring-east",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 224,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 224,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "ring-north",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 226,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 226,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "ring-west",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 224,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 224,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "ring-economy",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 120,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 120,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "avatars-and-items",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 168,
+            "geometries": 865,
+            "meshes": 1763,
+            "materials": 915,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 168,
+            "geometries": 865,
+            "meshes": 1763,
+            "materials": 915,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        },
+        {
+          "name": "ring-economy-fresh",
+          "lightsUnchanged": true,
+          "toneMappingUnchanged": true,
+          "before": {
+            "drawCalls": 120,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          },
+          "after": {
+            "drawCalls": 120,
+            "geometries": 846,
+            "meshes": 1744,
+            "materials": 908,
+            "treeTemplates": 3,
+            "treeBatches": 61
+          }
+        }
+      ]
+    },
+    "treeBrowser": {
+      "evidence": "output/playwright/tree-instancing-visual/result.json",
+      "fixture": "144 trees, five profiles including legacy conifers and broadleaf without AO",
+      "results": [
+        {
+          "shadows": false,
+          "faded": false,
+          "instances": 144,
+          "drawCalls": {
+            "glb": 145,
+            "instanced": 21
+          },
+          "modelLoads": 0,
+          "comparison": {
+            "changed": 0,
+            "meanError": 0,
+            "maxError": 0
+          }
+        },
+        {
+          "shadows": true,
+          "faded": false,
+          "instances": 144,
+          "drawCalls": {
+            "glb": 290,
+            "instanced": 42
+          },
+          "modelLoads": 0,
+          "comparison": {
+            "changed": 0,
+            "meanError": 0.06735,
+            "maxError": 4
+          }
+        },
+        {
+          "shadows": true,
+          "faded": true,
+          "instances": 144,
+          "drawCalls": {
+            "glb": 289,
+            "instanced": 43
+          },
+          "modelLoads": 0,
+          "comparison": {
+            "changed": 0,
+            "meanError": 0.06721875,
+            "maxError": 4
+          }
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "AO локальное и сдержанное. Оно не рисует контактные пятна на газоне или асфальте под отдельно стоящими объектами.",
+    "На крупных разреженных гранях детализация AO ограничена существующей сеткой; новые полигоны не добавлялись.",
+    "Браузерная проверка использует SwiftShader; аппаратный frame time не измерен. Прежние артефакты близких слоев покрытия сохранились."
+  ]
+}

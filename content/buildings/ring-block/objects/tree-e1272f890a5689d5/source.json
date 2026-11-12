@@ -5,7 +5,7 @@
       "id": "crown-spruce",
       "role": "detail",
       "fade": true,
-      "color": "#3f6844",
+      "color": "#47744c",
       "shapes": [
         {
           "cone": {
@@ -31,7 +31,7 @@
       "id": "trunk",
       "role": "detail",
       "fade": true,
-      "color": "#6b5a49",
+      "color": "#855c3b",
       "shapes": [
         {
           "box": {

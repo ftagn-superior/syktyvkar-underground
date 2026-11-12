@@ -1,0 +1,10 @@
+Tool: built-in image_gen.imagegen
+Edit target: output/opening/work/medium/city-keyart-source.png
+Output: output/opening/city-keyart-enhanced.png
+
+Use case: style-transfer / precise-object-edit.
+Edit target: the attached frame from the user's own isometric 3D game Syktyvkar Underground. Produce one polished 16:9 landscape key-art frame for the ending of a game opening video, ideally 1920x1080 or larger.
+Keep the exact camera angle, crop, streets, roundabout shape, monument, building footprints, heights, window grids and recognizable architecture. The pale L-shaped building at left and terracotta L-shaped building at right must stay exactly in position. Keep the small gold toy-like player on the grass. Preserve the fan-shaped tall concrete monument with its dark sculpture and base in the middle of the island.
+Improve the existing image: warmer inviting afternoon sunlight, bright fresh but natural greens, cleaner cream façades and rich terracotta walls, neat charcoal roofs, softer coherent shadows, crisp straight edges and tidy windows. Refine the existing shrubs into fuller stylized bushes and modest well-kept flower planting around the existing monument beds. A few restrained street trees along existing sidewalks are welcome. Keep the look a charming contemporary low-poly 3D game, not a photoreal city and not a highly detailed different game.
+Remove ALL screen UI, chat bubbles, labels, waving-hand icon, player name tag, mouse cursor, and any other text. Reconstruct their covered grass, roads or building surfaces seamlessly. No new typography, logo, border or watermark.
+Invariants: same city layout and central monument, no new large structures, no roads removed, no changed perspective, no invented signs. The image should still unmistakably be the same frame, just brighter, more colorful, cleaner and carefully finished.

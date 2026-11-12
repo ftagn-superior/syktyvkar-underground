@@ -26,6 +26,21 @@ const source = async (id = sampleId): Promise<KitRecipe> =>
   JSON.parse(await readFile(`${directory}/${id}/source.json`, 'utf8'));
 
 describe('tree instancing', () => {
+  it('opts into baked foliage colors while preserving older bundle geometry and colors', () => {
+    const old = treeTemplate('#ffffff', '#ffffff', 'broadleaf');
+    const baked = treeTemplate('#ffffff', '#ffffff', 'broadleaf', 'foliage-v1');
+    expect(baked.positions).toEqual(old.positions);
+    expect(baked.normals).toEqual(old.normals);
+    expect(baked.indices).toEqual(old.indices);
+    expect(old.colors.every((channel) => channel === 1)).toBe(true);
+    expect(baked.colors.some((channel) => channel < 0.8)).toBe(true);
+    for (let vertex = 0; vertex < baked.parts.length; vertex++) {
+      expect(baked.colors[vertex * 4 + 3]).toBe(1);
+      if (baked.parts[vertex] === 2)
+        expect(baked.colors.slice(vertex * 4, vertex * 4 + 4)).toEqual([1, 1, 1, 1]);
+    }
+  });
+
   it('reconstructs positions, normals and colors of all 829 authored trees without quantization', async () => {
     const ids = (await readdir(directory)).filter((id) => id.startsWith('tree-'));
     expect(ids).toHaveLength(829);
@@ -34,14 +49,27 @@ describe('tree instancing', () => {
       const tree = treeRenderRecipe(id, recipe)!;
       expect(tree, id).toBeDefined();
       const original = generateKit(id, recipe).parts[0];
-      const template = treeTemplate(tree.crownColor, tree.trunkColor);
+      const template = treeTemplate(
+        tree.crownColor,
+        tree.trunkColor,
+        tree.foliage,
+        tree.ambientOcclusion,
+      );
       const vertices: string[] = [];
       const key = (values: number[]) => values.map((v) => Math.round(v * 100_000)).join(',');
       // Evaluate the shader's deformation independently against the existing kit generator.
       for (let i = 0; i < template.parts.length; i++) {
         let [x, y, z] = template.positions.slice(i * 3, i * 3 + 3);
         let normal = Vector3.FromArray(template.normals, i * 3);
-        if (template.parts[i] < 2) {
+        if (template.parts[i] < 2 && tree.foliage) {
+          const [lower, upper] = tree.crowns;
+          const radius = Math.max(lower[0], lower[1], upper[0], upper[1]);
+          const height = upper[2] + upper[3] - lower[2];
+          x *= radius;
+          z *= radius;
+          y = lower[2] + y * height;
+          normal = new Vector3(normal.x / radius, normal.y / height, normal.z / radius).normalize();
+        } else if (template.parts[i] < 2) {
           const [bottom, top, base, height] = tree.crowns[template.parts[i]];
           const radius = bottom + (top - bottom) * y;
           x *= radius;
@@ -77,6 +105,26 @@ describe('tree instancing', () => {
     }
   });
 
+  it('keeps legacy conical metadata and tests broadleaf crown gaps rather than its box', async () => {
+    const authored = await source();
+    const broadleaf = treeRenderRecipe(sampleId, authored)!;
+    expect(broadleaf.foliage).toBe('broadleaf');
+    const [lower, upper] = broadleaf.crowns;
+    const radius = Math.max(lower[0], lower[1], upper[0], upper[1]);
+    const height = upper[2] + upper[3] - lower[2];
+    const ray = (x: number, y: number) =>
+      new Ray(new Vector3(x * radius, lower[2] + y * height, 20), new Vector3(0, 0, -1), 40);
+    expect(treeIntersectsRay(broadleaf, ray(-0.1, 0.85))).toBe(true);
+    expect(treeIntersectsRay(broadleaf, ray(0.8, 0.95))).toBe(false);
+    delete authored.foliage;
+    const legacy = treeRenderRecipe(sampleId, authored)!;
+    expect(legacy.foliage).toBeUndefined();
+    expect(treeTemplate(legacy.crownColor, legacy.trunkColor).indices.length).toBe(
+      generateKit(sampleId, authored).parts[0].indices.length,
+    );
+    expect(treeIntersectsRay(legacy, ray(0, 0.5))).toBe(true);
+  });
+
   it('falls back for edited shapes and rejects malformed procedural metadata', async () => {
     const recipe = await source();
     const tree = treeRenderRecipe(sampleId, recipe)!;
@@ -87,6 +135,9 @@ describe('tree instancing', () => {
     expect(validateBuildingParts({ ...parts, tree }).tree).toEqual(tree);
     for (const invalid of [
       { ...tree, formatVersion: 2 },
+      { ...tree, foliage: 'unknown' },
+      { ...tree, ambientOcclusion: 'unknown' },
+      { ...tree, foliage: undefined, ambientOcclusion: 'foliage-v1' },
       { ...tree, crowns: [[0, 1, 2, 3]] },
       { ...tree, trunkBase: Infinity },
       { ...tree, trunkColor: 'red' },

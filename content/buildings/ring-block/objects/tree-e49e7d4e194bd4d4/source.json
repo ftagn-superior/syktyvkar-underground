@@ -1,11 +1,12 @@
 {
   "formatVersion": 1,
+  "foliage": "broadleaf",
   "parts": [
     {
       "id": "crown-birch",
       "role": "detail",
       "fade": true,
-      "color": "#7aa457",
+      "color": "#8ca94a",
       "shapes": [
         {
           "cone": {
@@ -31,7 +32,7 @@
       "id": "trunk-birch",
       "role": "detail",
       "fade": true,
-      "color": "#e2ddd2",
+      "color": "#e8dfcc",
       "shapes": [
         {
           "box": {

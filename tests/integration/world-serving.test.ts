@@ -11,7 +11,7 @@ let bundle: string;
 beforeAll(async () => {
   temporary = await mkdtemp(join(tmpdir(), 'su-world-serving-'));
   bundle = join(temporary, 'release');
-  await buildWorld(undefined, bundle);
+  await buildWorld('content/worlds/physics-lab/world.json', bundle);
 });
 afterAll(async () => {
   await rm(temporary, { recursive: true, force: true });
@@ -23,7 +23,7 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)('serves verified world assets', asy
     const info = await fetch(app.url + '/api/world').then((r) => r.json());
     const manifest = await fetch(app.url + info.manifestUrl).then((r) => r.json());
     const { definition } = await readWorldDirectory(bundle);
-    expect(manifest.formatVersion).toBe(3);
+    expect(manifest.formatVersion).toBe(4);
     expect(manifest.mapVersion).toBe(info.mapVersion);
     expect(definition.buildings).toHaveLength(2);
     expect(app.room.diagnostics().bodies).toBe(

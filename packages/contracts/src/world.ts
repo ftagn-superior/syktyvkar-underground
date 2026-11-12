@@ -3,6 +3,8 @@ import {
   validPose,
   WORLD_FORMAT_VERSION,
   type WorldDefinition,
+  type WorldHeader,
+  type EntityDefinition,
   type Vec3,
 } from './index.js';
 import {
@@ -22,6 +24,36 @@ function vector(value: unknown, label: string): asserts value is Vec3 {
       typeof component === 'number' && Number.isFinite(component) && Math.abs(component) <= 100_000,
       `${label}.${axis}`,
     );
+  }
+}
+export function validateEntities(value: unknown): asserts value is EntityDefinition[] {
+  invariant(Array.isArray(value) && value.length <= 1000, 'entities');
+  const ids = new Set<string>();
+  for (const entity of value as EntityDefinition[]) {
+    invariant(entity && typeof entity === 'object', 'entity');
+    invariant(
+      typeof entity.entityId === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(entity.entityId),
+      'entityId',
+    );
+    invariant(!ids.has(entity.entityId), `duplicate ID ${entity.entityId}`);
+    ids.add(entity.entityId);
+    invariant(entity.kind === 'obstacle', 'entity kind');
+    vector(entity.position, `${entity.entityId}.position`);
+    vector(entity.size, `${entity.entityId}.size`);
+    invariant(
+      Object.values(entity.size).every((n) => n > 0 && n <= 1000),
+      'positive box size',
+    );
+    invariant(Number.isFinite(entity.mass) && entity.mass === 0, 'mass');
+    invariant(
+      Number.isFinite(entity.friction) && entity.friction >= 0 && entity.friction <= 10,
+      'friction',
+    );
+    invariant(
+      Number.isFinite(entity.restitution) && entity.restitution >= 0 && entity.restitution <= 1,
+      'restitution',
+    );
+    invariant(typeof entity.color === 'string' && /^#[a-f\d]{6}$/i.test(entity.color), 'color');
   }
 }
 /** Validate content at both process boundaries before constructing any physics objects. */
@@ -50,34 +82,8 @@ export function validateWorld(value: unknown): WorldDefinition {
   }
   invariant(character.sprintSpeed >= character.speed, 'sprintSpeed must be at least speed');
   invariant(character.height >= 2 * character.radius, 'capsule height');
-  invariant(Array.isArray(world.entities) && world.entities.length <= 1000, 'entities');
-  const ids = new Set<string>();
-  for (const entity of world.entities) {
-    invariant(entity && typeof entity === 'object', 'entity');
-    invariant(
-      typeof entity.entityId === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(entity.entityId),
-      'entityId',
-    );
-    invariant(!ids.has(entity.entityId), `duplicate ID ${entity.entityId}`);
-    ids.add(entity.entityId);
-    invariant(entity.kind === 'obstacle', 'entity kind');
-    vector(entity.position, `${entity.entityId}.position`);
-    vector(entity.size, `${entity.entityId}.size`);
-    invariant(
-      Object.values(entity.size).every((n) => n > 0 && n <= 1000),
-      'positive box size',
-    );
-    invariant(Number.isFinite(entity.mass) && entity.mass === 0, 'mass');
-    invariant(
-      Number.isFinite(entity.friction) && entity.friction >= 0 && entity.friction <= 10,
-      'friction',
-    );
-    invariant(
-      Number.isFinite(entity.restitution) && entity.restitution >= 0 && entity.restitution <= 1,
-      'restitution',
-    );
-    invariant(typeof entity.color === 'string' && /^#[a-f\d]{6}$/i.test(entity.color), 'color');
-  }
+  validateEntities(world.entities);
+  const ids = new Set(world.entities.map((entity) => entity.entityId));
   validateItemCatalog(world.itemCatalog);
   invariant(Array.isArray(world.initialItems) && world.initialItems.length <= 1000, 'initialItems');
   for (const seed of world.initialItems) {
@@ -167,6 +173,35 @@ export function validateWorld(value: unknown): WorldDefinition {
         'spawn points overlap',
       );
     }
+  if (world.routes !== undefined) {
+    invariant(
+      world.routes &&
+        typeof world.routes === 'object' &&
+        !Array.isArray(world.routes) &&
+        Object.keys(world.routes).length <= 32,
+      'routes',
+    );
+    for (const [id, points] of Object.entries(world.routes)) {
+      invariant(
+        /^[a-zA-Z0-9_-]{1,64}$/.test(id) &&
+          Array.isArray(points) &&
+          points.length >= 2 &&
+          points.length <= 1024,
+        'route',
+      );
+      for (const point of points)
+        invariant(
+          point &&
+            Number.isFinite(point.x) &&
+            Number.isFinite(point.z) &&
+            point.x >= world.bounds.min.x &&
+            point.x <= world.bounds.max.x &&
+            point.z >= world.bounds.min.z &&
+            point.z <= world.bounds.max.z,
+          'route point',
+        );
+    }
+  }
   return world;
 }
 /** Content addressing is stable across object key order and file formatting. */
@@ -178,4 +213,14 @@ export function canonicalJson(value: unknown): string {
       .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`)
       .join(',')}}`;
   return JSON.stringify(value);
+}
+
+/** Header validation never needs any remote cells or model resources. */
+export function validateWorldHeader(value: unknown): WorldHeader {
+  invariant(value && typeof value === 'object' && !Array.isArray(value), 'header');
+  const header = value as WorldHeader;
+  for (const field of ['entities', 'buildings', 'buildingAssets', 'statics'])
+    invariant(!Object.hasOwn(header, field), 'header must not contain static data');
+  validateWorld({ ...header, entities: [], buildings: [], buildingAssets: {} });
+  return header;
 }

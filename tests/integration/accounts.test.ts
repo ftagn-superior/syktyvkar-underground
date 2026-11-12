@@ -1,3 +1,4 @@
+import { prepareSdk } from '../helpers/prepare.js';
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { randomBytes } from 'node:crypto';
@@ -62,7 +63,7 @@ describe.skipIf(!databaseUrl)(
       room.onMessage('inventory', () => {});
       rooms.add(room);
       if (ready) {
-        room.send('clientReady');
+        prepareSdk(room);
         await until(() => !!room.state?.players?.has(room.sessionId));
       }
       return room;
@@ -290,7 +291,7 @@ describe.skipIf(!databaseUrl)(
       const first = (
         attempts.find((r) => r.status === 'fulfilled') as PromiseFulfilledResult<Room<WorldState>>
       ).value;
-      first.send('clientReady');
+      prepareSdk(first);
       await until(() => !!first.state?.players?.get(first.sessionId));
       const player = first.state.players.get(first.sessionId)!;
       expect(player.name).toBe('Постоянный');
@@ -302,6 +303,7 @@ describe.skipIf(!databaseUrl)(
       await until(() => app.room.diagnostics().reserved === 1);
       const sdk = new Client(app.url);
       const restored = await sdk.reconnect<WorldState>(reconnectToken);
+      prepareSdk(restored);
       restored.reconnection.enabled = false;
       restored.onMessage('resync', () => {});
       restored.onMessage('problem', () => {});

@@ -27,6 +27,7 @@ import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
 import { createItemShape } from './item-shapes.js';
 import {
+  canonicalJson,
   NEUTRAL_INPUT,
   ITEM_REACH,
   initialItemState,
@@ -37,11 +38,17 @@ import {
   type ItemPose,
   type ItemError,
   normalizeInput,
+  validPose,
   type EntityDefinition,
   type MoveInput,
   type PlayerState,
   type Quat,
   type SimulationSnapshot,
+  type LocalSimulationSnapshot,
+  type WorldHeader,
+  type StaticEntityDefinition,
+  type BuildingInstance,
+  type BuildingPhysicsAsset,
   type Vec3,
   type WorldDefinition,
 } from '@su/contracts';
@@ -99,10 +106,13 @@ export class PhysicsWorld {
   readonly spawnShape: PhysicsShapeCapsule;
   readonly gravity: Vector3;
   private readonly buildings: BuildingColliders;
-
+  private readonly staticReferences = new Map<
+    string,
+    { version: string; signature: string; references: number; building: boolean }
+  >();
   disposed = false;
   constructor(
-    readonly definition: WorldDefinition,
+    readonly definition: WorldDefinition | WorldHeader,
     havok: Awaited<ReturnType<typeof HavokPhysics>>,
     readonly prediction: boolean,
   ) {
@@ -128,18 +138,80 @@ export class PhysicsWorld {
     );
     this.buildings = new BuildingColliders(this.scene);
     try {
-      for (const item of definition.entities)
-        this.objects.set(item.entityId, this.createBody(item));
-      for (const seed of definition.initialItems) this.addItem(initialItemState(seed));
-      for (const instance of definition.buildings) {
-        const asset = definition.buildingAssets[instance.assetId];
-        if (!asset) throw new Error(`Unknown building asset: ${instance.assetId}`);
-        this.buildings.add(instance, asset);
+      if ('entities' in definition) {
+        for (const item of definition.entities) this.retainStatic(item, 'initial');
+        if (!prediction)
+          for (const seed of definition.initialItems) this.addItem(initialItemState(seed));
+        for (const instance of definition.buildings) {
+          const asset = definition.buildingAssets[instance.assetId];
+          if (!asset) throw new Error(`Unknown building asset: ${instance.assetId}`);
+          this.retainStatic(instance, 'initial', asset);
+        }
+      } else {
+        if (!prediction) throw new Error('Authoritative physics requires the complete world');
       }
     } catch (error) {
       this.dispose();
       throw error;
     }
+  }
+  /** Call between fixed steps. A reference is held by each connected cell. */
+  retainStatic(
+    item: StaticEntityDefinition | BuildingInstance,
+    version: string,
+    asset?: BuildingPhysicsAsset,
+  ): void {
+    if (this.disposed) throw new Error('Physics world is disposed');
+    const signature = canonicalJson(item);
+    const existing = this.staticReferences.get(item.entityId);
+    if (existing) {
+      if (existing.version !== version || existing.signature !== signature)
+        throw new Error(`Conflicting static entity/version: ${item.entityId}`);
+      existing.references++;
+      return;
+    }
+    if (
+      this.objects.has(item.entityId) ||
+      this.characters.has(item.entityId) ||
+      this.remotePlayers.has(item.entityId)
+    )
+      throw new Error(`Occupied entity ID: ${item.entityId}`);
+    if ('assetId' in item) {
+      if (!asset) throw new Error(`Missing collider: ${item.assetId}`);
+      this.buildings.add(item, asset);
+    } else this.objects.set(item.entityId, this.createBody(item));
+    this.staticReferences.set(item.entityId, {
+      version,
+      signature,
+      references: 1,
+      building: 'assetId' in item,
+    });
+  }
+  releaseStatic(entityId: string): void {
+    const entry = this.staticReferences.get(entityId);
+    if (!entry || --entry.references > 0) return;
+    this.staticReferences.delete(entityId);
+    if (entry.building) this.buildings.remove(entityId);
+    else {
+      const record = this.objects.get(entityId)!;
+      record.body.dispose();
+      record.shape.dispose();
+      record.node.dispose();
+      this.objects.delete(entityId);
+    }
+  }
+  staticDiagnostics() {
+    return {
+      entities: this.staticReferences.size,
+      references: [...this.staticReferences.values()].reduce(
+        (sum, entry) => sum + entry.references,
+        0,
+      ),
+      buildings: this.buildings.diagnostics(),
+      bodies: this.physics.getBodies().length,
+      items: [...this.objects.values()].filter((item) => item.item).length,
+      remotePlayers: this.remotePlayers.size,
+    };
   }
   private createBody(
     definition: Omit<EntityDefinition, 'kind'> & { kind: 'obstacle' | 'item' },
@@ -239,7 +311,9 @@ export class PhysicsWorld {
     };
   }
   snapshot(): SimulationSnapshot {
+    if (this.prediction) throw new Error('Authoritative snapshot requires the full server world');
     return {
+      scope: 'authoritative',
       players: [...this.characters.keys()].map((id) => this.state(id)),
       items: [...this.objects.values()].filter((b) => b.item).map((b) => this.boxState(b)),
     };
@@ -260,7 +334,8 @@ export class PhysicsWorld {
     body.setLinearVelocity(Vector3.Zero());
     body.setAngularVelocity(Vector3.Zero());
   }
-  setRemoteSnapshot(snapshot: SimulationSnapshot, ownId: string) {
+  setRemoteSnapshot(snapshot: LocalSimulationSnapshot | SimulationSnapshot, ownId: string) {
+    if (!this.prediction) throw new Error('Remote proxies belong to prediction');
     const ids = new Set(snapshot.items.map((i) => i.entityId));
     for (const [id, record] of this.objects) if (record.item && !ids.has(id)) this.removeItem(id);
     for (const item of snapshot.items) {
@@ -425,9 +500,10 @@ export class PhysicsWorld {
     pose: ItemPose,
     playerId?: string,
     ignoreId?: string,
+    requireSupport = true,
   ): ItemError | undefined {
     const type = this.definition.itemCatalog.types[typeId];
-    if (!type) return 'INVALID_INPUT';
+    if (!type || !validPose(pose)) return 'INVALID_INPUT';
     const p = vector(pose.position),
       q = new Quaternion(
         pose.rotation.x,
@@ -481,6 +557,7 @@ export class PhysicsWorld {
         hit,
       );
       if (hit.hasHit && hit.hitDistance < -0.01) return 'BLOCKED';
+      if (!requireSupport) return;
       const support = new ShapeCastResult();
       this.plugin.shapeCast(
         {
@@ -504,6 +581,17 @@ export class PhysicsWorld {
     } finally {
       shape.dispose();
     }
+  }
+  /** Stored dynamic poses can be airborne; new placement still requires support. */
+  checkSavedItem(item: ItemState): ItemError | undefined {
+    if (!validPose(item) || !validPose(item.safePose)) return 'INVALID_INPUT';
+    for (const vector of [item.velocity, item.angularVelocity]) {
+      if (!vector || ![vector.x, vector.y, vector.z].every(Number.isFinite)) return 'INVALID_INPUT';
+    }
+    return (
+      this.checkPlacement(item.typeId, item, undefined, item.entityId, false) ??
+      this.checkPlacement(item.typeId, item.safePose, undefined, item.entityId, false)
+    );
   }
   returnLostItems() {
     const { min, max } = this.definition.bounds;
@@ -572,6 +660,7 @@ export class PhysicsWorld {
       item.node.dispose();
     }
     this.objects.clear();
+    this.staticReferences.clear();
     this.remotePlayers.clear();
     this.spawnShape.dispose();
     this.scene.dispose();
@@ -579,7 +668,7 @@ export class PhysicsWorld {
   }
 }
 export async function createPhysicsWorld(
-  definition: WorldDefinition,
+  definition: WorldDefinition | WorldHeader,
   wasmBinary: WasmBinary | undefined,
   prediction: boolean,
 ) {

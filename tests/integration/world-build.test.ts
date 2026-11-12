@@ -57,7 +57,7 @@ async function load(manifest: WorldManifest, output: string) {
     return bytes;
   });
 }
-describe('world v3 release', () => {
+describe('world v4 release', () => {
   it('builds reproducible models and a verified graph of dependencies', async () =>
     withContent(async (root, source) => {
       const first = await buildWorld(source, join(root, 'first'));
@@ -126,7 +126,9 @@ describe('world v3 release', () => {
       expect(Object.keys(manifest.files).filter((path) => path.endsWith('.glb'))).toHaveLength(1);
       const world = await load(manifest, output);
       expect(world.buildings).toHaveLength(100);
-      expect(world.buildings[25].rotation.y).toBeCloseTo(Math.SQRT1_2);
+      expect(
+        world.buildings.find((building) => building.entityId === 'copy-25')!.rotation.y,
+      ).toBeCloseTo(Math.SQRT1_2);
     }));
   it('imports a closed arch mesh without filling its passage and extracts semantic parts', async () =>
     withContent(async (root, source) => {
@@ -207,14 +209,14 @@ describe('world v3 release', () => {
       const output = join(root, 'release'),
         manifest = await buildWorld(source, output);
       manifest.bounds.max.x += 1;
-      await expect(load(manifest, output)).rejects.toThrow('world bounds mismatch');
+      await expect(load(manifest, output)).rejects.toThrow('cell bounds disagree with grid');
       manifest.bounds.max.x -= 1;
       manifest.assets['house-a'].bounds.max.y += 1;
       await expect(load(manifest, output)).rejects.toThrow('asset bounds mismatch');
       manifest.assets['house-a'].bounds.max.y -= 1;
       manifest.cells[0].bounds = structuredClone(manifest.bounds);
       manifest.cells[0].bounds.min.z = -10;
-      await expect(load(manifest, output)).rejects.toThrow('outside containing bounds');
+      await expect(load(manifest, output)).rejects.toThrow('cell bounds disagree with grid');
     }));
   it('converts authoring sRGB colors to linear glTF material factors', () => {
     const part = meshPart('wall', 'wall', '#808080');

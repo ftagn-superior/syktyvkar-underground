@@ -1181,6 +1181,22 @@ dd {
   }
 }
 
+.area-status {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(34rem, calc(100vw - 2rem));
+  padding: 1rem 1.25rem;
+  border: 1px solid #65868b;
+  border-radius: 0.75rem;
+  background: #14232ef2;
+  color: #e4efef;
+  z-index: 10;
+}
+.area-status button {
+  margin-top: 0.75rem;
+}
 .placement-toolbar {
   position: fixed;
   z-index: 12;

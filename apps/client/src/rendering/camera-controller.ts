@@ -37,3 +37,12 @@ export function screenMovement(right: number, forward: number, angle: number): M
     moveZ: -right * Math.cos(angle) - forward * Math.sin(angle),
   })!;
 }
+
+/** Projection keeps the chosen scale on every aspect ratio; graphics streaming covers the frame. */
+export function orthographicFrame(
+  aspect: number,
+  zoom = 1,
+): { halfWidth: number; halfHeight: number } {
+  const halfHeight = (aspect < 1 ? 20 : 15) * zoom;
+  return { halfHeight, halfWidth: halfHeight * aspect };
+}

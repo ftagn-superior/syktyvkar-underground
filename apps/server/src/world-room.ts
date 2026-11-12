@@ -2,6 +2,9 @@ import type { Pool } from 'pg';
 import { ItemStore } from './items/store.js';
 import { ItemRuntime } from './items/runtime.js';
 import { randomUUID } from 'node:crypto';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { DurationMetric } from './metrics.js';
+import { DynamicInterest } from './interest.js';
 import {
   CloseCode,
   Room,
@@ -28,6 +31,10 @@ import {
   TICK_RATE,
   NEUTRAL_INPUT,
   normalizeInput,
+  worldNeighborhood,
+  type PrepareArea,
+  type AreaResult,
+  type Vec3,
   findReaction,
   findAnimation,
   normalizeChatText,
@@ -54,10 +61,12 @@ import type { AuthenticatedAccount } from './accounts/store.js';
 import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
 
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
+type Plan = { message: PrepareArea; deadline: number; readyAt?: number; spawnDeadline?: number };
 interface Session {
+  plan?: Plan;
+  areaResults: Map<string, AreaResult>;
   entityId: string;
   joinedAt: number;
-  readyAt?: number;
   connected: boolean;
   name: string;
   color: string;
@@ -82,6 +91,7 @@ export interface WorldRoomOptions {
   prepareTimeoutMs?: number;
   accounts?: AccountHttp;
   pool: Pool;
+  testDiagnostics?: boolean;
   itemCreationEnabled?: boolean;
 }
 
@@ -101,6 +111,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     },
   });
   private world!: PhysicsWorld;
+  private interest!: DynamicInterest;
+  private manifest!: WorldManifest;
+  private definition!: WorldDefinition;
   private items!: ItemRuntime;
   private itemRequests = 0;
   private shutdown?: Promise<void>;
@@ -118,7 +131,24 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private maxStepMs = 0;
   private resyncs = 0;
 
+  private readonly physicsTime = new DurationMetric();
+  private readonly selectionTime = new DurationMetric();
+  private readonly publicationTime = new DurationMetric();
+  private readonly cycleTime = new DurationMetric();
+  private readonly loopDelay = monitorEventLoopDelay({ resolution: 10 });
+  private pendingCycleMs: number | undefined;
+  private testDiagnostics = false;
+  private readonly publications: {
+    tick: number;
+    entities: { entityId: string; x: number; z: number }[];
+  }[] = [];
+
   async onCreate(options: WorldRoomOptions): Promise<void> {
+    this.manifest = options.manifest;
+    this.definition = options.definition;
+    this.interest = new DynamicInterest(options.manifest.grid);
+    this.testDiagnostics = options.testDiagnostics ?? false;
+    this.loopDelay.enable();
     this.reconnectSeconds = options.reconnectSeconds ?? RECONNECT_SECONDS;
     this.prepareTimeoutMs = options.prepareTimeoutMs ?? PREPARE_TIMEOUT_MS;
     this.accounts = options.accounts;
@@ -150,7 +180,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('inventoryRequest', (client) => {
       void this.sendInventory(client);
     });
-    this.onMessage('clientReady', (client) => this.ready(client));
+    this.onMessage('requestArea', (client) => this.sendPlan(client));
+    this.onMessage('areaReady', (client, data: unknown) => this.areaReady(client, data));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
@@ -238,35 +269,220 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       lastRespawn: -Infinity,
       lastInput: { ...NEUTRAL_INPUT },
       results: new Map(),
+      areaResults: new Map(),
     });
     if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
     this.state.occupancy = this.sessions.size;
-  }
-
-  private ready(client: Client): void {
-    const session = this.sessions.get(client.sessionId);
-    if (!session) return;
-    if (this.state.players.has(client.sessionId) || session.readyAt !== undefined) {
-      void this.sendInventory(client);
-      return;
-    }
-    session.readyAt = performance.now();
-    this.inputs.get(client.sessionId).clear();
-    if (!this.items.paused) this.trySpawn(client.sessionId, session);
+    this.interest.reset(client, this.sessions.get(client.sessionId)!.entityId);
+    this.createPlan(
+      client,
+      this.sessions.get(client.sessionId)!,
+      'spawn',
+      performance.now() + this.prepareTimeoutMs,
+    );
     void this.sendInventory(client);
   }
 
-  private trySpawn(sessionId: string, session: Session): void {
-    const player = this.world.addPlayer(session.entityId);
-    if (!player) return;
-    const projected = new PlayerSchema();
-    applyEntityState(projected, player);
-    projected.sessionId = sessionId;
-    projected.name = session.name;
-    projected.color = session.color;
-    projected.skinId = session.skinId;
-    projected.connected = session.connected;
-    this.state.players.set(sessionId, projected);
+  private sendPlan(client: Client): void {
+    const plan = this.sessions.get(client.sessionId)?.plan;
+    if (plan) client.send('prepareArea', plan.message);
+  }
+  private createPlan(
+    client: Client,
+    session: Session,
+    reason: PrepareArea['reason'],
+    deadline: number,
+    requestId?: number,
+    position?: Vec3,
+  ): void {
+    const spawnDeadline = session.plan?.spawnDeadline;
+    if (session.plan) this.completePlan(client, session, false, 'PLAN_REPLACED', false);
+    const actual = this.state.players.get(client.sessionId);
+    const target =
+      position ??
+      (reason === 'reconnect' && actual
+        ? { x: actual.x, y: actual.y, z: actual.z }
+        : (this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined) ??
+          this.definition.spawnPoints[0]));
+    const message: PrepareArea = {
+      prepareId: randomUUID(),
+      worldEpoch: this.state.worldEpoch,
+      mapVersion: this.state.mapVersion,
+      reason,
+      position: { ...target },
+      cellIds: worldNeighborhood(this.definition.bounds, this.manifest.grid, target),
+      expiresAt: Date.now() + Math.max(0, deadline - performance.now()),
+      ...(requestId !== undefined ? { requestId } : {}),
+    };
+    session.plan = { message, deadline, spawnDeadline };
+    this.inputs.get(client.sessionId).clear();
+    this.world.setInput(session.entityId, NEUTRAL_INPUT);
+    client.send('prepareArea', message);
+  }
+  private areaReady(client: Client, value: unknown): void {
+    const session = this.sessions.get(client.sessionId);
+    if (!session || !value || typeof value !== 'object') return;
+    const data = value as Record<string, unknown>;
+    if (data.worldEpoch !== this.state.worldEpoch || data.mapVersion !== this.state.mapVersion) {
+      client.send('problem', { code: 'STALE_WORLD' });
+      return;
+    }
+    if (typeof data.prepareId !== 'string') return;
+    const previous = session.areaResults.get(data.prepareId);
+    if (previous) {
+      client.send('areaResult', previous);
+      return;
+    }
+    const plan = session.plan;
+    if (!plan || plan.message.prepareId !== data.prepareId) return;
+    if (plan.readyAt === undefined) {
+      if (performance.now() >= plan.deadline) {
+        this.expirePlan(client, session, 'PREPARE_TIMEOUT');
+        return;
+      }
+      plan.readyAt = performance.now();
+      plan.spawnDeadline ??= plan.readyAt + 5000;
+    }
+    this.tryCompletePlan(client, session);
+  }
+  private tryCompletePlan(client: Client, session: Session): void {
+    const plan = session.plan;
+    if (
+      !plan ||
+      plan.readyAt === undefined ||
+      !session.connected ||
+      this.sessions.get(client.sessionId) !== session
+    )
+      return;
+    if (
+      session.auth &&
+      (session.auth.expiresAt <= Date.now() ||
+        this.accounts?.wasRevoked(session.auth.authSessionId))
+    ) {
+      this.expirePlan(client, session, 'AUTH_REQUIRED');
+      return;
+    }
+    if (this.items.paused) return;
+    const { reason, cellIds, requestId } = plan.message;
+    if (performance.now() >= (plan.spawnDeadline ?? plan.deadline)) {
+      this.expirePlan(client, session, 'PREPARE_TIMEOUT');
+      return;
+    }
+    if (reason === 'reconnect') {
+      const player = this.state.players.get(client.sessionId);
+      if (!player) {
+        this.expirePlan(client, session, 'STALE_WORLD');
+        return;
+      }
+      const position = { x: player.x, y: player.y, z: player.z };
+      if (
+        !worldNeighborhood(this.definition.bounds, this.manifest.grid, position).every((id) =>
+          cellIds.includes(id),
+        )
+      ) {
+        if (performance.now() < plan.deadline)
+          this.createPlan(client, session, reason, plan.deadline, undefined, position);
+        else this.expirePlan(client, session, 'PREPARE_TIMEOUT');
+        return;
+      }
+      this.completePlan(client, session, true);
+      return;
+    }
+    const candidates = [plan.message.position, ...this.definition.spawnPoints];
+    const inside = candidates.filter((point) =>
+      worldNeighborhood(this.definition.bounds, this.manifest.grid, point).every((id) =>
+        cellIds.includes(id),
+      ),
+    );
+    const point = this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined, inside);
+    if (point) {
+      if (reason === 'respawn') {
+        if (!this.world.respawnPlayer(session.entityId, point)) {
+          this.expirePlan(client, session, 'SPAWN_UNAVAILABLE');
+          return;
+        }
+        session.lastRespawn = performance.now();
+        session.lastInput = { ...NEUTRAL_INPUT };
+        this.cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
+        const projected = this.state.players.get(client.sessionId)!;
+        const actual = this.world
+          .getSnapshot()
+          .players.find((player) => player.entityId === session.entityId)!;
+        applyEntityState(projected, actual);
+        this.interest.upsert(projected);
+      } else {
+        const player = this.world.addPlayer(session.entityId, point);
+        if (!player) return;
+        const projected = new PlayerSchema();
+        applyEntityState(projected, player);
+        Object.assign(projected, {
+          sessionId: client.sessionId,
+          name: session.name,
+          color: session.color,
+          skinId: session.skinId,
+          connected: session.connected,
+        });
+        this.state.players.set(client.sessionId, projected);
+        this.interest.upsert(projected);
+      }
+      this.inputs.get(client.sessionId).clear();
+      this.interest.refresh(client.sessionId);
+      this.completePlan(client, session, true);
+      return;
+    }
+    const alternative = this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined);
+    if (alternative && performance.now() < plan.deadline)
+      this.createPlan(client, session, reason, plan.deadline, requestId, alternative);
+    else if (performance.now() >= plan.spawnDeadline!)
+      this.expirePlan(client, session, 'SPAWN_UNAVAILABLE');
+  }
+  private rememberAction(
+    client: Client | undefined,
+    session: Session,
+    requestId: number,
+    ok: boolean,
+    code?: ErrorCode,
+  ): void {
+    const result: ActionResult = {
+      requestId,
+      ok,
+      ...(code ? { code } : {}),
+      ...(ok || code === 'RATE_LIMITED'
+        ? {
+            retryAfterMs: Math.max(
+              0,
+              Math.ceil(RESPAWN_COOLDOWN_MS - (performance.now() - session.lastRespawn)),
+            ),
+          }
+        : {}),
+    };
+    session.results.set(requestId, result);
+    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
+    client?.send('actionResult', result);
+  }
+  private completePlan(
+    client: Client | undefined,
+    session: Session,
+    ok: boolean,
+    code?: ErrorCode,
+    finishAction = true,
+  ): void {
+    const plan = session.plan;
+    if (!plan) return;
+    session.plan = undefined;
+    const { prepareId, worldEpoch, mapVersion, requestId } = plan.message;
+    const result: AreaResult = { prepareId, worldEpoch, mapVersion, ok, ...(code ? { code } : {}) };
+    session.areaResults.set(prepareId, result);
+    if (session.areaResults.size > 32)
+      session.areaResults.delete(session.areaResults.keys().next().value!);
+    client?.send('areaResult', result);
+    if (finishAction && requestId !== undefined)
+      this.rememberAction(client, session, requestId, ok, code);
+  }
+  private expirePlan(client: Client, session: Session, code: ErrorCode): void {
+    const reason = session.plan?.message.reason;
+    this.completePlan(client, session, false, code);
+    if (reason !== 'respawn') this.fail(client, code);
   }
 
   private fail(client: Client, code: ErrorCode): void {
@@ -276,6 +492,19 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   private step(ctx: StepContext): void {
+    if (this.pendingCycleMs !== undefined) this.cycleTime.record(this.pendingCycleMs);
+    this.pendingCycleMs = undefined;
+    const now = performance.now();
+    for (const [id, session] of this.sessions) {
+      const plan = session.plan;
+      const client = this.clients.getById(id);
+      if (plan && client && session.connected && now >= (plan.spawnDeadline ?? plan.deadline))
+        this.expirePlan(
+          client,
+          session,
+          plan.readyAt === undefined ? 'PREPARE_TIMEOUT' : 'SPAWN_UNAVAILABLE',
+        );
+    }
     if (this.items.paused) {
       for (const id of this.sessions.keys()) this.inputs.get(id).clear();
       return;
@@ -283,17 +512,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const start = performance.now();
     for (const [sessionId, session] of this.sessions) {
       const client = this.clients.getById(sessionId);
-      if (!this.state.players.has(sessionId)) {
+      if (session.plan) {
         this.inputs.get(sessionId).clear();
-        if (session.readyAt !== undefined) {
-          if (start - session.readyAt >= 5000) {
-            if (client) this.fail(client, 'SPAWN_UNAVAILABLE');
-          } else this.trySpawn(sessionId, session);
-        } else if (start - session.joinedAt >= this.prepareTimeoutMs && client) {
-          this.fail(client, 'PREPARE_TIMEOUT');
-        }
+        this.world.setInput(session.entityId, NEUTRAL_INPUT);
+        if (client && session.connected && session.plan.readyAt !== undefined)
+          this.tryCompletePlan(client, session);
         continue;
       }
+      if (!this.state.players.has(sessionId)) continue;
       const input = this.inputs.get(sessionId);
       // More than 250ms of pending movement is stale. Clearing acknowledges
       // discarded commands through Colyseus and forces a clean client restore.
@@ -312,14 +538,19 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.cancelAnimation(player, this.state.serverTick + 1);
       this.world.setInput(session.entityId, session.lastInput);
     }
+    const physicsStart = performance.now();
     this.world.step(ctx.dt);
+    this.physicsTime.record(performance.now() - physicsStart);
     const snapshot = this.world.getSnapshot();
     const byId = new Map(snapshot.players.map((player) => [player.entityId, player]));
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
       if (actual && (!actual.grounded || actual.revision !== player.revision))
         this.cancelAnimation(player, this.state.serverTick + 1);
-      if (actual) applyEntityState(player, actual);
+      if (actual) {
+        applyEntityState(player, actual);
+        this.interest.upsert(player);
+      }
       this.expireAnimation(player, this.state.serverTick + 1);
       if (player.reactionId && this.state.serverTick >= player.reactionExpiresAtTick) {
         player.reactionId = '';
@@ -334,6 +565,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.state.serverTick++;
     this.items.step(this.state.serverTick);
     const duration = performance.now() - start;
+    this.pendingCycleMs = duration;
     // Diagnostics update at the patch rate rather than churning a field at 60Hz.
     if (ctx.tick % 3 === 0) this.state.stepMs = duration;
     if (this.stepSamples.length === 3600) this.stepSamples.shift();
@@ -342,6 +574,38 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.stepHistogram[Math.min(1000, Math.ceil(duration * 10))]++;
       this.measuredSteps++;
       this.maxStepMs = Math.max(this.maxStepMs, duration);
+    }
+  }
+
+  /** Exactly at state publication, using the most recent completed physical step. */
+  onBeforePatch(): void {
+    if (this.disposed) return;
+    const start = performance.now();
+    this.interest.refresh();
+    this.selectionTime.record(performance.now() - start);
+    if (this.testDiagnostics) {
+      this.publications.push({
+        tick: this.state.serverTick,
+        entities: [...this.state.items.values(), ...this.state.players.values()].map(
+          ({ entityId, x, z }) => ({
+            entityId,
+            x,
+            z,
+          }),
+        ),
+      });
+      if (this.publications.length > 120) this.publications.shift();
+    }
+  }
+
+  override broadcastPatch(): boolean {
+    const start = performance.now();
+    try {
+      return super.broadcastPatch();
+    } finally {
+      const ms = performance.now() - start;
+      this.publicationTime.record(ms);
+      if (this.pendingCycleMs !== undefined) this.pendingCycleMs += ms;
     }
   }
 
@@ -361,6 +625,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     const requestId = data.requestId;
     // An asynchronous command will acknowledge all duplicate deliveries once committed.
+    if (session.plan?.message.requestId === requestId) {
+      client.send('prepareArea', session.plan.message);
+      return;
+    }
     if (session.pendingActions.has(requestId)) return;
     const previous = session.results.get(requestId);
     if (previous) {
@@ -378,7 +646,12 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     session.lastRequest = requestId;
     let code: ErrorCode | undefined;
     if (data.worldEpoch !== this.state.worldEpoch) code = 'STALE_WORLD';
-    else if (this.items.paused || !session.connected || !this.state.players.has(client.sessionId))
+    else if (
+      this.items.paused ||
+      session.plan ||
+      !session.connected ||
+      !this.state.players.has(client.sessionId)
+    )
       code = 'WORLD_NOT_READY';
     return { session, requestId, code };
   }
@@ -394,30 +667,17 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (!action) return;
     const { session, requestId } = action;
     let { code } = action;
-    if (!code) {
-      if (performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS) code = 'RATE_LIMITED';
-      else if (!this.world.respawnPlayer(session.entityId)) code = 'SPAWN_UNAVAILABLE';
-      else {
-        session.lastRespawn = performance.now();
-        this.inputs.get(client.sessionId).clear();
-        session.lastInput = { ...NEUTRAL_INPUT };
-        this.cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
-      }
-    }
-    const result: ActionResult = {
-      requestId,
-      ok: code === undefined,
-      ...(code ? { code } : {}),
-      ...(code === undefined || code === 'RATE_LIMITED'
-        ? {
-            retryAfterMs: Math.max(
-              0,
-              Math.ceil(RESPAWN_COOLDOWN_MS - (performance.now() - session.lastRespawn)),
-            ),
-          }
-        : {}),
-    };
-    this.finishAction(client, session, result);
+    if (!code && performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS)
+      code = 'RATE_LIMITED';
+    if (code) this.rememberAction(client, session, requestId, false, code);
+    else
+      this.createPlan(
+        client,
+        session,
+        'respawn',
+        performance.now() + this.prepareTimeoutMs,
+        requestId,
+      );
   }
 
   private react(client: Client, request: unknown): void {
@@ -584,6 +844,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
             return 'AUTH_REQUIRED';
           if (
             this.sessions.get(client.sessionId) !== session ||
+            session.plan ||
             !session.connected ||
             !this.state.players.has(client.sessionId)
           )
@@ -615,6 +876,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     session.connected = false;
+    this.interest.drop(client.sessionId);
+    this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
     this.world.setInput(session.entityId, NEUTRAL_INPUT);
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
@@ -661,12 +924,17 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
     if (player) player.connected = true;
+    this.interest.reset(client, session.entityId);
+    this.createPlan(client, session, 'reconnect', performance.now() + this.prepareTimeoutMs);
   }
   onLeave(client: Client): void {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     const player = this.state.players.get(client.sessionId);
     if (player) this.cancelAnimation(player);
+    this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
+    this.interest.drop(client.sessionId);
+    this.interest.remove(session.entityId);
     this.world.removePlayer(session.entityId);
     this.state.players.delete(client.sessionId);
     this.sessions.delete(client.sessionId);
@@ -693,7 +961,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
   private projectItems(items: ItemState[]) {
     const ids = new Set(items.map((i) => i.entityId));
-    for (const id of this.state.items.keys()) if (!ids.has(id)) this.state.items.delete(id);
+    for (const id of this.state.items.keys())
+      if (!ids.has(id)) {
+        this.interest.remove(id);
+        this.state.items.delete(id);
+      }
     for (const item of items) {
       let schema = this.state.items.get(item.entityId);
       if (!schema) {
@@ -701,6 +973,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.state.items.set(item.entityId, schema);
       }
       applyEntityState(schema, item);
+      this.interest.upsert(schema);
     }
   }
   private persistenceStatus() {
@@ -769,7 +1042,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           )
             return 'AUTH_REQUIRED';
           if (command.worldEpoch !== this.state.worldEpoch) return 'STALE_WORLD';
-          if (!session.connected || !this.state.players.has(client.sessionId))
+          if (session.plan || !session.connected || !this.state.players.has(client.sessionId))
             return 'WORLD_NOT_READY';
         },
       );
@@ -792,6 +1065,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       console.error('World disposal follows an incomplete final save.');
     } finally {
       this.disposed = true;
+      this.loopDelay.disable();
+      this.interest?.clear();
       this.world?.dispose();
       this.sessions.clear();
       this.accountPlayers.clear();
@@ -811,7 +1086,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       }
       return this.maxStepMs;
     };
-    const { rss, heapUsed } = process.memoryUsage();
+    const { rss, heapUsed, external, arrayBuffers } = process.memoryUsage();
     return {
       ...this.world.diagnostics(),
       sessions: this.sessions.size,
@@ -826,8 +1101,27 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       cumulativeStepP95Ms: cumulativePercentile(0.95),
       cumulativeStepP99Ms: cumulativePercentile(0.99),
       maxStepMs: this.maxStepMs,
-      memory: { rss, heapUsed },
+      memory: { rss, heapUsed, external, arrayBuffers },
+      cpu: {
+        physics: this.physicsTime.snapshot(),
+        selection: this.selectionTime.snapshot(),
+        publication: this.publicationTime.snapshot(),
+        cycle: this.cycleTime.snapshot(),
+        cycleDefinition:
+          'Fixed-step work plus all publication CPU before the next step; publication includes selection, encoding, ACKs and transport enqueue, not socket delivery.',
+      },
+      eventLoop: {
+        resolutionMs: 10,
+        count: this.loopDelay.count,
+        meanMs: this.loopDelay.count ? this.loopDelay.mean / 1e6 : 0,
+        p95Ms: this.loopDelay.percentile(95) / 1e6,
+        p99Ms: this.loopDelay.percentile(99) / 1e6,
+        maxMs: this.loopDelay.max / 1e6,
+      },
+      ...(this.testDiagnostics ? { testPublications: this.publications } : {}),
       resyncs: this.resyncs,
+      interest: this.interest.diagnostics(),
+      preparing: [...this.sessions.values()].filter((session) => session.plan).length,
       disposed: this.disposed,
       items: this.state.items.size,
       persistence: { paused: this.state.paused, unavailable: this.items.unavailable },

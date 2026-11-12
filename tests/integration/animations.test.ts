@@ -1,3 +1,4 @@
+import { prepareSdk } from '../helpers/prepare.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/index.js';
@@ -28,7 +29,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     const results: ActionResult[] = [];
     room.onMessage('actionResult', (result: ActionResult) => results.push(result));
     if (ready) {
-      room.send('clientReady');
+      prepareSdk(room);
       await until(() => room.state?.players?.get(room.sessionId)?.grounded === true);
     } else await until(() => !!room.state?.worldEpoch);
     return { room, results, player: () => app.room.state.players.get(room.sessionId)! };
@@ -92,6 +93,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     await until(() => !observer.player().connected);
     expect(player().animationId).toBe('wave');
     const recoveredObserver = await new Client(app.url).reconnect<WorldState>(observerToken);
+    prepareSdk(recoveredObserver);
     recoveredObserver.reconnection.enabled = false;
     recoveredObserver.onMessage('resync', () => {});
     rooms.delete(observer.room);
@@ -152,7 +154,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     request(room, 1);
     await until(() => results.length === 1 && problems.length === 5);
     expect(results[0].code).toBe('WORLD_NOT_READY');
-    room.send('clientReady');
+    prepareSdk(room);
     await until(() => player()?.grounded === true);
     request(room, 2, 'wave', { worldEpoch: 'stale' });
     request(room, 3, '__proto__');
@@ -291,6 +293,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     await until(() => !player().connected);
     expect(player().animationId).toBe('');
     const restored = await new Client(app.url).reconnect<WorldState>(token);
+    prepareSdk(restored);
     restored.reconnection.enabled = false;
     restored.onMessage('resync', () => {});
     rooms.delete(room);

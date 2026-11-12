@@ -2,6 +2,8 @@
   "formatVersion": 1,
   "assets": {
     "house-a": "house-a/asset.json",
-    "house-b": "house-b/asset.json"
+    "house-b": "house-b/asset.json",
+    "house-remote-a": "house-remote-a/asset.json",
+    "house-remote-b": "house-remote-b/asset.json"
   }
 }

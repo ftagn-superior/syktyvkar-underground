@@ -199,7 +199,13 @@ export class InventoryPanel {
     return button;
   }
   private open(open: boolean, restoreFocus = true) {
-    if (open && (this.session.state !== 'playing' || !this.session.accountId)) return;
+    if (
+      open &&
+      (!['playing', 'preparing', 'waiting'].includes(this.session.state) ||
+        !this.session.accountId ||
+        !this.session.room)
+    )
+      return;
     if (open) this.onOpen?.();
     this.panel.hidden = !open;
     this.toggle.setAttribute('aria-expanded', String(open));
@@ -244,16 +250,20 @@ export class InventoryPanel {
       .normalize();
   }
   update() {
-    const available = this.session.state === 'playing' && !!this.session.accountId;
+    const preparing = ['preparing', 'waiting'].includes(this.session.state);
+    const available =
+      (this.session.state === 'playing' || preparing) &&
+      !!this.session.accountId &&
+      !!this.session.room;
     this.toggle.hidden = this.pickup.hidden = !available;
     if (!available) {
       this.panel.hidden = true;
       this.cancel();
       this.toggle.setAttribute('aria-expanded', 'false');
     }
-    const busy = this.session.itemPending || this.session.worldPaused;
+    const busy = preparing || this.session.itemPending || this.session.worldPaused;
     this.pickup.disabled = busy || !this.session.nearestItem() || !!this.selected;
-    this.toggle.disabled = this.session.worldPaused;
+    this.toggle.disabled = false;
     const slots = this.session.inventory.slots;
     if (!slots.some((slot) => slot.slotId === this.activeSlot)) this.activeSlot = slots[0]?.slotId;
     if (!slots.some((slot) => slot.slotId === this.targetSlot)) this.targetSlot = undefined;
@@ -275,11 +285,13 @@ export class InventoryPanel {
     this.summary.textContent = String(count);
     this.summary.setAttribute('aria-label', `Всего предметов: ${count}`);
     this.message.dataset.state = busy || this.targetSlot ? 'waiting' : 'ready';
-    this.message.textContent = busy
-      ? 'Ожидаем подтверждение сервера…'
-      : this.targetSlot
-        ? 'Выберите другую ячейку для обмена или объединения.'
-        : 'Одинаковые вещи собираются в стопки.';
+    this.message.textContent = preparing
+      ? 'Готовим окружение. Инвентарь доступен для просмотра.'
+      : busy
+        ? 'Ожидаем подтверждение сервера…'
+        : this.targetSlot
+          ? 'Выберите другую ячейку для обмена или объединения.'
+          : 'Одинаковые вещи собираются в стопки.';
     this.message.hidden = !slots.length;
     this.grid.replaceChildren();
     this.details.replaceChildren();
@@ -453,6 +465,7 @@ export class InventoryPanel {
   }
   frame(view: WorldView) {
     if (!this.selected || this.session.state !== 'playing') {
+      this.confirm.disabled = true;
       view.showPlacement();
       return;
     }

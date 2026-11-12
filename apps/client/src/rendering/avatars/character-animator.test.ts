@@ -317,3 +317,72 @@ describe('character animation from displayed motion', () => {
     expect(animator.pose.facingOffset).toBeCloseTo(0, 5);
   });
 });
+
+describe('footstep contact markers', () => {
+  it('emits both feet at a bounded cadence independent of frame rate and reduced motion', () => {
+    const counts = [30, 60, 120].map((fps) => {
+      const count = (speed: number, reduced: boolean) => {
+        const animator = new CharacterAnimator(4, 14);
+        const input = frame();
+        input.velocity.z = speed;
+        advance(animator, input, 2, { fps, reduced });
+        let total = 0;
+        for (let i = 0; i < fps * 2; i++) {
+          advance(animator, input, 1 / fps, { fps, reduced });
+          expect(animator.footsteps.count).toBeGreaterThanOrEqual(0);
+          expect(animator.footsteps.count).toBeLessThanOrEqual(1);
+          expect(animator.footsteps.running).toBe(speed === 14);
+          total += animator.footsteps.count;
+        }
+        return total;
+      };
+      const walk = count(4, false);
+      const run = count(14, false);
+      expect(walk).toBeGreaterThanOrEqual(7);
+      expect(walk).toBeLessThanOrEqual(8);
+      expect(run).toBeGreaterThanOrEqual(11);
+      expect(run).toBeLessThanOrEqual(12);
+      expect(count(4, true)).toBe(walk);
+      expect(count(14, true)).toBe(run);
+      return { walk, run };
+    });
+    for (const result of counts) {
+      expect(Math.abs(result.walk - counts[0].walk)).toBeLessThanOrEqual(1);
+      expect(Math.abs(result.run - counts[0].run)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it.each(['blocked', 'airborne', 'paused', 'disconnected', 'remote-stale'] as const)(
+    'stops contacts immediately when %s, even while the pose eases to rest',
+    (reason) => {
+      const animator = new CharacterAnimator(4, 14);
+      const input = frame();
+      input.velocity.z = 14;
+      advance(animator, input, 1);
+      if (reason === 'blocked') input.velocity.z = 0;
+      if (reason === 'airborne') input.grounded = false;
+      if (reason === 'paused') input.motionEnabled = false;
+      if (reason === 'disconnected') input.connected = false;
+      for (let i = 0; i < 60; i++) {
+        animator.update(input, 1 / 60, reason !== 'remote-stale');
+        expect(animator.footsteps.count).toBe(0);
+      }
+    },
+  );
+
+  it.each(['revision', 'motionRevision', 'teleport', 'long-frame', 'visibility'] as const)(
+    'discards pending contacts on %s without an audible catch-up',
+    (reason) => {
+      const animator = new CharacterAnimator(4, 14);
+      const input = frame();
+      input.velocity.z = 14;
+      advance(animator, input, 1);
+      if (reason === 'revision' || reason === 'motionRevision') input[reason]++;
+      if (reason === 'teleport') input.position.x += 100;
+      if (reason === 'visibility') animator.resetMotion();
+      animator.update(input, reason === 'long-frame' ? 1 : 1 / 60, true);
+      expect(animator.footsteps.count).toBe(0);
+      expect(animator.diagnostics().phase).toBe(0);
+    },
+  );
+});

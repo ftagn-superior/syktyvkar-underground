@@ -27,6 +27,12 @@ export class AuthoritativeWorld {
   step(dt = 1 / this.world.definition.simulation.tickRate) {
     this.world.advance(dt);
   }
+  drainImpacts() {
+    return this.world.drainImpacts();
+  }
+  suppressImpacts(entityId: string, seconds = 0.25) {
+    this.world.suppressImpacts(entityId, seconds);
+  }
   getSnapshot() {
     return this.world.snapshot();
   }

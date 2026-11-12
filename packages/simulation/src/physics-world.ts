@@ -26,6 +26,7 @@ import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
 import { createItemShape } from './item-shapes.js';
+import { ImpactCollector } from './impacts.js';
 import {
   canonicalJson,
   NEUTRAL_INPUT,
@@ -111,6 +112,13 @@ export class PhysicsWorld {
     { version: string; signature: string; references: number; building: boolean }
   >();
   disposed = false;
+  private readonly impacts = new ImpactCollector();
+  private readonly impactBodyIds = new WeakMap<PhysicsBody, number>();
+  private nextImpactBodyId = 0;
+  private readonly impactMotion = new Map<
+    PhysicsBody,
+    { velocity: Vector3; angular: Vector3; center: Vector3 }
+  >();
   constructor(
     readonly definition: WorldDefinition | WorldHeader,
     havok: Awaited<ReturnType<typeof HavokPhysics>>,
@@ -127,6 +135,27 @@ export class PhysicsWorld {
     this.scene.useRightHandedSystem = true;
     this.gravity = vector(definition.simulation.gravity);
     this.plugin = new HavokPlugin(true, havok);
+    if (!prediction)
+      this.plugin.onCollisionObservable.add((event) => {
+        if (!event.point || !event.normal) return;
+        const a = this.objects.get(event.collider.transformNode.name);
+        const b = this.objects.get(event.collidedAgainst.transformNode.name);
+        const item = a?.item ? a : b?.item ? b : undefined;
+        if (!item?.item) return;
+        const relative = this.impactVelocity(event.collider, event.point).subtract(
+          this.impactVelocity(event.collidedAgainst, event.point),
+        );
+        this.impacts.record(
+          this.impactPair(event.collider, event.collidedAgainst),
+          {
+            entityId: item.definition.entityId,
+            typeId: item.item.typeId,
+            position: plain(event.point),
+          },
+          event.impulse,
+          Math.max(0, Vector3.Dot(relative, event.normal)),
+        );
+      });
     this.scene.enablePhysics(this.gravity, this.plugin);
     this.physics = this.scene.getPhysicsEngine() as PhysicsEngine;
     const { height, radius } = definition.simulation.character;
@@ -245,6 +274,7 @@ export class PhysicsWorld {
       body.setMassProperties({ mass: definition.mass });
       body.setLinearDamping(0.15);
       body.setAngularDamping(0.3);
+      body.setCollisionCallbackEnabled(true);
     }
     return { node, body, shape, definition, revision: 0 };
   }
@@ -267,6 +297,29 @@ export class PhysicsWorld {
       .getBodies()
       .find((candidate) => candidate.shape === controller.shape)!;
     body.transformNode.name = id;
+    if (!this.prediction)
+      controller.onTriggerCollisionObservable.add((event) => {
+        const item = this.objects.get(event.collider.transformNode.name);
+        if (!item?.item) return;
+        const impulse = event.impulse.length();
+        if (impulse <= 0) return;
+        const direction = event.impulse.scale(1 / impulse);
+        const relative = this.impactVelocity(body, event.impulsePosition).subtract(
+          this.impactVelocity(event.collider, event.impulsePosition),
+        );
+        this.impacts.record(
+          this.impactPair(body, event.collider),
+          {
+            entityId: item.definition.entityId,
+            typeId: item.item.typeId,
+            position: plain(event.impulsePosition),
+            actorId: id,
+          },
+          impulse,
+          Math.max(0, Vector3.Dot(relative, direction)),
+          true,
+        );
+      });
     const q = state?.rotation;
     const yaw = q ? Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z)) : 0;
     const record = {
@@ -281,6 +334,7 @@ export class PhysicsWorld {
     return record;
   }
   removeCharacter(id: string) {
+    this.impacts.clear(true);
     this.characters.get(id)?.controller.dispose();
     this.characters.delete(id);
   }
@@ -324,6 +378,7 @@ export class PhysicsWorld {
     this.createCharacter(state.entityId, state.position, state);
   }
   teleport(body: PhysicsBody, node: TransformNode, position: Vec3, q: Quat = identity()) {
+    this.impacts.clear(true);
     node.position.copyFrom(vector(position));
     node.rotationQuaternion = new Quaternion(q.x, q.y, q.z, q.w);
     node.computeWorldMatrix(true);
@@ -415,6 +470,17 @@ export class PhysicsWorld {
   advance(dt: number) {
     if (this.disposed) throw new Error('Physics world is disposed');
     if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) throw new Error('Invalid physics timestep');
+    if (!this.prediction) {
+      this.impacts.beginStep(dt);
+      this.impactMotion.clear();
+      for (const record of this.objects.values())
+        if (record.item)
+          this.impactMotion.set(record.body, {
+            velocity: record.body.getLinearVelocity(),
+            angular: record.body.getAngularVelocity(),
+            center: record.node.position.clone(),
+          });
+    }
     for (const record of this.characters.values()) {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
       const config = this.definition.simulation.character;
@@ -427,12 +493,38 @@ export class PhysicsWorld {
       record.controller.setVelocity(
         new Vector3(input.moveX * speed, vertical, input.moveZ * speed),
       );
+      if (!this.prediction)
+        this.impactMotion.set(record.body, {
+          velocity: record.controller.getVelocity().clone(),
+          angular: Vector3.Zero(),
+          center: record.controller.getPosition().clone(),
+        });
       if (Math.hypot(input.moveX, input.moveZ) > 0.001)
         record.yaw = Math.atan2(input.moveX, input.moveZ);
       record.controller.integrate(dt, support, this.gravity);
     }
     this.plugin.executeStep(dt, this.physics.getBodies());
     if (!this.prediction) this.returnLostItems();
+    if (!this.prediction) this.impacts.endStep();
+  }
+  private impactPair(a: PhysicsBody, b: PhysicsBody): string {
+    for (const body of [a, b])
+      if (!this.impactBodyIds.has(body)) this.impactBodyIds.set(body, ++this.nextImpactBodyId);
+    const aa = this.impactBodyIds.get(a)!,
+      bb = this.impactBodyIds.get(b)!;
+    return aa < bb ? `${aa}/${bb}` : `${bb}/${aa}`;
+  }
+  private impactVelocity(body: PhysicsBody, point: Vector3): Vector3 {
+    const motion = this.impactMotion.get(body);
+    return motion
+      ? motion.velocity.add(Vector3.Cross(motion.angular, point.subtract(motion.center)))
+      : Vector3.Zero();
+  }
+  drainImpacts() {
+    return this.impacts.drain();
+  }
+  suppressImpacts(entityId: string, seconds = 0.25) {
+    this.impacts.suppress(entityId, seconds);
   }
   addItem(state: ItemState) {
     if (this.objects.has(state.entityId)) throw new Error('Duplicate physical item');
@@ -459,12 +551,14 @@ export class PhysicsWorld {
   removeItem(id: string) {
     const record = this.objects.get(id);
     if (!record?.item) return;
+    this.impacts.clear(true);
     record.body.dispose();
     record.shape.dispose();
     record.node.dispose();
     this.objects.delete(id);
   }
   replaceItems(items: ItemState[]) {
+    this.impacts.clear();
     for (const [id, record] of this.objects) if (record.item) this.removeItem(id);
     for (const item of items) this.addItem(item);
   }
@@ -650,6 +744,8 @@ export class PhysicsWorld {
     }
   }
   dispose() {
+    this.impacts.clear();
+    this.impactMotion.clear();
     if (this.disposed) return;
     this.disposed = true;
     for (const id of [...this.characters.keys()]) this.removeCharacter(id);

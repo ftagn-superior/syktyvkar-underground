@@ -22,6 +22,9 @@ import { ChatConsole } from './ui/chat';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 import { bindTouchButtons } from './ui/touch-buttons';
+import { GameAudio } from './audio/game-audio';
+import { AudioSettings } from './ui/audio-settings';
+import { MenuSounds } from './ui/menu-sounds';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -45,6 +48,15 @@ const diagnosticsToggle = element<HTMLButtonElement>('diagnostics-toggle');
 const qualitySelect = element<HTMLSelectElement>('quality');
 const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
+const audio = new GameAudio();
+const audioSettings = new AudioSettings(audio);
+const audioInputs = new AbortController();
+const unlockAudio = () => audio.unlock();
+document.addEventListener('pointerdown', unlockAudio, {
+  capture: true,
+  signal: audioInputs.signal,
+});
+document.addEventListener('keydown', unlockAudio, { capture: true, signal: audioInputs.signal });
 const unbindTouchButtons = bindTouchButtons([
   join,
   respawn,
@@ -234,6 +246,7 @@ function showNotice(message: string, options: { toast?: { hint?: string } } = {}
 }
 function updateState(state: ConnectionState, message?: string): void {
   const playing = state === 'playing';
+  if (!playing) audio.stopWorld();
   const reconnecting = state === 'reconnecting';
   const preparing = state === 'preparing' || state === 'waiting';
   welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && !!session.room);
@@ -306,6 +319,14 @@ function updateState(state: ConnectionState, message?: string): void {
   syncPreview();
 }
 const session = new GameSession(updateState, showNotice);
+session.onSpawn = () => audio.playUi('spawn');
+session.onActionFeedback = (cue) => audio.playUi(cue);
+function syncAudioActivity(): void {
+  const active = pageActive && !document.hidden && !graphicsLost;
+  audio.setActive(active);
+  session.setSoundActive(active);
+}
+syncAudioActivity();
 const storageStatus = document.createElement('div');
 storageStatus.className = 'storage-status';
 storageStatus.setAttribute('role', 'status');
@@ -426,6 +447,18 @@ session.onChatResult = (result) => {
   chat?.complete(result.ok);
   renderChat();
 };
+const menuSounds = new MenuSounds(
+  [
+    'help-panel',
+    'reactions-panel',
+    'animations-panel',
+    'inventory-panel',
+    'chat-console',
+    'diagnostics',
+  ].map((id) => element(id)),
+  () => pageActive && !document.hidden && !graphicsLost && session.state === 'playing',
+  (cue) => audio.playUi(cue),
+);
 function renderChat(): void {
   const state = session.chatStatus();
   chat?.update({
@@ -459,14 +492,17 @@ touch = new TouchInput(
 renderInputMode();
 window.addEventListener('blur', () => {
   pageActive = false;
+  syncAudioActivity();
   resetGameInput();
   syncTouchInput();
 });
 window.addEventListener('focus', () => {
   pageActive = true;
+  syncAudioActivity();
   syncTouchInput();
 });
 document.addEventListener('visibilitychange', () => {
+  syncAudioActivity();
   if (document.hidden) resetGameInput();
   syncTouchInput();
 });
@@ -545,10 +581,12 @@ async function start(): Promise<void> {
     view = undefined;
     await session.load();
     view = new WorldView(canvas, element('labels'), session.definition, quality);
+    view.setAudio(audio);
     view.setTouchMode(inputMode.value === 'touch');
     view.engine.onContextRestoredObservable.add(() => {
       if (!graphicsLost) return;
       graphicsLost = false;
+      syncAudioActivity();
       graphicsRecovery.hidden = true;
       document.body.classList.remove('graphics-unavailable');
       qualitySelect.disabled = false;
@@ -587,6 +625,17 @@ async function start(): Promise<void> {
         syncTouchInput();
         view!.follow(frame.ownId);
         view!.update(frame.entities, frame.ownId, delta);
+        for (const event of session.takeWorldSounds(now)) {
+          const own = event.actorId === session.room?.sessionId;
+          if (event.kind === 'pickup' && own) audio.playUi('pickup');
+          else
+            audio.playWorld(event.kind, event.position, {
+              typeId: event.typeId,
+              strength: event.strength,
+              own,
+              sourceId: event.entityId,
+            });
+        }
         inventory?.frame(view!);
       } catch (error) {
         loaded = false;
@@ -667,6 +716,7 @@ graphicsReload.addEventListener('click', () => location.reload());
 canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   graphicsLost = true;
+  syncAudioActivity();
   keyboard.setEnabled(false);
   resetGameInput();
   session.setInputEnabled(false);
@@ -720,6 +770,10 @@ window.addEventListener(
     animations?.dispose();
     chat?.dispose();
     inventory?.dispose();
+    menuSounds.dispose();
+    audioSettings.dispose();
+    audioInputs.abort();
+    audio.dispose();
   },
   { once: true },
 );
@@ -742,6 +796,7 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
       }),
       buildings: () => structuredClone(view?.buildingDiagnostics() ?? []),
       avatars: () => view?.avatarDiagnostics() ?? [],
+      audio: () => audio.diagnostics(),
     }),
     writable: false,
   });

@@ -67,6 +67,7 @@ import wasmUrl from '@babylonjs/havok/lib/esm/HavokPhysics.wasm?url';
 import type { DisplayEntity } from '../presentation/display-state';
 import { AnimationBuffer, REMOTE_INTERPOLATION_MS } from '../presentation/animation-buffer';
 import { AnimationRequestState } from '../presentation/animation-request';
+import { WorldSoundEvents } from '../presentation/world-sound-events';
 
 export type ConnectionState =
   | 'loading'
@@ -160,11 +161,17 @@ export class GameSession {
   guestSkinId: AvatarSkinId = DEFAULT_AVATAR_SKIN;
   inventory: InventoryView = { slots: [] };
   private pendingItem?: ItemCommand;
+  private liveItemOperation?: string;
   private itemRetryAt = 0;
   private persistencePaused = false;
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  onSpawn?: () => void;
+  onActionFeedback?: (cue: 'click' | 'error') => void;
+  private readonly worldSounds = new WorldSoundEvents();
+  private pendingSpawnSound = false;
+  private soundActive = true;
   state: ConnectionState = 'loading';
   definition!: WorldHeader;
   manifest!: WorldManifest;
@@ -250,6 +257,9 @@ export class GameSession {
   private setState(state: ConnectionState, message?: string): void {
     if (state !== this.state) this.motionRevision++;
     if (['loading', 'ready', 'error', 'reconnecting'].includes(state)) {
+      this.worldSounds.clear();
+      this.pendingSpawnSound = false;
+      this.liveItemOperation = undefined;
       this.clearPendingRespawn();
       this.clearPendingReaction();
       this.animationRequest.clear();
@@ -495,6 +505,17 @@ export class GameSession {
         this.inventory = inventory;
         this.onInventoryChange?.();
       });
+      room.onMessage<unknown>('worldSound', (value) => {
+        if (this.room !== room) return;
+        this.worldSounds.receive(value, {
+          epoch: this.info.worldEpoch,
+          serverTick: room.state.serverTick,
+          sessionId: room.sessionId,
+          now: performance.now(),
+          active:
+            this.soundActive && this.state === 'playing' && this.inputEnabled && !document.hidden,
+        });
+      });
       room.onMessage<ItemResult>('itemResult', (result) => {
         if (this.room !== room || result.operationId !== this.pendingItem?.operationId) return;
         if (
@@ -505,6 +526,9 @@ export class GameSession {
           this.itemRetryAt = performance.now() + 3000;
           return;
         }
+        if (!result.ok && this.liveItemOperation === result.operationId)
+          this.onActionFeedback?.('error');
+        this.liveItemOperation = undefined;
         this.pendingItem = undefined;
         try {
           sessionStorage.removeItem(`su:item-operation:${this.accountId}`);
@@ -517,7 +541,10 @@ export class GameSession {
       });
       room.onMessage<ActionResult>('actionResult', (result) => {
         if (this.room !== room) return;
-        if (this.animationRequest.result(result)) return;
+        if (this.animationRequest.result(result)) {
+          this.onActionFeedback?.(result.ok ? 'click' : 'error');
+          return;
+        }
         if (result.requestId === this.pendingChat) {
           this.clearPendingChat();
           if (result.ok || result.code === 'RATE_LIMITED') {
@@ -535,10 +562,12 @@ export class GameSession {
                 : (messages[result.code] ?? result.code),
             );
           this.onChatResult?.(result);
+          if (!result.ok) this.onActionFeedback?.('error');
           return;
         }
         if (result.requestId === this.pendingReaction) {
           this.clearPendingReaction();
+          if (!result.ok) this.onActionFeedback?.('error');
           if (result.ok || result.code === 'RATE_LIMITED') {
             const delay =
               typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
@@ -556,6 +585,7 @@ export class GameSession {
         }
         if (result.requestId !== this.pendingRespawn) return;
         this.clearPendingRespawn();
+        if (!result.ok) this.onActionFeedback?.('error');
         if (result.ok || result.code === 'RATE_LIMITED') {
           const delay =
             typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
@@ -589,6 +619,7 @@ export class GameSession {
           return;
         }
         if (this.plan?.prepareId === plan.prepareId) return;
+        this.pendingSpawnSound = false;
         this.pausePrediction();
         this.waitingTarget = undefined;
         this.preparationConfirmed = false;
@@ -615,6 +646,7 @@ export class GameSession {
           return;
         }
         this.preparationConfirmed = result.ok || !!room.state.players?.get(room.sessionId);
+        this.pendingSpawnSound = result.ok && this.plan.reason !== 'reconnect';
         this.plan = undefined;
         this.planAcknowledged = undefined;
         if (!result.ok) {
@@ -953,6 +985,10 @@ export class GameSession {
         this.itemRetryAt = 0;
       }
     }
+    if (this.pendingSpawnSound) {
+      this.pendingSpawnSound = false;
+      this.onSpawn?.();
+    }
     if (!this.input || !this.predictor || !this.simulation) return this.authoritativeDisplay();
     if (this.input.lastProcessed !== this.lastAck || this.input.pendingCount === 0) {
       this.lastAck = this.input.lastProcessed;
@@ -1130,6 +1166,16 @@ export class GameSession {
   get worldPaused() {
     return this.persistencePaused;
   }
+  takeWorldSounds(now: number, active = true) {
+    return this.worldSounds.drain(
+      now,
+      active && this.soundActive && this.state === 'playing' && !document.hidden,
+    );
+  }
+  setSoundActive(active: boolean): void {
+    this.soundActive = active;
+    if (!active) this.worldSounds.suspend();
+  }
   get gameplayInputEnabled(): boolean {
     return (
       this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused
@@ -1152,6 +1198,7 @@ export class GameSession {
       worldEpoch: this.info.worldEpoch,
       action,
     };
+    this.liveItemOperation = this.pendingItem.operationId;
     try {
       sessionStorage.setItem(
         `su:item-operation:${this.accountId}`,
@@ -1406,6 +1453,9 @@ export class GameSession {
       });
   }
   private cleanup(preserveRecovery = false): void {
+    this.worldSounds.clear();
+    this.pendingSpawnSound = false;
+    this.liveItemOperation = undefined;
     this.cancelPhysicsPreparation();
     this.clearPendingRespawn();
     this.clearPendingReaction();

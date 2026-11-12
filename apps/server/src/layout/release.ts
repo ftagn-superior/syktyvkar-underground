@@ -34,6 +34,15 @@ export async function readAuthoringRelease(directory: string) {
   return { manifest, definition, metadata, seed, directory: resolve(directory) };
 }
 export type AuthoringRelease = Awaited<ReturnType<typeof readAuthoringRelease>>;
+export function editableStaticAssetIds(release: AuthoringRelease): string[] {
+  const fixed = new Set(release.metadata.fixedInstanceIds);
+  const fixedAssets = new Set(
+    release.definition.buildings.filter((i) => fixed.has(i.entityId)).map((i) => i.assetId),
+  );
+  return Object.keys(release.manifest.assets)
+    .filter((id) => !fixedAssets.has(id))
+    .sort();
+}
 export function layoutHash(snapshot: WorldLayoutSnapshot) {
   return hash(
     canonicalJson({
@@ -63,6 +72,7 @@ export async function createLayoutPublication(
     ...release.definition.entities.map((i) => i.entityId),
   ]);
   const ids = new Set<string>();
+  const editableAssets = new Set(editableStaticAssetIds(release));
   for (const instance of snapshot.instances) {
     if (reserved.has(instance.entityId) || ids.has(instance.entityId))
       throw new Error(`Reserved/duplicate static ID: ${instance.entityId}`);
@@ -81,7 +91,7 @@ export async function createLayoutPublication(
       Math.abs(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w - 1) >= 0.000001
     )
       throw new Error('Static rotation must be a finite unit quaternion');
-    if (!release.manifest.assets[instance.assetId])
+    if (!editableAssets.has(instance.assetId))
       throw new Error(`Unknown static asset: ${instance.assetId}`);
   }
   if (

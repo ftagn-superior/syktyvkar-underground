@@ -4,6 +4,7 @@ export * from './items.js';
 export * from './item-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
+export * from './world-layout-patch.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
 export const PROTOCOL_VERSION = 10;

@@ -22,6 +22,8 @@ pnpm build
 
 ## Подсистемы
 
+Файловые патчи размещений проверяются в `packages/contracts/src/world-layout-patch.test.ts` (офлайн diff, формат и конфликты) и `tests/integration/static-layout.test.ts` (настоящие CLI export/patch/check/apply, сохранность предметов, аудит, откат SQL-сбоя и блокировка работающего мира). Второй набор требует `SU_TEST_DATABASE_URL`.
+
 | Проверка | Команда |
 | --- | --- |
 | Аккаунты, профиль, локальный OIDC с RS256 | `pnpm test:accounts`, `pnpm test:accounts:browser` |

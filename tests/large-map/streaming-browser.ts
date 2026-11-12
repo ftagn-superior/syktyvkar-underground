@@ -52,7 +52,7 @@ export async function runStreamingProbe() {
   document.body.append(canvas);
   const labels = document.createElement('div');
   document.body.append(labels);
-  const view = new WorldView(canvas, labels, header);
+  const view = new WorldView(canvas, labels, header, 'economy');
   disposeGraphics = () => view.dispose();
   let clockOffset = 0;
   const stream = new CellStreamer(
@@ -95,13 +95,14 @@ export async function runStreamingProbe() {
   }
   async function drain() {
     clockOffset += 5001;
-    for (let i = 0; i < 1000; i++) {
+    const deadline = performance.now() + 60_000;
+    for (let i = 0; i < 1000 && performance.now() < deadline; i++) {
       stream.pump();
       if (!stream.diagnostics().cells.some((cell) => cell.state === 'releasing' || cell.releaseAt))
         return;
       await frame();
     }
-    throw new Error('Release did not finish');
+    throw new Error('Release did not finish: ' + JSON.stringify(stream.diagnostics()));
   }
   function display() {
     view.follow('self');
@@ -159,6 +160,7 @@ export async function runStreamingProbe() {
     stream.setArea(world.state('self').position);
     await waitReady();
     display();
+    console.info('[L2] critical prepared');
     const initial = {
       diagnostics: stream.diagnostics(),
       requests: requests.slice(),
@@ -175,6 +177,7 @@ export async function runStreamingProbe() {
     );
     check(resources.diagnostics().integrityRetries === 1, 'Corrupt resource did not recover');
     const side = await walk({ x: 130, y: 0.92, z: 4 }, 2100);
+    console.info('[L2] side route passed');
     await relocate({ x: -3, y: 0.92, z: -3 });
     const corner = await walk({ x: 3, y: 0.92, z: 3 }, 200);
     await relocate({ x: -135, y: 0.92, z: -312.5 });
@@ -193,6 +196,7 @@ export async function runStreamingProbe() {
       'Corner house duplicated',
     );
     const cornerHouse = await walk({ x: -240, y: 0.92, z: -240 }, 500, true);
+    console.info('[L2] corner and obstacles passed');
     // Keep history colliders after moving to a distant area, then release the final reference.
     const held = { x: -125, y: 0.92, z: -312.5 };
     stream.setArea({ x: 950, y: 0, z: 950 });
@@ -218,6 +222,7 @@ export async function runStreamingProbe() {
       !view.buildingDiagnostics().buildings.some((item) => item.entityId === 'house-6-5-0'),
       'History reference leaked',
     );
+    console.info('[L2] history release passed');
     await relocate(held);
     await drain();
     const cycles: ReturnType<typeof counts>[] = [];
@@ -225,9 +230,35 @@ export async function runStreamingProbe() {
       await relocate({ x: 500, y: 0.92, z: 500 });
       await drain();
       await relocate(held);
-      const deadline = performance.now() + 30000;
+      // Full-radius background coverage is not the entry deadline. SwiftShader can need
+      // more than 30s to connect hundreds of ready models after expired holds are released.
+      const deadline = performance.now() + 90_000;
+      let reportAt = performance.now();
       while (!stream.backgroundReady && performance.now() < deadline) {
         stream.pump();
+        if (performance.now() >= reportAt) {
+          const d = stream.diagnostics();
+          console.info(
+            '[L2] background ' +
+              JSON.stringify({
+                required: d.physicsRequired.length,
+                visual: d.graphicsRequired.length,
+                physics: d.physicsActive.length,
+                graphics: d.graphicsActive.length,
+                pending: d.requested.length,
+                errors: d.cells.filter((c) => c.error),
+                cells: d.cells
+                  .filter((c) => !c.graphicsReady || !c.physicsReady)
+                  .map((c) => ({
+                    id: c.id,
+                    state: c.state,
+                    physics: c.physicsReady,
+                    graphics: c.graphicsReady,
+                  })),
+              }),
+          );
+          reportAt = performance.now() + 5000;
+        }
         await frame();
       }
       check(stream.backgroundReady, 'Background did not settle before resource comparison');
@@ -237,6 +268,7 @@ export async function runStreamingProbe() {
         for (let i = 0; i < 12; i++) await frame();
       }
       cycles.push(counts());
+      console.info('[L2] resource cycle ' + cycle);
     }
     check(
       cycles.every((value) => JSON.stringify(value) === JSON.stringify(cycles[0])),
@@ -265,6 +297,7 @@ export async function runStreamingProbe() {
         ),
       'Late response activated an old target',
     );
+    console.info('[L2] cancellation passed');
     const self = world.state('self');
     const ownDisplay = {
       ...self,
@@ -344,6 +377,13 @@ export async function runStreamingProbe() {
       limits: { plannedFrameMs: 2, graceMs: 5000, cacheBytes: 64 * 1024 * 1024 },
     };
   } catch (error) {
+    (globalThis as unknown as { __L2_FAILURE__: unknown }).__L2_FAILURE__ = {
+      error: String(error),
+      streaming: stream.diagnostics(),
+      rendering: view.renderingDiagnostics(),
+      resources: counts(),
+      requests,
+    };
     stream.dispose();
     world.dispose();
     view.dispose();

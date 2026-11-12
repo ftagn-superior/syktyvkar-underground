@@ -4,7 +4,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
 
 const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
-const browser = await launchTestBrowser();
+// Headless shell treats every tab as focused; full Chromium provides native tab activation.
+const browser = await launchTestBrowser({ channel: 'chromium' });
 type Position = { x: number; z: number };
 const distance = (a: Position, b: Position) => Math.hypot(a.x - b.x, a.z - b.z);
 const errors: string[] = [];

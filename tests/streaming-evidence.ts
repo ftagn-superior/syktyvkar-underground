@@ -25,7 +25,7 @@ assert.ok(browser.results.every((row: any) => row.code === 0));
 for (const stage of ['l2', 'l3', 'l4']) await read(base + '/' + stage + '/browser.json');
 await read(base + '/failures/result.json');
 const regression = await read(base + '/regression/suite.json');
-assert.equal(regression.results.length, 17);
+assert.equal(regression.results.length, 20);
 assert.ok(regression.results.every((row: any) => row.code === 0 && !row.timedOut));
 const artifact = await read(base + '/artifact/artifact.json');
 await read(base + '/regression/supplementary.json');
@@ -88,7 +88,7 @@ assert.match(
 execFileSync('git', ['diff', '--check']);
 execFileSync('bash', ['-n', 'tests/browser-network-netem.sh', 'tests/streaming-netem.sh']);
 const unitTests = Number(/Tests\s+(\d+) passed/.exec(unitLog)?.[1]);
-assert.ok(unitTests >= 276 && !/Tests\s+\d+ failed/.test(unitLog));
+assert.ok(unitTests >= 281 && !/Tests\s+\d+ failed/.test(unitLog));
 assert.ok(!/\d+ skipped/.test(unitLog), 'Persistent-world evidence must include database tests');
 const all = [...profiles, ...soaks];
 for (const profile of [...all, netem]) {

@@ -18,6 +18,9 @@ for (const [name, file] of [
   ['buildings', 'tests/browser-buildings.ts'],
   ['restart', 'tests/browser-restart.ts'],
   ['network', 'tests/browser-network.ts'],
+  ['dynamic-map', 'tests/dynamic-map-browser.ts'],
+  ['streaming-failures', 'tests/streaming-failures.ts'],
+  ['streaming-movement', 'tests/large-map-l3.ts'],
 ]) {
   results.push(
     await runCheck(name, process.execPath, ['--import', 'tsx', file], `${output}/${name}.log`),

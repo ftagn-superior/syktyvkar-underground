@@ -78,7 +78,9 @@ try {
   const beforeReturn = await page.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
   );
-  await page.locator('#respawn').click();
+  // Keyboard activation avoids the HUD's intentional outside-pointer dismissal.
+  await page.locator('#respawn').focus();
+  await page.keyboard.press('Enter');
   await page.waitForFunction((revision) => {
     const state = (window as any).__SU_DEBUG__.snapshot();
     return state.connection === 'playing' && state.authoritative.revision > revision;
@@ -161,18 +163,28 @@ try {
   await confirm.click();
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().items.length === 1);
   assert.equal(app.room.state.items.values().next().value!.entityId, chosenId);
-  const placed = app.room.state.items.values().next().value!;
+  // Inspect the accepted command before gravity/contact can rotate the live body.
+  const placement = await fixture.pool.query(
+    `SELECT request->'action'->'pose'->'rotation' AS rotation, result
+     FROM item_operations
+     WHERE request->'action'->>'kind'='place' AND request->'action'->>'itemId'=$1
+     ORDER BY created_at DESC LIMIT 1`,
+    [chosenId],
+  );
+  assert.equal(placement.rowCount, 1);
+  assert.equal(placement.rows[0].result.ok, true);
+  const rotation = placement.rows[0].rotation;
   const sin = Math.sin(Math.PI / 24),
     cos = Math.cos(Math.PI / 24);
   const expectedRotation = {
-    qx: sin * cos * (cos - sin),
-    qy: sin * cos * (cos + sin),
-    qz: sin * cos * (cos - sin),
-    qw: cos ** 3 + sin ** 3,
+    x: sin * cos * (cos - sin),
+    y: sin * cos * (cos + sin),
+    z: sin * cos * (cos - sin),
+    w: cos ** 3 + sin ** 3,
   };
-  for (const key of ['qx', 'qy', 'qz', 'qw'] as const)
+  for (const key of ['x', 'y', 'z', 'w'] as const)
     assert.ok(
-      Math.abs(placed[key] - expectedRotation[key]) < 0.025,
+      Math.abs(rotation[key] - expectedRotation[key]) < 0.000001,
       `${key}: all six keys rotate the object by the expected 15-degree steps`,
     );
   await page.waitForFunction(

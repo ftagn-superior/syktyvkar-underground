@@ -108,6 +108,19 @@ async function settled(page: Page) {
     { timeout: 120000 },
   );
   await sleep(5500);
+  await page.waitForFunction(
+    () => {
+      const streaming = (window as any).__SU_DEBUG__.snapshot().streaming;
+      return (
+        streaming.backgroundReady &&
+        !streaming.requested.length &&
+        !streaming.retained.length &&
+        streaming.cells.every((cell: any) => cell.releaseAt === undefined)
+      );
+    },
+    undefined,
+    { timeout: 120000 },
+  );
 }
 /** Move only the isolated authoritative test fixture; clients receive ordinary snapshots. */
 async function relocate(page: Page, x: number, z = 4) {
@@ -135,6 +148,8 @@ async function resources(page: Page) {
     rendering = (await report(page)).rendering;
   const labels = await page.locator('.player-label').count();
   return {
+    physicsRequired: [...data.streaming.physicsRequired].sort(),
+    graphicsRequired: [...data.streaming.graphicsRequired].sort(),
     meshes: rendering.meshes,
     materials: rendering.materials,
     geometries: rendering.geometries,
@@ -280,6 +295,7 @@ try {
     visibleCycles.push(await resources(observer));
     stage(`visibility cycle ${cycle + 1} passed`);
   }
+  phases.cycles = { hiddenCycles, visibleCycles, freshSamples };
   assert.ok(
     hiddenCycles.every((value) => JSON.stringify(value) === JSON.stringify(hiddenCycles[0])),
     'Hidden resources accumulated',
@@ -288,7 +304,6 @@ try {
     visibleCycles.every((value) => JSON.stringify(value) === JSON.stringify(visibleCycles[0])),
     'Visible resources accumulated',
   );
-  phases.cycles = { hiddenCycles, visibleCycles, freshSamples };
   checks.push(
     'Three 500/800m cycles clean views, proxies, labels, shadows/materials and smoothing; same IDs return with fresh positions',
   );

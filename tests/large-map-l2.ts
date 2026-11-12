@@ -58,6 +58,9 @@ try {
   });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.text().startsWith('[L2]')) console.log(message.text());
+  });
   await page.goto(`${harness.resolvedUrls!.local[0]}l2`);
   const result: Awaited<
     ReturnType<(typeof import('./large-map/streaming-browser.js'))['runStreamingProbe']>
@@ -121,6 +124,15 @@ try {
       2,
     ),
   );
+} catch (error) {
+  const page = browser?.contexts()[0]?.pages()[0];
+  if (page) {
+    const failure = await page
+      .evaluate(() => (globalThis as unknown as { __L2_FAILURE__?: unknown }).__L2_FAILURE__)
+      .catch(() => undefined);
+    if (failure) await writeFile(join(output, 'failure.json'), JSON.stringify(failure, null, 2));
+  }
+  throw error;
 } finally {
   await browser?.close();
   await harness.close();

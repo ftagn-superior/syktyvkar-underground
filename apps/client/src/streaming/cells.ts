@@ -42,6 +42,7 @@ type Cell = {
   physicsReleaseAt?: number;
   graphicsReleaseAt?: number;
   operations?: Generator<void>;
+  releasing?: boolean;
   error?: string;
   startedAt: number;
   preparedMs?: number;
@@ -304,6 +305,52 @@ export class CellStreamer {
     if (this.physicsReady(cell) && this.graphicsReady(cell))
       cell.preparedMs ??= this.clock() - cell.startedAt;
   }
+  private releaseDue(cell: Cell, now: number): boolean {
+    return (
+      !!(cell.error && (cell.physics.size || cell.graphics.size || cell.releaseModels)) ||
+      (!this.physicsWanted.has(cell.id) &&
+        cell.physics.size > 0 &&
+        (cell.physicsReleaseAt ?? Infinity) <= now) ||
+      (!this.graphicsWanted.has(cell.id) &&
+        (cell.graphics.size > 0 || !!cell.releaseModels) &&
+        (cell.graphicsReleaseAt ?? Infinity) <= now)
+    );
+  }
+  /** Releasing one ownership channel must not allocate another channel along the way. */
+  private *releaseExpired(cell: Cell): Generator<void> {
+    for (const id of [...cell.physics]) {
+      if (
+        !cell.error &&
+        (this.physicsWanted.has(cell.id) || (cell.physicsReleaseAt ?? Infinity) > this.clock())
+      )
+        continue;
+      this.physics.releaseStatic(id);
+      cell.physics.delete(id);
+      this.count(id, -1);
+      yield;
+    }
+    for (const id of [...cell.graphics]) {
+      if (
+        !cell.error &&
+        (this.graphicsWanted.has(cell.id) || (cell.graphicsReleaseAt ?? Infinity) > this.clock())
+      )
+        continue;
+      this.graphics.releaseStatic(id);
+      cell.graphics.delete(id);
+      this.count(id, -1);
+      yield;
+    }
+    if (
+      !cell.graphics.size &&
+      (cell.error ||
+        (!this.graphicsWanted.has(cell.id) && (cell.graphicsReleaseAt ?? Infinity) <= this.clock()))
+    ) {
+      cell.releaseDecoration?.();
+      cell.releaseDecoration = undefined;
+      cell.releaseModels?.();
+      cell.releaseModels = undefined;
+    }
+  }
   private physicsReady(cell: Cell): boolean {
     return (
       !!cell.set &&
@@ -343,27 +390,41 @@ export class CellStreamer {
     };
     // Completed near cells must not consume the whole frame budget again: otherwise distant
     // prepared cells starve permanently on a detailed city even with an empty HTTP queue.
+    const workPriority = (cell: Cell) =>
+      this.critical.has(cell.id)
+        ? -2e9 + this.priority(cell)
+        : this.releaseDue(cell, start)
+          ? -1e9 + this.priority(cell)
+          : this.priority(cell);
     const work = [...this.cells.values()]
       .filter(needsWork)
-      .sort((a, b) => this.priority(a) - this.priority(b));
+      .sort((a, b) => workPriority(a) - workPriority(b));
     outer: for (const cell of work) {
+      if (this.releaseDue(cell, start) && !cell.releasing) {
+        // Preempt a suspended background connection after its ownership expired.
+        cell.operations?.return(undefined);
+        cell.operations = this.releaseExpired(cell);
+        cell.releasing = true;
+      }
       cell.operations ??= this.reconcile(cell);
       while (cell.operations) {
         const operationStart = this.clock();
+        const action = cell.releasing ? 'release' : 'connect';
         try {
-          if (cell.operations.next().done) cell.operations = undefined;
+          if (cell.operations.next().done) {
+            cell.operations = undefined;
+            cell.releasing = false;
+          }
         } catch (error) {
           cell.error = String(error);
-          cell.operations = this.reconcile(cell);
+          cell.operations = this.releaseExpired(cell);
+          cell.releasing = true;
         }
         const ms = this.clock() - operationStart;
         this.peakOperationMs = Math.max(this.peakOperationMs, ms);
         this.samples.push({
           cellId: cell.id,
-          action:
-            this.physicsWanted.has(cell.id) || this.graphicsWanted.has(cell.id)
-              ? 'connect'
-              : 'release',
+          action,
           ms,
         });
         if (this.samples.length > 4096) this.samples.shift();
@@ -392,12 +453,16 @@ export class CellStreamer {
       if (cell.error) {
         cell.error = undefined;
         cell.operations = undefined;
+        cell.releasing = false;
       }
     this.schedule();
   }
   /** Background failures are diagnostic only; they cannot freeze a safe local character. */
   get problem(): string | undefined {
     return [...this.critical].map((id) => this.cells.get(id)?.error).find(Boolean);
+  }
+  get backgroundProblem(): string | undefined {
+    return [...this.cells.values()].map((cell) => cell.error).find(Boolean);
   }
   get criticalReady(): boolean {
     return (
@@ -466,15 +531,17 @@ export class CellStreamer {
         id: cell.id,
         state: cell.error
           ? 'error'
-          : cell.operations
-            ? 'prepared'
-            : active(cell)
-              ? 'active'
-              : cell.loading
-                ? 'loading'
-                : releaseAt(cell) !== undefined
-                  ? 'releasing'
-                  : 'verified',
+          : cell.releasing
+            ? 'releasing'
+            : cell.operations
+              ? 'prepared'
+              : active(cell)
+                ? 'active'
+                : cell.loading
+                  ? 'loading'
+                  : releaseAt(cell) !== undefined
+                    ? 'releasing'
+                    : 'verified',
         references: cell.physics.size + cell.graphics.size,
         error: cell.error,
         releaseAt: releaseAt(cell),

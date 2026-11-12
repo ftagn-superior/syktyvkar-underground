@@ -289,7 +289,7 @@ export class GameSession {
     return this.streamer?.graphicsReadyRadius(center, drawRadius) ?? 0;
   }
   get areaProblem(): string | undefined {
-    return this.streamer?.problem;
+    return this.streamer?.problem ?? this.streamer?.backgroundProblem;
   }
   retryArea(): void {
     this.streamer?.retry();
@@ -816,8 +816,8 @@ export class GameSession {
     const room = this.room;
     this.planArea();
     this.streamer?.pump();
-    if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     if (/SHA-256|version/i.test(this.areaProblem ?? '')) this.reloadRequired = true;
+    if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     const selfNow = room.state.players?.get(room.sessionId);
     if (this.plan && this.streamer.criticalReady && this.planAcknowledged !== this.plan.prepareId) {
       this.planAcknowledged = this.plan.prepareId;

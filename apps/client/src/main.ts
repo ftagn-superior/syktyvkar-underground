@@ -437,8 +437,8 @@ const uiTimer = setInterval(() => {
   renderRespawn();
   renderMetrics();
   const loading = session.state === 'preparing' || session.state === 'waiting';
-  element('area-status').hidden = !loading || graphicsLost;
   const problem = session.areaProblem;
+  element('area-status').hidden = (!loading && !problem) || graphicsLost;
   element('area-message').textContent = problem
     ? session.reloadRequired
       ? 'Ресурсы мира изменились. Обновите страницу.'

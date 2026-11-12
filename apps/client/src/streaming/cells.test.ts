@@ -84,9 +84,9 @@ function fixture(clockStep = 0) {
     graphical,
     graphics,
     pins: () => pins,
-    advance: () => {
+    advance: (budgetMs = 1000) => {
       now += 5001;
-      stream.pump(1000);
+      stream.pump(budgetMs);
     },
   };
 }
@@ -193,6 +193,33 @@ describe('segmented world ownership', () => {
       v.advance();
       expect(v.physics.size).toBe(0);
       expect(v.graphical.size).toBe(models);
+    } finally {
+      v.stream.dispose();
+    }
+  });
+  it('releases abandoned gameplay physics ahead of a large preview graphics queue', async () => {
+    const v = fixture(0.1);
+    const far = { x: 950, y: 0, z: 950 };
+    try {
+      v.stream.setArea(far);
+      await until(v.stream, () => v.stream.backgroundReady);
+      expect(v.physics.size).toBeGreaterThan(0);
+      v.stream.setPreview({ x: -950, y: 0, z: -950 }, 3000);
+      // Prepare the whole graphics queue without pumping connections. In production this is
+      // a late GLB completing after leave while the preview keeps the same cell alive.
+      const deadline = performance.now() + 10000;
+      while (v.stream.diagnostics().requested.length && performance.now() < deadline) await tick();
+      expect(v.stream.diagnostics().requested).toHaveLength(0);
+      expect(v.stream.backgroundReady).toBe(false);
+      v.advance(2);
+      for (let frame = 0; frame < 50 && v.physics.size; frame++) v.stream.pump(2);
+      expect(v.physics.size).toBe(0);
+      expect(v.stream.diagnostics().physicsActive).toHaveLength(0);
+      expect(v.stream.backgroundReady).toBe(false);
+      expect(v.stream.diagnostics().graphicsRequired).toHaveLength(256);
+      await until(v.stream, () => v.stream.backgroundReady);
+      expect(v.graphical.size).toBeGreaterThan(0);
+      expect(v.physics.size).toBe(0);
     } finally {
       v.stream.dispose();
     }

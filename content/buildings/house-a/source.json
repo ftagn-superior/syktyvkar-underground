@@ -5,8 +5,8 @@
   "floors": 1,
   "floorHeight": 3,
   "roofHeight": 1.5,
-  "wallColor": "#9ebbae",
-  "roofColor": "#586b76",
-  "windowColor": "#304957",
-  "doorColor": "#5b5148"
+  "wallColor": "#b8d1b2",
+  "roofColor": "#5b6069",
+  "windowColor": "#29343c",
+  "doorColor": "#6d4f38"
 }

@@ -15,8 +15,16 @@ export class TreeMaterial extends MaterialPluginBase {
   constructor(
     material: PBRMaterial,
     private readonly radial?: RadialState,
+    foliage?: 'broadleaf',
   ) {
-    super(material, 'TreeInstances', 200, { SU_TREE_INSTANCES: true }, true, false);
+    super(
+      material,
+      'TreeInstances',
+      200,
+      { SU_TREE_INSTANCES: true, SU_TREE_BROADLEAF: !!foliage },
+      true,
+      false,
+    );
     this.doNotSerialize = true;
     this.registerForExtraEvents = true;
     this._enable(true);
@@ -47,6 +55,13 @@ export class TreeMaterial extends MaterialPluginBase {
       `,
         CUSTOM_VERTEX_UPDATE_POSITION: `
         if (suTreePart < 1.5) {
+          #ifdef SU_TREE_BROADLEAF
+          float radius = max(max(suTreeCrown0.x, suTreeCrown0.y), max(suTreeCrown1.x, suTreeCrown1.y));
+          float height = suTreeCrown1.z + suTreeCrown1.w - suTreeCrown0.z;
+          positionUpdated *= vec3(radius, height, radius);
+          positionUpdated.y += suTreeCrown0.z;
+          normalUpdated = normalize(normalUpdated / vec3(radius, height, radius));
+          #else
           vec4 shape = suTreePart < 0.5 ? suTreeCrown0 : suTreeCrown1;
           positionUpdated.xz *= mix(shape.x, shape.y, positionUpdated.y);
           positionUpdated.y = shape.z + positionUpdated.y * shape.w;
@@ -54,6 +69,7 @@ export class TreeMaterial extends MaterialPluginBase {
             normalUpdated.y = (shape.x - shape.y) * ${Math.cos(Math.PI / 7).toPrecision(16)} / shape.w;
             normalUpdated = normalize(normalUpdated);
           }
+          #endif
         } else {
           positionUpdated *= suTreeTrunk.xyz;
           float c = cos(suTreeTrunk.w), s = sin(suTreeTrunk.w);

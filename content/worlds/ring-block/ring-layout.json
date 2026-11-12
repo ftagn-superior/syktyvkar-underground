@@ -70,18 +70,18 @@
   "layers": {
     "road": {
       "id": "road",
-      "color": "#6f7670",
-      "elevation": 0.01
+      "color": "#706d68",
+      "elevation": 0.034
     },
     "islands": {
       "id": "islands",
-      "color": "#b5b4a2",
-      "elevation": 0.011
+      "color": "#d9cbb1",
+      "elevation": 0.038
     },
     "markings": {
       "id": "markings",
-      "color": "#e9e9e2",
-      "elevation": 0.012
+      "color": "#f3e7ce",
+      "elevation": 0.042
     }
   }
 }

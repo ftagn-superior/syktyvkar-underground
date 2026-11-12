@@ -1,5 +1,6 @@
 import type { BuildingPhysicsAsset, StaticCollider, Vec3 } from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
+import { bakeLocalAo } from './ambient-occlusion.js';
 
 export interface HouseRecipe {
   formatVersion: 1;
@@ -182,8 +183,10 @@ export function generateHouse(
       indices: [...roof.indices],
     },
   ];
+  const parts = [walls, roof, windows, doors, plinth];
+  bakeLocalAo(parts);
   return {
-    parts: [walls, roof, windows, doors, plinth],
+    parts,
     physics: { assetId, bounds: { min: { x: -x, y: 0, z: -z }, max: { x, y: top, z } }, colliders },
   };
 }

@@ -2,6 +2,7 @@ import { PROFILE_COLORS } from './accounts.js';
 export * from './accounts.js';
 export * from './items.js';
 export * from './item-shapes.js';
+export * from './foliage-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
 export * from './world-layout-patch.js';
@@ -72,9 +73,12 @@ export interface BuildingParts {
   /** Optional render-only representation. The original GLB and colliders remain authoritative. */
   tree?: TreeRenderRecipe;
 }
-/** Exact profile of the generated seven-sided, two-crown kit trees. */
+/** Exact profile of generated kit trees; absent foliage retains the legacy conical crown. */
 export interface TreeRenderRecipe {
   formatVersion: 1;
+  foliage?: 'broadleaf';
+  /** Absent on older bundles: preserve their unoccluded vertex colours. */
+  ambientOcclusion?: 'foliage-v1';
   /** bottom radius, top radius (including the kit's minimum tip), base Y, height */
   crowns: [[number, number, number, number], [number, number, number, number]];
   /** X/Y/Z dimensions and yaw in radians; centered on X/Z = 0. */

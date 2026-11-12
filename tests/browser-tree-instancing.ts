@@ -7,6 +7,7 @@ import { launchTestBrowser } from './helpers/browser.js';
 import { generateKit, type KitRecipe } from '../tools/world-build/src/kit.js';
 import { treeRenderRecipe } from '../tools/world-build/src/tree-instances.js';
 import { encodeStaticGlb, inspectStaticGlb } from '../tools/world-build/src/glb.js';
+import { mergeParts } from '../tools/world-build/src/merge.js';
 
 const output = resolve('output/playwright/tree-instancing-visual');
 await mkdir(output, { recursive: true });
@@ -21,17 +22,20 @@ await build({
 const payloads = new Map<string, Uint8Array>();
 const assets: Record<string, unknown> = {};
 const palettes = new Set<string>();
-for (const id of (await readdir('content/buildings/ring-block/objects'))
-  .filter((id) => id.startsWith('tree-'))
-  .sort()) {
-  const recipe: KitRecipe = JSON.parse(
-    await readFile(`content/buildings/ring-block/objects/${id}/source.json`, 'utf8'),
-  );
+const addAsset = (id: string, recipe: KitRecipe, unoccluded = false) => {
   const tree = treeRenderRecipe(id, recipe)!;
-  if (palettes.has(tree.crownColor)) continue;
-  palettes.add(tree.crownColor);
-  const generated = generateKit(id, recipe),
-    model = encodeStaticGlb(generated.parts);
+  const generated = generateKit(id, recipe);
+  if (unoccluded) {
+    delete tree.ambientOcclusion;
+    // Emulate an already-published pre-AO GLB, retaining its exact original colours.
+    generated.parts = mergeParts(
+      generateKit(id, { ...recipe, merge: false }).parts.map((part) => ({
+        ...part,
+        colors: undefined,
+      })),
+    );
+  }
+  const model = encodeStaticGlb(generated.parts);
   const parts = { ...inspectStaticGlb(model, id).parts, tree };
   payloads.set(`/${id}/model.glb`, model);
   payloads.set(`/${id}/parts.json`, new TextEncoder().encode(JSON.stringify(parts)));
@@ -42,8 +46,34 @@ for (const id of (await readdir('content/buildings/ring-block/objects'))
     partsFile: `${id}/parts.json`,
     bounds: generated.physics.bounds,
   };
+};
+let legacyAdded = false;
+for (const id of (await readdir('content/buildings/ring-block/objects'))
+  .filter((id) => id.startsWith('tree-'))
+  .sort()) {
+  const recipe: KitRecipe = JSON.parse(
+    await readFile(`content/buildings/ring-block/objects/${id}/source.json`, 'utf8'),
+  );
+  const tree = treeRenderRecipe(id, recipe)!;
+  const palette = `${tree.crownColor}:${tree.trunkColor}:${tree.foliage ?? 'conical'}`;
+  if (palettes.has(palette)) continue;
+  palettes.add(palette);
+  addAsset(id, recipe);
+  // Same colors, different profile: old streamed metadata must not reuse a broadleaf template.
+  if (!legacyAdded && recipe.foliage) {
+    const legacy = structuredClone(recipe);
+    delete legacy.foliage;
+    addAsset(`${id}-legacy`, legacy);
+    addAsset(`${id}-pre-ao`, recipe, true);
+    legacyAdded = true;
+  }
 }
-assert.equal(palettes.size, 3);
+assert.equal(palettes.size, 3, 'birch, leafy and spruce palettes remain represented');
+assert.equal(
+  Object.keys(assets).length,
+  5,
+  'include old conical and pre-AO broadleaf bundles with the same colors',
+);
 payloads.set('/manifest.json', new TextEncoder().encode(JSON.stringify({ assets })));
 payloads.set('/app.js', await readFile(`${output}/app.js`));
 payloads.set(

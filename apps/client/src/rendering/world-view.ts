@@ -4,18 +4,12 @@ import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { Vector3, Quaternion, Matrix } from '@babylonjs/core/Maths/math.vector';
-import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
-import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
-import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
-import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
-import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
-import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
+import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
-import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
 import {
   findReaction,
@@ -35,6 +29,7 @@ import { Frustum } from '@babylonjs/core/Maths/math.frustum';
 import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
+import { WorldLighting } from './lighting';
 import { BuildingViews } from './buildings';
 import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
@@ -65,9 +60,6 @@ type LabelAnchor = {
   chat?: HTMLElement;
 };
 const vector = (p: Vec3) => new Vector3(p.x, p.y, p.z);
-/** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
-const SHADOW_EXTENT = 90;
-const SUN_DISTANCE = 150;
 /** Пределы масштаба колёсиком мыши относительно исходного кадра. */
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 30;
@@ -76,9 +68,8 @@ export class WorldView {
   readonly engine: Engine;
   readonly scene: Scene;
   private readonly camera: ArcRotateCamera;
-  private readonly sun: DirectionalLight;
+  private readonly lighting: WorldLighting;
   private readonly shadow: ShadowGenerator;
-  private pipeline?: DefaultRenderingPipeline;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
   private manifest?: WorldManifest;
@@ -144,10 +135,7 @@ export class WorldView {
     });
     this.scene = new Scene(this.engine);
     this.instrumentation = new SceneInstrumentation(this.scene);
-    this.applyQuality();
     this.scene.useRightHandedSystem = true;
-    this.scene.clearColor = Color4.FromHexString('#101820ff');
-    this.scene.ambientColor = Color3.FromHexString('#8199ac');
     this.camera = new ArcRotateCamera(
       'isometric',
       INITIAL_CAMERA_ANGLE,
@@ -161,32 +149,10 @@ export class WorldView {
     this.camera.minZ = 0.1;
     this.camera.maxZ = 300;
     this.camera.inputs.clear();
-    this.sizeCamera();
-    // Вечернее освещение: низкое тёплое солнце, холодное небо в тенях, отражённый тёплый свет от земли.
-    const sky = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
-    sky.intensity = 0.85;
-    sky.diffuse = Color3.FromHexString('#bcd4f0');
-    sky.groundColor = Color3.FromHexString('#8a7058');
-    sky.specular = Color3.Black();
-    // Высота солнца около 32°: длинные мягкие тени, фасады с разной освещённостью сторон.
-    const sun = new DirectionalLight('sun', new Vector3(-1.1, -0.8, -0.65), this.scene);
-    sun.position.set(20, 35, 15);
-    sun.intensity = 2.4;
-    sun.diffuse = Color3.FromHexString('#ffd9a0');
-    // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
-    sun.shadowFrustumSize = SHADOW_EXTENT;
-    sun.shadowMinZ = 0;
-    sun.shadowMaxZ = SUN_DISTANCE * 2;
-    this.sun = sun;
-    this.sizeCamera();
-    this.shadow = new ShadowGenerator(2048, sun);
-    // PCF даёт чёткий край у основания и мягкий на расстоянии, в отличие от размытой ESM.
-    this.shadow.usePercentageCloserFiltering = true;
-    this.shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
-    this.shadow.bias = 0.0012;
-    this.shadow.normalBias = 0.08;
-    this.shadow.setDarkness(0.3);
+    this.lighting = new WorldLighting(this.scene, this.camera);
+    this.shadow = this.lighting.shadow;
     this.applyQuality();
+    this.sizeCamera();
     this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
     this.statics = new StaticViews(this.scene, this.shadow);
     if ('entities' in definition) {
@@ -229,12 +195,7 @@ export class WorldView {
         false,
         true, // Following translates the rig; pitch, orbit angle and radius remain fixed.
       );
-      // Солнце движется вместе с целью камеры; направление лучей не меняется.
-      this.sun.position
-        .copyFrom(this.sun.direction)
-        .normalize()
-        .scaleInPlace(-SUN_DISTANCE)
-        .addInPlace(this.camera.target);
+      this.lighting.follow(this.camera.target);
       // Update the orbit before casting parallel orthographic rays; alpha may be mid-turn.
       this.camera.getViewMatrix(true);
       this.buildings.update(
@@ -273,41 +234,9 @@ export class WorldView {
   }
   private applyQuality(): void {
     const settings = renderQualitySettings(this.quality);
-    this.scene.shadowsEnabled = settings.shadows;
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
-    this.updatePipeline(settings.postProcessing);
-  }
-  /** Тональная компрессия, лёгкое свечение и MSAA; в режиме экономии отключены целиком. */
-  private updatePipeline(enabled: boolean): void {
-    if (!this.camera) return;
-    if (!enabled) {
-      this.pipeline?.dispose();
-      this.pipeline = undefined;
-      return;
-    }
-    if (this.pipeline) return;
-    const pipeline = new DefaultRenderingPipeline('lighting', true, this.scene, [this.camera]);
-    pipeline.samples = 4;
-    pipeline.fxaaEnabled = false;
-    pipeline.bloomEnabled = true;
-    pipeline.bloomThreshold = 0.95;
-    pipeline.bloomWeight = 0.15;
-    pipeline.bloomKernel = 48;
-    pipeline.bloomScale = 0.5;
-    const ip = pipeline.imageProcessing;
-    ip.toneMappingEnabled = true;
-    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    ip.exposure = 1.55;
-    ip.contrast = 1.12;
-    ip.colorCurvesEnabled = true;
-    ip.colorCurves = new ColorCurves();
-    ip.colorCurves.globalSaturation = 25;
-    ip.vignetteEnabled = true;
-    ip.vignetteWeight = 0.9;
-    ip.vignetteStretch = 0.2;
-    ip.vignetteColor = new Color4(0.12, 0.08, 0.05, 0);
-    this.pipeline = pipeline;
+    this.lighting.setQuality(this.quality);
   }
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
@@ -498,7 +427,6 @@ export class WorldView {
     const depthScale = Math.max(1, this.zoom);
     this.camera.radius = 120 * depthScale;
     this.camera.maxZ = 300 * depthScale;
-    if (this.sun) this.sun.shadowFrustumSize = SHADOW_EXTENT;
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();
@@ -695,11 +623,7 @@ export class WorldView {
     const type = this.definition.itemCatalog.types[entity.typeId];
     const material = this.material(`material-${entity.entityId}`, '#ffffff');
     const mesh = createItemMesh(`item-${entity.entityId}`, type, this.scene);
-    if (type.model === 'box') {
-      mesh.enableEdgesRendering();
-      mesh.edgesWidth = 1.5;
-      mesh.edgesColor = new Color4(0.24, 0.17, 0.1, 0.6);
-    }
+    // Bevels and board seams provide the crate's silhouette without a screen-space outline.
     mesh.parent = root;
     mesh.material = material;
     mesh.receiveShadows = true;
@@ -899,6 +823,7 @@ export class WorldView {
     this.statics.dispose();
     this.instrumentation.dispose();
     const releaseGraphics = () => {
+      this.lighting.dispose();
       this.scene.dispose();
       this.engine.dispose();
     };

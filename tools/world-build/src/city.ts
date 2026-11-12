@@ -4,6 +4,7 @@ import { addBox, addFace, meshPart } from './house.js';
 import { triangulate, type Point2 } from './triangulate.js';
 import { addOrientedBox, buildFacade, type FacadeDetails } from './facade.js';
 import { mergeParts } from './merge.js';
+import { bakeLocalAo } from './ambient-occlusion.js';
 
 /**
  * Генераторы городских моделей по контурам: здание-призма, поверхность земли и дерево.
@@ -145,6 +146,7 @@ export function generateFootprint(
   const built = recipe.sections?.length
     ? generateSections(assetId, recipe)
     : generatePrism(assetId, recipe);
+  bakeLocalAo(built.parts);
   // Слияние частей с цветами вершин: один меш на группу прозрачности вместо десятка.
   return recipe.merge ? { ...built, parts: mergeParts(built.parts) } : built;
 }

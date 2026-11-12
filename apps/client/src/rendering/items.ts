@@ -4,6 +4,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { itemShapeParts, type ItemType } from '@su/contracts';
+import { createBeveledBox } from './beveled-box';
 
 /** One mesh and one material per instance, also used by the placement preview. */
 export function createItemMesh(name: string, type: ItemType, scene: Scene): Mesh {
@@ -22,11 +23,7 @@ export function createItemMesh(name: string, type: ItemType, scene: Scene): Mesh
     let mesh: Mesh;
     switch (part.kind) {
       case 'box':
-        mesh = MeshBuilder.CreateBox(
-          id,
-          { width: part.size.x, height: part.size.y, depth: part.size.z },
-          scene,
-        );
+        mesh = createBeveledBox(id, part.size, type.model === 'soap' ? 0.07 : 0.018, scene);
         break;
       case 'sphere':
         mesh = MeshBuilder.CreateSphere(id, { diameter: part.radius * 2, segments: 20 }, scene);
@@ -64,6 +61,37 @@ export function createItemMesh(name: string, type: ItemType, scene: Scene): Mesh
   const { size } = type;
   switch (type.model) {
     case 'box':
+      // Broad board seams stay legible at game scale and merge into the item mesh.
+      for (const level of [-0.25, 0, 0.25]) {
+        for (const side of [-1, 1]) {
+          const seam = paint(
+            MeshBuilder.CreateBox(
+              `${name}-board-seam`,
+              {
+                width: size.x - 0.04,
+                height: 0.009,
+                depth: 0.003,
+              },
+              scene,
+            ),
+            '#a9753f',
+          );
+          seam.position.set(0, level * size.y, side * (size.z / 2 - 0.001));
+          const end = paint(
+            MeshBuilder.CreateBox(
+              `${name}-end-seam`,
+              {
+                width: 0.003,
+                height: 0.009,
+                depth: size.z - 0.04,
+              },
+              scene,
+            ),
+            '#a9753f',
+          );
+          end.position.set(side * (size.x / 2 - 0.001), level * size.y, 0);
+        }
+      }
       for (const x of [-size.x * 0.3, size.x * 0.3]) {
         const strap = paint(
           MeshBuilder.CreateBox(

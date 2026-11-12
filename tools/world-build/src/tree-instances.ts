@@ -21,6 +21,7 @@ export function treeRenderRecipe(assetId: string, recipe: KitRecipe): TreeRender
   if (b.center[0] !== 0 || b.center[2] !== 0) return;
   const result: TreeRenderRecipe = {
     formatVersion: 1,
+    ...(recipe.foliage ? { foliage: recipe.foliage, ambientOcclusion: 'foliage-v1' as const } : {}),
     crowns: [crowns[0], crowns[1]],
     trunk: [...b.size, ((b.yaw ?? 0) * Math.PI) / 180],
     trunkBase: b.center[1] - b.size[1] / 2,

@@ -35,6 +35,19 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('offline world geometry migra
     };
   }
 
+  it('allows startup on a fresh database without initializing or seeding it during migration', async () => {
+    const before = await savedState();
+    const migration = store();
+    expect(await migration.migrateGeometry()).toEqual({
+      from: null,
+      to: worldCompatibility(definition),
+      changed: false,
+    });
+    expect(await savedState()).toEqual(before);
+    await migration.close();
+    expect(await store().initialize()).toHaveLength(definition.initialItems.length);
+  });
+
   it('preserves item identities, poses, inventories and operations across a valid map upgrade', async () => {
     definition.initialItems.push({
       ...structuredClone(definition.initialItems[0]),

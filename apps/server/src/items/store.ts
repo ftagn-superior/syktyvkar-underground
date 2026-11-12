@@ -180,9 +180,10 @@ export class ItemStore {
         'SELECT compatibility_hash FROM persistent_worlds WHERE id=$1 FOR UPDATE',
         [this.definition.worldId],
       );
-      if (!found.rowCount) throw new Error('World has no saved state. Start the server first.');
-      const from = found.rows[0].compatibility_hash,
-        to = worldCompatibility(this.definition);
+      const to = worldCompatibility(this.definition);
+      // A fresh database is populated once by initialize(), after all startup checks pass.
+      if (!found.rowCount) return { from: null, to, changed: false };
+      const from = found.rows[0].compatibility_hash;
       if (from === to) return { from, to, changed: false };
 
       const catalog = physicsCatalog(this.definition.itemCatalog);

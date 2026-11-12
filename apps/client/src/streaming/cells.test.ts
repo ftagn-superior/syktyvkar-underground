@@ -128,6 +128,77 @@ describe('segmented world ownership', () => {
       v.stream.dispose();
     }
   });
+  it('preempts a graphical-only preview when joining needs physics in the same loading cell', async () => {
+    const v = fixture();
+    const prepare = v.graphics.prepareCellAssets;
+    let stalled = false;
+    v.graphics.prepareCellAssets = async (m, ids, read, signal) => {
+      if (!stalled) {
+        stalled = true;
+        await new Promise<void>((_resolve, reject) => {
+          signal!.addEventListener(
+            'abort',
+            () => reject(new DOMException('Preempted', 'AbortError')),
+            { once: true },
+          );
+        });
+      }
+      return prepare(m, ids, read, signal);
+    };
+    try {
+      v.stream.setPreview({ x: 0, y: 0, z: 0 });
+      const deadline = performance.now() + 5000;
+      while (!stalled && performance.now() < deadline) {
+        v.stream.pump(2);
+        await tick();
+      }
+      expect(stalled).toBe(true);
+      expect(v.physics.size).toBe(0);
+      v.stream.setArea({ x: 0, y: 0, z: 0 });
+      await until(v.stream);
+      expect(v.physics.size).toBeGreaterThan(0);
+      expect(v.stream.problem).toBeUndefined();
+    } finally {
+      v.stream.dispose();
+    }
+    expect(v.pins()).toBe(0);
+  });
+  it('defers distant scene allocations while a critical cell is still preparing', async () => {
+    const v = fixture();
+    const prepare = v.graphics.prepareCellAssets;
+    let first = true,
+      release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    v.graphics.prepareCellAssets = async (m, ids, read, signal) => {
+      if (first) {
+        first = false;
+        await gate;
+      }
+      return prepare(m, ids, read, signal);
+    };
+    try {
+      v.stream.setArea({ x: 0, y: 0, z: 0 });
+      v.stream.setVisualArea({ x: 0, y: 0, z: 0 }, 3000);
+      for (let n = 0; n < 300; n++) {
+        v.stream.pump(2);
+        await tick();
+      }
+      expect(v.stream.criticalReady).toBe(false);
+      const d = v.stream.diagnostics();
+      expect(
+        d.cells
+          .filter((cell) => !d.required.includes(cell.id))
+          .every((cell) => cell.references === 0),
+      ).toBe(true);
+      release();
+      await until(v.stream, () => v.stream.backgroundReady);
+    } finally {
+      release();
+      v.stream.dispose();
+    }
+  });
   it('critical preparation succeeds despite a stalled distant model and ready circle hides its holes', async () => {
     const v = fixture();
     let release!: () => void;
@@ -182,15 +253,19 @@ describe('segmented world ownership', () => {
       expect(v.physics.size).toBe(0);
       expect(v.graphical.size).toBeGreaterThan(0);
       expect(v.stream.criticalReady).toBe(false);
+      expect(v.reads.some((path) => path.endsWith('/colliders.json'))).toBe(false);
+      expect(v.stream.diagnostics().parsedCollisionBytes).toBe(0);
       const models = v.graphical.size;
       const reads = v.reads.length;
       v.stream.setArea(p);
       await until(v.stream, () => v.stream.backgroundReady);
       expect(v.physics.size).toBeGreaterThan(0);
       expect(v.graphical.size).toBe(models);
-      expect(v.reads.length).toBe(reads);
+      expect(v.reads.slice(reads).length).toBeGreaterThan(0);
+      expect(v.reads.slice(reads).every((path) => path.endsWith('/colliders.json'))).toBe(true);
       v.stream.setPreview(p);
       v.advance();
+      await until(v.stream, () => v.stream.diagnostics().parsedCollisionBytes === 0);
       expect(v.physics.size).toBe(0);
       expect(v.graphical.size).toBe(models);
     } finally {

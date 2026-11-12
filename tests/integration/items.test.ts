@@ -138,7 +138,9 @@ describe.skipIf(!databaseUrl)(
 
     it('upgrades the existing account schema in place and can reapply migrations safely', async () => {
       await fixture.pool
-        .query(`DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
+        .query(`DROP TABLE world_static_operations,world_static_instances,world_layouts;
+      DROP FUNCTION world_static_before_change(),world_static_after_change(),world_layout_before_change(),su_finite(double precision);
+      DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
       DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
       ALTER TABLE player_profiles DROP COLUMN skin_id;
       DELETE FROM su_schema_migrations WHERE version>=2;`);
@@ -150,15 +152,17 @@ describe.skipIf(!databaseUrl)(
       expect(
         (await fixture.pool.query('SELECT version FROM su_schema_migrations ORDER BY version'))
           .rows,
-      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
       expect(await open()).toHaveLength(1);
     });
 
     it('reconciles the old skin-only migration 2 without losing the selected skin or session', async () => {
       await fixture.pool.query(`
-        DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
+        DROP TABLE world_static_operations,world_static_instances,world_layouts;
+      DROP FUNCTION world_static_before_change(),world_static_after_change(),world_layout_before_change(),su_finite(double precision);
+      DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
         DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
-        DELETE FROM su_schema_migrations WHERE version=3;
+        DELETE FROM su_schema_migrations WHERE version>=3;
       `);
       await fixture.pool.query(
         `INSERT INTO player_profiles(account_id,display_name,color_id,skin_id,version)
@@ -180,7 +184,7 @@ describe.skipIf(!databaseUrl)(
       expect(
         (await fixture.pool.query('SELECT version FROM su_schema_migrations ORDER BY version'))
           .rows,
-      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
       expect(await open()).toHaveLength(1);
     });
 

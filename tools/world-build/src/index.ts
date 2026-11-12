@@ -1,34 +1,32 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, sep } from 'node:path';
 import { validateBytes } from 'gltf-validator';
 import {
   WORLD_FORMAT_VERSION,
+  type WorldManifest,
   canonicalJson,
   validateWorld,
   validateWorldCell,
-  validateWorldManifest,
   validateBuildingPhysicsAsset,
-  simulationProjection,
-  worldManifestIdentity,
-  type BuildingAssetManifest,
   type BuildingPhysicsAsset,
   type WorldHeader,
   type WorldCell,
-  type StaticEntityDefinition,
   createWorldGrid,
   worldCellBounds,
-  buildingBounds,
-  primitiveBounds,
   cellsIntersectingBounds,
   mergeWorldCells,
   validateWorldHeader,
   WORLD_RESOURCE_LIMITS,
   type WorldDefinition,
-  type WorldManifest,
   type WorldSource,
 } from '@su/contracts';
+import {
+  createWorldPublication,
+  writeWorldPublication,
+  writeAuthoringMetadata,
+} from '@su/world-release';
 import { encodeStaticGlb, inspectStaticGlb } from './glb.js';
 import { generateHouse, type HouseRecipe } from './house.js';
 import { generateStreamingCells } from './streaming-lab.js';
@@ -183,6 +181,7 @@ export async function buildWorld(
     });
   const merged = mergeWorldCells(authoredCells);
   const buildings: WorldDefinition['buildings'] = [];
+  const fixedInstanceIds: string[] = [];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
   for (const instance of merged.buildings) {
     if (!Object.hasOwn(catalog.assets, instance.assetId))
@@ -228,9 +227,18 @@ export async function buildWorld(
           Math.min(extent.max.z, cell.max.z) - instance.position.z,
         ],
       };
+      fixedInstanceIds.push(`${instance.entityId}-${cellId}`);
       buildings.push({ ...instance, entityId: `${instance.entityId}-${cellId}`, assetId });
       compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
     }
+  }
+  // A catalog model is available even when this seed has no instance of it yet.
+  for (const [assetId, path] of Object.entries(catalog.assets)) {
+    if (compiled.has(assetId)) continue;
+    const descriptorPath = sourceFile(dirname(catalogPath), path);
+    const descriptor = await readJson(descriptorPath);
+    if (descriptor.source?.kind !== 'ground')
+      compiled.set(assetId, await compileAsset(assetId, descriptorPath));
   }
   const world: WorldDefinition = validateWorld({
     ...base,
@@ -238,88 +246,10 @@ export async function buildWorld(
     buildings,
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });
-  const cells = new Map<string, WorldCell>();
-  for (let z = 0; z < grid.rows; z++)
-    for (let x = 0; x < grid.columns; x++) {
-      const cellId = `${x}_${z}`;
-      cells.set(cellId, { formatVersion: 2, cellId, statics: [], buildings: [] });
-    }
-  for (const item of merged.statics) {
-    const ids = cellsIntersectingBounds(base.bounds, grid, primitiveBounds(item));
-    if (ids.length === 0) throw new Error(`Static outside world: ${item.entityId}`);
-    for (const id of ids) cells.get(id)!.statics.push(item as StaticEntityDefinition);
-  }
-  for (const item of buildings) {
-    const ids = cellsIntersectingBounds(
-      base.bounds,
-      grid,
-      buildingBounds(item, compiled.get(item.assetId)!.bounds),
-    );
-    for (const id of ids) cells.get(id)!.buildings.push(item);
-  }
-  const files: Record<string, string> = {};
-  const payloads = new Map<string, Uint8Array>();
-  const put = (path: string, bytes: Uint8Array, maxBytes: number) => {
-    if (bytes.byteLength > maxBytes) throw new Error(`World resource byte limit: ${path}`);
-    files[path] = hash(bytes);
-    payloads.set(path, bytes);
-    return path;
-  };
-  const baseBytes = jsonBytes(base);
-  const worldFile = put(
-    `header.${hash(baseBytes)}.json`,
-    baseBytes,
-    WORLD_RESOURCE_LIMITS.headerBytes,
-  );
-  const assets: Record<string, BuildingAssetManifest> = {};
-  for (const [assetId, asset] of compiled) {
-    const prefix = `assets/${asset.version}`;
-    assets[assetId] = {
-      assetId,
-      version: asset.version,
-      bounds: asset.bounds,
-      modelFile: put(`${prefix}/model.glb`, asset.model, WORLD_RESOURCE_LIMITS.modelBytes),
-      collisionFile: put(
-        `${prefix}/colliders.json`,
-        asset.collision,
-        WORLD_RESOURCE_LIMITS.collisionBytes,
-      ),
-      partsFile: put(`${prefix}/parts.json`, asset.parts, WORLD_RESOURCE_LIMITS.partsBytes),
-    };
-  }
-  const cellEntries = [...cells.values()].map((cell) => {
-    const bytes = jsonBytes(cell);
-    return {
-      cellId: cell.cellId,
-      file: put(`cells/${cell.cellId}.${hash(bytes)}.json`, bytes, WORLD_RESOURCE_LIMITS.cellBytes),
-      bounds: worldCellBounds(base.bounds, grid, cell.cellId),
-      assetIds: [...new Set(cell.buildings.map((building) => building.assetId))].sort(),
-    };
-  });
-  const manifest: WorldManifest = {
-    formatVersion: WORLD_FORMAT_VERSION,
-    worldId: world.worldId,
-    worldFile,
-    mapVersion: '0'.repeat(64),
-    simulationConfigHash: hash(canonicalJson(simulationProjection(world))),
-    bounds: world.bounds,
-    grid,
-    cells: cellEntries,
-    assets,
-    files,
-  };
-  manifest.mapVersion = hash(canonicalJson(worldManifestIdentity(manifest)));
-  validateWorldManifest(manifest);
-  await mkdir(outputDirectory, { recursive: true });
-  for (const [path, bytes] of payloads) {
-    const destination = resolve(outputDirectory, path);
-    await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, bytes);
-  }
-  // Content files are immutable; publishing the small manifest is the final step.
-  const temporary = resolve(outputDirectory, '.manifest.tmp');
-  await writeFile(temporary, JSON.stringify(manifest, null, 2) + '\n');
-  await rename(temporary, resolve(outputDirectory, 'manifest.json'));
+  const publication = createWorldPublication(world, grid, Object.fromEntries(compiled));
+  await writeWorldPublication(publication, outputDirectory);
+  await writeAuthoringMetadata(world, publication.manifest, fixedInstanceIds, outputDirectory);
+  const manifest = publication.manifest;
   return manifest;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

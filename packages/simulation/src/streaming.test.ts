@@ -107,3 +107,24 @@ describe('local static physics', () => {
     );
   });
 });
+
+it('retains and releases a visual-only instance without allocating a native shape or body', async () => {
+  const { header, buildings, buildingAssets } = fixture();
+  const world = await createPhysicsWorld(header, await loadServerWasm(), true);
+  try {
+    const asset = { ...buildingAssets.arch, colliders: [] };
+    world.retainStatic(buildings[0], 'visual', asset);
+    world.retainStatic(buildings[0], 'visual', asset);
+    expect(world.staticDiagnostics()).toMatchObject({
+      entities: 1,
+      references: 2,
+      bodies: 0,
+      buildings: { instances: 0, assets: 0, shapes: 0 },
+    });
+    world.releaseStatic(buildings[0].entityId);
+    world.releaseStatic(buildings[0].entityId);
+    expect(world.staticDiagnostics()).toMatchObject({ entities: 0, references: 0, bodies: 0 });
+  } finally {
+    world.dispose();
+  }
+});

@@ -145,10 +145,7 @@ export function validateWorldCell(value: unknown): WorldCell {
 export function validateBuildingPhysicsAsset(value: unknown): BuildingPhysicsAsset {
   requireValue(object(value) && stringMatches(value.assetId, assetPattern), 'physics assetId');
   validateBounds(value.bounds);
-  requireValue(
-    Array.isArray(value.colliders) && value.colliders.length > 0 && value.colliders.length <= 2048,
-    'colliders',
-  );
+  requireValue(Array.isArray(value.colliders) && value.colliders.length <= 2048, 'colliders');
   const ids = new Set<string>();
   for (const shape of value.colliders) {
     requireValue(
@@ -340,6 +337,7 @@ export function worldManifestIdentity(manifest: WorldManifest) {
 }
 /** Explicit domain projection: render metadata can never accidentally alter the physics hash. */
 export function simulationProjection(world: WorldDefinition) {
+  const usedAssets = new Set(world.buildings.map((instance) => instance.assetId));
   const vector = ({ x, y, z }: Vec3) => ({ x, y, z });
   const rotation = ({ x, y, z, w }: Quat) => ({ x, y, z, w });
   const character = world.simulation.character;
@@ -382,6 +380,7 @@ export function simulationProjection(world: WorldDefinition) {
       })),
     buildingAssets: Object.fromEntries(
       Object.entries(world.buildingAssets)
+        .filter(([id]) => usedAssets.has(id))
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([id, a]) => [
           id,
@@ -499,26 +498,40 @@ export async function loadCellPhysics(
   manifest: WorldManifest,
   cellId: string,
   read: ReadVerifiedBytes,
+  loadedCell?: WorldCell,
 ): Promise<LocalStaticSet> {
-  const cell = await loadWorldCell(manifest, cellId, read);
+  validateWorldManifest(manifest);
+  const cell = loadedCell
+    ? validateWorldCell(loadedCell)
+    : await loadWorldCell(manifest, cellId, read);
+  validateCellPlacement(manifest, cell);
+  if (cell.cellId !== cellId) throw new Error('Cell identity mismatch');
   const entry = manifest.cells.find((item) => item.cellId === cellId)!;
-  const assets = await Promise.all(
-    entry.assetIds.map(async (id) => {
-      const descriptor = manifest.assets[id];
-      const asset = validateBuildingPhysicsAsset(
-        await readJson(
-          manifest,
-          read,
-          descriptor.collisionFile,
-          WORLD_RESOURCE_LIMITS.collisionBytes,
-        ),
-      );
-      requireValue(asset.assetId === id, 'asset key disagrees');
-      requireValue(
-        canonicalJson(asset.bounds) === canonicalJson(descriptor.bounds),
-        'asset bounds mismatch',
-      );
-      return [id, asset] as const;
+  const assets: (readonly [string, BuildingPhysicsAsset])[] = new Array(entry.assetIds.length);
+  let next = 0;
+  // A dense cell must not enqueue its entire model catalogue into VerifiedResources.
+  await Promise.all(
+    Array.from({ length: Math.min(8, entry.assetIds.length) }, async () => {
+      for (;;) {
+        const index = next++;
+        if (index >= entry.assetIds.length) return;
+        const id = entry.assetIds[index],
+          descriptor = manifest.assets[id];
+        const asset = validateBuildingPhysicsAsset(
+          await readJson(
+            manifest,
+            read,
+            descriptor.collisionFile,
+            WORLD_RESOURCE_LIMITS.collisionBytes,
+          ),
+        );
+        requireValue(asset.assetId === id, 'asset key disagrees');
+        requireValue(
+          canonicalJson(asset.bounds) === canonicalJson(descriptor.bounds),
+          'asset bounds mismatch',
+        );
+        assets[index] = [id, asset];
+      }
     }),
   );
   return { cell, buildingAssets: Object.fromEntries(assets) };

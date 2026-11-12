@@ -12,6 +12,7 @@
     "@su/contracts": "workspace:*",
     "@su/protocol": "workspace:*",
     "@su/simulation": "workspace:*",
+    "@su/world-release": "workspace:*",
     "express": "5.3.0",
     "openid-client": "6.8.9",
     "pg": "8.23.1"

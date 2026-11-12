@@ -1,7 +1,12 @@
 import ts from 'typescript';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-const allowed = { contracts: [], simulation: ['contracts'], protocol: ['contracts'] };
+const allowed = {
+  contracts: [],
+  simulation: ['contracts'],
+  protocol: ['contracts'],
+  'world-release': ['contracts'],
+};
 let errors = 0;
 async function walk(directory, visit) {
   for (const item of await readdir(directory, { withFileTypes: true })) {

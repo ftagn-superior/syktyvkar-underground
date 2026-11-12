@@ -1,11 +1,14 @@
 import type { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
+import { WorldOwnership } from './world-ownership.js';
+import { prepareLayoutWorld } from './layout/prepare.js';
 import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { MAX_PLAYERS, PROTOCOL_VERSION, type WorldInfo } from '@su/contracts';
 import { WorldRoom } from './world-room.js';
-import { readWorldDirectory } from './world-bundle.js';
+import { readAuthoringRelease } from './layout/release.js';
 import { AccountHttp } from './accounts/http.js';
 import { AccountStore } from './accounts/store.js';
 import { checkDatabaseSchema } from './migrations.js';
@@ -31,9 +34,9 @@ export async function createGameServer(options: GameServerOptions = {}) {
     options.worldDirectory ?? `dist/worlds/${process.env.SU_WORLD ?? 'ring-block'}`,
   );
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
-  const { manifest, definition } = await readWorldDirectory(worldDirectory);
+  const authored = await readAuthoringRelease(worldDirectory);
   // worldId проверен по шаблону [a-z0-9-] и безопасен как сегмент URL.
-  const worldPath = `/worlds/${manifest.worldId}`;
+  const worldPath = `/worlds/${authored.manifest.worldId}`;
   const ownedPool =
     !options.pool && !options.accounts ? createDatabasePool(readDatabaseUrl()) : undefined;
   const pool = options.pool ?? options.accounts?.store.pool ?? ownedPool!;
@@ -43,6 +46,16 @@ export async function createGameServer(options: GameServerOptions = {}) {
     await ownedPool?.end();
     throw error;
   }
+  const ownership = new WorldOwnership(pool, authored.definition.worldId, randomUUID());
+  let prepared: Awaited<ReturnType<typeof prepareLayoutWorld>>;
+  try {
+    prepared = await prepareLayoutWorld(worldDirectory, ownership, false, authored);
+  } catch (error) {
+    await ownership.close();
+    await ownedPool?.end();
+    throw error;
+  }
+  const { manifest, definition } = prepared;
   let room: WorldRoom | undefined;
   const accounts = options.accounts
     ? new AccountHttp(
@@ -133,7 +146,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
             ? 'public, max-age=31536000, immutable'
             : 'no-cache',
         );
-        res.sendFile(resolve(worldDirectory, file));
+        res.sendFile(resolve(prepared.directory, file));
       });
       // These routes come before the SDK matcher: arbitrary room creation is
       // deliberately absent. The sole room is created once during startup.
@@ -168,6 +181,8 @@ export async function createGameServer(options: GameServerOptions = {}) {
     definition,
     manifest,
     pool,
+    ownership,
+    itemStore: prepared.items,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
     itemCreationEnabled,
@@ -189,6 +204,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
   } catch (error) {
     ready = false;
     await server.gracefullyShutdown(false);
+    await ownership.close();
     await ownedPool?.end();
     throw error;
   }
@@ -218,6 +234,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           http.close(() => done());
           http.closeAllConnections();
         });
+        await ownership.close();
         await ownedPool?.end();
         if (saveError) throw saveError;
       })());

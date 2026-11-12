@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
+import { staticLayoutSchema } from './layout/schema.js';
 
-export const DATABASE_SCHEMA_VERSION = 3;
+export const DATABASE_SCHEMA_VERSION = 4;
 
 /** Kept in the server bundle so source and built migration commands use identical SQL. */
 const migrations = [
@@ -128,6 +129,7 @@ const migrations = [
       ADD COLUMN IF NOT EXISTS skin_id text NOT NULL DEFAULT 'minifigure'
       CHECK (skin_id ~ '^[a-z][a-z0-9-]{0,47}$');`,
   },
+  { version: 4, sql: staticLayoutSchema },
 ];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {
@@ -158,6 +160,19 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
     }
     for (const migration of migrations) {
       if (applied.rows.some((row) => row.version === migration.version)) continue;
+      if (migration.version === 4) {
+        const worlds = await client.query<{ id: string }>(
+          'SELECT id FROM persistent_worlds ORDER BY id',
+        );
+        for (const world of worlds.rows) {
+          const lock = await client.query<{ locked: boolean }>(
+            "SELECT pg_try_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':' || $1,193708)) AS locked",
+            [world.id],
+          );
+          if (!lock.rows[0].locked)
+            throw new Error('Stop all persistent world owners before upgrading placement storage');
+        }
+      }
       await client.query(migration.sql);
       await client.query('INSERT INTO su_schema_migrations(version) VALUES ($1)', [
         migration.version,

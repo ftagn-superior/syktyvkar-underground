@@ -148,7 +148,6 @@ describe('independent static-object extraction evidence', () => {
   it('builds all three worlds deterministically with no snapshot, import config or prototype', async () => {
     await cp('content', join(temporary, 'content'), { recursive: true });
     await rm(join(temporary, 'content/sources'), { recursive: true, force: true });
-    await rm(join(temporary, 'content/worlds/ring-block/import.json'));
     // The evidence registry must also be absent: it is not a second placement source.
     await rm(join(temporary, 'content/worlds/ring-block/extraction.json'));
     for (const id of WORLDS) {

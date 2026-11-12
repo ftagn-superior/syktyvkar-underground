@@ -70,7 +70,8 @@ describe('world v4 release', () => {
         );
       const world = await load(first, join(root, 'first'));
       expect(world.buildings).toHaveLength(2);
-      expect(Object.keys(world.buildingAssets)).toHaveLength(2);
+      const catalog = await readJson(join(root, 'content/buildings/catalog.json'));
+      expect(Object.keys(world.buildingAssets).sort()).toEqual(Object.keys(catalog.assets).sort());
       expect(first.simulationConfigHash).toBe(hash(canonicalJson(simulationProjection(world))));
       expect(world.buildingAssets['house-a'].colliders.map((c) => c.kind)).toEqual(['box', 'mesh']);
     }));
@@ -104,6 +105,20 @@ describe('world v4 release', () => {
       const sprint = await buildWorld(source, join(root, 'sprint'));
       expect(sprint.simulationConfigHash).not.toBe(mass.simulationConfigHash);
     }));
+  it('publishes unused catalog revisions without changing the applied physics hash', async () =>
+    withContent(async (root, source) => {
+      const before = await buildWorld(source, join(root, 'before-unused'));
+      const recipePath = join(root, 'content/buildings/house-remote-a/source.json');
+      const recipe = await readJson(recipePath);
+      recipe.roofHeight += 0.2;
+      await writeJson(recipePath, recipe);
+      const after = await buildWorld(source, join(root, 'after-unused'));
+      expect(after.assets['house-remote-a'].version).not.toBe(
+        before.assets['house-remote-a'].version,
+      );
+      expect(after.mapVersion).not.toBe(before.mapVersion);
+      expect(after.simulationConfigHash).toBe(before.simulationConfigHash);
+    }));
   it('stores one asset package for one hundred references with independent IDs and transforms', async () =>
     withContent(async (root, source) => {
       const path = join(root, 'content/worlds/physics-lab/cells/0_0.json');
@@ -120,6 +135,12 @@ describe('world v4 release', () => {
         },
       }));
       await writeJson(path, cell);
+      const catalogPath = join(root, 'content/buildings/catalog.json');
+      const catalog = await readJson(catalogPath);
+      await writeJson(catalogPath, {
+        ...catalog,
+        assets: { 'house-a': catalog.assets['house-a'] },
+      });
       const output = join(root, 'release'),
         manifest = await buildWorld(source, output);
       expect(Object.keys(manifest.assets)).toEqual(['house-a']);

@@ -178,7 +178,7 @@ export class PhysicsWorld {
       throw new Error(`Occupied entity ID: ${item.entityId}`);
     if ('assetId' in item) {
       if (!asset) throw new Error(`Missing collider: ${item.assetId}`);
-      this.buildings.add(item, asset);
+      if (asset.colliders.length) this.buildings.add(item, asset);
     } else this.objects.set(item.entityId, this.createBody(item));
     this.staticReferences.set(item.entityId, {
       version,

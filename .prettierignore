@@ -2,7 +2,5 @@ node_modules
 dist
 output
 pnpm-lock.yaml
-# Исторический снимок OSM: удаляется вместе со старым импортёром
-content/sources
 # Трассировка по снимку: одна трасса в строке, сохраняется из предпросмотра кольца
 content/worlds/ring-block/ring-trace.json

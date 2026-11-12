@@ -10,6 +10,7 @@ await bundle({
     'apps/server/src/main.ts',
     'apps/server/src/migrate.ts',
     'apps/server/src/migrate-world.ts',
+    'apps/server/src/layout-command.ts',
   ],
   outdir: 'dist/server',
   outExtension: { '.js': '.mjs' },

@@ -59,6 +59,7 @@ export class PlayerSchema extends EntitySchema.extend(
     animationChangedAtTick: t.uint32().default(0),
     chatText: t.string().default(''),
     chatSequence: t.uint32().default(0),
+    // Zero with nonempty text means the author has not moved yet.
     chatExpiresAtTick: t.uint32().default(0),
   },
   'Player',

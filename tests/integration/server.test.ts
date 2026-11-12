@@ -6,8 +6,9 @@ import {
   RESPAWN_COOLDOWN_MS,
   REACTION_DURATION_MS,
   CHAT_MAX_LENGTH,
-  CHAT_MIN_DURATION_MS,
-  CHAT_MAX_DURATION_MS,
+  CHAT_MOVE_DURATION_MS,
+  CHAT_MIN_COOLDOWN_MS,
+  CHAT_MAX_COOLDOWN_MS,
   TICK_RATE,
   type ActionResult,
   type WorldInfo,
@@ -329,7 +330,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     expect(after.state.players.get(sender.sessionId)!.reactionId).toBe('');
   });
 
-  it('shares bounded chat text, protects the author and reading time, and never replays expired requests', async () => {
+  it('keeps stationary chat until movement, shares one five-second deadline, and protects sending and authorship', async () => {
     const sender = await join();
     const observer = await join();
     const results: ActionResult[] = [];
@@ -348,11 +349,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     const expires = player.chatExpiresAtTick;
     expect(player.chatText).toBe('Привет, <b>сосед</b>! 🙂');
     expect(observer.state.players.get(observer.sessionId)!.chatText).toBe('');
-    expect(results[0]).toMatchObject({ ok: true, retryAfterMs: CHAT_MIN_DURATION_MS });
-    expect(expires - observer.state.serverTick).toBeGreaterThan(0);
-    expect(expires - observer.state.serverTick).toBeLessThanOrEqual(
-      (CHAT_MIN_DURATION_MS * TICK_RATE) / 1000,
-    );
+    expect(results[0]).toMatchObject({ ok: true, retryAfterMs: CHAT_MIN_COOLDOWN_MS });
+    expect(expires).toBe(0);
     send(1, 'Повтор');
     send(2, 'Следующее');
     sender.send('requestReaction', {
@@ -376,18 +374,53 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
 
     const late = await join();
     expect(late.state.players.get(sender.sessionId)!.chatExpiresAtTick).toBe(expires);
+    expect(late.state.players.get(sender.sessionId)!.chatText).toBe(player.chatText);
+    await sleep(CHAT_MIN_COOLDOWN_MS + 200);
+    expect(player.chatText).toBe('Привет, <b>сосед</b>! 🙂');
+    expect(player.chatExpiresAtTick).toBe(0);
+    send(10, 'Новое сообщение без движения');
+    await until(() => player.chatSequence === 2 && results.length === 11);
+    expect(player.chatText).toBe('Новое сообщение без движения');
+    expect(player.chatExpiresAtTick).toBe(0);
+
+    const input = sender.input({ type: MoveInputSchema, mode: 'reliable' });
+    input.data.moveX = 1;
+    input.send();
+    await until(() => player.chatExpiresAtTick > 0);
+    const movementExpires = player.chatExpiresAtTick;
+    expect(movementExpires - observer.state.serverTick).toBeGreaterThan(
+      (CHAT_MOVE_DURATION_MS * TICK_RATE) / 1000 - 15,
+    );
+    expect(movementExpires - observer.state.serverTick).toBeLessThanOrEqual(
+      (CHAT_MOVE_DURATION_MS * TICK_RATE) / 1000,
+    );
+    input.data.moveX = 0;
+    input.send();
+    await sleep(150);
+    expect(player.chatExpiresAtTick).toBe(movementExpires);
+    input.data.moveX = 1;
+    input.send();
+    await sleep(150);
+    expect(player.chatExpiresAtTick).toBe(movementExpires);
+    const movingLate = await join();
+    expect(movingLate.state.players.get(sender.sessionId)!.chatExpiresAtTick).toBe(movementExpires);
     await until(
       () => player.chatText === '' && sender.state.players.get(sender.sessionId)!.chatText === '',
-      CHAT_MIN_DURATION_MS + 1500,
+      CHAT_MOVE_DURATION_MS + 1500,
     );
     expect(player.chatExpiresAtTick).toBe(0);
     send(1, 'Повтор после окончания');
-    await until(() => results.length === 11);
+    await until(() => results.length === 12);
     expect(app.room.state.players.get(sender.sessionId)!.chatText).toBe('');
-    send(10, 'я'.repeat(CHAT_MAX_LENGTH));
-    await until(() => player.chatSequence === 2);
+    // A message sent during movement starts the same five-second countdown.
+    input.send();
+    send(11, 'я'.repeat(CHAT_MAX_LENGTH));
+    await until(() => player.chatSequence === 3 && player.chatExpiresAtTick > 0);
     expect(player.chatText).toHaveLength(CHAT_MAX_LENGTH);
-    expect(results.at(-1)).toMatchObject({ ok: true, retryAfterMs: CHAT_MAX_DURATION_MS });
+    expect(results.at(-1)).toMatchObject({ ok: true, retryAfterMs: CHAT_MAX_COOLDOWN_MS });
+    expect(player.chatExpiresAtTick - observer.state.serverTick).toBeLessThanOrEqual(
+      (CHAT_MOVE_DURATION_MS * TICK_RATE) / 1000,
+    );
   });
 
   it('rejects malformed chat requests and chat before the character is ready', async () => {

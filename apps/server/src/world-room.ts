@@ -31,7 +31,8 @@ import {
   findReaction,
   findAnimation,
   normalizeChatText,
-  chatDurationMs,
+  chatCooldownMs,
+  CHAT_MOVE_DURATION_MS,
   findAvatarSkin,
   DEFAULT_AVATAR_SKIN,
   type AvatarSkinId,
@@ -64,6 +65,7 @@ interface Session {
   skinId: AvatarSkinId;
   lastRequest: number;
   lastRespawn: number;
+  chatAvailableAtTick: number;
   lastInput: MoveInput;
   results: Map<number, ActionResult>;
   pendingActions: Set<number>;
@@ -236,6 +238,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         PLAYER_COLORS[ordinal % PLAYER_COLORS.length],
       lastRequest: 0,
       lastRespawn: -Infinity,
+      chatAvailableAtTick: 0,
       lastInput: { ...NEUTRAL_INPUT },
       results: new Map(),
     });
@@ -325,9 +328,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         player.reactionId = '';
         player.reactionExpiresAtTick = 0;
       }
-      if (player.chatText && this.state.serverTick >= player.chatExpiresAtTick) {
-        player.chatText = '';
-        player.chatExpiresAtTick = 0;
+      if (player.chatText) {
+        if (
+          !player.chatExpiresAtTick &&
+          actual &&
+          Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08
+        )
+          player.chatExpiresAtTick =
+            this.state.serverTick + 1 + Math.ceil((CHAT_MOVE_DURATION_MS * TICK_RATE) / 1000);
+        if (player.chatExpiresAtTick && this.state.serverTick + 1 >= player.chatExpiresAtTick) {
+          player.chatText = '';
+          player.chatExpiresAtTick = 0;
+        }
       }
     }
     this.projectItems(snapshot.items);
@@ -524,15 +536,20 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       return;
     }
     const player = this.state.players.get(client.sessionId);
-    const remainingTicks = Math.max(0, (player?.chatExpiresAtTick ?? 0) - this.state.serverTick);
+    const remainingTicks = Math.max(
+      0,
+      session.chatAvailableAtTick - this.state.serverTick,
+      (player?.chatExpiresAtTick ?? 0) - this.state.serverTick,
+    );
     if (!code) {
       if (!text) code = 'INVALID_INPUT';
       else if (remainingTicks > 0) code = 'RATE_LIMITED';
       else {
         player!.chatText = text;
         player!.chatSequence++;
-        player!.chatExpiresAtTick =
-          this.state.serverTick + Math.ceil((chatDurationMs(text) * TICK_RATE) / 1000);
+        player!.chatExpiresAtTick = 0;
+        session.chatAvailableAtTick =
+          this.state.serverTick + Math.ceil((chatCooldownMs(text) * TICK_RATE) / 1000);
       }
     }
     // Cache only the acknowledgement, never the message body or a history.
@@ -544,7 +561,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         ? {
             retryAfterMs: code
               ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
-              : chatDurationMs(text!),
+              : chatCooldownMs(text!),
           }
         : {}),
     });

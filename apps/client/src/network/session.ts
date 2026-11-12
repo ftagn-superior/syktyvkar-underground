@@ -27,7 +27,7 @@ import {
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
   REACTION_DURATION_MS,
-  CHAT_MAX_DURATION_MS,
+  CHAT_MAX_COOLDOWN_MS,
   normalizeChatText,
   TICK_RATE,
   findReaction,
@@ -405,8 +405,8 @@ export class GameSession {
           if (result.ok || result.code === 'RATE_LIMITED') {
             const delay =
               typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
-                ? Math.min(CHAT_MAX_DURATION_MS, Math.max(0, result.retryAfterMs))
-                : CHAT_MAX_DURATION_MS;
+                ? Math.min(CHAT_MAX_COOLDOWN_MS, Math.max(0, result.retryAfterMs))
+                : CHAT_MAX_COOLDOWN_MS;
             this.chatAvailableAt = performance.now() + delay;
           }
           if (result.message) this.onNotice(result.message);
@@ -760,7 +760,9 @@ export class GameSession {
             ? {
                 text: player.chatText,
                 sequence: player.chatSequence,
-                remainingMs: this.displayRemainingMs(player.chatExpiresAtTick, now),
+                remainingMs: player.chatExpiresAtTick
+                  ? this.displayRemainingMs(player.chatExpiresAtTick, now)
+                  : Infinity,
               }
             : undefined,
       });

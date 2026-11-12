@@ -1,4 +1,12 @@
 import './style.css';
+import './ui/theme.css';
+import './ui/lobby.css';
+import './ui/hud.css';
+import { HelpMenu } from './ui/help';
+import { InteractionSystem } from './interaction/prompt';
+import { PickupSource } from './interaction/pickups';
+import { applyAccent } from './ui/theme';
+import { CharacterPreview } from './ui/character-preview';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
 import { CameraPointerInput } from './input/camera-pointer';
@@ -46,14 +54,6 @@ const unbindTouchButtons = bindTouchButtons([
   element<HTMLButtonElement>('area-retry'),
   element<HTMLButtonElement>('download-report'),
 ]);
-const actions = document.querySelector<HTMLElement>('.actions')!;
-const actionsResize = new ResizeObserver(() => {
-  document.documentElement.style.setProperty(
-    '--game-actions-height',
-    `${actions.getBoundingClientRect().height}px`,
-  );
-});
-actionsResize.observe(actions);
 const qualityStorageKey = 'su:render-quality:v1';
 let quality: RenderQuality = 'standard';
 try {
@@ -76,6 +76,48 @@ let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
 let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
+let preview: CharacterPreview | undefined;
+let help: HelpMenu | undefined;
+let interactions: InteractionSystem | undefined;
+let appliedAccent = '';
+const previewCanvas = element<HTMLCanvasElement>('preview-canvas');
+const previewFallback = element<HTMLImageElement>('preview-fallback');
+
+function setAccent(hex: string): void {
+  if (hex === appliedAccent) return;
+  appliedAccent = hex;
+  applyAccent(hex);
+}
+/** The lobby shows the real model in a private scene; it is released as soon as play starts. */
+function syncPreview(): void {
+  const lobby = !welcome.hidden;
+  if (!lobby) {
+    preview?.dispose();
+    preview = undefined;
+    previewCanvas.hidden = true;
+    previewFallback.hidden = false;
+    return;
+  }
+  setAccent(accounts.previewColor);
+  if (!preview && loaded && !graphicsLost) {
+    try {
+      previewCanvas.hidden = false;
+      preview = new CharacterPreview(
+        previewCanvas,
+        session.definition.simulation.character,
+        accounts.selectedSkinId,
+        accounts.previewColor,
+      );
+      previewFallback.hidden = true;
+    } catch (error) {
+      console.warn('Character preview unavailable', error);
+      previewCanvas.hidden = true;
+      previewFallback.hidden = false;
+    }
+  }
+  preview?.setSkin(accounts.selectedSkinId);
+  preview?.setColor(accounts.previewColor);
+}
 
 function resetCameraInput(): void {
   cameraPointer?.cancel();
@@ -154,19 +196,48 @@ function continuationHint(): string {
     : 'Нажмите клавишу движения, чтобы продолжить.';
 }
 
-function showNotice(message: string): void {
-  notice.textContent = message;
+function showNotice(message: string, options: { toast?: { hint?: string } } = {}): void {
+  const text = document.createElement('span');
+  text.textContent = message;
+  const parts: Node[] = [];
+  if (options.toast) {
+    // Pickup feedback: hexagon icon + text + the key that opens the result.
+    const icon = document.createElement('span');
+    icon.className = 'ic';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML =
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>';
+    parts.push(icon);
+  }
+  parts.push(text);
+  if (options.toast?.hint) {
+    const hint = document.createElement('span');
+    hint.className = 'muted';
+    const key = document.createElement('kbd');
+    key.className = 'su-kbd';
+    key.textContent = options.toast.hint;
+    hint.append(key, 'открыть');
+    parts.push(hint);
+  }
+  notice.replaceChildren(...parts);
+  // Re-trigger the slide-up for each new message.
+  notice.hidden = true;
+  void notice.offsetWidth;
   notice.hidden = false;
   clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => {
-    notice.hidden = true;
-  }, 7000);
+  noticeTimer = setTimeout(
+    () => {
+      notice.hidden = true;
+    },
+    options.toast ? 2800 : 7000,
+  );
 }
 function updateState(state: ConnectionState, message?: string): void {
   const playing = state === 'playing';
   const reconnecting = state === 'reconnecting';
   const preparing = state === 'preparing' || state === 'waiting';
   welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && !!session.room);
+  document.body.dataset.scene = welcome.hidden ? 'world' : 'lobby';
   join.disabled =
     graphicsLost ||
     accounts.busy ||
@@ -189,7 +260,7 @@ function updateState(state: ConnectionState, message?: string): void {
               ? 'Перезагрузить страницу'
               : accounts.enabled && !accounts.account
                 ? 'Войти гостем'
-                : 'Войти';
+                : 'Войти в мир';
   status.textContent = {
     loading: 'Загрузка',
     ready: session.reloadRequired
@@ -227,6 +298,12 @@ function updateState(state: ConnectionState, message?: string): void {
   if (message) showNotice(message);
   renderRespawn();
   renderGamePanels();
+  if (playing) {
+    const own = session.room?.state.players.get(session.room.sessionId);
+    if (own?.color) setAccent(own.color);
+  }
+  help?.setAvailable(welcome.hidden && !graphicsLost && !!session.room);
+  syncPreview();
 }
 const session = new GameSession(updateState, showNotice);
 const storageStatus = document.createElement('div');
@@ -259,7 +336,26 @@ inventory = new InventoryPanel(
     resetGameInput();
     renderControls(placing);
   },
+  (name) => showNotice(`В инвентарь: ${name}`, { toast: { hint: 'X' } }),
 );
+help = new HelpMenu(() => canvas.focus({ preventScroll: true }));
+const pickups = new PickupSource(
+  session,
+  () => view,
+  () => appliedAccent || '#6EE0C4',
+  (itemId, name) => inventory?.pickup(itemId, name),
+);
+interactions = new InteractionSystem({
+  player: () => {
+    const room = session.room;
+    const self = room?.state.players.get(room.sessionId);
+    return self ? { x: self.x, y: self.y, z: self.z } : undefined;
+  },
+  candidates: () => pickups.candidates(),
+  project: (anchor, out) => (view ? view.project(anchor, out) : (out.visible = false)),
+  enabled: () =>
+    loaded && !graphicsLost && inputMode.value === 'desktop' && !!inventory?.canCollect,
+});
 const accountPreparation = accounts.load();
 function setCameraRotation(direction: -1 | 0 | 1): void {
   if (!loaded || graphicsLost) return;
@@ -392,6 +488,7 @@ function renderRespawn(): void {
 }
 function renderMetrics(): void {
   element('player-count').textContent = `${session.occupancy} / 8`;
+  element('help-online').textContent = `${session.occupancy} / 8 в сети`;
   if (diagnostics.hidden) return;
   const data = session.diagnostics();
   const rendering = view?.renderingDiagnostics();
@@ -484,6 +581,8 @@ async function start(): Promise<void> {
           inputMode.value === 'touch'
             ? touch!.read(view!.cameraAngle)
             : keyboard.read(view!.cameraAngle);
+        if (command.moveX || command.moveZ) help?.noteMovement();
+        interactions?.tick(now);
         const frame = session.frame(now, delta, command);
         syncTouchInput();
         view!.follow(frame.ownId);
@@ -606,7 +705,6 @@ window.addEventListener(
   () => {
     clearInterval(uiTimer);
     clearTimeout(noticeTimer);
-    actionsResize.disconnect();
     unbindTouchButtons();
     resetGameInput();
     session.dispose();
@@ -615,6 +713,9 @@ window.addEventListener(
     cameraPointer?.dispose();
     view?.dispose();
     keyboard.dispose();
+    help?.dispose();
+    interactions?.dispose();
+    preview?.dispose();
     reactions?.dispose();
     animations?.dispose();
     chat?.dispose();

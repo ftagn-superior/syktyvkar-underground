@@ -99,6 +99,10 @@ describe('building rendering from the real world bundle', () => {
         assets: 2,
         modelLoads: 2,
         fadedBuildings: 0,
+        treeInstances: 0,
+        treeBatches: 0,
+        treeTemplates: 0,
+        fadedTrees: 0,
       });
       const wall = (id: string) =>
         view.scene
@@ -247,7 +251,10 @@ describe('building rendering from the real world bundle', () => {
       settled = true;
     });
     try {
-      await vi.waitFor(() => expect(signals.every((signal) => signal.aborted)).toBe(true));
+      await vi.waitFor(() => {
+        expect(signals).toHaveLength(4);
+        expect(signals.every((signal) => signal.aborted)).toBe(true);
+      });
       expect(reads).toHaveLength(4);
       expect(settled).toBe(false);
       finish();
@@ -395,7 +402,8 @@ describe('incremental building ownership', () => {
     };
     const cancelled = view.buildings.prepareAssets(manifest, ['house-a'], read, controller.signal);
     const retained = view.buildings.prepareAssets(manifest, ['house-a'], read);
-    await vi.waitFor(() => expect(signals).toHaveLength(2));
+    // Parts are now read first; supported trees never need their GLB.
+    await vi.waitFor(() => expect(signals).toHaveLength(1));
     controller.abort();
     expect(signals.every((signal) => !signal.aborted)).toBe(true);
     finish();

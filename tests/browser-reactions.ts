@@ -5,6 +5,7 @@ import { createGameServer } from './helpers/game-server.js';
 import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 // Run after build: the two real browsers share an isolated, freshly created world.
 const app = await createGameServer({
@@ -47,19 +48,35 @@ try {
   await sender.keyboard.press('r');
   await sender.locator('#reactions-panel').waitFor();
   assert.equal(await sender.locator('.reaction-choice').count(), REACTIONS.length);
-  assert.equal(await sender.locator('.reaction-choice:focus').count(), 1);
   assert.equal(
-    await sender
-      .locator('.reaction-choice img')
-      .evaluateAll((images) =>
-        images.every(
-          (image) =>
-            (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0,
-        ),
-      ),
-    true,
+    await sender.locator('#reactions-panel [data-catalog-count]').textContent(),
+    String(REACTIONS.length),
+  );
+  assert.equal(await sender.locator('.reaction-choice:focus').count(), 1);
+  assert.equal(await sender.locator('.reaction-choice[aria-keyshortcuts]').count(), 9);
+  assert.equal(
+    await sender.locator('.reaction-choice:nth-child(n + 10) .catalog-choice-key').count(),
+    0,
+  );
+  await sender.waitForFunction(() =>
+    Array.from(document.querySelectorAll<HTMLImageElement>('.reaction-choice img')).every(
+      (image) => image.complete && image.naturalWidth > 0,
+    ),
   );
   await sender.screenshot({ path: `${output}/menu.png` });
+  for (let index = 1; index < REACTIONS.length; index++) await sender.keyboard.press('Tab');
+  assert.equal(await sender.locator('.reaction-choice:last-child:focus').count(), 1);
+  assert.equal(
+    await sender.locator('#reactions-panel').evaluate((panel) => panel.scrollTop > 0),
+    true,
+  );
+  await sender.keyboard.press('Escape');
+  await sender.keyboard.press('r');
+  assert.equal(await sender.locator('#reactions-panel').evaluate((panel) => panel.scrollTop), 0);
+  assert.equal(await sender.locator('.reaction-choice:first-child:focus').count(), 1);
+  checks.push(
+    'Tab reaches the last reaction and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges',
+  );
   const origin = (await snapshot(sender)).authoritative.position;
   await sender.keyboard.down('d');
   await sender.waitForFunction((origin) => {
@@ -89,7 +106,8 @@ try {
       `.reaction-choice[data-reaction-id="${reaction.id}"]:not([disabled])`,
     );
     await choice.waitFor({ timeout: 6000 });
-    if (reaction.id === 'hello') await sender.keyboard.press('1');
+    if (REACTIONS.indexOf(reaction) < 9)
+      await sender.keyboard.press(String(REACTIONS.indexOf(reaction) + 1));
     else await choice.click();
     await Promise.all([
       sender.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
@@ -173,7 +191,7 @@ try {
     );
   }
   checks.push(
-    'all five reactions reach both browsers, follow the character and camera, and expire five seconds after movement even after stopping',
+    `all ${REACTIONS.length} reactions reach both browsers, follow the character and camera, and expire five seconds after movement even after stopping`,
   );
   console.log(checks.at(-1));
 
@@ -182,12 +200,12 @@ try {
   assert.equal(await observer.locator('.player-reaction').count(), 0);
   checks.push('restoring a session does not replay an expired reaction');
 
-  await sender.locator('#diagnostics-toggle').click();
-  await sender.locator('#reactions-toggle').click();
+  await hudClick(sender, '#diagnostics-toggle');
+  await hudClick(sender, '#reactions-toggle');
   assert.equal(await sender.locator('#diagnostics').isVisible(), false);
-  await sender.locator('#diagnostics-toggle').click();
+  await hudClick(sender, '#diagnostics-toggle');
   assert.equal(await sender.locator('#reactions-panel').isVisible(), false);
-  await sender.locator('#diagnostics-toggle').click();
+  await hudClick(sender, '#diagnostics-toggle');
   checks.push('diagnostics and reactions do not cover each other');
 
   for (const viewport of [
@@ -197,8 +215,28 @@ try {
     { width: 640, height: 360 },
   ]) {
     await sender.setViewportSize(viewport);
-    await sender.locator('#reactions-toggle').click();
+    await hudClick(sender, '#reactions-toggle');
     await sender.locator('#reactions-panel').waitFor();
+    const panel = sender.locator('#reactions-panel');
+    const layout = await panel.evaluate((node) => ({
+      scrollTop: node.scrollTop,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+      horizontalOverflow: node.scrollWidth > node.clientWidth,
+      overflowY: getComputedStyle(node).overflowY,
+    }));
+    assert.equal(layout.scrollTop, 0);
+    assert.equal(layout.overflowY, 'auto');
+    assert.equal(layout.horizontalOverflow, false);
+    assert.ok(layout.scrollHeight > layout.clientHeight, 'the expanded catalog needs scrolling');
+    await sender.locator('.reaction-choice:first-child').hover();
+    await sender.mouse.wheel(0, layout.scrollHeight);
+    await sender.waitForFunction(() => {
+      const panel = document.querySelector('#reactions-panel')!;
+      const last = panel.querySelector('.reaction-choice:last-child')!.getBoundingClientRect();
+      const bounds = panel.getBoundingClientRect();
+      return panel.scrollTop > 0 && last.top >= bounds.top && last.bottom <= bounds.bottom;
+    });
     for (const selector of [
       '#reactions-panel',
       '.reaction-choice:last-child',
@@ -229,7 +267,9 @@ try {
     if (viewport.height === 360) await sender.screenshot({ path: `${output}/short.png` });
     await sender.keyboard.press('Escape');
   }
-  checks.push('menu and gameplay controls fit desktop, tablet, narrow and short viewports');
+  checks.push(
+    'mouse wheel reaches the last reaction without horizontal overflow; menu and gameplay controls fit desktop, tablet, narrow and short viewports',
+  );
   assert.deepEqual(errors, []);
   await writeFile(`${output}/checks.json`, JSON.stringify({ checks, errors }, null, 2));
   console.log(JSON.stringify({ checks, errors }, null, 2));

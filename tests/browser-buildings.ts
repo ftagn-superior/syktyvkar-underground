@@ -7,6 +7,7 @@ import type { Page } from 'playwright';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { createGameServer } from './helpers/game-server.js';
 import { holdCamera, rotateCamera, waitForCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 // A separate test release changes only placements/spawns; controls still use real keyboard input.
 const temporary = await mkdtemp(join(tmpdir(), 'su-buildings-browser-'));
@@ -51,9 +52,9 @@ try {
     });
     await page.goto(`${app.url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').waitFor({ timeout: 30_000 });
-    await page.locator('#diagnostics-toggle').click();
+    await hudClick(page, '#diagnostics-toggle');
     await page.locator('#quality').selectOption('economy');
-    await page.locator('#diagnostics-toggle').click();
+    await hudClick(page, '#diagnostics-toggle');
     await page.locator('#join').click();
     await page.waitForFunction(
       () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
@@ -85,18 +86,18 @@ try {
   checks.push(
     'occlusion is local to the player and does not fade another instance of the same asset',
   );
-  await pages[0].locator('#diagnostics-toggle').click();
+  await hudClick(pages[0], '#diagnostics-toggle');
   await pages[0].locator('#quality').selectOption('standard');
-  await pages[0].locator('#diagnostics-toggle').click();
+  await hudClick(pages[0], '#diagnostics-toggle');
   await pages[0].waitForTimeout(800);
   assert.ok(
     (await buildings(pages[0])).buildings.find((b: any) => b.entityId === original.entityId)
       .opacity < 0.4,
   );
   await pages[0].screenshot({ path: 'output/playwright/buildings/occluded-standard.png' });
-  await pages[0].locator('#diagnostics-toggle').click();
+  await hudClick(pages[0], '#diagnostics-toggle');
   await pages[0].locator('#quality').selectOption('economy');
-  await pages[0].locator('#diagnostics-toggle').click();
+  await hudClick(pages[0], '#diagnostics-toggle');
   checks.push('both quality profiles retain the same occlusion behavior');
 
   // Camera moves without changing the authoritative position, and completes a full circuit.
@@ -242,7 +243,7 @@ try {
     JSON.stringify(result, null, 2) + '\n',
   );
   console.log(JSON.stringify(result, null, 2));
-  for (const page of pages) await page.locator('#leave').click();
+  for (const page of pages) await hudClick(page, '#leave');
 } finally {
   await browser.close();
   await app?.close();

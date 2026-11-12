@@ -184,3 +184,65 @@ it('shares border assets without duplicating bytes or bundling unrelated neighbo
     ),
   ).toHaveLength(1);
 });
+
+it('packs procedural tree metadata while preserving the original GLB for older clients and republication', async () => {
+  const authored = JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8'));
+  const itemCatalog = JSON.parse(await readFile('content/items/catalog.json', 'utf8'));
+  const assetId = 'tree-pilot';
+  const bounds = { min: { x: -2, y: 0, z: -2 }, max: { x: 2, y: 10, z: 2 } };
+  const physics = { assetId, bounds, colliders: [] };
+  const parts = jsonBytes({
+    formatVersion: 1,
+    assetId,
+    parts: [{ partId: 'fading', role: 'wall', occlusionGroup: 'shell', nodeIndex: 0 }],
+    tree: {
+      formatVersion: 1,
+      crowns: [
+        [1, 2, 3, 3],
+        [2, 0.5, 6, 4],
+      ],
+      trunk: [0.3, 4, 0.3, 0],
+      trunkBase: 0,
+      crownColor: '#55813f',
+      trunkColor: '#704a31',
+    },
+  });
+  const compiled = {
+    [assetId]: {
+      version: hash(parts),
+      bounds,
+      physics,
+      parts,
+      collision: jsonBytes(physics),
+      model: new Uint8Array([1, 2, 3, 4]),
+    },
+  };
+  const world: WorldDefinition = {
+    ...authored,
+    itemCatalog,
+    buildingAssets: { [assetId]: physics },
+    buildings: [
+      {
+        entityId: 'tree-1',
+        assetId,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    ],
+  };
+  const grid = createWorldGrid(world.bounds, 125);
+  const first = createWorldPublication(world, grid, compiled);
+  const asset = first.manifest.assets[assetId];
+  const entries = new Map(
+    first.manifest.cells.flatMap((cell) =>
+      (cell.graphicsPacks ?? []).flatMap((path) => [
+        ...decodeGraphicsPack(first.payloads.get(path)!),
+      ]),
+    ),
+  );
+  expect(entries.has(asset.partsFile)).toBe(true);
+  expect(entries.has(asset.modelFile)).toBe(false);
+  expect(first.payloads.get(asset.modelFile)).toEqual(compiled[assetId].model);
+  expect(first.manifest.files[asset.modelFile]).toBe(hash(compiled[assetId].model));
+  expect(createWorldPublication(world, grid, compiled).manifest).toEqual(first.manifest);
+});

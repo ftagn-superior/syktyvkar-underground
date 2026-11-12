@@ -72,7 +72,12 @@ export class RadialFog extends MaterialPluginBase {
     return {
       CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
         float suDistance = length(vPositionW.xz - suRadial.xy);
-        float suVisibility = (1.0 - smoothstep(max(0.0, suRadial.z - suRadial.w), max(0.001, suRadial.z), suDistance)) * suAppearance;
+        #ifdef SU_TREE_INSTANCES
+          float suAppear = vSuTreeAppearance;
+        #else
+          float suAppear = suAppearance;
+        #endif
+        float suVisibility = (1.0 - smoothstep(max(0.0, suRadial.z - suRadial.w), max(0.001, suRadial.z), suDistance)) * suAppear;
         if (suDynamic > 0.5) {
           float suCoverage = fract(dot(floor(gl_FragCoord.xy), vec2(0.754877666, 0.569840296)));
           if (suVisibility <= suCoverage) discard;

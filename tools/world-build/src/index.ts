@@ -21,6 +21,8 @@ import {
   WORLD_RESOURCE_LIMITS,
   type WorldDefinition,
   type WorldSource,
+  type TreeRenderRecipe,
+  validateBuildingParts,
 } from '@su/contracts';
 import {
   createWorldPublication,
@@ -39,6 +41,7 @@ import {
   type TreeRecipe,
 } from './city.js';
 import { generateKit, type KitRecipe } from './kit.js';
+import { treeRenderRecipe } from './tree-instances.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
 export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab'] as const;
@@ -73,6 +76,7 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     throw new Error(`Invalid asset descriptor: ${assetId}`);
   const directory = dirname(descriptorPath);
   let model: Uint8Array, physics: BuildingPhysicsAsset;
+  let tree: TreeRenderRecipe | undefined;
   const kind = descriptor.source?.kind;
   const generator = Object.hasOwn(generators, kind)
     ? generators[kind as keyof typeof generators]
@@ -82,6 +86,7 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     const generated = generator(assetId, recipe);
     model = encodeStaticGlb(generated.parts);
     physics = generated.physics;
+    if (kind === 'kit') tree = treeRenderRecipe(assetId, recipe);
   } else if (descriptor.source?.kind === 'glb') {
     model = await readFile(sourceFile(directory, descriptor.source.file));
     physics = validateBuildingPhysicsAsset(
@@ -112,7 +117,7 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   physics = { ...physics, bounds: inspected.bounds };
   validateBuildingPhysicsAsset(physics);
   const collision = jsonBytes(physics),
-    parts = jsonBytes(inspected.parts);
+    parts = jsonBytes(validateBuildingParts({ ...inspected.parts, ...(tree ? { tree } : {}) }));
   if (
     collision.byteLength > WORLD_RESOURCE_LIMITS.collisionBytes ||
     parts.byteLength > WORLD_RESOURCE_LIMITS.partsBytes

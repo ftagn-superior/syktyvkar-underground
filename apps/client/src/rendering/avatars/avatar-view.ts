@@ -16,6 +16,8 @@ import { CharacterAnimator } from './character-animator';
 import { AvatarRig } from './avatar-rig';
 import { SKIN_BUILDERS } from './skins';
 
+const MARKER_ALPHA = 0.55;
+
 /** One animator and stable entity root; a skin supplies only the visual rig's appearance. */
 export class AvatarView {
   private rig: AvatarRig;
@@ -66,12 +68,14 @@ export class AvatarView {
       }
     }
     if (own && !this.marker) {
-      this.marker = MeshBuilder.CreateTorus(
+      // A flat hexagon on the ground (low-poly replacement for the former ring).
+      this.marker = MeshBuilder.CreateDisc(
         `marker-${this.root.name}`,
-        { diameter: this.config.radius * 3, thickness: 0.028, tessellation: 40 },
+        { radius: this.config.radius * 1.55, tessellation: 6 },
         this.scene,
       );
       this.marker.parent = this.root;
+      this.marker.rotation.x = Math.PI / 2;
       this.marker.position.y = -this.config.height / 2 + 0.04;
       this.marker.isPickable = false;
       this.markerMaterial = new StandardMaterial(`marker-${this.root.name}`, this.scene);
@@ -79,14 +83,15 @@ export class AvatarView {
       this.markerMaterial.specularColor.set(0.16, 0.17, 0.18);
       this.markerMaterial.specularPower = 72;
       this.markerMaterial.emissiveColor = this.markerMaterial.diffuseColor.scale(0.35);
+      this.markerMaterial.backFaceCulling = false;
       this.marker.material = this.markerMaterial;
     }
     this.marker?.setEnabled(own);
     const alpha = player.connected === false ? 0.45 : 1;
-    if (changed || alpha !== this.alpha || this.markerMaterial?.alpha !== alpha) {
+    if (changed || alpha !== this.alpha || this.markerMaterial?.alpha !== alpha * MARKER_ALPHA) {
       this.alpha = alpha;
       this.rig.material.alpha = alpha;
-      if (this.markerMaterial) this.markerMaterial.alpha = alpha;
+      if (this.markerMaterial) this.markerMaterial.alpha = alpha * MARKER_ALPHA;
     }
     this.rig.applyPose(this.animator.update(player, delta, own, reducedMotion), this.config.height);
   }

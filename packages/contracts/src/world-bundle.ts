@@ -243,6 +243,40 @@ export function validateBuildingParts(value: unknown): BuildingParts {
     );
     requireValue(Number.isSafeInteger(part.nodeIndex) && part.nodeIndex >= 0, 'part nodeIndex');
   }
+  if (value.tree !== undefined) {
+    const tree = value.tree;
+    const tuple = (v: unknown): v is number[] =>
+      Array.isArray(v) &&
+      v.length === 4 &&
+      v.every((n: unknown) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1000);
+    requireValue(object(tree) && tree.formatVersion === 1, 'tree render version');
+    requireValue(
+      value.parts.length === 1 && value.parts[0].occlusionGroup === 'shell',
+      'tree render semantic group',
+    );
+    requireValue(
+      Array.isArray(tree.crowns) &&
+        tree.crowns.length === 2 &&
+        tree.crowns.every((c: unknown) => tuple(c) && c[0] > 0 && c[1] >= 0.001 && c[3] > 0),
+      'tree render crowns',
+    );
+    requireValue(
+      tuple(tree.trunk) && tree.trunk.slice(0, 3).every((n: number) => n > 0),
+      'tree render trunk',
+    );
+    requireValue(
+      typeof tree.trunkBase === 'number' &&
+        Number.isFinite(tree.trunkBase) &&
+        Math.abs(tree.trunkBase) <= 1000,
+      'tree render trunk base',
+    );
+    requireValue(
+      [tree.crownColor, tree.trunkColor].every(
+        (c) => typeof c === 'string' && /^#[a-f0-9]{6}$/i.test(c),
+      ),
+      'tree render colors',
+    );
+  }
   return value as BuildingParts;
 }
 export function validateWorldManifest(value: unknown): WorldManifest {

@@ -24,7 +24,7 @@ export class AnimationRequestState {
         result.code === 'RATE_LIMITED'
           ? 'Дождитесь, прежде чем выбрать другую анимацию.'
           : result.code === 'ANIMATION_NOT_ALLOWED'
-            ? 'Дождитесь опоры; для танца остановитесь.'
+            ? 'Дождитесь опоры; для движений всем телом остановитесь.'
             : result.code === 'WORLD_NOT_READY'
               ? 'Мир пока недоступен.'
               : result.code === 'STALE_WORLD'

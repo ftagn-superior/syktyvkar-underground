@@ -86,6 +86,7 @@ export class ReactionMenu {
     if (!this.panel.hidden) return this.close();
     this.onOpen?.();
     this.panel.hidden = false;
+    this.panel.scrollTop = 0;
     this.toggle.setAttribute('aria-expanded', 'true');
     (
       this.choices.find((button) => !button.disabled) ??

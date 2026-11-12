@@ -9,7 +9,7 @@ import { readWorldDirectory } from './world-bundle.js';
 import { AccountHttp } from './accounts/http.js';
 import { AccountStore } from './accounts/store.js';
 import { checkDatabaseSchema } from './migrations.js';
-import { readDatabaseUrl, type AccountConfig } from './config.js';
+import { readDatabaseUrl, readItemCreationEnabled, type AccountConfig } from './config.js';
 import { createDatabasePool } from './database.js';
 import type { LoginProvider } from './accounts/telegram.js';
 
@@ -21,9 +21,11 @@ export interface GameServerOptions {
   clientDirectory?: string;
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
+  itemCreationEnabled?: boolean;
   accounts?: { config: AccountConfig; store: AccountStore; provider?: LoginProvider };
 }
 export async function createGameServer(options: GameServerOptions = {}) {
+  const itemCreationEnabled = options.itemCreationEnabled ?? readItemCreationEnabled();
   const worldDirectory = resolve(options.worldDirectory ?? 'dist/worlds/physics-lab');
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const { manifest, definition } = await readWorldDirectory(worldDirectory);
@@ -165,6 +167,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     pool,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
+    itemCreationEnabled,
     accounts,
   });
   try {

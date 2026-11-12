@@ -10,6 +10,7 @@ if (!databaseUrl)
   );
 const items = process.argv.includes('--items');
 const avatars = process.argv.includes('--avatars');
+const giveme = process.argv.includes('--giveme');
 const child = spawn(
   process.execPath,
   process.argv.includes('--browser')
@@ -18,9 +19,11 @@ const child = spawn(
         'tsx',
         avatars
           ? 'tests/browser-avatars.ts'
-          : items
-            ? 'tests/browser-items.ts'
-            : 'tests/browser-accounts.ts',
+          : giveme
+            ? 'tests/browser-giveme.ts'
+            : items
+              ? 'tests/browser-items.ts'
+              : 'tests/browser-accounts.ts',
       ]
     : [
         'node_modules/vitest/vitest.mjs',
@@ -29,6 +32,7 @@ const child = spawn(
           ? [
               'tests/integration/items.test.ts',
               'tests/integration/items-network.test.ts',
+              'tests/integration/giveme.test.ts',
               'tests/integration/world-migration.test.ts',
               'packages/simulation/src/items.test.ts',
             ]

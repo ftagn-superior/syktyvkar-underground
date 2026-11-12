@@ -2,9 +2,9 @@ import { PROFILE_COLORS } from './accounts.js';
 export * from './accounts.js';
 export * from './items.js';
 export * from './avatars.js';
-import type { ItemCatalog, InitialItem, ItemState } from './items.js';
+import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 export const WORLD_FORMAT_VERSION = 3;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -162,13 +162,17 @@ export type ErrorCode =
   | 'SPAWN_UNAVAILABLE'
   | 'INVALID_INPUT'
   | 'INVALID_SKIN'
+  | 'COMMAND_DISABLED'
+  | 'UNKNOWN_COMMAND'
   | 'RATE_LIMITED'
   | 'STALE_WORLD'
   | 'ALREADY_PROCESSED';
 export interface ActionResult {
   requestId: number;
   ok: boolean;
-  code?: ErrorCode;
+  code?: ErrorCode | ItemError;
+  /** Private feedback to the sender; never replicated as character speech. */
+  message?: string;
   /** Remaining server-enforced delay before the same kind of action can be accepted. */
   retryAfterMs?: number;
 }

@@ -8,7 +8,7 @@ import {
   type ItemState,
 } from '@su/contracts';
 import type { AuthoritativeWorld } from '@su/simulation/server';
-import { ItemStore } from './store.js';
+import { ItemStore, type ItemMutationResult } from './store.js';
 
 interface Job {
   run: () => Promise<void>;
@@ -103,6 +103,19 @@ export class ItemRuntime {
   }
   inventory(accountId: string): Promise<InventoryView> {
     return this.enqueue(() => this.store.inventory(accountId));
+  }
+  give(
+    accountId: string,
+    operationId: string,
+    typeId: string,
+    validate: () => ItemError | undefined,
+  ): Promise<ItemMutationResult> {
+    if (this.closing) return Promise.resolve({ operationId, ok: false, code: 'WORLD_NOT_READY' });
+    // Inventory-only creation uses the same ordered writer and durable replay journal,
+    // without reserving any physical body or pausing the simulation.
+    return this.enqueue(() =>
+      this.store.operation(accountId, operationId, { kind: 'give', typeId }, validate),
+    );
   }
   command(
     accountId: string,

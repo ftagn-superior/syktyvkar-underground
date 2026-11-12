@@ -3,7 +3,7 @@ export interface AnimationDefinition {
   id: string;
   label: string;
   category: string;
-  durationMs: number;
+  cooldownMs: number;
   mode: 'upperBody' | 'fullBody';
   rig: 'humanoid-v1';
 }
@@ -13,7 +13,7 @@ export const ANIMATIONS = [
     id: 'wave',
     label: 'Помахать рукой',
     category: 'Общение',
-    durationMs: 3000,
+    cooldownMs: 3000,
     mode: 'upperBody',
     rig: 'humanoid-v1',
   },
@@ -21,7 +21,7 @@ export const ANIMATIONS = [
     id: 'clap',
     label: 'Хлопать',
     category: 'Общение',
-    durationMs: 3000,
+    cooldownMs: 3000,
     mode: 'upperBody',
     rig: 'humanoid-v1',
   },
@@ -29,7 +29,7 @@ export const ANIMATIONS = [
     id: 'dance',
     label: 'Танцевать',
     category: 'Развлечения',
-    durationMs: 5000,
+    cooldownMs: 5000,
     mode: 'fullBody',
     rig: 'humanoid-v1',
   },
@@ -48,6 +48,7 @@ export interface AnimationPlayback {
   animationId: AnimationId | null;
   sequence: number;
   startedAtTick: number;
+  /** Zero until the author's first movement; the pose keeps cycling meanwhile. */
   endsAtTick: number;
   changedAtTick: number;
 }

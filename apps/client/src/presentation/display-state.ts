@@ -28,8 +28,6 @@ export interface DisplayPlayer extends PlayerState, Appearance {
   motionRevision: number;
   motionEnabled: boolean;
   animation?: DisplayAnimation;
-  /** Local accepted control intent gives locomotion immediate priority over a dance. */
-  animationMoving?: boolean;
 }
 
 export type DisplayEntity = DisplayPlayer | (ItemState & Appearance);

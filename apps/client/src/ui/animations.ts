@@ -1,4 +1,4 @@
-import { ANIMATIONS, type AnimationId } from '@su/contracts';
+import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS, type AnimationId } from '@su/contracts';
 import type { GameSession } from '../network/session';
 import { bindCatalogShortcuts } from './catalog-shortcuts';
 type Status = ReturnType<GameSession['animationStatus']>;
@@ -10,6 +10,7 @@ const poses: Record<AnimationId, string> = {
 };
 
 export class AnimationMenu {
+  private available = false;
   private readonly controller = new AbortController();
   private readonly choices: { button: HTMLButtonElement; hint: HTMLElement; fullBody: boolean }[] =
     [];
@@ -46,17 +47,23 @@ export class AnimationMenu {
       title.textContent = animation.label;
       const detail = document.createElement('span');
       detail.className = 'animation-category';
-      detail.textContent = animation.mode === 'fullBody' ? 'Танец' : 'Жест';
+      detail.textContent = `${animation.mode === 'fullBody' ? 'Танец' : 'Жест'} · до движения`;
       const duration = document.createElement('span');
       duration.className = 'animation-duration';
-      duration.textContent = `${animation.durationMs / 1000} с`;
+      duration.textContent = `+ ${WORLD_ACTIVITY_MOVE_DURATION_MS / 1000} с`;
       const hint = document.createElement('span');
       hint.className = 'animation-hint';
       hint.id = `animation-hint-${animation.id}`;
       button.setAttribute('aria-describedby', hint.id);
       copy.append(title, detail, hint);
       button.append(icon, copy, duration);
-      button.addEventListener('click', () => choose(animation.id), options);
+      button.addEventListener(
+        'click',
+        () => {
+          if (this.available && !button.disabled) choose(animation.id);
+        },
+        options,
+      );
       panel.querySelector('.animation-choices')!.append(button);
       this.choices.push({ button, hint, fullBody: animation.mode === 'fullBody' });
     }
@@ -109,6 +116,7 @@ export class AnimationMenu {
     if (open && restoreFocus) this.canvas.focus({ preventScroll: true });
   }
   update(state: Status): void {
+    this.available = state.available;
     this.toggle.hidden = !state.available;
     if (!state.available) this.close(false);
     if (state.accepted !== this.accepted) {
@@ -128,7 +136,7 @@ export class AnimationMenu {
         : state.paused
           ? 'Мир приостановлен.'
           : state.busy
-            ? 'Дождитесь окончания текущей анимации.'
+            ? 'Дождитесь, прежде чем выбрать другую анимацию.'
             : !state.grounded
               ? 'Дождитесь опоры'
               : 'Выберите жест или танец');
@@ -139,7 +147,11 @@ export class AnimationMenu {
         : fullBody && state.moving
           ? 'Остановитесь, чтобы танцевать'
           : '';
-      const description = reason || (fullBody ? 'Движение прервёт танец' : 'Можно на ходу');
+      const description =
+        reason ||
+        (fullBody
+          ? `После движения — ещё ${WORLD_ACTIVITY_MOVE_DURATION_MS / 1000} с`
+          : 'Можно на ходу');
       if (hint.textContent !== description) hint.textContent = description;
       button.disabled = !state.available || state.pending || state.busy || state.paused || !!reason;
     }

@@ -164,7 +164,7 @@ export async function createExtractionProbe(options: { cancelLate?: 'glb' | 'col
       canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 10000, cancelable: true }));
       const views = [];
       for (let turn = 0; turn < 4; turn++) {
-        view.rotateCamera(1);
+        view.rotateCameraBy(Math.PI / 2);
         while (view.renderingDiagnostics().camera.turning) await frame();
         await ready();
         await delay(500);

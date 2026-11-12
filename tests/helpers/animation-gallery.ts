@@ -69,7 +69,7 @@ const avatars: { avatar: AvatarView; player: DisplayPlayer }[] = [];
         animationId,
         sequence: 1,
         startedAtTick: 0,
-        endsAtTick: animationId === 'dance' ? 300 : 180,
+        endsAtTick: 0,
         changedAtTick: 0,
         displayTick: 60,
       },

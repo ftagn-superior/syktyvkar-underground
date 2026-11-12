@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { Page } from 'playwright';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { createGameServer } from './helpers/game-server.js';
+import { holdCamera, rotateCamera, waitForCamera } from './helpers/camera.js';
 
 // A separate test release changes only placements/spawns; controls still use real keyboard input.
 const temporary = await mkdtemp(join(tmpdir(), 'su-buildings-browser-'));
@@ -17,10 +18,6 @@ const snapshot = (page: Page) => page.evaluate(() => (window as any).__SU_DEBUG_
 const buildings = (page: Page) => page.evaluate(() => (window as any).__SU_DEBUG__.buildings());
 const report = (page: Page) => page.evaluate(() => (window as any).__SU_DEBUG__.report());
 const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
-async function turn(page: Page, key: 'q' | 'e') {
-  await page.keyboard.press(key);
-  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
-}
 try {
   await cp('content', join(temporary, 'content'), { recursive: true });
   const source = join(temporary, 'content/worlds/physics-lab/world.json');
@@ -107,17 +104,70 @@ try {
   const initialAngle = (await report(pages[0])).rendering.camera.azimuth;
   for (const key of ['q', 'e'] as const) {
     const before = (await report(pages[0])).rendering.camera.azimuth;
-    await turn(pages[0], key);
+    await holdCamera(pages[0], key, 230);
     const after = (await report(pages[0])).rendering.camera.azimuth;
-    assert.ok(Math.abs(Math.abs(angleDelta(after, before)) - Math.PI / 2) < 0.01);
+    const change = angleDelta(after, before);
+    assert.ok(change * (key === 'e' ? 1 : -1) > 0.03);
+    assert.ok(Math.abs(change) < 0.8, 'a short hold stops before a quarter turn');
   }
+  await rotateCamera(
+    pages[0],
+    angleDelta(initialAngle, (await report(pages[0])).rendering.camera.azimuth),
+  );
   assert.ok(
     Math.abs(angleDelta((await report(pages[0])).rendering.camera.azimuth, initialAngle)) < 0.01,
   );
-  checks.push('Q and E each rotate the camera by a quarter turn');
+  checks.push('Q and E rotate while held and settle at arbitrary angles on release');
+  await pages[0].keyboard.down('q');
+  await pages[0].keyboard.down('e');
+  await pages[0].waitForTimeout(350);
+  const opposed = (await report(pages[0])).rendering.camera.azimuth;
+  await pages[0].waitForTimeout(200);
+  assert.ok(
+    Math.abs(angleDelta((await report(pages[0])).rendering.camera.azimuth, opposed)) < 0.001,
+  );
+  await pages[0].keyboard.up('q');
+  await pages[0].waitForTimeout(200);
+  await pages[0].keyboard.up('e');
+  await waitForCamera(pages[0]);
+  assert.ok(angleDelta((await report(pages[0])).rendering.camera.azimuth, opposed) > 0.03);
+  await rotateCamera(
+    pages[0],
+    angleDelta(initialAngle, (await report(pages[0])).rendering.camera.azimuth),
+  );
+  checks.push('opposite rotation keys cancel and releasing one resumes the other direction');
+  const fixedCamera = (await report(pages[0])).rendering.camera;
+  await pages[0].mouse.move(640, 390);
+  await pages[0].mouse.down({ button: 'right' });
+  await pages[0].mouse.move(710, 470, { steps: 6 });
+  assert.equal(await pages[0].locator('#world.camera-rotating').count(), 1);
+  await pages[0].evaluate(() => window.dispatchEvent(new Event('blur')));
+  const cancelled = (await report(pages[0])).rendering.camera.azimuth;
+  await pages[0].mouse.move(790, 500, { steps: 6 });
+  await pages[0].mouse.up({ button: 'right' });
+  await pages[0].waitForTimeout(300);
+  const afterCancel = (await report(pages[0])).rendering.camera;
+  assert.ok(Math.abs(angleDelta(afterCancel.azimuth, cancelled)) < 0.001);
+  assert.equal(afterCancel.beta, fixedCamera.beta);
+  assert.equal(afterCancel.zoom, fixedCamera.zoom);
+  assert.equal(await pages[0].locator('#world.camera-rotating').count(), 0);
+  await pages[0].keyboard.down('e');
+  await pages[0].waitForTimeout(100);
+  await pages[0].evaluate(() => window.dispatchEvent(new Event('blur')));
+  await pages[0].keyboard.up('e');
+  const blurred = (await report(pages[0])).rendering.camera.azimuth;
+  await pages[0].waitForTimeout(300);
+  assert.ok(
+    Math.abs(angleDelta((await report(pages[0])).rendering.camera.azimuth, blurred)) < 0.001,
+  );
+  await rotateCamera(
+    pages[0],
+    angleDelta(initialAngle, (await report(pages[0])).rendering.camera.azimuth),
+  );
+  checks.push('blur cancels keyboard and captured mouse rotation without changing pitch or zoom');
   let sawOpaque = false;
   for (let i = 0; i < 4; i++) {
-    await turn(pages[0], 'e');
+    await rotateCamera(pages[0], [0.39, 1.28, 1.73, 2 * Math.PI - 3.4][i]);
     await pages[0].waitForTimeout(600);
     const data = await buildings(pages[0]);
     sawOpaque ||= data.buildings.find((b: any) => b.entityId === original.entityId).opacity > 0.99;
@@ -130,7 +180,7 @@ try {
   const afterRotation = (await snapshot(pages[0])).authoritative.position;
   assert.ok(Math.hypot(afterRotation.x - stationary.x, afterRotation.z - stationary.z) < 0.05);
   checks.push(
-    'four camera turns preserve position and restore opaque geometry when the view clears',
+    'mouse orbit crosses arbitrary angles and a full circuit without moving the player; clear views restore opacity',
   );
 
   // The eastern spawn has space to move in every camera direction.
@@ -159,9 +209,9 @@ try {
       (dx * -Math.cos(angle) + dz * -Math.sin(angle)) / length > 0.95,
       'W follows the current view',
     );
-    await turn(page, 'e');
+    await rotateCamera(page, 0.61 + i * 0.13);
   }
-  checks.push('W movement remains screen-relative at all four camera angles');
+  checks.push('W movement remains screen-relative at arbitrary camera angles');
   // Walk toward a solid house face using the matching world direction.
   await pages[0].bringToFront();
   await pages[0].locator('#world').focus();

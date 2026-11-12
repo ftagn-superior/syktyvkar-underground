@@ -61,6 +61,9 @@ function physicsCatalog(catalog: ItemCatalog) {
 export class ItemStore {
   private started = false;
   readonly ownership: WorldOwnership;
+  get onConnectionFailure(): (() => void) | undefined {
+    return this.ownership.onConnectionFailure;
+  }
   set onConnectionFailure(callback: (() => void) | undefined) {
     this.ownership.onConnectionFailure = callback;
   }

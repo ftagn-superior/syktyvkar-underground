@@ -5,6 +5,7 @@ import type { WorldView } from '../rendering/world-view';
 
 /** Private inventory and a local preview. Only server confirmation moves an instance. */
 export class InventoryPanel {
+  private enabled = true;
   private readonly controller = new AbortController();
   private readonly toggle = document.createElement('button');
   private readonly pickup = document.createElement('button');
@@ -136,7 +137,7 @@ export class InventoryPanel {
     canvas.addEventListener(
       'click',
       () => {
-        if (this.selected) this.place();
+        if (this.enabled && this.selected) this.place();
       },
       options,
     );
@@ -144,6 +145,7 @@ export class InventoryPanel {
       'keydown',
       (event) => {
         if (
+          !this.enabled ||
           event.repeat ||
           event.ctrlKey ||
           event.metaKey ||
@@ -195,13 +197,20 @@ export class InventoryPanel {
     button.className = 'button quiet';
     button.textContent = text;
     button.dataset.focusKey = text;
-    button.addEventListener('click', click, { signal: this.controller.signal });
+    button.addEventListener(
+      'click',
+      () => {
+        if (this.enabled) click();
+      },
+      { signal: this.controller.signal },
+    );
     return button;
   }
   private open(open: boolean, restoreFocus = true) {
     if (
       open &&
-      (!['playing', 'preparing', 'waiting'].includes(this.session.state) ||
+      (!this.enabled ||
+        !['playing', 'preparing', 'waiting'].includes(this.session.state) ||
         !this.session.accountId ||
         !this.session.room)
     )
@@ -225,12 +234,19 @@ export class InventoryPanel {
     this.pendingFocusKey = undefined;
     this.cancel();
   }
+  setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (!enabled) this.close();
+    this.update();
+  }
   private collect() {
+    if (!this.enabled) return;
     const id = this.session.nearestItem();
     if (id && !this.selected) this.session.itemAction({ kind: 'pickup', itemId: id });
   }
   private place() {
-    if (this.selected && this.pose && this.valid)
+    if (this.enabled && this.selected && this.pose && this.valid)
       this.session.itemAction({ kind: 'place', itemId: this.selected.itemId, pose: this.pose });
   }
   private cancel() {
@@ -243,7 +259,8 @@ export class InventoryPanel {
     if (wasPlacing) this.onPlacementChange?.(false);
   }
   rotatePlacement(axis: 'x' | 'y' | 'z', direction: -1 | 1): void {
-    if (!this.selected || this.session.itemPending || this.session.worldPaused) return;
+    if (!this.enabled || !this.selected || this.session.itemPending || this.session.worldPaused)
+      return;
     const vector = axis === 'x' ? Vector3.Right() : axis === 'y' ? Vector3.Up() : Vector3.Forward();
     this.rotation = Quaternion.RotationAxis(vector, (direction * Math.PI) / 12)
       .multiply(this.rotation)
@@ -252,6 +269,7 @@ export class InventoryPanel {
   update() {
     const preparing = ['preparing', 'waiting'].includes(this.session.state);
     const available =
+      this.enabled &&
       (this.session.state === 'playing' || preparing) &&
       !!this.session.accountId &&
       !!this.session.room;
@@ -464,7 +482,7 @@ export class InventoryPanel {
     }
   }
   frame(view: WorldView) {
-    if (!this.selected || this.session.state !== 'playing') {
+    if (!this.enabled || !this.selected || this.session.state !== 'playing') {
       this.confirm.disabled = true;
       view.showPlacement();
       return;

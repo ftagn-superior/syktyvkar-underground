@@ -52,6 +52,9 @@ button[hidden],
   display: block;
   outline: none;
 }
+#world.camera-rotating {
+  cursor: grabbing;
+}
 .vignette {
   pointer-events: none;
   position: fixed;
@@ -1462,4 +1465,100 @@ dd {
     margin: 8px 0;
     padding: 9px 12px;
   }
+}
+
+/* The canvas and the stick own game gestures; forms keep native touch scrolling. */
+#world,
+.touch-stick {
+  touch-action: none;
+}
+.touch-stick {
+  position: fixed;
+  z-index: 11;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: 136px;
+  height: 136px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #72e0c566;
+  border-radius: 50%;
+  background: #10212bbb;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.touch-stick[aria-disabled='true'] {
+  opacity: 0.45;
+}
+.touch-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--mint);
+  background: #72e0c566;
+  pointer-events: none;
+}
+body[data-input-mode='touch'] .topbar {
+  top: max(14px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+}
+body[data-input-mode='touch'] .bottom-bar {
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+body[data-input-mode='touch'] .actions {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  pointer-events: auto;
+}
+body[data-input-mode='touch'] .button,
+body[data-input-mode='touch'] .icon-button,
+body[data-input-mode='touch'] select {
+  min-width: 44px;
+  min-height: 44px;
+}
+body[data-input-mode='touch'] .icon-button {
+  align-self: flex-end;
+}
+body[data-input-mode='touch'] .controls {
+  display: block;
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 150px);
+  max-width: calc(100vw - 48px);
+  padding: 8px 10px;
+  pointer-events: none;
+}
+body[data-input-mode='touch'] .controls .keys,
+body[data-input-mode='touch'] .controls strong {
+  display: none;
+}
+body[data-input-mode='touch'] .controls span {
+  font-size: 11px;
+  line-height: 1.4;
+}
+body[data-input-mode='touch'] .welcome {
+  z-index: 12;
+  max-height: calc(
+    100dvh - max(80px, env(safe-area-inset-top)) - max(64px, env(safe-area-inset-bottom))
+  );
+}
+body[data-input-mode='touch'] .diagnostics {
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 166px);
+  max-height: calc(
+    100dvh - max(24px, env(safe-area-inset-bottom)) - max(80px, env(safe-area-inset-top)) - 166px
+  );
+  width: min(300px, calc(100vw - 32px));
+}
+body[data-input-mode='touch'] .graphics-recovery {
+  max-height: calc(
+    100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom))
+  );
 }

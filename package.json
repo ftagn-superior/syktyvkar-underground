@@ -44,6 +44,7 @@
     "test:avatars:profile": "node --import tsx tests/browser-avatar-profile.ts"
   },
   "devDependencies": {
+    "@babylonjs/core": "9.35.0",
     "@colyseus/sdk": "0.18.10",
     "@types/express": "5.0.6",
     "@types/node": "24.10.0",

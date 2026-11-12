@@ -166,6 +166,9 @@ importers:
 
   .:
     devDependencies:
+      '@babylonjs/core':
+        specifier: 9.35.0
+        version: 9.35.0
       '@colyseus/sdk':
         specifier: 0.18.10
         version: 0.18.10(@colyseus/core@0.18.28)(typescript@5.9.3)

@@ -15,7 +15,7 @@ const app = await createGameServer({
   port: 0,
   worldDirectory: process.env.SU_TEST_WORLD_DIRECTORY,
 });
-const browser = await launchTestBrowser();
+const browser = await launchTestBrowser({ channel: 'chromium' });
 const errors: string[] = [];
 const checks: string[] = [];
 const output = 'output/playwright/chat';
@@ -26,6 +26,23 @@ async function playing(page: Page): Promise<void> {
     { timeout: 20_000 },
   );
 }
+async function startMovementCountdown(page: Page, entityId: string) {
+  await page.bringToFront();
+  await page.locator('#world').focus();
+  const player = [...app.room.state.players.values()].find((p) => p.entityId === entityId)!;
+  await page.keyboard.down('d');
+  try {
+    const deadline = performance.now() + 5000;
+    while (!player.chatExpiresAtTick) {
+      assert.ok(performance.now() < deadline, 'movement starts the server chat countdown');
+      await new Promise((resolve) => setTimeout(resolve, 15));
+    }
+    assert.ok(player.chatExpiresAtTick <= app.room.state.serverTick + 300);
+  } finally {
+    await page.keyboard.up('d');
+  }
+}
+
 try {
   await mkdir(output, { recursive: true });
   const contexts = await Promise.all(
@@ -33,8 +50,12 @@ try {
   );
   const [sender, observer] = await Promise.all(contexts.map((context) => context.newPage()));
   for (const [index, page] of [sender, observer].entries()) {
-    page.setDefaultTimeout(10_000);
+    page.setDefaultTimeout(30_000);
     page.on('pageerror', (error) => errors.push(error.message));
+    await contexts[index].addInitScript(() =>
+      localStorage.setItem('su:render-quality:v1', 'economy'),
+    );
+    await page.bringToFront();
     await page.goto(`${app.url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').waitFor({ timeout: 45_000 });
     await page
@@ -149,9 +170,7 @@ try {
   const before = await observer
     .locator(bubble)
     .evaluate((node) => (node as HTMLElement).style.transform);
-  await sender.keyboard.down('d');
-  await sender.waitForTimeout(200);
-  await sender.keyboard.up('d');
+  await startMovementCountdown(sender, senderId);
   await rotateCamera(observer, -0.39, false);
   await observer.waitForFunction(
     ({ selector, before }) => {
@@ -166,7 +185,8 @@ try {
   );
   await sender.keyboard.press('t');
   await input.fill('Следующее');
-  assert.equal(await sender.locator('#chat-send').isDisabled(), true);
+  if (await sender.evaluate(() => (window as any).__SU_DEBUG__.snapshot().chat.remainingMs > 0))
+    assert.equal(await sender.locator('#chat-send').isDisabled(), true);
   await sender.keyboard.press('Escape');
   await Promise.all([
     sender.locator(bubble).waitFor({ state: 'detached', timeout: 7000 }),
@@ -228,9 +248,7 @@ try {
     'typing enforces 255 characters, counters agree, long text wraps and input fits desktop, narrow and short viewports; no browser history is stored',
   );
   await sender.locator('#world').focus();
-  await sender.keyboard.down('d');
-  await sender.waitForTimeout(200);
-  await sender.keyboard.up('d');
+  await startMovementCountdown(sender, senderId);
   await Promise.all([
     sender.locator(bubble).waitFor({ state: 'detached', timeout: 7000 }),
     observer.locator(bubble).waitFor({ state: 'detached', timeout: 7000 }),

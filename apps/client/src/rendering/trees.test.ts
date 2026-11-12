@@ -26,13 +26,8 @@ const source = async (id = sampleId): Promise<KitRecipe> =>
   JSON.parse(await readFile(`${directory}/${id}/source.json`, 'utf8'));
 
 describe('tree instancing', () => {
-  it('opts into baked foliage colors while preserving older bundle geometry and colors', () => {
-    const old = treeTemplate('#ffffff', '#ffffff', 'broadleaf');
-    const baked = treeTemplate('#ffffff', '#ffffff', 'broadleaf', 'foliage-v1');
-    expect(baked.positions).toEqual(old.positions);
-    expect(baked.normals).toEqual(old.normals);
-    expect(baked.indices).toEqual(old.indices);
-    expect(old.colors.every((channel) => channel === 1)).toBe(true);
+  it('always bakes broadleaf occlusion while leaving the trunk opaque and unshaded', () => {
+    const baked = treeTemplate('#ffffff', '#ffffff', 'broadleaf');
     expect(baked.colors.some((channel) => channel < 0.8)).toBe(true);
     for (let vertex = 0; vertex < baked.parts.length; vertex++) {
       expect(baked.colors[vertex * 4 + 3]).toBe(1);
@@ -49,19 +44,14 @@ describe('tree instancing', () => {
       const tree = treeRenderRecipe(id, recipe)!;
       expect(tree, id).toBeDefined();
       const original = generateKit(id, recipe).parts[0];
-      const template = treeTemplate(
-        tree.crownColor,
-        tree.trunkColor,
-        tree.foliage,
-        tree.ambientOcclusion,
-      );
+      const template = treeTemplate(tree.crownColor, tree.trunkColor, tree.foliage);
       const vertices: string[] = [];
       const key = (values: number[]) => values.map((v) => Math.round(v * 100_000)).join(',');
       // Evaluate the shader's deformation independently against the existing kit generator.
       for (let i = 0; i < template.parts.length; i++) {
         let [x, y, z] = template.positions.slice(i * 3, i * 3 + 3);
         let normal = Vector3.FromArray(template.normals, i * 3);
-        if (template.parts[i] < 2 && tree.foliage) {
+        if (template.parts[i] < 2 && tree.foliage === 'broadleaf') {
           const [lower, upper] = tree.crowns;
           const radius = Math.max(lower[0], lower[1], upper[0], upper[1]);
           const height = upper[2] + upper[3] - lower[2];
@@ -105,7 +95,7 @@ describe('tree instancing', () => {
     }
   });
 
-  it('keeps legacy conical metadata and tests broadleaf crown gaps rather than its box', async () => {
+  it('tests broadleaf crown gaps and the current spruce silhouette', async () => {
     const authored = await source();
     const broadleaf = treeRenderRecipe(sampleId, authored)!;
     expect(broadleaf.foliage).toBe('broadleaf');
@@ -117,15 +107,15 @@ describe('tree instancing', () => {
     expect(treeIntersectsRay(broadleaf, ray(-0.1, 0.85))).toBe(true);
     expect(treeIntersectsRay(broadleaf, ray(0.8, 0.95))).toBe(false);
     delete authored.foliage;
-    const legacy = treeRenderRecipe(sampleId, authored)!;
-    expect(legacy.foliage).toBeUndefined();
-    expect(treeTemplate(legacy.crownColor, legacy.trunkColor).indices.length).toBe(
+    const spruce = treeRenderRecipe(sampleId, authored)!;
+    expect(spruce.foliage).toBe('spruce');
+    expect(treeTemplate(spruce.crownColor, spruce.trunkColor, spruce.foliage).indices.length).toBe(
       generateKit(sampleId, authored).parts[0].indices.length,
     );
-    expect(treeIntersectsRay(legacy, ray(0, 0.5))).toBe(true);
+    expect(treeIntersectsRay(spruce, ray(0, 0.5))).toBe(true);
   });
 
-  it('falls back for edited shapes and rejects malformed procedural metadata', async () => {
+  it('rejects unsupported shapes and obsolete or malformed procedural metadata', async () => {
     const recipe = await source();
     const tree = treeRenderRecipe(sampleId, recipe)!;
     const parts = inspectStaticGlb(
@@ -134,7 +124,7 @@ describe('tree instancing', () => {
     ).parts;
     expect(validateBuildingParts({ ...parts, tree }).tree).toEqual(tree);
     for (const invalid of [
-      { ...tree, formatVersion: 2 },
+      { ...tree, formatVersion: 1 },
       { ...tree, foliage: 'unknown' },
       { ...tree, ambientOcclusion: 'unknown' },
       { ...tree, foliage: undefined, ambientOcclusion: 'foliage-v1' },
@@ -178,7 +168,6 @@ describe('tree instancing', () => {
     const descriptor = {
       assetId: sampleId,
       version: 'a'.repeat(64),
-      modelFile: 'model.glb',
       partsFile: 'parts.json',
       collisionFile: 'colliders.json',
       bounds: generated.physics.bounds,
@@ -196,10 +185,19 @@ describe('tree instancing', () => {
     );
     const views = new BuildingViews(scene, shadow, header, radial);
     const reads: string[] = [];
-    const release = await views.prepareAssets(manifest, [sampleId], async (path) => {
-      reads.push(path);
-      return path === 'model.glb' ? model : new TextEncoder().encode(JSON.stringify(parts));
-    });
+    let release: () => void;
+    try {
+      release = await views.prepareAssets(manifest, [sampleId], async (path) => {
+        reads.push(path);
+        if (path !== 'parts.json') throw new Error(`Unexpected tree resource: ${path}`);
+        return new TextEncoder().encode(JSON.stringify(parts));
+      });
+    } catch (error) {
+      views.dispose();
+      scene.dispose();
+      engine.dispose();
+      throw error;
+    }
     const add = (entityId: string, x = 0, z = 0) => {
       const item: BuildingInstance = {
         entityId,
@@ -294,6 +292,37 @@ describe('tree instancing', () => {
     }
   });
 
+  it('restores opaque tree batches in the first perspective frame and resumes overview fades', async () => {
+    const f = await fixture();
+    try {
+      f.add('near');
+      f.add('far', 0, -4);
+      const own = new Vector3(0, 1, -10);
+      for (let i = 0; i < 30; i++) f.update(own, i * 100);
+      expect(f.views.aggregateDiagnostics().fadedTrees).toBe(2);
+      f.views.update(
+        own,
+        new Vector3(0, 1, 20),
+        new Vector3(0, 0, -1),
+        0.05,
+        3001,
+        1 / 60,
+        own,
+        200,
+        true,
+      );
+      expect(f.views.diagnostics().buildings.every((b) => b.opacity === 1 && !b.occluded)).toBe(
+        true,
+      );
+      expect(f.views.aggregateDiagnostics().treeInstances).toBe(2);
+      expect(f.views.aggregateDiagnostics().fadedTrees).toBe(0);
+      f.update(own, 3002);
+      expect(f.views.diagnostics().buildings.every((b) => b.occluded && b.opacity < 1)).toBe(true);
+    } finally {
+      f.dispose();
+    }
+  });
+
   it('keeps independent appearance times when a chunk grows and compacts after unloading', async () => {
     const radial = { center: { x: 0, y: 0, z: 0 }, radius: 500, time: 1000, appearMs: 300 };
     const f = await fixture(true, radial);
@@ -324,23 +353,9 @@ describe('tree instancing', () => {
   it.each([
     [false, 16],
     [true, 8],
-  ])(
-    'uses the original GLB with instancing=%s and %s attributes',
-    async (instancing, attributes) => {
-      const f = await fixture(!!instancing, undefined, Number(attributes));
-      try {
-        f.add('legacy');
-        f.update();
-        expect(f.reads).toEqual(['parts.json', 'model.glb']);
-        expect(f.views.aggregateDiagnostics()).toMatchObject({
-          instances: 1,
-          modelLoads: 1,
-          treeInstances: 0,
-        });
-        expect(f.scene.getTransformNodeByName('legacy')).toBeTruthy();
-      } finally {
-        f.dispose();
-      }
-    },
-  );
+  ])('requires instancing with instancing=%s and %s attributes', async (instancing, attributes) => {
+    await expect(fixture(!!instancing, undefined, Number(attributes))).rejects.toThrow(
+      'instancing',
+    );
+  });
 });

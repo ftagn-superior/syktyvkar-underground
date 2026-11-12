@@ -2,10 +2,12 @@ import '@babylonjs/core/Culling/ray';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { Vector3, Quaternion, Matrix } from '@babylonjs/core/Maths/math.vector';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { loadBuildingContainer } from './building-container';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -13,6 +15,7 @@ import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstr
 import '@babylonjs/core/Rendering/edgesRenderer';
 import {
   findReaction,
+  normalizeYaw,
   type ItemPose,
   type Vec3,
   type WorldDefinition,
@@ -33,8 +36,16 @@ import { WorldLighting } from './lighting';
 import { WorldClouds } from './clouds';
 import { DEFAULT_DAY_CLOCK, dayClockHour, type DayClock } from '@su/contracts';
 import { BuildingViews } from './buildings';
-import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
-import type { DisplayEntity } from '../presentation/display-state';
+import {
+  CameraOrbit,
+  INITIAL_CAMERA_ANGLE,
+  FIRST_PERSON,
+  yawFromOrbit,
+  orbitFromYaw,
+} from './camera-controller';
+import type { DisplayEntity, DisplayPlayer } from '../presentation/display-state';
+import { ReactionSoundGate } from '../presentation/reaction-sounds';
+import type { GameAudio } from '../audio/game-audio';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -52,6 +63,7 @@ type EntityView = {
   reactionShownAt?: number;
   expiredReactionSequence?: number;
   chat?: HTMLElement;
+  occlusion?: { at: number; blocked: boolean };
   chatSequence?: number;
   expiredChatSequence?: number;
 };
@@ -70,6 +82,12 @@ export class WorldView {
   readonly engine: Engine;
   readonly scene: Scene;
   private readonly camera: ArcRotateCamera;
+  private readonly eyeCamera: FreeCamera;
+  private firstPerson = false;
+  private yaw = 0;
+  private pitch = 0;
+  private eyePosition?: Vec3;
+  private overlayTest?: (from: Vec3, to: Vec3, targetId?: string) => boolean;
   private readonly lighting: WorldLighting;
   private readonly clouds: WorldClouds;
   private readonly cloudTint = new Color3();
@@ -100,6 +118,8 @@ export class WorldView {
   private readonly cameraOrbit = new CameraOrbit();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
+  private audio?: GameAudio;
+  private readonly reactionSounds = new ReactionSoundGate();
   private ring?: { mesh: Mesh; material: StandardMaterial; target?: string };
   private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
   private readonly target = Vector3.Zero();
@@ -115,11 +135,17 @@ export class WorldView {
     this.sizeCamera();
   };
   private frameHook?: (now: number, delta: number) => void;
+  private cameraFrameHook?: (now: number, delta: number) => void;
   private lastFrame = performance.now();
   private readonly visibilityChanged = () => {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
     this.lastFrame = performance.now();
     for (const view of this.entities.values()) view.avatar?.resetMotion();
+    this.reactionSounds.suspend();
+    if (document.hidden) {
+      this.audio?.setListener(undefined);
+      this.audio?.stopWorld();
+    }
   };
   private followed?: string;
   private ownPosition?: Vector3;
@@ -159,7 +185,14 @@ export class WorldView {
     this.camera.minZ = 0.1;
     this.camera.maxZ = 300;
     this.camera.inputs.clear();
-    this.lighting = new WorldLighting(this.scene, this.camera);
+    this.eyeCamera = new FreeCamera('first-person', Vector3.Zero(), this.scene);
+    this.eyeCamera.inputs.clear();
+    this.eyeCamera.fov = FIRST_PERSON.fov;
+    this.eyeCamera.fovMode = Camera.FOVMODE_VERTICAL_FIXED;
+    this.eyeCamera.minZ = FIRST_PERSON.minZ;
+    this.eyeCamera.maxZ = FIRST_PERSON.maxZ;
+    this.scene.activeCamera = this.camera;
+    this.lighting = new WorldLighting(this.scene, this.camera, [this.eyeCamera]);
     // Before any world material exists: cloud shadows attach to materials as they are created.
     this.clouds = new WorldClouds(this.scene, this.camera);
     this.shadow = this.lighting.shadow;
@@ -214,7 +247,22 @@ export class WorldView {
         false,
         true, // Following translates the rig; pitch, orbit angle and radius remain fixed.
       );
-      this.lighting.follow(this.camera.target);
+      if (this.firstPerson && this.eyePosition) {
+        this.eyeCamera.position.copyFrom(vector(this.eyePosition));
+        this.eyeCamera.position.y += this.definition.simulation.character.height / 2 - 0.2;
+        const cosPitch = Math.cos(this.pitch);
+        this.eyeCamera.setTarget(
+          this.eyeCamera.position.add(
+            new Vector3(
+              Math.sin(this.yaw) * cosPitch,
+              Math.sin(this.pitch),
+              Math.cos(this.yaw) * cosPitch,
+            ),
+          ),
+        );
+      }
+      const active = this.activeCamera;
+      this.lighting.follow(this.ownPosition ?? this.target);
       const epochMs = Date.now();
       const sky = this.lighting.setTimeOfDay(
         this.fixedHour ?? dayClockHour(this.dayClock, epochMs),
@@ -228,36 +276,43 @@ export class WorldView {
         ),
         lightStrength: sky.directLight,
         tint: this.cloudTint.set(...sky.cloudColor),
-        zoom: this.zoom,
+        // The layer is laid out for the orthographic view; on foot only the shadows remain.
+        zoom: this.firstPerson ? 0 : this.zoom,
         visible: this.radial,
       });
-      // Update the orbit before casting parallel orthographic rays; alpha may be mid-turn.
-      this.camera.getViewMatrix(true);
+      active.getViewMatrix(true);
+      active.getProjectionMatrix(true);
+      this.scene.updateTransformMatrix(true);
+      this.cameraFrameHook?.(now, delta);
+      const desiredRadius = this.firstPerson
+        ? Math.min(FIRST_PERSON.radius, this.streamingRadius)
+        : this.streamingRadius;
+      this.radial.radius =
+        desiredRadius < this.radial.radius
+          ? desiredRadius
+          : Math.min(
+              desiredRadius,
+              this.radial.radius + (Math.max(1, desiredRadius) * delta) / 0.3,
+            );
+      this.dynamicRadial.radius = this.firstPerson ? this.radial.radius : 500;
       this.buildings.update(
         this.ownPosition,
-        this.camera.globalPosition,
-        this.camera.target.subtract(this.camera.globalPosition).normalize(),
-        this.camera.minZ,
+        active.globalPosition,
+        active.getForwardRay().direction,
+        active.minZ,
         now,
         delta,
         this.ownPosition ?? this.target,
         this.radial.radius,
+        this.firstPerson,
       );
       this.statics.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
       const center = this.ownPosition ?? this.target;
       this.radial.center = this.dynamicRadial.center = center;
       this.radial.time = this.dynamicRadial.time = now;
       this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
-      // Closing is immediate; opening follows only the completely prepared circle.
-      this.radial.radius =
-        this.streamingRadius < this.radial.radius
-          ? this.streamingRadius
-          : Math.min(
-              this.streamingRadius,
-              this.radial.radius + (Math.max(1, this.streamingRadius) * delta) / 0.3,
-            );
-      this.scene.render();
       this.positionLabels();
+      this.scene.render();
     });
   }
   private material(id: string, color: string): StandardMaterial {
@@ -289,13 +344,61 @@ export class WorldView {
     this.dayClock = clock;
   }
   get cameraAngle(): number {
-    return this.cameraOrbit.angle;
+    return this.firstPerson ? orbitFromYaw(this.yaw) : this.cameraOrbit.angle;
+  }
+  private get activeCamera(): Camera {
+    return this.firstPerson ? this.eyeCamera : this.camera;
+  }
+  get facingYaw(): number {
+    return this.yaw;
+  }
+  setFirstPerson(enabled: boolean): void {
+    if (enabled === this.firstPerson) return;
+    this.stopCamera();
+    if (enabled) {
+      this.yaw = yawFromOrbit(this.cameraOrbit.angle);
+      this.pitch = 0;
+      this.setItemRing(undefined);
+      this.showPlacement();
+    } else {
+      this.cameraOrbit.setAngle(orbitFromYaw(this.yaw));
+      this.camera.alpha = this.cameraOrbit.angle;
+      this.camera.setTarget(this.target.clone(), false, false, true);
+    }
+    this.firstPerson = enabled;
+    this.scene.activeCamera = this.activeCamera;
+    this.graphicalFrame = undefined;
+    this.sizeCamera();
+    for (const [id, view] of this.entities) {
+      view.occlusion = undefined;
+      view.root.setEnabled(!enabled || id !== this.followed);
+    }
+  }
+  lookBy(x: number, y: number): void {
+    if (!this.firstPerson || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    // A right turn decreases world yaw in Babylon's right-handed scene.
+    this.yaw = normalizeYaw(this.yaw - x * FIRST_PERSON.sensitivity);
+    this.pitch = Math.max(
+      -FIRST_PERSON.pitchLimit,
+      Math.min(FIRST_PERSON.pitchLimit, this.pitch - y * FIRST_PERSON.sensitivity),
+    );
+  }
+  setOverlayTest(test: (from: Vec3, to: Vec3, targetId?: string) => boolean): void {
+    this.overlayTest = test;
+  }
+  setAudio(audio: GameAudio): void {
+    if (this.audio === audio) return;
+    this.audio?.setListener(undefined);
+    this.audio?.stopWorld();
+    this.audio = audio;
+    this.reactionSounds.suspend();
+    for (const view of this.entities.values()) view.avatar?.resetMotion();
   }
   setCameraRotation(direction: -1 | 0 | 1): void {
-    this.cameraOrbit.setDirection(direction);
+    if (!this.firstPerson) this.cameraOrbit.setDirection(direction);
   }
   rotateCameraBy(radians: number): void {
-    this.cameraOrbit.rotateBy(radians);
+    if (!this.firstPerson) this.cameraOrbit.rotateBy(radians);
   }
   stopCamera(): void {
     this.cameraOrbit.stop();
@@ -404,6 +507,15 @@ export class WorldView {
       dynamicEntities: [...this.entities].map(([entityId, view]) => ({
         entityId,
         position: { x: view.root.position.x, y: view.root.position.y, z: view.root.position.z },
+        rotation: {
+          x: view.root.rotationQuaternion!.x,
+          y: view.root.rotationQuaternion!.y,
+          z: view.root.rotationQuaternion!.z,
+          w: view.root.rotationQuaternion!.w,
+        },
+        visible: view.root.isEnabled(),
+        overlayBlocked: view.occlusion?.blocked ?? false,
+        overlayVisible: view.label ? !view.label.hidden : false,
       })),
       geometries: this.scene.geometries.length,
       nodes: this.scene.transformNodes.length,
@@ -418,9 +530,27 @@ export class WorldView {
       meshes: this.scene.meshes.length,
       transformNodes: this.scene.transformNodes.length,
       materials: this.scene.materials.length,
+      pipelines: (this.scene.postProcessRenderPipelineManager?.supportedPipelines ?? []).map(
+        (pipeline) => ({
+          name: pipeline.name,
+          cameras: pipeline.cameras.map((camera) => camera.name),
+        }),
+      ),
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),
       camera: {
+        mode: this.firstPerson ? 'first-person' : 'overview',
+        yaw: this.yaw,
+        pitch: this.pitch,
+        position: {
+          x: this.activeCamera.position.x,
+          y: this.activeCamera.position.y,
+          z: this.activeCamera.position.z,
+        },
+        fov: this.activeCamera.fov,
+        minZ: this.activeCamera.minZ,
+        maxZ: this.activeCamera.maxZ,
+        cameras: this.scene.cameras.length,
         azimuth: this.cameraAngle,
         turning: this.cameraOrbit.turning,
         halfWidth: this.camera.orthoRight!,
@@ -432,9 +562,9 @@ export class WorldView {
     };
   }
   graphicalArea() {
-    this.camera.getViewMatrix(true);
+    this.activeCamera.getViewMatrix(true);
     const center = this.ownPosition ?? this.target;
-    const matrix = this.camera.getTransformationMatrix();
+    const matrix = this.activeCamera.getTransformationMatrix();
     let frame = this.graphicalFrame;
     if (!frame || frame.x !== center.x || frame.z !== center.z || !frame.matrix.equals(matrix)) {
       let radius = 0;
@@ -473,11 +603,14 @@ export class WorldView {
     const depthScale = Math.max(1, this.zoom);
     this.camera.radius = 120 * depthScale;
     this.camera.maxZ = 300 * depthScale;
-    this.buildings?.setDetailScale((2 * halfHeight) / Math.max(1, this.canvas.clientHeight));
+    this.buildings?.setDetailScale(
+      this.firstPerson ? 0 : (2 * halfHeight) / Math.max(1, this.canvas.clientHeight),
+    );
+    this.graphicalFrame = undefined;
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();
-    if (this.touchMode) return;
+    if (this.touchMode || this.firstPerson) return;
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * Math.exp(event.deltaY * 0.001)));
     if (zoom === this.zoom) return;
     this.zoom = zoom;
@@ -497,9 +630,15 @@ export class WorldView {
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
   }
+  onCameraFrame(callback: (now: number, delta: number) => void): void {
+    this.cameraFrameHook = callback;
+  }
   follow(id?: string): void {
     this.followed = id;
     if (!id) {
+      this.audio?.setListener(undefined);
+      this.audio?.stopWorld();
+      this.reactionSounds.suspend();
       const bounds = this.definition.bounds;
       if (bounds.min.x <= 0 && bounds.max.x >= 0 && bounds.min.z <= 0 && bounds.max.z >= 0)
         this.target.setAll(0);
@@ -509,8 +648,32 @@ export class WorldView {
       }
     }
   }
-  update(entities: DisplayEntity[], ownId: string | undefined, delta: number): void {
+  update(
+    entities: DisplayEntity[],
+    ownId: string | undefined,
+    delta: number,
+    physicalPosition?: Vec3,
+  ): void {
     this.ownPosition = undefined;
+    this.eyePosition = physicalPosition;
+    const ownPlayer = entities.find(
+      (entity): entity is DisplayPlayer => entity.entityId === ownId && entity.kind === 'player',
+    );
+    const audible = !!ownPlayer && ownPlayer.connected !== false && !document.hidden;
+    // The orthographic orbit can be kilometres away: distance belongs to the avatar.
+    // Set this before any entity emits, regardless of entity ordering in the snapshot.
+    this.audio?.setListener(
+      audible
+        ? this.firstPerson && physicalPosition
+          ? physicalPosition
+          : ownPlayer.position
+        : undefined,
+      this.cameraAngle,
+    );
+    const reactions = this.reactionSounds.update(
+      entities.filter((entity): entity is DisplayPlayer => entity.kind === 'player'),
+      audible && Number.isFinite(delta) && delta > 0 && delta <= 0.25,
+    );
     this.updateRing();
     const current = new Set(entities.map((entity) => entity.entityId));
     for (const [id, view] of this.entities)
@@ -533,6 +696,7 @@ export class WorldView {
       }
       view.root.position.set(entity.position.x, entity.position.y, entity.position.z);
       if (entity.entityId === ownId) this.ownPosition = view.root.position;
+      view.root.setEnabled(!this.firstPerson || entity.entityId !== ownId);
       view.root
         .rotationQuaternion!.set(
           entity.rotation.x,
@@ -566,9 +730,18 @@ export class WorldView {
           view.labelText = key;
         }
       }
-      if (entity.kind === 'player')
-        view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
-      else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
+      if (entity.kind === 'player') {
+        const own = entity.entityId === ownId;
+        const contacts = view.avatar!.update(entity, delta, own, this.reducedMotion.matches);
+        // A slow rendered frame can cross two contacts; never play an audible catch-up burst.
+        if (audible && contacts.count > 0)
+          this.audio?.playWorld(contacts.running ? 'run' : 'step', entity.position, {
+            sourceId: entity.entityId,
+            own,
+          });
+        if (reactions.has(entity.entityId))
+          this.audio?.playWorld('reaction', entity.position, { sourceId: entity.entityId, own });
+      } else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
       const nearShadow =
         Math.hypot(entity.position.x - shadowCenter.x, entity.position.z - shadowCenter.z) <= 80;
       for (const mesh of view.root.getChildMeshes()) {
@@ -589,6 +762,7 @@ export class WorldView {
       if (entity.entityId === this.followed)
         this.target.set(entity.position.x, 0, entity.position.z);
     }
+    if (this.firstPerson && physicalPosition) this.ownPosition = vector(physicalPosition);
   }
   private disposeEntity(view: EntityView): void {
     view.label?.remove();
@@ -672,6 +846,7 @@ export class WorldView {
       );
       const label = document.createElement('div');
       label.className = `player-label${own ? ' own' : ''}`;
+      label.dataset.entityId = entity.entityId;
       this.labels.append(label);
       return { root, label, avatar };
     }
@@ -690,7 +865,7 @@ export class WorldView {
       this.scene.pointerX,
       this.scene.pointerY,
       Matrix.Identity(),
-      this.camera,
+      this.activeCamera,
     );
     return {
       from: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
@@ -698,6 +873,48 @@ export class WorldView {
         x: ray.origin.x + ray.direction.x * 5000,
         y: ray.origin.y + ray.direction.y * 5000,
         z: ray.origin.z + ray.direction.z * 5000,
+      },
+    };
+  }
+  /** An isolated local model; neither cell references nor the inventory ghost own it. */
+  async createStaticGhost(model: Uint8Array) {
+    const container = await loadBuildingContainer(model, this.scene, 'static-preview.glb');
+    if (this.disposed) {
+      container.dispose();
+      throw new Error('View disposed');
+    }
+    const root = new TransformNode('static-placement-preview', this.scene);
+    const material = new StandardMaterial('static-placement-preview', this.scene);
+    material.diffuseColor = Color3.FromHexString('#b8c5d6');
+    material.emissiveColor = material.diffuseColor.scale(0.25);
+    material.alpha = 0.5;
+    const entries = container.instantiateModelsToScene((name) => `static-preview:${name}`, false, {
+      doNotInstantiate: true,
+    });
+    for (const node of entries.rootNodes) node.parent = root;
+    for (const mesh of root.getChildMeshes()) {
+      mesh.material = material;
+      mesh.isPickable = false;
+      mesh.useVertexColors = false;
+    }
+    root.setEnabled(false);
+    return {
+      show: (pose?: ItemPose) => {
+        root.setEnabled(!!pose);
+        if (!pose) return;
+        root.position.copyFrom(vector(pose.position));
+        root.rotationQuaternion = new Quaternion(
+          pose.rotation.x,
+          pose.rotation.y,
+          pose.rotation.z,
+          pose.rotation.w,
+        );
+      },
+      dispose: () => {
+        entries.dispose();
+        root.dispose();
+        container.dispose();
+        material.dispose();
       },
     };
   }
@@ -735,12 +952,12 @@ export class WorldView {
   project(position: Vec3, out: { x: number; y: number; visible: boolean }): void {
     const width = this.engine.getRenderWidth(true);
     const height = this.engine.getRenderHeight(true);
-    const viewport = this.camera.viewport.toGlobal(width, height);
+    const viewport = this.activeCamera.viewport.toGlobal(width, height);
     this.labelPosition.set(position.x, position.y, position.z);
     Vector3.ProjectToRef(
       this.labelPosition,
       this.projection,
-      this.scene.getTransformMatrix(),
+      this.activeCamera.getTransformationMatrix(),
       viewport,
       this.projectedLabel,
     );
@@ -809,13 +1026,19 @@ export class WorldView {
   private positionLabels(): void {
     const width = this.engine.getRenderWidth(true);
     const height = this.engine.getRenderHeight(true);
-    const viewport = this.camera.viewport.toGlobal(width, height);
+    const viewport = this.activeCamera.viewport.toGlobal(width, height);
     const cssWidth = this.canvas.clientWidth;
     const cssHeight = this.canvas.clientHeight;
     const labelHeight = this.definition.simulation.character.height / 2 + 0.5;
     const anchors: [LabelAnchor, Vector3, number, number][] = [];
     for (const view of this.entities.values())
-      if (view.label) anchors.push([view as LabelAnchor, view.root.position, labelHeight, 500]);
+      if (view.label)
+        anchors.push([
+          view as LabelAnchor,
+          view.root.position,
+          labelHeight,
+          this.dynamicRadial.radius,
+        ]);
     for (const landmark of this.landmarks)
       anchors.push([landmark, landmark.position, 0, this.radial.radius]);
     for (const [view, position, lift, radius] of anchors) {
@@ -824,7 +1047,7 @@ export class WorldView {
       Vector3.ProjectToRef(
         this.labelPosition,
         this.projection,
-        this.scene.getTransformMatrix(),
+        this.activeCamera.getTransformationMatrix(),
         viewport,
         this.projectedLabel,
       );
@@ -832,7 +1055,7 @@ export class WorldView {
       const y = (this.projectedLabel.y * cssHeight) / height;
       const opacity = radialOpacity(this.radial.center, position, radius);
       view.label.style.opacity = String(opacity);
-      const hidden =
+      let hidden =
         opacity <= 0.01 ||
         this.projectedLabel.z < 0 ||
         this.projectedLabel.z > 1 ||
@@ -840,6 +1063,28 @@ export class WorldView {
         x > cssWidth ||
         y < 0 ||
         y > cssHeight;
+      if (this.firstPerson) {
+        const entity = view as EntityView;
+        if (view === this.entities.get(this.followed ?? '')) hidden = true;
+        if (!hidden && this.overlayTest) {
+          const now = performance.now();
+          if (!entity.occlusion || now - entity.occlusion.at >= 100) {
+            const targetId = view.label.dataset.entityId;
+            const sightTarget = targetId
+              ? {
+                  x: position.x,
+                  y: position.y + this.definition.simulation.character.height / 2 - 0.2,
+                  z: position.z,
+                }
+              : this.labelPosition;
+            entity.occlusion = {
+              at: now,
+              blocked: this.overlayTest(this.eyeCamera.position, sightTarget, targetId),
+            };
+          }
+          hidden = entity.occlusion.blocked;
+        }
+      }
       if (view.label.hidden !== hidden) view.label.hidden = hidden;
       if (view.reaction) {
         view.reaction.hidden = hidden;
@@ -867,6 +1112,9 @@ export class WorldView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.audio?.setListener(undefined);
+    this.audio?.stopWorld();
+    this.reactionSounds.clear();
     window.removeEventListener('resize', this.resize);
     this.canvas.removeEventListener('wheel', this.wheel);
     document.removeEventListener('visibilitychange', this.visibilityChanged);

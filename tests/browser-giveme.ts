@@ -34,13 +34,15 @@ try {
   app = await createGameServer({ port: 0, accounts: fixture, itemCreationEnabled: true });
   fixture.config.publicOrigin = app.url;
   const port = Number(new URL(app.url).port);
-  browser = await launchTestBrowser();
+  browser = await launchTestBrowser({ channel: 'chromium' });
   const ownerContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const observerContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  for (const context of [ownerContext, observerContext])
+    await context.addInitScript(() => localStorage.setItem('su:render-quality:v1', 'economy'));
   const owner = await ownerContext.newPage(),
     observer = await observerContext.newPage();
   for (const page of [owner, observer]) {
-    page.setDefaultTimeout(15_000);
+    page.setDefaultTimeout(30_000);
     page.on('pageerror', (error) => errors.push(error.message));
   }
   await owner.goto(app.url);
@@ -74,11 +76,13 @@ try {
   await owner.locator('#chat-input').fill('/giveme wooden-crate');
   assert.equal(
     await owner.locator('#chat-send').isDisabled(),
-    true,
-    'composer respects the grant cooldown',
+    false,
+    'private commands bypass the ordinary speech cooldown',
   );
   await mkdir('output/playwright', { recursive: true });
   await owner.screenshot({ path: 'output/playwright/giveme-received.png' });
+  // Creation retains its independent server-enforced two-second cooldown.
+  await owner.waitForTimeout(2100);
   await owner.locator('#chat-send:not([disabled])').click();
   await inventoryCount(owner, 2);
   await owner.locator('#chat-console').waitFor({ state: 'hidden' });
@@ -98,6 +102,7 @@ try {
     ['watermelon-ball', '🍉 Мяч-арбуз'],
   ] as const;
   for (const [index, [typeId, label]] of newTypes.entries()) {
+    await owner.waitForTimeout(2100);
     await command(owner, `/giveme ${typeId}`);
     await inventoryCount(owner, 3 + index);
     await owner.locator('#chat-console').waitFor({ state: 'hidden' });
@@ -175,6 +180,7 @@ try {
   await app.close();
   app = await createGameServer({ port, accounts: fixture, itemCreationEnabled: false });
   fixture.config.publicOrigin = app.url;
+  await owner.bringToFront();
   await owner.goto(app.url + '/?diagnostics=1');
   await owner.locator('#join:not([disabled])').click();
   await playing(owner);

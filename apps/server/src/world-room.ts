@@ -1,3 +1,4 @@
+import { LiveStaticPlacement, type LayoutPublications } from './layout/live.js';
 import type { Pool } from 'pg';
 import { ItemStore } from './items/store.js';
 import type { WorldOwnership } from './world-ownership.js';
@@ -6,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DurationMetric } from './metrics.js';
 import { DynamicInterest } from './interest.js';
+import { deliverWorldSound } from './sounds.js';
 import {
   CloseCode,
   Room,
@@ -16,6 +18,8 @@ import {
 } from '@colyseus/core';
 import {
   MAX_PLAYERS,
+  parsePlaceStaticRequest,
+  type StaticPlacementError,
   parseItemCommand,
   type ItemResult,
   type ItemState,
@@ -32,7 +36,6 @@ import {
   REACTION_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
-  normalizeInput,
   worldNeighborhood,
   type PrepareArea,
   type AreaResult,
@@ -55,10 +58,12 @@ import {
   type ErrorCode,
   type WorldDefinition,
   type WorldManifest,
+  type WorldSoundEvent,
 } from '@su/contracts';
 import {
   EntitySchema,
   MoveInputSchema,
+  readMoveInput,
   PlayerSchema,
   WorldState,
   applyEntityState,
@@ -96,6 +101,7 @@ interface ClientAction {
   code?: ErrorCode;
 }
 export interface WorldRoomOptions {
+  layouts?: LayoutPublications;
   ownership?: WorldOwnership;
   itemStore?: ItemStore;
   definition: WorldDefinition;
@@ -130,6 +136,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private items!: ItemRuntime;
   private itemRequests = 0;
   private timeChangeAvailableAt = 0;
+  private staticPlacement?: LiveStaticPlacement;
+  private layoutGroup?: Set<string>;
+  private layoutFailureReported = false;
   private shutdown?: Promise<void>;
   private sessions = new Map<string, Session>();
   private guestCounter = 0;
@@ -144,6 +153,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private measuredSteps = 0;
   private maxStepMs = 0;
   private resyncs = 0;
+  private soundSequence = 0;
 
   private readonly physicsTime = new DurationMetric();
   private readonly selectionTime = new DurationMetric();
@@ -179,6 +189,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       options.itemStore ?? new ItemStore(options.pool, options.definition, this.state.worldEpoch),
       this.world,
       () => this.persistenceStatus(),
+      (event) => {
+        if (event.kind === 'place') this.world.suppressImpacts(event.entityId, 0.25);
+        this.publishWorldSound(event);
+      },
     );
     try {
       await this.items.initialize();
@@ -187,6 +201,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.world.dispose();
       throw error;
     }
+    if (options.layouts)
+      this.staticPlacement = new LiveStaticPlacement(
+        options.layouts,
+        this.items,
+        this.world,
+        this.state.worldEpoch,
+        () => this.layoutChanged(),
+        () => this.neutralAll(),
+      );
+    this.onMessage('placeStatic', (client, request: unknown) => {
+      void this.placeStatic(client, request);
+    });
     this.projectItems(this.world.getSnapshot().items);
     this.onMessage('itemCommand', (client, request: unknown) => {
       void this.itemCommand(client, request);
@@ -256,6 +282,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   onJoin(client: Client, options: { skinId?: unknown } = {}): void {
+    if (!this.isReady()) throw new ServerError(503, 'WORLD_NOT_READY');
     const auth =
       typeof client.auth === 'object' && client.auth?.accountId
         ? (client.auth as AuthenticatedAccount)
@@ -313,17 +340,19 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     requestId?: number,
     position?: Vec3,
   ): void {
-    const spawnDeadline = session.plan?.spawnDeadline;
+    const spawnDeadline =
+      reason === 'layout' || this.items.layoutPaused ? undefined : session.plan?.spawnDeadline;
     if (session.plan) this.completePlan(client, session, false, 'PLAN_REPLACED', false);
     const actual = this.state.players.get(client.sessionId);
     const target =
       position ??
-      (reason === 'reconnect' && actual
+      ((reason === 'reconnect' || reason === 'layout') && actual
         ? { x: actual.x, y: actual.y, z: actual.z }
         : (this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined) ??
           this.definition.spawnPoints[0]));
     const message: PrepareArea = {
       prepareId: randomUUID(),
+      layoutRevision: this.staticPlacement?.publications.current.snapshot.revision ?? 1,
       worldEpoch: this.state.worldEpoch,
       mapVersion: this.state.mapVersion,
       reason,
@@ -341,8 +370,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const session = this.sessions.get(client.sessionId);
     if (!session || !value || typeof value !== 'object') return;
     const data = value as Record<string, unknown>;
-    if (data.worldEpoch !== this.state.worldEpoch || data.mapVersion !== this.state.mapVersion) {
-      client.send('problem', { code: 'STALE_WORLD' });
+    if (
+      data.worldEpoch !== this.state.worldEpoch ||
+      data.mapVersion !== this.state.mapVersion ||
+      data.layoutRevision !== (this.staticPlacement?.publications.current.snapshot.revision ?? 1)
+    ) {
+      client.send('problem', {
+        code: data.worldEpoch !== this.state.worldEpoch ? 'STALE_WORLD' : 'LAYOUT_CHANGED',
+      });
       return;
     }
     if (typeof data.prepareId !== 'string') return;
@@ -359,7 +394,15 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         return;
       }
       plan.readyAt = performance.now();
-      plan.spawnDeadline ??= plan.readyAt + 5000;
+      if (!this.layoutGroup) plan.spawnDeadline ??= plan.readyAt + 5000;
+    }
+    if (this.layoutGroup) {
+      if (this.staticPlacement?.metrics)
+        this.staticPlacement.metrics.clients[client.sessionId] =
+          performance.now() - this.staticPlacement.metrics.pauseStarted;
+      this.layoutGroup.delete(client.sessionId);
+      if (plan.message.reason === 'layout') this.completePlan(client, session, true);
+      this.finishLayoutBarrier();
     }
     this.tryCompletePlan(client, session);
   }
@@ -386,7 +429,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.expirePlan(client, session, 'PREPARE_TIMEOUT');
       return;
     }
-    if (reason === 'reconnect') {
+    if (reason === 'reconnect' || reason === 'layout') {
       const player = this.state.players.get(client.sessionId);
       if (!player) {
         this.expirePlan(client, session, 'STALE_WORLD');
@@ -488,8 +531,15 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const plan = session.plan;
     if (!plan) return;
     session.plan = undefined;
-    const { prepareId, worldEpoch, mapVersion, requestId } = plan.message;
-    const result: AreaResult = { prepareId, worldEpoch, mapVersion, ok, ...(code ? { code } : {}) };
+    const { prepareId, worldEpoch, mapVersion, layoutRevision, requestId } = plan.message;
+    const result: AreaResult = {
+      prepareId,
+      worldEpoch,
+      mapVersion,
+      layoutRevision,
+      ok,
+      ...(code ? { code } : {}),
+    };
     session.areaResults.set(prepareId, result);
     if (session.areaResults.size > 32)
       session.areaResults.delete(session.areaResults.keys().next().value!);
@@ -501,6 +551,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const reason = session.plan?.message.reason;
     this.completePlan(client, session, false, code);
     if (reason !== 'respawn') this.fail(client, code);
+    this.layoutGroup?.delete(client.sessionId);
+    this.finishLayoutBarrier();
   }
 
   private fail(client: Client, code: ErrorCode): void {
@@ -547,7 +599,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         client?.send('resync', { serverTick: this.state.serverTick });
       }
       const command = session.connected ? input.next() : undefined;
-      session.lastInput = normalizeInput(command) ?? { ...NEUTRAL_INPUT };
+      session.lastInput = command ? readMoveInput(command) : { ...NEUTRAL_INPUT };
       this.world.setInput(session.entityId, session.lastInput);
     }
     const physicsStart = performance.now();
@@ -590,6 +642,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     this.projectItems(snapshot.items);
     this.state.serverTick++;
+    for (const impact of this.world.drainImpacts())
+      this.publishWorldSound({ ...impact, kind: 'impact' });
     this.items.step(this.state.serverTick);
     const duration = performance.now() - start;
     this.pendingCycleMs = duration;
@@ -602,6 +656,33 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.measuredSteps++;
       this.maxStepMs = Math.max(this.maxStepMs, duration);
     }
+  }
+
+  private publishWorldSound(
+    sound: Omit<WorldSoundEvent, 'worldEpoch' | 'eventId' | 'serverTick'>,
+  ): void {
+    const actorId =
+      sound.actorId &&
+      [...this.sessions].find(([, session]) => session.entityId === sound.actorId)?.[0];
+    const event: WorldSoundEvent = {
+      ...sound,
+      actorId: actorId || undefined,
+      worldEpoch: this.state.worldEpoch,
+      eventId: `${this.state.worldEpoch}:${++this.soundSequence}`,
+      serverTick: this.state.serverTick,
+    };
+    deliverWorldSound(
+      event,
+      this.clients.map((client) => {
+        const session = this.sessions.get(client.sessionId);
+        const player = this.state.players.get(client.sessionId);
+        return {
+          connected: !!session?.connected && !session.plan,
+          position: player ? { x: player.x, y: player.y, z: player.z } : undefined,
+          send: (message: WorldSoundEvent) => client.send('worldSound', message),
+        };
+      }),
+    );
   }
 
   /** Exactly at state publication, using the most recent completed physical step. */
@@ -867,8 +948,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           : giveFailureMessage('AUTH_REQUIRED'),
       );
     if (command.kind === 'time') return this.timeCommand(client, action, command.action);
+    if (command.kind === 'staticPlacement') {
+      const effect = this.staticPlacement?.effect();
+      if (!effect) return fail('COMMAND_DISABLED', 'Размещение скамейки недоступно в этом мире.');
+      if (this.staticPlacement?.busy || this.items.layoutPaused)
+        return fail('WORLD_NOT_READY', 'Обновляется окружение.');
+      this.finishAction(client, session, { requestId, ok: true, effect });
+      return;
+    }
     if (!this.itemCreationEnabled)
       return fail('COMMAND_DISABLED', 'Создание предметов отключено на сервере.');
+    if (this.staticPlacement?.busy || this.items.layoutPaused)
+      return fail('WORLD_NOT_READY', 'Обновляется окружение.');
     const types = this.items.store.definition.itemCatalog.types;
     if (!Object.hasOwn(types, command.typeId))
       return fail('INVALID_INPUT', `Неизвестный тип предмета: ${command.typeId}.`);
@@ -956,6 +1047,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   onDrop(client: Client, code?: number): void {
+    this.layoutGroup?.delete(client.sessionId);
+    this.finishLayoutBarrier();
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     session.connected = false;
@@ -1008,9 +1101,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const player = this.state.players.get(client.sessionId);
     if (player) player.connected = true;
     this.interest.reset(client, session.entityId);
+    this.staticPlacement &&
+      client.send('layoutChanged', this.staticPlacement.publications.info(this.state.worldEpoch));
     this.createPlan(client, session, 'reconnect', performance.now() + this.prepareTimeoutMs);
+    if (this.layoutGroup) this.layoutGroup.add(client.sessionId);
   }
   onLeave(client: Client): void {
+    this.layoutGroup?.delete(client.sessionId);
+    this.finishLayoutBarrier();
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     const player = this.state.players.get(client.sessionId);
@@ -1039,8 +1137,103 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       void client?.leave(CloseCode.CONSENTED, 'AUTH_REQUIRED');
     }
   }
-  isReady() {
-    return !!this.items && !this.items.unavailable && !this.items.closing;
+  isReady(includeLayout = true) {
+    return (
+      !!this.items &&
+      !this.items.unavailable &&
+      !this.items.closing &&
+      !this.staticPlacement?.fatal &&
+      (!includeLayout || (!this.items.layoutPaused && !this.staticPlacement?.busy))
+    );
+  }
+  private neutralAll() {
+    for (const [id, session] of this.sessions) {
+      this.inputs.get(id).clear();
+      session.lastInput = { ...NEUTRAL_INPUT };
+      this.world.setInput(session.entityId, NEUTRAL_INPUT);
+    }
+  }
+  private layoutChanged() {
+    const p = this.staticPlacement!.publications;
+    this.definition = p.current.definition;
+    this.manifest = p.current.manifest;
+    this.state.mapVersion = this.manifest.mapVersion;
+    this.state.simulationConfigHash = this.manifest.simulationConfigHash;
+    this.neutralAll();
+    if (this.items.closing) {
+      this.layoutGroup = undefined;
+      return;
+    }
+    this.layoutGroup = new Set([...this.sessions].filter(([, s]) => s.connected).map(([id]) => id));
+    this.broadcast('layoutChanged', p.info(this.state.worldEpoch));
+    for (const client of this.clients) {
+      const session = this.sessions.get(client.sessionId);
+      if (session?.connected)
+        this.createPlan(
+          client,
+          session,
+          this.state.players.has(client.sessionId) ? 'layout' : 'spawn',
+          performance.now() + this.prepareTimeoutMs,
+        );
+    }
+    this.finishLayoutBarrier();
+  }
+  private finishLayoutBarrier() {
+    if (!this.layoutGroup || this.layoutGroup.size) return;
+    this.layoutGroup = undefined;
+    if (this.staticPlacement?.metrics)
+      this.staticPlacement.metrics.pauseMs =
+        performance.now() - this.staticPlacement.metrics.pauseStarted;
+    this.neutralAll();
+    this.items.setLayoutPaused(false);
+    void this.staticPlacement?.publications
+      .cleanup()
+      .catch((error) => console.error('Layout cleanup failed', error));
+  }
+  private async placeStatic(client: Client, value: unknown) {
+    const request = parsePlaceStaticRequest(value);
+    const operationId = request?.operationId ?? '';
+    const fail = (code: StaticPlacementError) =>
+      client.send('staticPlacementResult', { operationId, ok: false, code });
+    if (!request) return fail('INVALID_INPUT');
+    const session = this.sessions.get(client.sessionId);
+    const authorize = (): StaticPlacementError | undefined => {
+      if (
+        !session?.auth ||
+        session.auth.expiresAt <= Date.now() ||
+        this.accounts?.wasRevoked(session.auth.authSessionId)
+      )
+        return 'AUTH_REQUIRED';
+    };
+    const auth = authorize();
+    if (auth) return fail(auth);
+    if (!this.staticPlacement) return fail('COMMAND_DISABLED');
+    if (this.itemRequests >= 32) return fail('RATE_LIMITED');
+    this.itemRequests++;
+    try {
+      const result = await this.staticPlacement.place(
+        session!.auth!.accountId,
+        request,
+        authorize,
+        () =>
+          !session?.connected ||
+          session.plan ||
+          this.sessions.get(client.sessionId) !== session ||
+          !this.state.players.has(client.sessionId)
+            ? 'WORLD_NOT_READY'
+            : undefined,
+      );
+      client.send('staticPlacementResult', result);
+      if (this.staticPlacement.fatal && !this.layoutFailureReported) {
+        this.layoutFailureReported = true;
+        this.neutralAll();
+        for (const participant of [...this.clients]) this.fail(participant, 'WORLD_NOT_READY');
+      }
+    } catch {
+      /* Uncertain storage remains queued, under the layout pause. */
+    } finally {
+      this.itemRequests--;
+    }
   }
   private projectItems(items: ItemState[]) {
     const ids = new Set(items.map((i) => i.entityId));
@@ -1066,7 +1259,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       ? 'STORAGE_UNAVAILABLE'
       : this.items.closing
         ? 'WORLD_NOT_READY'
-        : '';
+        : this.staticPlacement?.fatal
+          ? 'WORLD_NOT_READY'
+          : this.items.layoutPaused
+            ? 'LAYOUT_UPDATING'
+            : '';
     if (!wasPaused && this.state.paused)
       for (const player of this.state.players.values()) this.cancelAnimation(player);
     if (wasPaused && !this.state.paused) {
@@ -1091,6 +1288,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
   private async itemCommand(client: Client, request: unknown) {
+    if (this.staticPlacement?.busy || this.items.layoutPaused) {
+      client.send('itemResult', {
+        operationId: (request as { operationId?: string })?.operationId ?? '',
+        ok: false,
+        code: 'WORLD_NOT_READY',
+      });
+      return;
+    }
     const command = parseItemCommand(request);
     if (!command) {
       client.send('problem', { code: 'INVALID_INPUT' });
@@ -1139,6 +1344,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
   shutdownWorld(): Promise<void> {
+    this.layoutGroup = undefined;
+    this.items?.setLayoutPaused(false);
     return (this.shutdown ??= this.items?.close() ?? Promise.resolve());
   }
   async onDispose(): Promise<void> {
@@ -1171,6 +1378,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     };
     const { rss, heapUsed, external, arrayBuffers } = process.memoryUsage();
     return {
+      staticPlacement: this.staticPlacement?.metrics,
       ...this.world.diagnostics(),
       sessions: this.sessions.size,
       occupied: this.sessions.size,

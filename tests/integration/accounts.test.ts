@@ -421,7 +421,9 @@ describe.skipIf(!databaseUrl)(
       expect(saved.status).toBe(200);
       const info: WorldInfo = await (await fetch(app.url + '/api/world')).json();
       expect(info.protocolVersion).toBe(PROTOCOL_VERSION);
-      expect(info.manifestUrl).toBe('/worlds/ring-block/manifest.json');
+      expect(info.manifestUrl).toMatch(
+        /^\/worlds\/ring-block\/layouts\/[a-f0-9]{64}\/[a-f0-9]{64}\/manifest\.json$/,
+      );
       const manifest = await (await fetch(app.url + info.manifestUrl)).json();
       expect(manifest.worldId).toBe('ring-block');
       expect(manifest.mapVersion).toBe(info.mapVersion);

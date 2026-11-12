@@ -325,7 +325,7 @@ try {
   );
   for (const id of usedModels)
     for (const key of ['modelFile', 'partsFile', 'collisionFile'] as const)
-      initialFiles.add(scene.manifest.assets[id][key]);
+      if (scene.manifest.assets[id][key]) initialFiles.add(scene.manifest.assets[id][key]!);
   const initialBytes = await Promise.all(
     [...initialFiles].map((file) => readFile(join(scene.output, file))),
   );

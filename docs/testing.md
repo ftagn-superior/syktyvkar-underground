@@ -2,6 +2,23 @@
 
 Текущая production-версия принята: все приёмки завершены по подтверждению владельца проекта от 12 ноября 2026 года. Этот документ описывает воспроизведение проверок для следующих изменений. Ручная мобильная приёмка нового сенсорного MVP остаётся открытой; автоматические результаты — в [отчёте](../reports/touch-controls-mvp.md). Исторические результаты и ограничения конкретных стендов — в [reports](../reports/README.md).
 
+Ядро размещения статики проверяется на отдельной **тестовой** PostgreSQL:
+
+```sh
+export SU_TEST_DATABASE_URL=postgresql://.../test_database
+pnpm check
+pnpm test
+pnpm build
+pnpm test:static-placement:browser
+pnpm test:chat:browser
+pnpm test:giveme:browser
+pnpm test:items:browser
+```
+
+Для медленного стенда с городскими fixtures допустим `pnpm test --testTimeout=120000 --hookTimeout=120000`. Это лимит тестового runner; клиентский барьер по-прежнему ограничен 15 секундами.
+
+Новый сценарий сам создаёт маленький выпуск с реальной скамейкой, локальный OIDC, два браузерных контекста и временную схему. SDK-проверки находятся в `tests/integration/static-placement.test.ts`, геометрия — в `packages/simulation/src/static-placement.test.ts`. Без `SU_TEST_DATABASE_URL` SQL-наборы пропускаются и не подтверждают готовность MVP. Свидетельства браузера записываются в `output/playwright/static-placement*`; итог поставки и ограничения — в [отчёте](../reports/static-placement-core-mvp.md).
+
 ## Подготовка
 
 Нужны зависимости из lockfile, Node.js ≥24 и pnpm 12.18.0; зафиксированная версия Node — в `.node-version`.
@@ -30,6 +47,8 @@ pnpm build
 | Хранение, сетевые операции, миграции и физика предметов | `pnpm test:items`, `pnpm test:items:browser` |
 | Выдача предметов и приватность ответов | `pnpm test:giveme:browser` |
 | Сенсорный MVP: мультитач, режимы, прерывания и DPR | `pnpm test:touch:browser` |
+| Первое лицо: два клиента, Pointer Lock, чат, качества и восстановление | `pnpm test:first-person:browser` |
+| Первое лицо: стены, физические лучи, глаза и авторизованные предметы | `pnpm test:first-person:geometry` |
 | Эквивалентность физики Node/Chromium | `pnpm test:physics:browser` |
 | GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser` |
 | Повреждённый кеш и неверные ресурсы | `pnpm test:assets:browser` |

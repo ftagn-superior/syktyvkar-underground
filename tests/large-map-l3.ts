@@ -129,6 +129,8 @@ try {
   await writeFile(source, JSON.stringify(header));
   const manifest = await buildWorld(source, join(temporary, 'world'));
   app = await createGameServer({ port: 0, worldDirectory: join(temporary, 'world') });
+  const info = await fetch(app.url + '/api/world').then((r) => r.json());
+  const publicationPath = new URL('.', new URL(info.manifestUrl, app.url)).pathname;
   const profile = { name: 'rtt100-jitter20', rttMs: 100, jitterMs: 20 };
   relay = await createDelayRelay(new URL(app.url), profile);
   const contexts = await Promise.all(
@@ -151,7 +153,7 @@ try {
     });
     if (index === 0) {
       const backgroundFile = manifest.cells.find((cell) => cell.cellId === '12_8')!.file;
-      await page.route(`**/worlds/streaming-lab/${backgroundFile}`, async (route) => {
+      await page.route(`**${publicationPath}${backgroundFile}`, async (route) => {
         backgroundRequested = true;
         while (!releaseBackground && !page.isClosed()) await sleep(50);
         await route.continue().catch(() => {});
@@ -242,7 +244,7 @@ try {
   );
   const targetFile = manifest.cells.find((cell) => cell.cellId === '0_0')!.file;
   let fail = true;
-  await first.route(`**/worlds/streaming-lab/${targetFile}`, async (route) => {
+  await first.route(`**${publicationPath}${targetFile}`, async (route) => {
     if (fail) await route.fulfill({ status: 503, body: 'L3 critical resource fault' });
     else {
       await sleep(500);

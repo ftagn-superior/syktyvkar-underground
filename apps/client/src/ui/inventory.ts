@@ -85,6 +85,7 @@ export class InventoryPanel {
       footer.append(hint);
     }
     this.panel.append(heading, description, this.message, this.grid, this.details, footer);
+    this.toolbar.id = 'item-placement';
     this.toolbar.className = 'placement-toolbar';
     this.toolbar.hidden = true;
     this.toolbar.setAttribute('aria-label', 'Размещение предмета');

@@ -4,6 +4,7 @@ export type ChatCommand =
   | { kind: 'give'; typeId: string }
   /** Без `action` команда только сообщает текущее время. */
   | { kind: 'time'; action?: DayClockAction }
+  | { kind: 'staticPlacement' }
   | { kind: 'invalid'; code: 'INVALID_INPUT' | 'UNKNOWN_COMMAND'; message: string };
 
 const invalid = (message: string): ChatCommand => ({
@@ -16,6 +17,10 @@ const invalid = (message: string): ChatCommand => ({
 export function parseChatCommand(text: string): ChatCommand | undefined {
   if (!text.startsWith('/')) return;
   const [name, argument, ...extra] = text.split(' ');
+  if (name === '/motherlode')
+    return argument || extra.length
+      ? invalid('Формат команды: /motherlode.')
+      : { kind: 'staticPlacement' };
   if (name === '/giveme') {
     if (!argument || !/^[a-zA-Z0-9_-]{1,64}$/.test(argument) || extra.length)
       return invalid('Формат команды: /giveme <type-id>.');

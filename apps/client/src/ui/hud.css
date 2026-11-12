@@ -76,6 +76,36 @@ body[data-scene='lobby'] .su-coach {
   justify-content: space-between;
   align-items: center;
 }
+.audio-settings {
+  margin: 10px 0;
+  padding: 10px 0;
+  border-block: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+}
+.audio-settings summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.audio-settings label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.audio-settings output {
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.audio-settings input {
+  width: 100%;
+  min-height: 30px;
+  accent-color: var(--accent);
+  touch-action: pan-y;
+}
+.audio-lobby-toggle {
+  align-self: flex-start;
+  margin-top: 12px;
+  min-height: 32px;
+}
 .su-h {
   display: flex;
   align-items: center;
@@ -453,4 +483,23 @@ body:not([data-input-mode='touch']) .placement-toolbar {
 .su-kbd {
   flex: none;
   white-space: nowrap;
+}
+.first-person-hud {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  background: var(--surface, #15242e);
+  color: var(--ink, #edf6f5);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.first-person-hud[hidden] {
+  display: none;
 }

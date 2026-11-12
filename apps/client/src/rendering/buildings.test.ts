@@ -50,7 +50,7 @@ function fixture(world = definition) {
 
 async function modelBatch(count = 10) {
   const source = manifest.assets['house-a'];
-  const model = await readBytes(source.modelFile);
+  const model = await readBytes(source.modelFile!);
   const parts = JSON.parse((await readBytes(source.partsFile)).toString());
   const ids = Array.from({ length: count }, (_, index) => `batch-${index}`);
   const assets = Object.fromEntries(
@@ -133,6 +133,26 @@ describe('building rendering from the real world bundle', () => {
       expect(clear.material!.alpha).toBe(1);
       expect(view.shadow.getShadowMap()!.renderList).not.toContain(near);
       expect(view.shadow.getShadowMap()!.renderList).toContain(clear);
+      const own = new Vector3(0, 0.92, -14);
+      view.buildings.update(
+        own,
+        new Vector3(0, 8, 20),
+        direction,
+        0.05,
+        490,
+        1 / 60,
+        own,
+        200,
+        true,
+      );
+      expect(
+        view.buildings.diagnostics().buildings.every((building) => building.opacity === 1),
+      ).toBe(true);
+      expect(near.material).toBe(far.material);
+      expect(view.shadow.getShadowMap()!.renderList).toContain(near);
+      view.buildings.update(own, new Vector3(0, 8, 20), direction, 0.1, 491, 1 / 60);
+      expect(view.buildings.diagnostics().buildings[0].occluded).toBe(true);
+      expect(near.material!.alpha).toBeLessThan(1);
       // Clearing the silhouette restores rendering state without touching geometry or placement.
       for (let frame = 0; frame < 90; frame++)
         view.buildings.update(

@@ -1,6 +1,9 @@
 import {
   NEUTRAL_INPUT,
+  normalizeInput,
   type ItemState,
+  type BuildingInstance,
+  type BuildingPhysicsAsset,
   type ItemPose,
   type MoveInput,
   type Vec3,
@@ -21,11 +24,16 @@ export class AuthoritativeWorld {
   }
   setInput(id: string, input: MoveInput) {
     const character = this.world.characters.get(id);
-    if (character)
-      character.input = { moveX: input.moveX, moveZ: input.moveZ, sprint: input.sprint ?? false };
+    if (character) character.input = normalizeInput(input) ?? { ...NEUTRAL_INPUT };
   }
   step(dt = 1 / this.world.definition.simulation.tickRate) {
     this.world.advance(dt);
+  }
+  drainImpacts() {
+    return this.world.drainImpacts();
+  }
+  suppressImpacts(entityId: string, seconds = 0.25) {
+    this.world.suppressImpacts(entityId, seconds);
   }
   getSnapshot() {
     return this.world.snapshot();
@@ -58,6 +66,13 @@ export class AuthoritativeWorld {
   }
   checkSavedItem(item: ItemState) {
     return this.world.checkSavedItem(item);
+  }
+  checkStaticPlacement(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
+    return this.world.checkStaticPlacement(instance, asset);
+  }
+  addStatic(instance: BuildingInstance, definition: WorldDefinition) {
+    this.world.addStatic(instance, definition.buildingAssets[instance.assetId]);
+    Object.assign(this.world.definition, definition);
   }
   respawnPlayer(id: string, spawn?: Vec3): boolean {
     const character = this.world.characters.get(id);

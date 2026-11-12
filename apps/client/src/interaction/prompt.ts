@@ -100,6 +100,7 @@ export class InteractionSystem {
     this.current?.setHighlighted(false);
     this.current = next;
     this.button.hidden = !next;
+    this.button.dataset.interactionId = next?.id ?? '';
     if (!next) return;
     next.setHighlighted(true);
     this.keyCap.textContent = next.keyLabel;

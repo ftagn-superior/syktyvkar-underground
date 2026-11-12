@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-12",
+  "worldFormat": 5,
+  "mapVersion": "59d35a5994fa94866cd5e1b86f45b611137ebd4133af40092bc773a50401ce53",
+  "physicsHashUnchanged": true,
+  "assetBoundsAndCollidersUnchanged": 1715,
+  "treeAssets": 829,
+  "treeGlbFiles": 0,
+  "glbFiles": 886,
+  "releaseFiles": 4465,
+  "releaseBytes": 36691445,
+  "releaseByType": {
+    "metadata": 3659154,
+    "packs": 16845771,
+    "GLB": 16186520
+  },
+  "releaseBytesBeforeAudit": 48793574,
+  "localWorldDirectoryBytesBeforeAudit": 266914670,
+  "removedStandalonePrototypeBytes": 3422740,
+  "checks": {
+    "typecheck": "passed",
+    "packageBoundaries": "passed",
+    "build": "passed",
+    "testsPassed": 328,
+    "testsSkipped": 102,
+    "databaseTests": "not run: test database not configured",
+    "browser": {
+      "errors": [],
+      "scenarios": [
+        {
+          "shadows": false,
+          "faded": false,
+          "drawCallsReference": 145,
+          "drawCallsInstanced": 13,
+          "instancedTrees": 144,
+          "treeGlbLoads": 0,
+          "imageDifference": {
+            "changed": 0,
+            "meanError": 0,
+            "maxError": 0
+          }
+        },
+        {
+          "shadows": true,
+          "faded": false,
+          "drawCallsReference": 290,
+          "drawCallsInstanced": 26,
+          "instancedTrees": 144,
+          "treeGlbLoads": 0,
+          "imageDifference": {
+            "changed": 0,
+            "meanError": 0.06537708333333334,
+            "maxError": 4
+          }
+        },
+        {
+          "shadows": true,
+          "faded": true,
+          "drawCallsReference": 289,
+          "drawCallsInstanced": 27,
+          "instancedTrees": 144,
+          "treeGlbLoads": 0,
+          "imageDifference": {
+            "changed": 0,
+            "meanError": 0.06509375,
+            "maxError": 4
+          }
+        }
+      ]
+    }
+  },
+  "removedGeneratedGraphics": [
+    "obsolete resources and layouts under dist/worlds",
+    "output/art-style previews except current ao-after",
+    "output/static-extraction",
+    "output/tree-instancing",
+    "output/loading-audit",
+    "old loading-profile, tree-instancing and main-merge-standard builds under output/playwright",
+    "legacy tree browser screenshots"
+  ]
+}

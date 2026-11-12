@@ -8,6 +8,7 @@ interface Snapshot {
   tick: number;
   grounded: boolean;
   paused: boolean;
+  facingYaw: number;
 }
 interface Transition {
   time: number;
@@ -17,6 +18,8 @@ export interface AnimationSource {
   entityId: string;
   revision: number;
   grounded: boolean;
+  qy: number;
+  qw: number;
   animationId: string;
   animationSequence: number;
   animationStartedAtTick: number;
@@ -24,7 +27,7 @@ export interface AnimationSource {
   animationChangedAtTick: number;
 }
 
-/** Discrete visual state on the same server-clock timeline as Predict's positions. */
+/** Player presentation on the same server-clock timeline as Predict's positions. */
 export class AnimationBuffer {
   private readonly entities = new Map<
     string,
@@ -72,7 +75,13 @@ export class AnimationBuffer {
           });
         }
       }
-      history.snapshots.push({ time, tick, grounded: player.grounded, paused });
+      history.snapshots.push({
+        time,
+        tick,
+        grounded: player.grounded,
+        paused,
+        facingYaw: Math.atan2(2 * player.qw * player.qy, player.qw ** 2 - player.qy ** 2),
+      });
       // Keep a predecessor around a generous interpolation window, with hard count bounds.
       while (
         history.snapshots.length > 2 &&
@@ -91,7 +100,7 @@ export class AnimationBuffer {
   sample(
     entityId: string,
     time: number,
-  ): { grounded: boolean; animation: DisplayAnimation } | undefined {
+  ): { grounded: boolean; facingYaw: number; animation: DisplayAnimation } | undefined {
     const history = this.entities.get(entityId);
     if (!history) return;
     const samples = history.snapshots;
@@ -104,11 +113,13 @@ export class AnimationBuffer {
         break;
       }
     }
+    const fraction =
+      next && next.time > previous.time
+        ? Math.max(0, Math.min(1, (time - previous.time) / (next.time - previous.time)))
+        : 0;
     const tick =
       next && next.time > previous.time
-        ? previous.tick +
-          (next.tick - previous.tick) *
-            Math.max(0, (time - previous.time) / (next.time - previous.time))
+        ? previous.tick + (next.tick - previous.tick) * fraction
         : previous.tick + (previous.paused ? 0 : Math.max(0, time - previous.time) / TICK_MS);
     let playback = history.transitions[0].playback;
     for (const transition of history.transitions) {
@@ -117,6 +128,14 @@ export class AnimationBuffer {
     }
     return {
       grounded: previous.grounded,
+      facingYaw:
+        previous.facingYaw +
+        (next
+          ? Math.atan2(
+              Math.sin(next.facingYaw - previous.facingYaw),
+              Math.cos(next.facingYaw - previous.facingYaw),
+            ) * fraction
+          : 0),
       animation: { ...playback, worldEpoch: history.epoch, displayTick: tick, displayTimeMs: time },
     };
   }

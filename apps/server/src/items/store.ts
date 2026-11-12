@@ -69,7 +69,7 @@ export class ItemStore {
   }
   constructor(
     readonly pool: Pool,
-    readonly definition: WorldDefinition,
+    public definition: WorldDefinition,
     readonly epoch: string,
     ownership?: WorldOwnership,
     private readonly initializeLayout?: () => Promise<void>,
@@ -306,8 +306,10 @@ export class ItemStore {
     operationId: string,
     action: ItemMutation,
     validate: (action: ItemMutation, typeId?: string) => ItemError | undefined,
+    onFreshCommit?: () => void,
   ): Promise<ItemMutationResult> {
-    return this.transaction(async () => {
+    let fresh = false;
+    const result = await this.transaction(async () => {
       const prior = await this.db.query(
         'SELECT request,result FROM item_operations WHERE account_id=$1 AND operation_id=$2',
         [accountId, operationId],
@@ -340,8 +342,18 @@ export class ItemStore {
           result,
         ],
       );
+      fresh = result.ok;
       return result;
     });
+    // Presentation callbacks cannot fail, repeat, or roll back a durable mutation.
+    if (fresh) {
+      try {
+        onFreshCommit?.();
+      } catch {
+        /* Optional presentation. */
+      }
+    }
+    return result;
   }
   private async applyAction(
     accountId: string,

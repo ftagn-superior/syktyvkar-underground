@@ -107,7 +107,9 @@ describe('extracted ring-block content budgets', () => {
           ...cell.assetIds
             .slice(0, 1)
             .flatMap((id) => [
-              stress.read(manifest.assets[id].modelFile),
+              ...(manifest.assets[id].modelFile
+                ? [stress.read(manifest.assets[id].modelFile!)]
+                : []),
               stress.read(manifest.assets[id].partsFile),
             ]),
         ]),
@@ -144,7 +146,10 @@ describe('extracted ring-block content budgets', () => {
           for (const id of new Set(ids)) {
             if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
             const asset = world.assets[id];
-            await Promise.all([read(asset.modelFile, signal), read(asset.partsFile, signal)]);
+            await Promise.all([
+              ...(asset.modelFile ? [read(asset.modelFile, signal)] : []),
+              read(asset.partsFile, signal),
+            ]);
           }
           pins++;
           return () => {

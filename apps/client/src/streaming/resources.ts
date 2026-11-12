@@ -109,7 +109,7 @@ export class VerifiedResources {
     const allowed = new Set(
       cell.assetIds.flatMap((id) => {
         const asset = this.manifest.assets[id];
-        return [asset.modelFile, asset.partsFile];
+        return asset.modelFile ? [asset.modelFile, asset.partsFile] : [asset.partsFile];
       }),
     );
     for (const pack of cell.graphicsPacks) {

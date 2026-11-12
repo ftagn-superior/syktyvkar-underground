@@ -35,12 +35,14 @@ const pages = await Promise.all(
 const [slow, good] = pages;
 let release: () => void = () => {};
 try {
+  const info = await fetch(app.url + '/api/world').then((r) => r.json());
+  const publicationPath = new URL('.', new URL(info.manifestUrl, app.url)).pathname;
   let assetRequested = false;
   const blockedPaths = new Set(
     fixture.manifest.cells
       .filter((cell) => cell.assetIds.includes('house-a'))
       .flatMap((cell) => cell.graphicsPacks ?? [fixture.manifest.assets['house-a'].modelFile])
-      .map((path) => `/worlds/streaming-lab/${path}`),
+      .map((path) => publicationPath + path),
   );
   const gate = new Promise<void>((resolve) => {
     release = resolve;

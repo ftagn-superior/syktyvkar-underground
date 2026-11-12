@@ -1,6 +1,9 @@
 import { schema, t } from '@colyseus/schema';
 import {
   PROTOCOL_VERSION,
+  normalizeInput,
+  NEUTRAL_INPUT,
+  type MoveInput,
   DEFAULT_AVATAR_SKIN,
   type EntityState,
   type ItemState,
@@ -14,9 +17,37 @@ export class MoveInputSchema extends schema(
     moveX: t.float32().default(0),
     moveZ: t.float32().default(0),
     sprint: t.boolean().default(false),
+    hasFacing: t.boolean().default(false),
+    facingYaw: t.float64().default(0),
   },
   'MoveInput',
 ) {}
+
+export type WireMoveInput = Pick<
+  MoveInputSchema,
+  'moveX' | 'moveZ' | 'sprint' | 'hasFacing' | 'facingYaw'
+>;
+
+export function readMoveInput(input: WireMoveInput): MoveInput {
+  return (
+    normalizeInput({
+      moveX: input.moveX,
+      moveZ: input.moveZ,
+      sprint: input.sprint,
+      facingYaw: input.hasFacing ? input.facingYaw : undefined,
+    }) ?? { ...NEUTRAL_INPUT }
+  );
+}
+
+/** Every send, including neutral, replaces both orientation fields in the delta encoder. */
+export function writeMoveInput(target: MoveInputSchema, command: MoveInput): void {
+  const input = normalizeInput(command) ?? NEUTRAL_INPUT;
+  target.moveX = input.moveX;
+  target.moveZ = input.moveZ;
+  target.sprint = input.sprint ?? false;
+  target.hasFacing = input.facingYaw !== undefined;
+  target.facingYaw = input.facingYaw ?? 0;
+}
 
 export class EntitySchema extends schema(
   {

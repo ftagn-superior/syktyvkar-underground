@@ -123,7 +123,7 @@ export class TreeViews {
     shadow: boolean,
     transparent: boolean,
   ): Batch {
-    const palette = `${recipe.crownColor}:${recipe.trunkColor}:${recipe.foliage ?? 'conical'}:${recipe.ambientOcclusion ?? 'none'}`;
+    const palette = `${recipe.crownColor}:${recipe.trunkColor}:${recipe.foliage}`;
     // Give the few translucent occluders individual sorting bounds, preserving alpha blending.
     const key = `${Math.floor(definition.position.x / 125)},${Math.floor(definition.position.z / 125)}:${palette}:${shadow}:${transparent ? definition.entityId : ''}`;
     let batch = this.batches.get(key);
@@ -132,12 +132,7 @@ export class TreeViews {
     if (!template) {
       template = new Mesh(`tree-template:${palette}`, this.scene);
       template.sideOrientation = Material.CounterClockWiseSideOrientation;
-      const data = treeTemplate(
-        recipe.crownColor,
-        recipe.trunkColor,
-        recipe.foliage,
-        recipe.ambientOcclusion,
-      );
+      const data = treeTemplate(recipe.crownColor, recipe.trunkColor, recipe.foliage);
       const vertices = new VertexData();
       Object.assign(vertices, {
         positions: data.positions,
@@ -187,6 +182,7 @@ export class TreeViews {
     visibleRadius: number,
     now: number,
     seconds: number,
+    opaque = false,
   ) {
     const selected = new Set(this.fading);
     for (const ray of rays) {
@@ -223,6 +219,7 @@ export class TreeViews {
           treeIntersectsRay(tree.recipe, Ray.Transform(ray, tree.inverse)),
       );
       const previousOpacity = tree.fade.opacity;
+      if (opaque) tree.fade.clear();
       const opacity = tree.fade.update(blocked, now, seconds);
       const shadow = this.shadowed.has(id) && opacity >= 0.98;
       const transparent = opacity < 1;

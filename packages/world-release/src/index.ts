@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile, rename } from 'node:fs/promises';
+import { mkdir, writeFile, rename, readFile, readdir, unlink, rmdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
   WORLD_FORMAT_VERSION,
@@ -31,7 +31,7 @@ export interface CompiledWorldAsset {
   version: string;
   bounds: Bounds;
   physics: BuildingPhysicsAsset;
-  model: Uint8Array;
+  model?: Uint8Array;
   collision: Uint8Array;
   parts: Uint8Array;
 }
@@ -87,16 +87,23 @@ export function createWorldPublication(
     WORLD_RESOURCE_LIMITS.headerBytes,
   );
   const assets: Record<string, BuildingAssetManifest> = {};
-  const proceduralTrees = new Set<string>();
   for (const [assetId, asset] of Object.entries(compiled).sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
   )) {
     const prefix = `assets/${asset.version}`;
+    const parts = JSON.parse(new TextDecoder().decode(asset.parts));
+    if (parts.tree) validateBuildingParts(parts);
+    if (!!parts.tree !== (asset.model === undefined))
+      throw new Error(`Asset must contain either an instanced tree or a GLB: ${assetId}`);
     assets[assetId] = {
       assetId,
       version: asset.version,
       bounds: asset.bounds,
-      modelFile: put(`${prefix}/model.glb`, asset.model, WORLD_RESOURCE_LIMITS.modelBytes),
+      ...(asset.model === undefined
+        ? {}
+        : {
+            modelFile: put(`${prefix}/model.glb`, asset.model, WORLD_RESOURCE_LIMITS.modelBytes),
+          }),
       collisionFile: put(
         `${prefix}/colliders.json`,
         asset.collision,
@@ -104,8 +111,6 @@ export function createWorldPublication(
       ),
       partsFile: put(`${prefix}/parts.json`, asset.parts, WORLD_RESOURCE_LIMITS.partsBytes),
     };
-    const parts = JSON.parse(new TextDecoder().decode(asset.parts));
-    if (parts.tree && validateBuildingParts(parts).tree) proceduralTrees.add(assetId);
   }
   const cellEntries: WorldCellManifest[] = [...cells.values()].map((cell) => {
     cell.statics.sort(byId);
@@ -136,15 +141,14 @@ export function createWorldPublication(
   }
   for (const { owners, assetIds } of groups.values()) {
     const paths = [
-      // Modern clients reconstruct these trees from parts. Legacy clients can still fetch
-      // the original, hash-verified GLB separately, including after layout republication.
+      // Instanced trees have only parameters; other assets include their GLB.
       ...new Set(
         assetIds
           .sort()
           .flatMap((id) =>
-            proceduralTrees.has(id)
-              ? [assets[id].partsFile]
-              : [assets[id].modelFile, assets[id].partsFile],
+            assets[id].modelFile
+              ? [assets[id].modelFile!, assets[id].partsFile]
+              : [assets[id].partsFile],
           ),
       ),
     ];
@@ -208,6 +212,45 @@ export async function writeWorldPublication(
   await writeFile(temporary, JSON.stringify(manifest, null, 2) + '\n');
   await rename(temporary, resolve(outputDirectory, 'manifest.json'));
   return manifest;
+}
+
+/** Offline build cleanup. Runtime layout publication deliberately does not call this. */
+export async function pruneWorldPublication(outputDirectory: string) {
+  const manifest = validateWorldManifest(
+    JSON.parse(await readFile(resolve(outputDirectory, 'manifest.json'), 'utf8')),
+  );
+  const obsolete: string[] = [];
+  const directories: string[] = [];
+  const scan = async (relative: string) => {
+    for (const entry of await readdir(resolve(outputDirectory, relative), {
+      withFileTypes: true,
+    })) {
+      const path = relative ? `${relative}/${entry.name}` : entry.name;
+      if (
+        !relative &&
+        !['assets', 'cells', 'graphics', 'layouts'].includes(entry.name) &&
+        !/^header\.[a-f0-9]{64}\.json$/.test(entry.name)
+      )
+        continue;
+      if (entry.isSymbolicLink()) throw new Error(`Cannot prune symbolic link: ${path}`);
+      if (entry.isDirectory()) {
+        await scan(path);
+        directories.push(path);
+      } else if (entry.isFile() && !Object.hasOwn(manifest.files, path)) obsolete.push(path);
+    }
+  };
+  await scan('');
+  // Validate the complete retained release before deleting anything.
+  for (const [path, expected] of Object.entries(manifest.files)) {
+    if (hash(await readFile(resolve(outputDirectory, path))) !== expected)
+      throw new Error(`Cannot prune an incomplete or corrupt release: ${path}`);
+  }
+  for (const path of obsolete) await unlink(resolve(outputDirectory, path));
+  for (const path of directories) {
+    const absolute = resolve(outputDirectory, path);
+    if ((await readdir(absolute)).length === 0) await rmdir(absolute);
+  }
+  return obsolete.length;
 }
 
 export interface AuthoringMetadata {

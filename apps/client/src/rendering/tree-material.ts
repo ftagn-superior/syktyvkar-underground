@@ -15,13 +15,13 @@ export class TreeMaterial extends MaterialPluginBase {
   constructor(
     material: PBRMaterial,
     private readonly radial?: RadialState,
-    foliage?: 'broadleaf',
+    foliage: 'broadleaf' | 'spruce' = 'spruce',
   ) {
     super(
       material,
       'TreeInstances',
       200,
-      { SU_TREE_INSTANCES: true, SU_TREE_BROADLEAF: !!foliage },
+      { SU_TREE_INSTANCES: true, SU_TREE_BROADLEAF: foliage === 'broadleaf' },
       true,
       false,
     );

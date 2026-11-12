@@ -23,7 +23,7 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)('serves verified world assets', asy
     const info = await fetch(app.url + '/api/world').then((r) => r.json());
     const manifest = await fetch(app.url + info.manifestUrl).then((r) => r.json());
     const { definition } = await readWorldDirectory(bundle);
-    expect(manifest.formatVersion).toBe(4);
+    expect(manifest.formatVersion).toBe(5);
     expect(manifest.mapVersion).toBe(info.mapVersion);
     expect(definition.buildings).toHaveLength(2);
     expect(app.room.diagnostics().bodies).toBe(
@@ -33,14 +33,14 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)('serves verified world assets', asy
       modelFile: string;
       collisionFile: string;
     }[]) {
-      const model = await fetch(`${app.url}/worlds/physics-lab/${asset.modelFile}`);
+      const model = await fetch(new URL(asset.modelFile, app.url + info.manifestUrl).href);
       expect(model.status).toBe(200);
       expect(model.headers.get('cache-control')).toContain('immutable');
       const bytes = new Uint8Array(await model.arrayBuffer());
       expect(new TextDecoder().decode(bytes.subarray(0, 4))).toBe('glTF');
-      expect((await fetch(`${app.url}/worlds/physics-lab/${asset.collisionFile}`)).status).toBe(
-        200,
-      );
+      expect(
+        (await fetch(new URL(asset.collisionFile, app.url + info.manifestUrl).href)).status,
+      ).toBe(200);
     }
     expect((await fetch(app.url + '/worlds/physics-lab/not-listed.glb')).status).toBe(404);
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);
@@ -54,7 +54,7 @@ it('rejects a damaged release before starting a room, including visual resource 
   await cp(bundle, broken, { recursive: true });
   const { manifest } = await readWorldDirectory(broken);
   const asset = Object.values(manifest.assets)[0];
-  const file = join(broken, asset.modelFile);
+  const file = join(broken, asset.modelFile!);
   const bytes = await readFile(file);
   bytes[bytes.length - 1] ^= 1;
   await writeFile(file, bytes);

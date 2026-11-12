@@ -61,6 +61,38 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     await app?.close();
   });
 
+  it('replicates facing while idle and backward, without starting chat expiry on a turn', async () => {
+    const first = await join();
+    const second = await join();
+    const input = first.input({ type: MoveInputSchema, mode: 'reliable' });
+    first.send('requestChat', { requestId: 1, worldEpoch: info.worldEpoch, text: 'Лицом к лицу' });
+    await until(() => !!first.state.players.get(first.sessionId)?.chatText);
+    const send = (yaw: number, moveZ = 0) => {
+      input.data.hasFacing = true;
+      input.data.facingYaw = yaw;
+      input.data.moveZ = moveZ;
+      input.send();
+    };
+    send(Math.PI / 2);
+    await until(
+      () => Math.abs((second.state.players.get(first.sessionId)?.qy ?? 0) - Math.SQRT1_2) < 0.001,
+    );
+    expect(second.state.players.get(first.sessionId)?.chatExpiresAtTick).toBe(0);
+    const repeat = setInterval(() => send(0, -1), 16);
+    try {
+      await until(() => Math.abs(second.state.players.get(first.sessionId)?.vz ?? 0) > 1);
+    } finally {
+      clearInterval(repeat);
+    }
+    expect(second.state.players.get(first.sessionId)?.qy).toBeCloseTo(0);
+    expect(second.state.players.get(first.sessionId)?.qw).toBeCloseTo(1);
+    input.data.moveZ = 0;
+    input.data.hasFacing = false;
+    input.send();
+    await until(() => Math.abs(second.state.players.get(first.sessionId)?.vz ?? 100) < 0.01);
+    expect(second.state.players.get(first.sessionId)?.qy).toBeCloseTo(0);
+  });
+
   it('shares one epoch and crate, spawns only once after ready', async () => {
     const first = await join(false);
     expect(app.room.state.players.size).toBe(0);

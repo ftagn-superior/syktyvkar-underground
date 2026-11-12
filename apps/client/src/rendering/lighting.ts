@@ -110,6 +110,7 @@ export class WorldLighting {
   constructor(
     private readonly scene: Scene,
     private readonly camera: Camera,
+    private readonly additionalCameras: Camera[] = [],
   ) {
     // Economy applies this in the material shader; standard uses the HDR pipeline.
     // Changing quality must not change the art direction.
@@ -220,7 +221,10 @@ export class WorldLighting {
       return;
     }
     if (this.pipeline) return;
-    const pipeline = new DefaultRenderingPipeline('lighting', true, this.scene, [this.camera]);
+    const pipeline = new DefaultRenderingPipeline('lighting', true, this.scene, [
+      this.camera,
+      ...this.additionalCameras,
+    ]);
     pipeline.samples = 4;
     pipeline.fxaaEnabled = false;
     pipeline.bloomEnabled = false;

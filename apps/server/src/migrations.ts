@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
-import { staticLayoutSchema } from './layout/schema.js';
+import { staticLayoutSchema, gameStaticLayoutSchema } from './layout/schema.js';
 
-export const DATABASE_SCHEMA_VERSION = 5;
+export const DATABASE_SCHEMA_VERSION = 6;
 
 /** Kept in the server bundle so source and built migration commands use identical SQL. */
 const migrations = [
@@ -137,6 +137,7 @@ const migrations = [
     ALTER TABLE player_profiles ADD CONSTRAINT player_profiles_color_id_check
       CHECK (color_id ~ '^([a-z]{3,16}|#[0-9A-Fa-f]{6})$');`,
   },
+  { version: 6, sql: gameStaticLayoutSchema },
 ];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {
@@ -167,7 +168,7 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
     }
     for (const migration of migrations) {
       if (applied.rows.some((row) => row.version === migration.version)) continue;
-      if (migration.version === 4) {
+      if (migration.version === 4 || migration.version === 6) {
         const worlds = await client.query<{ id: string }>(
           'SELECT id FROM persistent_worlds ORDER BY id',
         );

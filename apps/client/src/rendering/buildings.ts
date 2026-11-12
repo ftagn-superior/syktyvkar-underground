@@ -26,8 +26,14 @@ import {
 } from '@su/contracts';
 import { SpatialIndex } from './spatial-index';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
+import { TreeViews } from './trees';
+import type { RadialState } from './radial-fog';
 
-type Asset = { descriptor: BuildingAssetManifest; container: AssetContainer; parts: BuildingParts };
+type Asset = {
+  descriptor: BuildingAssetManifest;
+  container?: AssetContainer;
+  parts: BuildingParts;
+};
 type FadingMaterial = { material: Material; alpha: number; mode: number | null };
 type Group = {
   id: string;
@@ -76,12 +82,16 @@ export class BuildingViews {
   private readonly instances: BuildingView[] = [];
   private disposed = false;
   private prepared = false;
+  private readonly trees: TreeViews;
 
   constructor(
     private readonly scene: Scene,
     private readonly shadow: ShadowGenerator,
     private readonly definition: WorldDefinition | WorldHeader,
-  ) {}
+    radial?: RadialState,
+  ) {
+    this.trees = new TreeViews(scene, shadow, radial);
+  }
 
   async prepare(
     manifest: WorldManifest,
@@ -149,7 +159,7 @@ export class BuildingViews {
             const entry = record;
             record.promise = record.promise.then((asset) => {
               if (this.cache.get(descriptor.version) !== entry || this.disposed) {
-                asset.container.dispose();
+                asset.container?.dispose();
                 if (this.assets.get(descriptor.version) === asset)
                   this.assets.delete(descriptor.version);
                 throw new DOMException('Preparation cancelled', 'AbortError');
@@ -166,7 +176,7 @@ export class BuildingViews {
             entry.controller.abort();
             if (this.cache.get(descriptor.version) === entry) this.cache.delete(descriptor.version);
             if (entry.value) {
-              entry.value.container.dispose();
+              entry.value.container?.dispose();
               if (this.assets.get(descriptor.version) === entry.value)
                 this.assets.delete(descriptor.version);
             }
@@ -199,7 +209,7 @@ export class BuildingViews {
       throw error;
     }
   }
-  add(definition: BuildingInstance, version: string): void {
+  add(definition: BuildingInstance, version: string): TransformNode | undefined {
     if (this.disposed) throw new Error('Building views disposed');
     const signature = version + canonicalJson(definition);
     const previous = this.references.get(definition.entityId);
@@ -207,18 +217,29 @@ export class BuildingViews {
       if (signature !== previous.signature)
         throw new Error(`Conflicting building/version: ${definition.entityId}`);
       previous.count++;
-      return;
+      return previous.view.root;
     }
     const asset = this.assets.get(version);
     if (!asset || asset.descriptor.assetId !== definition.assetId)
       throw new Error('Model is not prepared');
+    if (!asset.container && asset.parts.tree) {
+      this.trees.add(definition, asset.descriptor, asset.parts.tree, signature);
+      return;
+    }
+    if (this.trees.has(definition.entityId))
+      throw new Error(`Conflicting building/version: ${definition.entityId}`);
     const view = this.instantiate(definition, asset);
     this.instances.push(view);
     this.references.set(definition.entityId, { count: 1, signature, view });
     this.index.add(definition.entityId, { min: plain(view.minimum), max: plain(view.maximum) });
     this.shadowed.add(definition.entityId);
+    return view.root;
   }
   remove(id: string): void {
+    if (this.trees.has(id)) {
+      this.trees.remove(id);
+      return;
+    }
     const entry = this.references.get(id);
     if (!entry || --entry.count > 0) return;
     this.references.delete(id);
@@ -236,13 +257,12 @@ export class BuildingViews {
     descriptor: BuildingAssetManifest,
     readBytes: (path: string) => Promise<Uint8Array>,
   ): Promise<Asset> {
-    const [model, partsBytes] = await Promise.all([
-      readBytes(descriptor.modelFile),
-      readBytes(descriptor.partsFile),
-    ]);
+    const partsBytes = await readBytes(descriptor.partsFile);
     const parts = validateBuildingParts(JSON.parse(new TextDecoder().decode(partsBytes)));
     if (parts.assetId !== descriptor.assetId) throw new Error('Building part asset mismatch');
     if (this.disposed) throw new Error('Building preparation was cancelled');
+    if (parts.tree && this.trees.supported) return { descriptor, parts };
+    const model = await readBytes(descriptor.modelFile);
     // A failed glTF parse does not return its partially populated AssetContainer.
     // Keep loader-owned resources until success so that errors can release them as well.
     const meshes = new Set<AbstractMesh>();
@@ -286,7 +306,7 @@ export class BuildingViews {
     let entries: InstantiatedEntries | undefined;
     const ownedMaterials = new Set<Material>();
     try {
-      entries = asset.container.instantiateModelsToScene(
+      entries = asset.container!.instantiateModelsToScene(
         (name) => `${definition.entityId}:${name}`,
         false,
         { doNotInstantiate: true },
@@ -415,6 +435,7 @@ export class BuildingViews {
         rays.push(orthographicSightRay(cameraPosition, direction, sample, cameraNear));
       }
     }
+    this.trees.update(rays, shadowCenter, visibleRadius, now, seconds);
     const selected = new Set(this.fading);
     for (const ray of rays) {
       const end = ray.origin.add(ray.direction.scale(ray.length));
@@ -487,51 +508,60 @@ export class BuildingViews {
   }
 
   aggregateDiagnostics() {
+    const trees = this.trees.aggregateDiagnostics();
     return {
-      instances: this.instances.length,
+      instances: this.instances.length + trees.treeInstances,
       assets: this.assets.size,
-      modelLoads: this.assets.size,
-      fadedBuildings: this.instances.filter((instance) =>
-        instance.groups.some((group) => group.fade.opacity < 0.99),
-      ).length,
+      modelLoads: [...this.assets.values()].filter((asset) => asset.container).length,
+      fadedBuildings:
+        this.instances.filter((instance) =>
+          instance.groups.some((group) => group.fade.opacity < 0.99),
+        ).length + trees.fadedTrees,
+      ...trees,
     };
   }
   diagnostics() {
+    const trees = this.trees.diagnostics();
+    const counts = new Map<string, number>();
+    for (const definition of [...this.instances.map((view) => view.definition), ...trees])
+      counts.set(definition.assetId, (counts.get(definition.assetId) ?? 0) + 1);
     return {
-      assets: [...this.assets.values()].map(({ descriptor }) => ({
+      assets: [...this.assets.values()].map(({ descriptor, container }) => ({
         assetId: descriptor.assetId,
         version: descriptor.version,
-        loads: 1,
-        instances: this.instances.filter(
-          (instance) => instance.definition.assetId === descriptor.assetId,
-        ).length,
+        loads: container ? 1 : 0,
+        instances: counts.get(descriptor.assetId) ?? 0,
       })),
-      buildings: this.instances.map((instance) => ({
-        entityId: instance.definition.entityId,
-        assetId: instance.definition.assetId,
-        position: { ...instance.definition.position },
-        rotation: { ...instance.definition.rotation },
-        bounds: { min: plain(instance.minimum), max: plain(instance.maximum) },
-        opacity: Math.min(1, ...instance.groups.map((group) => group.fade.opacity)),
-        occluded: instance.groups.some((group) => group.fade.blocked),
-        groups: instance.groups.map((group) => ({
-          id: group.id,
-          opacity: group.fade.opacity,
-          occluded: group.fade.blocked,
+      buildings: [
+        ...this.instances.map((instance) => ({
+          entityId: instance.definition.entityId,
+          assetId: instance.definition.assetId,
+          position: { ...instance.definition.position },
+          rotation: { ...instance.definition.rotation },
+          bounds: { min: plain(instance.minimum), max: plain(instance.maximum) },
+          opacity: Math.min(1, ...instance.groups.map((group) => group.fade.opacity)),
+          occluded: instance.groups.some((group) => group.fade.blocked),
+          groups: instance.groups.map((group) => ({
+            id: group.id,
+            opacity: group.fade.opacity,
+            occluded: group.fade.blocked,
+          })),
         })),
-      })),
+        ...trees,
+      ],
     };
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.trees.dispose();
     for (const [id, entry] of this.references) {
       entry.count = 1;
       this.remove(id);
     }
     for (const entry of this.cache.values()) entry.controller.abort();
-    for (const { container } of this.assets.values()) container.dispose();
+    for (const { container } of this.assets.values()) container?.dispose();
     this.assets.clear();
     this.cache.clear();
   }

@@ -174,7 +174,7 @@ export class WorldView {
     this.shadow.useBlurExponentialShadowMap = true;
     this.shadow.blurKernel = 16;
     this.shadow.setDarkness(0.25);
-    this.buildings = new BuildingViews(this.scene, this.shadow, definition);
+    this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
     this.statics = new StaticViews(this.scene, this.shadow);
     if ('entities' in definition) {
       for (const entity of definition.entities)
@@ -345,10 +345,13 @@ export class WorldView {
     }
   }
   retainStatic(item: StaticEntityDefinition | BuildingInstance, version: string) {
-    if ('assetId' in item) this.buildings.add(item, version);
-    else this.statics.add(item, version);
-    const root =
-      this.scene.getTransformNodeByName(item.entityId) ?? this.scene.getMeshByName(item.entityId);
+    let root;
+    if ('assetId' in item) root = this.buildings.add(item, version);
+    else {
+      this.statics.add(item, version);
+      root =
+        this.scene.getTransformNodeByName(item.entityId) ?? this.scene.getMeshByName(item.entityId);
+    }
     if (root) {
       const meshes = root instanceof TransformNode ? root.getChildMeshes() : [];
       if ('material' in root)

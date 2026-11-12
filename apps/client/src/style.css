@@ -52,6 +52,9 @@ button[hidden],
   display: block;
   outline: none;
 }
+#world.camera-rotating {
+  cursor: grabbing;
+}
 .vignette {
   pointer-events: none;
   position: fixed;

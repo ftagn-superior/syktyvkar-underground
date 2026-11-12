@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { rotateCamera } from './helpers/camera.js';
 
 // Exercise the built application and real prediction/interpolation in two sessions.
 const app = await createGameServer({ port: 0 });
@@ -123,7 +124,7 @@ try {
   await mode(sender, id, 'idle');
   await mode(observer, id, 'idle');
   await sender.locator('#world').focus();
-  await sender.keyboard.press('q');
+  await rotateCamera(sender, -0.39);
   await sender.mouse.move(700, 450);
   await sender.mouse.wheel(0, -1800);
   await sender.waitForTimeout(400);

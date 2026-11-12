@@ -4,6 +4,7 @@ import type { Page } from 'playwright';
 import { CHAT_MAX_LENGTH } from '../packages/contracts/src/index.js';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { rotateCamera } from './helpers/camera.js';
 
 // Run after build with SU_TEST_DATABASE_URL to use a disposable database schema.
 const app = await createGameServer({
@@ -50,6 +51,7 @@ try {
   );
   await sender.bringToFront();
   await sender.locator('#world').focus();
+  await sender.keyboard.down('e');
   await sender.keyboard.down('d');
   await sender.waitForTimeout(200);
   await sender.keyboard.press('t');
@@ -60,14 +62,26 @@ try {
   const stopped = await sender.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
   );
+  const chatAngle = await sender.evaluate(
+    () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+  );
   await sender.keyboard.type('wasd qer zxft');
   await sender.waitForTimeout(300);
   const afterTyping = await sender.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
   );
   assert.ok(Math.hypot(afterTyping.x - stopped.x, afterTyping.z - stopped.z) < 0.05);
+  assert.ok(
+    Math.abs(
+      (await sender.evaluate(
+        () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+      )) - chatAngle,
+    ) < 0.001,
+    'opening chat stops a held rotation; typing Q/E does not orbit the camera',
+  );
   assert.equal(await sender.locator('#reactions-panel').isVisible(), false);
   await sender.keyboard.up('d');
+  await sender.keyboard.up('e');
   await sender.keyboard.press('Escape');
   assert.equal(await sender.locator('#chat-console').isVisible(), false);
   assert.equal(await sender.locator('#world:focus').count(), 1);
@@ -115,16 +129,22 @@ try {
   await sender.locator('.reaction-choice[data-reaction-id="hello"]').click();
   await observer.locator(`.player-reaction[data-entity-id="${senderId}"]`).waitFor();
   assert.equal(await observer.locator(bubble).isVisible(), true);
-  const before = await sender
+  const before = await observer
     .locator(bubble)
     .evaluate((node) => (node as HTMLElement).style.transform);
   await sender.keyboard.down('d');
   await sender.waitForTimeout(200);
   await sender.keyboard.up('d');
-  await sender.keyboard.press('q');
-  await sender.waitForTimeout(200);
+  await rotateCamera(observer, -0.39, false);
+  await observer.waitForFunction(
+    ({ selector, before }) => {
+      const node = document.querySelector<HTMLElement>(selector);
+      return node && node.style.transform !== before;
+    },
+    { selector: bubble, before },
+  );
   assert.notEqual(
-    await sender.locator(bubble).evaluate((node) => (node as HTMLElement).style.transform),
+    await observer.locator(bubble).evaluate((node) => (node as HTMLElement).style.transform),
     before,
   );
   await sender.keyboard.press('t');

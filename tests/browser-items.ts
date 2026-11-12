@@ -6,6 +6,7 @@ import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { buildWorld } from '../tools/world-build/src/index.js';
+import { rotateCamera } from './helpers/camera.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('Use pnpm test:items:browser.');
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
@@ -130,15 +131,15 @@ try {
   assert.ok(distance((await controls()).position, beforeCancel.position) < 0.03);
   await page.keyboard.up('ArrowUp');
   await page.keyboard.up('d');
-  await page.keyboard.press('e');
-  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
-  assert.ok(Math.abs((await controls()).camera - beforeCancel.camera - Math.PI / 2) < 0.01);
-  await page.keyboard.press('q');
-  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
+  await rotateCamera(page, 0.39);
+  assert.ok(Math.abs((await controls()).camera - beforeCancel.camera - 0.39) < 0.01);
+  await rotateCamera(page, -0.39);
 
   await page.keyboard.press('x');
   await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
   const beforeRotation = await controls();
+  await rotateCamera(page, 0.5);
+  assert.ok(Math.abs((await controls()).camera - beforeRotation.camera) < 0.001);
   // Opposite pairs cancel, then S/D/E apply +15 degrees around each of the three axes.
   for (const key of ['w', 's', 'a', 'd', 'q', 'e', 's', 'd', 'e']) await page.keyboard.press(key);
   await page.waitForTimeout(300);
@@ -191,11 +192,9 @@ try {
     () => (document.querySelector('.placement-toolbar') as HTMLElement).hidden,
   );
   assert.equal(await page.locator('#controls-title').textContent(), 'Свободное движение');
-  await page.keyboard.press('e');
-  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
-  assert.ok(Math.abs((await controls()).camera - beforeRotation.camera - Math.PI / 2) < 0.01);
-  await page.keyboard.press('q');
-  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
+  await rotateCamera(page, 0.39);
+  assert.ok(Math.abs((await controls()).camera - beforeRotation.camera - 0.39) < 0.01);
+  await rotateCamera(page, -0.39);
   await page.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
   await page.waitForFunction(
     () =>

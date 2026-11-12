@@ -4,6 +4,7 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { REACTIONS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { rotateCamera } from './helpers/camera.js';
 
 // Run after build: the two real browsers share an isolated, freshly created world.
 const app = await createGameServer({
@@ -93,16 +94,22 @@ try {
     await sender.locator('#reactions-panel').waitFor({ state: 'hidden' });
     assert.equal(await observer.locator(sticker).count(), 1);
     if (reaction.id === 'hello') {
-      const before = await sender
+      const before = await observer
         .locator(sticker)
         .evaluate((node) => (node as HTMLElement).style.transform);
       await sender.keyboard.down('d');
       await sender.waitForTimeout(300);
       await sender.keyboard.up('d');
-      await sender.keyboard.press('q');
-      await sender.waitForTimeout(200);
+      await rotateCamera(observer, -0.39, false);
+      await observer.waitForFunction(
+        ({ selector, before }) => {
+          const node = document.querySelector<HTMLElement>(selector);
+          return node && node.style.transform !== before;
+        },
+        { selector: sticker, before },
+      );
       assert.notEqual(
-        await sender.locator(sticker).evaluate((node) => (node as HTMLElement).style.transform),
+        await observer.locator(sticker).evaluate((node) => (node as HTMLElement).style.transform),
         before,
       );
       await sender.keyboard.press('r');

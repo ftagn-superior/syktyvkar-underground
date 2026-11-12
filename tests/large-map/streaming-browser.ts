@@ -264,7 +264,7 @@ export async function runStreamingProbe() {
       check(stream.backgroundReady, 'Background did not settle before resource comparison');
       await drain();
       for (let turn = 0; turn < 4; turn++) {
-        view.rotateCamera(1);
+        view.rotateCameraBy(Math.PI / 2);
         for (let i = 0; i < 12; i++) await frame();
       }
       cycles.push(counts());

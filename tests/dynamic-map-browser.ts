@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { rotateCamera } from './helpers/camera.js';
 
 // Functional SwiftShader integration evidence, with economy rasterization for the 12-view matrix.
 // A standard-quality screenshot also compiles both material families. The 90s background wait
@@ -57,7 +58,19 @@ try {
     await page.locator('#world').dispatchEvent('wheel', { deltaY: 10_000 });
     for (let turn = 0; turn < 4; turn++) {
       await page.locator('#world').focus();
-      await page.keyboard.press('e');
+      const before = await page.evaluate(
+        () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+      );
+      const requested = 0.83 + turn * 0.19;
+      await rotateCamera(page, requested);
+      const after = await page.evaluate(
+        () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+      );
+      assert.ok(
+        Math.abs(
+          Math.atan2(Math.sin(after - before - requested), Math.cos(after - before - requested)),
+        ) < 0.01,
+      );
       await page.waitForFunction(
         () => {
           const r = (window as any).__SU_DEBUG__.report().rendering;

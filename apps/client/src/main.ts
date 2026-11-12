@@ -1,6 +1,7 @@
 import './style.css';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
+import { CameraPointerInput } from './input/camera-pointer';
 import { GameSession, readableError, type ConnectionState } from './network/session';
 import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
@@ -53,12 +54,18 @@ let view: WorldView | undefined;
 let loaded = false;
 let starting = false;
 let keyboard: KeyboardInput;
+let cameraPointer: CameraPointerInput | undefined;
 let graphicsLost = false;
 let previousConnection: ConnectionState = 'loading';
 let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
 let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
+
+function resetCameraInput(): void {
+  cameraPointer?.cancel();
+  view?.stopCamera();
+}
 
 function showNotice(message: string): void {
   notice.textContent = message;
@@ -115,7 +122,10 @@ function updateState(state: ConnectionState, message?: string): void {
   document.body.classList.toggle('connection-lost', reconnecting);
   respawn.hidden = !playing;
   leave.hidden = !session.room && !reconnecting;
-  if (state !== 'waiting' && !(playing && previousConnection === 'waiting')) keyboard?.clear();
+  if (state !== 'waiting' && !(playing && previousConnection === 'waiting')) {
+    keyboard?.clear();
+    resetCameraInput();
+  }
   previousConnection = state;
   if (
     playing &&
@@ -159,17 +169,18 @@ inventory = new InventoryPanel(
   },
   (placing) => {
     keyboard?.setPlacementMode(placing);
+    resetCameraInput();
     session.neutral();
     element('controls-title').textContent = placing ? 'Поворот предмета' : 'Свободное движение';
     element('controls-description').textContent = placing
       ? 'W / S — наклон · A / D — поворот · Q / E — крен'
-      : 'WASD / стрелки · Shift — быстрый бег · Q / E — камера';
+      : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
   },
 );
 const accountPreparation = accounts.load();
-function rotateCamera(direction: -1 | 1): void {
+function setCameraRotation(direction: -1 | 0 | 1): void {
   if (!loaded || graphicsLost) return;
-  view?.rotateCamera(direction);
+  view?.setCameraRotation(direction);
 }
 reactions = new ReactionMenu(
   element<HTMLButtonElement>('reactions-toggle'),
@@ -219,6 +230,7 @@ chat = new ChatConsole(
   },
   (open) => {
     keyboard?.setEnabled(!open && !graphicsLost);
+    resetCameraInput();
     session.neutral();
     if (open) {
       reactions?.close(false);
@@ -238,12 +250,21 @@ function renderChat(): void {
   chat?.update({ ...state, available: state.available && !graphicsLost });
 }
 keyboard = new KeyboardInput(
-  () => session.neutral(),
-  rotateCamera,
+  () => {
+    resetCameraInput();
+    session.neutral();
+  },
+  setCameraRotation,
   () => reactions!.toggleOpen(),
   (initialText) => chat!.open(initialText),
   () => animations!.toggleOpen(),
   (axis, direction) => inventory?.rotatePlacement(axis, direction),
+);
+cameraPointer = new CameraPointerInput(
+  canvas,
+  () => loaded && !graphicsLost && keyboard.cameraEnabled,
+  (radians) => view?.rotateCameraBy(radians),
+  () => view?.stopCamera(),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
@@ -308,6 +329,7 @@ async function start(): Promise<void> {
       );
       return;
     }
+    resetCameraInput();
     view?.dispose();
     view = undefined;
     await session.load();
@@ -424,6 +446,7 @@ canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   graphicsLost = true;
   keyboard.setEnabled(false);
+  resetCameraInput();
   session.setInputEnabled(false);
   graphicsRecovery.hidden = false;
   qualitySelect.disabled = true;
@@ -464,6 +487,7 @@ window.addEventListener(
     actionsResize.disconnect();
     session.neutral();
     session.dispose();
+    cameraPointer?.dispose();
     view?.dispose();
     keyboard.dispose();
     reactions?.dispose();

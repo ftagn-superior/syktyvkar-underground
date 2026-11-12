@@ -11,6 +11,7 @@
     "world:build": "node --import tsx tools/world-build/src/index.ts",
     "world:import": "node --import tsx tools/world-build/src/import-district.ts",
     "world:fetch-osm": "node --import tsx tools/world-build/src/fetch-osm.ts",
+    "world:preview-ring": "node --import tsx tools/world-build/src/preview-ring.ts",
     "dev": "pnpm world:build && node tools/dev.mjs",
     "check": "tsc --noEmit && node tools/check-boundaries.mjs",
     "test": "vitest run",

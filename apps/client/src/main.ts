@@ -1,4 +1,8 @@
 import './style.css';
+import './ui/theme.css';
+import './ui/lobby.css';
+import { applyAccent } from './ui/theme';
+import { CharacterPreview } from './ui/character-preview';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
 import { CameraPointerInput } from './input/camera-pointer';
@@ -76,6 +80,46 @@ let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
 let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
+let preview: CharacterPreview | undefined;
+let appliedAccent = '';
+const previewCanvas = element<HTMLCanvasElement>('preview-canvas');
+const previewFallback = element<HTMLImageElement>('preview-fallback');
+
+function setAccent(hex: string): void {
+  if (hex === appliedAccent) return;
+  appliedAccent = hex;
+  applyAccent(hex);
+}
+/** The lobby shows the real model in a private scene; it is released as soon as play starts. */
+function syncPreview(): void {
+  const lobby = !welcome.hidden;
+  if (!lobby) {
+    preview?.dispose();
+    preview = undefined;
+    previewCanvas.hidden = true;
+    previewFallback.hidden = false;
+    return;
+  }
+  setAccent(accounts.previewColor);
+  if (!preview && loaded && !graphicsLost) {
+    try {
+      previewCanvas.hidden = false;
+      preview = new CharacterPreview(
+        previewCanvas,
+        session.definition.simulation.character,
+        accounts.selectedSkinId,
+        accounts.previewColor,
+      );
+      previewFallback.hidden = true;
+    } catch (error) {
+      console.warn('Character preview unavailable', error);
+      previewCanvas.hidden = true;
+      previewFallback.hidden = false;
+    }
+  }
+  preview?.setSkin(accounts.selectedSkinId);
+  preview?.setColor(accounts.previewColor);
+}
 
 function resetCameraInput(): void {
   cameraPointer?.cancel();
@@ -167,6 +211,7 @@ function updateState(state: ConnectionState, message?: string): void {
   const reconnecting = state === 'reconnecting';
   const preparing = state === 'preparing' || state === 'waiting';
   welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && !!session.room);
+  document.body.dataset.scene = welcome.hidden ? 'world' : 'lobby';
   join.disabled =
     graphicsLost ||
     accounts.busy ||
@@ -189,7 +234,7 @@ function updateState(state: ConnectionState, message?: string): void {
               ? 'Перезагрузить страницу'
               : accounts.enabled && !accounts.account
                 ? 'Войти гостем'
-                : 'Войти';
+                : 'Войти в мир';
   status.textContent = {
     loading: 'Загрузка',
     ready: session.reloadRequired
@@ -227,6 +272,11 @@ function updateState(state: ConnectionState, message?: string): void {
   if (message) showNotice(message);
   renderRespawn();
   renderGamePanels();
+  if (playing) {
+    const own = session.room?.state.players.get(session.room.sessionId);
+    if (own?.color) setAccent(own.color);
+  }
+  syncPreview();
 }
 const session = new GameSession(updateState, showNotice);
 const storageStatus = document.createElement('div');

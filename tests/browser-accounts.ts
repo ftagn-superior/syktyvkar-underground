@@ -21,25 +21,26 @@ try {
   await page.locator('#telegram-login').click();
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   await page.locator('#profile-name').fill('Игрок из Сыктывкара');
-  await page.locator('#profile-color').selectOption('indigo');
+  await page.locator('input[name="profile-color"][value="indigo"]').check();
   await page.locator('input[name="avatar-skin"][value="standard"]').check();
-  await page.locator('#profile-save').click();
-  await page.waitForFunction(
-    () => document.querySelector('#account-message')?.textContent === 'Профиль сохранён.',
-  );
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/accounts-profile.png' });
+  // There is no separate save button: entering the world saves the profile.
+  await page.locator('#join:not([disabled])').click();
+  await page.waitForFunction(
+    () => document.querySelector('#connection-status')?.textContent === 'В сети',
+  );
   const first = await page.evaluate(async () => (await fetch('/api/me')).json());
   assert.equal(first.account.profile.displayName, 'Игрок из Сыктывкара');
   assert.equal(first.account.profile.skinId, 'standard');
-  await page.locator('#join:not([disabled])').click();
+  assert.equal(first.account.profile.colorId, 'indigo');
   await page.waitForFunction(
     () => document.querySelector('#connection-status')?.textContent === 'В сети',
   );
   await page.waitForFunction(() =>
     document.querySelector('.player-label')?.textContent?.includes('Игрок из Сыктывкара'),
   );
-  assert.equal([...app.room.state.players.values()][0].color, '#8c9eff');
+  assert.equal([...app.room.state.players.values()][0].color, '#7D86F0');
   assert.equal([...app.room.state.players.values()][0].skinId, 'standard');
   await page.locator('#leave').click();
   await page.locator('#profile-form').waitFor({ state: 'visible' });
@@ -62,7 +63,7 @@ try {
   await page.goto(app.url);
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#profile-name').inputValue(), 'Игрок из Сыктывкара');
-  assert.equal(await page.locator('#profile-color').inputValue(), 'indigo');
+  assert.equal(await page.locator('input[name="profile-color"]:checked').inputValue(), 'indigo');
   assert.equal(await page.locator('input[name="avatar-skin"]:checked').inputValue(), 'minifigure');
   const other = await browser.newContext({ viewport: { width: 960, height: 720 } });
   const second = await other.newPage();

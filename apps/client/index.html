@@ -8,6 +8,12 @@
       name="description"
       content="Syktyvkar Underground — небольшой общий мир. Войдите на полигон, исследуйте площадку и двигайте предметы вместе."
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+    />
     <title>Syktyvkar Underground · Полигон</title>
     <link
       rel="icon"
@@ -29,65 +35,147 @@
     </div>
     <header class="topbar">
       <a class="brand" href="/" aria-label="Syktyvkar Underground, главная">
-        <svg viewBox="0 0 40 44" aria-hidden="true">
-          <path d="m20 2 17 10v20L20 42 3 32V12Z" />
-          <path d="m3 12 17 10 17-10M20 22v20" />
+        <svg width="34" height="38" viewBox="0 0 34 38" fill="none" aria-hidden="true">
+          <path d="M17 2 L32 10.5 L17 19 L2 10.5 Z" fill="var(--accent)" fill-opacity="0.85" />
+          <path d="M2 10.5 L17 19 V36 L2 27.5 Z" fill="var(--accent)" fill-opacity="0.45" />
+          <path d="M17 19 L32 10.5 V27.5 L17 36 Z" fill="var(--accent)" fill-opacity="0.2" />
+          <path
+            d="M17 2 L32 10.5 V27.5 L17 36 L2 27.5 V10.5 Z M2 10.5 L17 19 L32 10.5 M17 19 V36"
+            stroke="var(--accent)"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+          />
         </svg>
-        <span>SYKTYVKAR<span class="brand-secondary">UNDERGROUND</span></span>
+        <span class="brand-text"
+          ><span class="su-wm1">SYKTYVKAR</span><span class="su-wm2">UNDERGROUND</span></span
+        >
       </a>
-      <div class="world-status">
-        <span class="status-dot" id="status-dot"></span
+      <div class="world-status su-facet" style="--cut: 10px; --fbg: rgba(13, 18, 21, 0.88)">
+        <span class="status-dot su-gem sm" id="status-dot"></span
         ><span id="connection-status" role="status">Загрузка</span
-        ><span class="status-divider"></span><span id="player-count">0 / 8</span
-        ><span class="count-label">игроков</span>
+        ><span class="status-divider"></span
+        ><span><b id="player-count">0 / 8</b> <span class="count-label">игроков</span></span>
       </div>
     </header>
-    <main id="welcome" class="welcome" aria-labelledby="welcome-title">
-      <div class="eyebrow">
-        <span></span> ПОЛИГОН 01 <span class="version">TECH DEMO · V0.1</span>
-      </div>
-      <h1 id="welcome-title">Встретимся<br />на полигоне.</h1>
-      <p id="welcome-description">
-        Небольшой мир для общих экспериментов. Двигайтесь, толкайте предметы и обустраивайте общий
-        мир.
-      </p>
-      <fieldset id="avatar-skins" class="avatar-skins">
-        <legend>Внешность персонажа</legend>
-        <div id="avatar-skin-options" class="skin-options"></div>
-      </fieldset>
-      <section id="account-panel" class="account-panel" aria-label="Аккаунт игрока" hidden>
-        <a id="telegram-login" class="button telegram-login" href="/api/auth/telegram"
-          >Войти через Telegram</a
-        >
-        <form id="profile-form" hidden>
-          <label for="profile-name">Имя в игре</label>
-          <input
-            id="profile-name"
-            name="displayName"
-            type="text"
-            autocomplete="nickname"
-            required
-            minlength="2"
-            maxlength="48"
-          />
-          <label for="profile-color">Цвет персонажа</label>
-          <select id="profile-color" name="colorId"></select>
-          <button id="profile-save" class="button quiet" type="submit">Сохранить профиль</button>
-        </form>
-        <button id="account-logout" class="button quiet" type="button" hidden>
-          Выйти из аккаунта
+    <main id="welcome" class="lobby" aria-labelledby="welcome-title">
+      <section class="su-win su-panel su-facet" aria-label="Профиль">
+        <span class="su-corner"></span>
+        <div class="su-eyebrow">
+          <span class="l"><span class="su-gem sm"></span> ПОЛИГОН 01</span>
+          <span class="r">TECH DEMO · V0.1</span>
+        </div>
+        <h1 id="welcome-title" class="su-title">Встретимся<br />на <span>полигоне.</span></h1>
+        <p id="welcome-description" class="su-sub">
+          Небольшой мир для общих экспериментов: двигайтесь, толкайте предметы, общайтесь.
+        </p>
+        <section id="account-panel" class="account-panel" aria-label="Аккаунт игрока" hidden>
+          <a id="telegram-login" class="su-btn accent telegram-login" href="/api/auth/telegram"
+            >Войти через Telegram</a
+          >
+          <form id="profile-form" class="profile-form" hidden>
+            <div class="su-field">
+              <label class="su-lbl" for="profile-name">Имя в игре</label>
+              <input
+                id="profile-name"
+                class="su-input"
+                name="displayName"
+                type="text"
+                autocomplete="nickname"
+                required
+                minlength="2"
+                maxlength="18"
+              />
+            </div>
+            <fieldset class="su-field su-colors" id="profile-colors">
+              <legend class="su-lbl"><span>Цвет</span><b id="profile-color-label"></b></legend>
+              <div id="profile-swatches" class="su-swatches"></div>
+            </fieldset>
+          </form>
+          <button id="account-retry" class="su-btn" type="button" hidden>
+            Повторить загрузку аккаунта
+          </button>
+          <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
+        </section>
+        <div class="su-spacer"></div>
+        <button id="join" class="su-enter" disabled>
+          <span id="join-label">Загружаем мир…</span>
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
         </button>
-        <button id="account-retry" class="button quiet" type="button" hidden>
-          Повторить загрузку аккаунта
-        </button>
-        <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
+        <div class="su-foot">
+          <span id="welcome-note" class="welcome-note"
+            >Без регистрации. Для второго игрока откройте ещё одну вкладку.</span
+          >
+          <button id="account-logout" class="su-link" type="button" hidden>
+            Выйти из аккаунта
+          </button>
+        </div>
       </section>
-      <button id="join" class="button primary" disabled>
-        <span id="join-label">Загружаем мир…</span><span aria-hidden="true">↗</span>
-      </button>
-      <p id="welcome-note" class="welcome-note">
-        Без регистрации. Для второго игрока откройте ещё одну вкладку.
-      </p>
+      <section class="su-win su-preview su-facet" aria-label="Предпросмотр персонажа">
+        <div class="su-win-head">
+          <h2 class="su-win-title"><span class="su-gem"></span>Предпросмотр</h2>
+          <span class="su-chip" id="preview-index">1 / 2</span>
+        </div>
+        <div class="su-stagebox">
+          <svg class="su-stage-art" width="520" height="540" viewBox="0 0 520 540" aria-hidden="true">
+            <g fill="var(--accent)" stroke="#ffffff" stroke-opacity="0.04" id="stage-mesh"></g>
+            <polygon points="0,430 520,430 520,540 0,540" fill="#0a1012" fill-opacity="0.55" />
+            <polygon points="40,470 260,392 480,470 260,540" fill="var(--accent)" fill-opacity="0.07" />
+            <polygon points="150,460 205,488 205,508 150,480" fill="var(--accent)" fill-opacity="0.5" />
+            <polygon points="205,488 315,488 315,508 205,508" fill="var(--accent)" fill-opacity="0.78" />
+            <polygon points="315,488 370,460 370,480 315,508" fill="var(--accent)" fill-opacity="0.34" />
+            <polygon
+              points="150,460 205,432 315,432 370,460 315,488 205,488"
+              fill="#172126"
+              stroke="var(--accent)"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <polygon
+              points="185,460 222,442 298,442 335,460 298,478 222,478"
+              fill="var(--accent)"
+              fill-opacity="0.16"
+            />
+            <polygon points="205,432 315,432 260,460" fill="#ffffff" fill-opacity="0.04" />
+          </svg>
+          <img id="preview-fallback" class="su-figbig" alt="" width="220" height="352" />
+          <canvas id="preview-canvas" class="su-figbig live" aria-hidden="true" hidden></canvas>
+          <button id="preview-prev" class="su-arrow l" type="button" aria-label="Предыдущий персонаж">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button id="preview-next" class="su-arrow r" type="button" aria-label="Следующий персонаж">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
+        </div>
+        <div class="su-plate" aria-live="polite">
+          <div class="n"><span class="su-gem"></span><span id="plate-name">Игрок</span></div>
+          <div class="m" id="plate-model"></div>
+          <div class="d" id="plate-description"></div>
+        </div>
+      </section>
+      <section class="su-win su-list su-facet" aria-label="Выбор персонажа">
+        <div class="su-win-head">
+          <h2 class="su-win-title"><span class="su-gem"></span>Персонажи</h2>
+          <span class="su-chip" id="list-count">2 / 12 открыто</span>
+        </div>
+        <div id="avatar-tabs" class="su-tabs" role="group" aria-label="Фильтр персонажей"></div>
+        <fieldset id="avatar-skins" class="su-scroll avatar-skins">
+          <legend class="sr-only">Внешность персонажа</legend>
+          <div id="avatar-skin-options" class="su-cards"></div>
+          <div class="su-more">Новые персонажи появятся с обновлениями</div>
+        </fieldset>
+      </section>
     </main>
     <div id="notice" class="notice" role="status" hidden></div>
     <section

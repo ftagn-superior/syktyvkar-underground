@@ -130,7 +130,7 @@ try {
     'static preview replaces corrupt cached bytes with one verified network reload',
   );
   assert.equal(matchmakingRequests, 0, 'the header alone cannot reserve a guest seat');
-  assert.equal(await page.locator('#join-label').textContent(), 'Войти');
+  assert.equal(await page.locator('#join-label').textContent(), 'Войти в мир');
   await page.locator('#join').click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',

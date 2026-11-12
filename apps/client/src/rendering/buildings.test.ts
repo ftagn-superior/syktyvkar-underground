@@ -223,3 +223,70 @@ describe('building rendering from the real world bundle', () => {
     }
   });
 });
+
+describe('incremental building ownership', () => {
+  it('pins one shared template across cells, keeps seam instances and disposes its last user', async () => {
+    const view = fixture();
+    const id = 'house-a',
+      version = manifest.assets[id].version;
+    const instance = {
+      ...definition.buildings.find((item) => item.assetId === id)!,
+      entityId: 'seam',
+    };
+    const reads: string[] = [];
+    const read = async (path: string) => {
+      reads.push(path);
+      return readBytes(path);
+    };
+    try {
+      const [releaseA, releaseB] = await Promise.all([
+        view.buildings.prepareAssets(manifest, [id], read),
+        view.buildings.prepareAssets(manifest, [id], read),
+      ]);
+      expect(reads.filter((path) => path.endsWith('.glb'))).toHaveLength(1);
+      view.buildings.add(instance, version);
+      view.buildings.add(instance, version);
+      view.buildings.remove(instance.entityId);
+      releaseA();
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 1, assets: 1 });
+      expect(() => view.buildings.add(instance, 'different')).toThrow('version');
+      view.buildings.remove(instance.entityId);
+      releaseB();
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 0, assets: 0 });
+      expect(view.scene.geometries).toHaveLength(0);
+      expect(view.scene.materials).toHaveLength(0);
+      expect(view.shadow.getShadowMap()!.renderList).toHaveLength(0);
+    } finally {
+      view.dispose();
+    }
+  });
+  it('cancels one cell without aborting another owner of an in-flight model', async () => {
+    const view = fixture();
+    const controller = new AbortController();
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const signals: AbortSignal[] = [];
+    const read = async (path: string, signal?: AbortSignal) => {
+      signals.push(signal!);
+      await gate;
+      return readBytes(path);
+    };
+    const cancelled = view.buildings.prepareAssets(manifest, ['house-a'], read, controller.signal);
+    const retained = view.buildings.prepareAssets(manifest, ['house-a'], read);
+    controller.abort();
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    finish();
+    try {
+      await expect(cancelled).rejects.toThrow('cancelled');
+      const release = await retained;
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(1);
+      release();
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(0);
+    } finally {
+      view.dispose();
+    }
+  });
+});

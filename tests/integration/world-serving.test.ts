@@ -23,7 +23,7 @@ it('serves only release-listed assets and initializes physics from the same rele
     const info = await fetch(app.url + '/api/world').then((r) => r.json());
     const manifest = await fetch(app.url + info.manifestUrl).then((r) => r.json());
     const { definition } = await readWorldDirectory(bundle);
-    expect(manifest.formatVersion).toBe(2);
+    expect(manifest.formatVersion).toBe(3);
     expect(manifest.mapVersion).toBe(info.mapVersion);
     expect(definition.buildings).toHaveLength(2);
     expect(app.room.diagnostics().bodies).toBe(

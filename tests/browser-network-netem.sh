@@ -7,7 +7,7 @@ if [[ "${1-}" != "--inside" ]]; then
     command -v "$executable" >/dev/null || { echo "Missing test prerequisite: $executable" >&2; exit 1; }
   done
   export SU_TEST_HOST_NETNS="$(readlink /proc/self/ns/net)"
-  exec unshare --net bash "$0" --inside
+  exec unshare --user --map-root-user --net bash "$0" --inside
 fi
 ip link set lo up
 mkdir -p output/playwright/network

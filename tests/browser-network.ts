@@ -19,7 +19,7 @@ type Diagnostic = {
   stalled: boolean;
   serverTick: number;
   authoritative: { entityId: string; position: Position; revision: number };
-  predicted: { position: Position };
+  predicted: { position: Position } | null;
   crate: { position: Position; velocity: Position; revision: number };
 };
 const externalTarget = process.env.SU_TEST_URL ? new URL(process.env.SU_TEST_URL) : undefined;
@@ -57,7 +57,12 @@ async function navigate(page: Page, target: { x: number; z: number }, tolerance 
   let closest = Infinity;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
-    assert.equal(state.connection, 'playing');
+    assert.ok(['playing', 'waiting', 'preparing'].includes(state.connection));
+    if (!state.predicted || state.stalled || state.connection !== 'playing') {
+      await keys(page, []);
+      await sleep(35);
+      continue;
+    }
     const position = state.predicted.position;
     const dx = target.x - position.x,
       dz = target.z - position.z;
@@ -88,7 +93,7 @@ async function measure(pages: Page[], durationMs: number, action: () => Promise<
   while (performance.now() - start < durationMs) {
     const states = await Promise.all(pages.map(snapshot));
     states.forEach((state, index) => {
-      assert.equal(state.connection, 'playing');
+      assert.ok(['playing', 'waiting'].includes(state.connection));
       maxPendingInputs = Math.max(maxPendingInputs, state.pendingInputs);
       stalledSamples += Number(state.stalled);
       observations++;
@@ -290,7 +295,9 @@ try {
       await navigate(pages[0], { x: -4, z: -4 });
       await navigate(pages[0], { x: -4, z: 2 });
       const crateBefore = (await snapshot(pages[0])).crate.position;
-      const direction = crateBefore.z < -4 ? 1 : -1;
+      // Push into the clear southern half of physics-lab. A long northward push
+      // can put the subsequent opposite-side waypoint inside house-b (z < -8).
+      const direction = 1;
       const behindZ = crateBefore.z - direction * 2;
       await Promise.all(
         pages.map((page, index) =>
@@ -314,10 +321,20 @@ try {
       // Opposed contact: use the clear central north/south corridor. The second
       // player walks around the east side; neither route crosses through the box.
       const center = (await snapshot(pages[0])).crate.position;
-      await navigate(pages[1], { x: center.x + 1.8, z: center.z - direction * 1.5 });
-      await navigate(pages[1], { x: center.x + 1.8, z: center.z + direction * 2 });
-      await navigate(pages[1], { x: center.x, z: center.z + direction * 2 });
-      await navigate(pages[0], { x: center.x, z: center.z - direction * 2 });
+      // A rotating box can deflect either actor past it. First back away on the
+      // actor's current side, then walk an explicit east corridor, not a diagonal through the box.
+      async function approach(page: Page, sign: number) {
+        const data = await snapshot(page);
+        const own = (data.predicted ?? data.authoritative).position;
+        const clearZ = center.z + (own.z >= center.z ? 3 : -3);
+        const clearX = center.x + 2.5;
+        await navigate(page, { x: own.x, z: clearZ });
+        await navigate(page, { x: clearX, z: clearZ });
+        await navigate(page, { x: clearX, z: center.z + sign * 2 });
+        await navigate(page, { x: center.x, z: center.z + sign * 2 });
+      }
+      await approach(pages[1], direction);
+      await approach(pages[0], -direction);
       const opposed = await measure(pages, 4500, async () => {
         await Promise.all(
           pages.map((page, index) =>

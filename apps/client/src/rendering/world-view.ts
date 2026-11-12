@@ -14,11 +14,20 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
-import type { EntityState, Vec3, WorldDefinition, WorldManifest } from '@su/contracts';
-import { decorateWorld, obstacleAccent } from './world-decoration';
+import type {
+  EntityState,
+  WorldDefinition,
+  WorldHeader,
+  WorldCell,
+  WorldManifest,
+  StaticEntityDefinition,
+  BuildingInstance,
+} from '@su/contracts';
+import { StaticViews } from './statics';
+import { decorateWorld } from './world-decoration';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { BuildingViews } from './buildings';
-import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
+import { CameraTurn, INITIAL_CAMERA_ANGLE, orthographicFrame } from './camera-controller';
 
 export interface DisplayEntity extends EntityState {
   name?: string;
@@ -32,7 +41,6 @@ type EntityView = {
   labelText?: string;
   labelTransform?: string;
 };
-const vector = (p: Vec3) => new Vector3(p.x, p.y, p.z);
 
 export class WorldView {
   readonly engine: Engine;
@@ -40,6 +48,7 @@ export class WorldView {
   private readonly camera: ArcRotateCamera;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
+  private readonly statics: StaticViews;
   private readonly cameraTurn = new CameraTurn();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
@@ -62,10 +71,11 @@ export class WorldView {
   private ownPosition?: Vector3;
   private disposed = false;
   private preparation?: Promise<void>;
+  private readonly cellPreparations = new Set<Promise<unknown>>();
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly labels: HTMLElement,
-    private readonly definition: WorldDefinition,
+    private readonly definition: WorldDefinition | WorldHeader,
     quality: RenderQuality = 'standard',
   ) {
     this.quality = quality;
@@ -107,35 +117,13 @@ export class WorldView {
     this.shadow.blurKernel = 16;
     this.shadow.setDarkness(0.25);
     this.buildings = new BuildingViews(this.scene, this.shadow, definition);
-    const staticMaterials = new Map<string, StandardMaterial>();
-    for (const entity of definition.entities) {
-      if (entity.kind !== 'obstacle') continue;
-      const mesh = MeshBuilder.CreateBox(
-        entity.entityId,
-        { width: entity.size.x, height: entity.size.y, depth: entity.size.z },
-        this.scene,
-      );
-      mesh.position.copyFrom(vector(entity.position));
-      let material = staticMaterials.get(entity.color);
-      if (!material) {
-        material = this.material(`static-${entity.color}`, entity.color);
-        staticMaterials.set(entity.color, material);
-      }
-      mesh.material = material;
-      mesh.receiveShadows = true;
-      mesh.isPickable = false;
-      mesh.freezeWorldMatrix();
-      if (entity.entityId !== 'ground-01') {
-        this.shadow.addShadowCaster(mesh);
-        mesh.enableEdgesRendering();
-        mesh.edgesWidth = 0.6;
-        const accent = obstacleAccent(entity);
-        mesh.edgesColor = accent
-          ? Color4.FromHexString(`${accent}66`)
-          : new Color4(0.65, 0.77, 0.79, 0.18);
-      }
+    this.statics = new StaticViews(this.scene, this.shadow);
+    if ('entities' in definition) {
+      for (const entity of definition.entities)
+        if (entity.kind === 'obstacle')
+          this.statics.add(entity as StaticEntityDefinition, 'initial');
+      decorateWorld(this.scene, definition);
     }
-    decorateWorld(this.scene, definition);
     window.addEventListener('resize', this.resize);
     document.addEventListener('visibilitychange', this.visibilityChanged);
     this.engine.runRenderLoop(() => {
@@ -196,6 +184,63 @@ export class WorldView {
     this.preparation = this.buildings.prepare(manifest, readBytes);
     return this.preparation;
   }
+  prepareCellAssets(
+    manifest: WorldManifest,
+    ids: string[],
+    read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
+    signal?: AbortSignal,
+  ) {
+    const pending = this.buildings.prepareAssets(manifest, ids, read, signal);
+    this.cellPreparations.add(pending);
+    void pending.then(
+      () => this.cellPreparations.delete(pending),
+      () => this.cellPreparations.delete(pending),
+    );
+    return pending;
+  }
+  /** Decorations stay local to a one-cell arena and are released with that cell. */
+  activateCell(cell: WorldCell): () => void {
+    const meshes = new Set(this.scene.meshes);
+    const materials = new Set(this.scene.materials);
+    const textures = new Set(this.scene.textures);
+    const release = () => {
+      for (const mesh of [...this.scene.meshes]) if (!meshes.has(mesh)) mesh.dispose();
+      for (const material of [...this.scene.materials])
+        if (!materials.has(material)) material.dispose(false, false);
+      for (const texture of [...this.scene.textures]) if (!textures.has(texture)) texture.dispose();
+    };
+    try {
+      const crate =
+        'crate' in this.definition
+          ? this.definition.crate
+          : this.definition.entities.find((entity) => entity.kind === 'crate')!;
+      decorateWorld(this.scene, {
+        bounds: this.definition.bounds,
+        spawnPoints: this.definition.spawnPoints,
+        entities: [...cell.statics, crate],
+      });
+      // Capture only decoration resources; later characters/buildings belong to other owners.
+      const ownedMeshes = this.scene.meshes.filter((mesh) => !meshes.has(mesh));
+      const ownedMaterials = this.scene.materials.filter((material) => !materials.has(material));
+      const ownedTextures = this.scene.textures.filter((texture) => !textures.has(texture));
+      return () => {
+        for (const mesh of ownedMeshes) mesh.dispose();
+        for (const material of ownedMaterials) material.dispose(false, false);
+        for (const texture of ownedTextures) texture.dispose();
+      };
+    } catch (error) {
+      release();
+      throw error;
+    }
+  }
+  retainStatic(item: StaticEntityDefinition | BuildingInstance, version: string) {
+    if ('assetId' in item) this.buildings.add(item, version);
+    else this.statics.add(item, version);
+  }
+  releaseStatic(entityId: string) {
+    this.buildings.remove(entityId);
+    this.statics.remove(entityId);
+  }
   buildingDiagnostics() {
     return this.buildings.diagnostics();
   }
@@ -210,22 +255,36 @@ export class WorldView {
       pixelRatio: window.devicePixelRatio,
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
+      dynamicEntities: [...this.entities].map(([entityId, view]) => ({
+        entityId,
+        position: { x: view.root.position.x, y: view.root.position.y, z: view.root.position.z },
+      })),
+      geometries: this.scene.geometries.length,
+      nodes: this.scene.transformNodes.length,
+      textures: this.scene.textures.length,
+      shadowCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
       meshes: this.scene.meshes.length,
       materials: this.scene.materials.length,
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),
-      camera: { azimuth: this.cameraAngle, turning: this.cameraTurn.turning },
+      camera: {
+        azimuth: this.cameraAngle,
+        turning: this.cameraTurn.turning,
+        halfWidth: this.camera.orthoRight!,
+        halfHeight: this.camera.orthoTop!,
+        beta: this.camera.beta,
+      },
       buildings: this.buildings.aggregateDiagnostics(),
     };
   }
   private sizeCamera(): void {
     // Quality changes raster resolution, never the world visible through the camera.
-    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-    const halfHeight = aspect < 1 ? 20 : 15;
+    const aspect = Math.max(1, this.canvas.clientWidth) / Math.max(1, this.canvas.clientHeight);
+    const { halfHeight, halfWidth } = orthographicFrame(aspect);
     this.camera.orthoTop = halfHeight;
     this.camera.orthoBottom = -halfHeight;
-    this.camera.orthoLeft = -halfHeight * aspect;
-    this.camera.orthoRight = halfHeight * aspect;
+    this.camera.orthoLeft = -halfWidth;
+    this.camera.orthoRight = halfWidth;
   }
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
@@ -312,7 +371,10 @@ export class WorldView {
         marker.material = markerMaterial;
       }
     } else {
-      const size = this.definition.entities.find((item) => item.entityId === entity.entityId)!.size;
+      const size =
+        'crate' in this.definition
+          ? this.definition.crate.size
+          : this.definition.entities.find((item) => item.entityId === entity.entityId)!.size;
       mesh = MeshBuilder.CreateBox(
         'crate',
         { width: size.x, height: size.y, depth: size.z },
@@ -383,6 +445,7 @@ export class WorldView {
     this.engine.stopRenderLoop();
     this.labels.replaceChildren();
     this.buildings.dispose();
+    this.statics.dispose();
     this.instrumentation.dispose();
     const releaseGraphics = () => {
       this.scene.dispose();
@@ -390,7 +453,8 @@ export class WorldView {
     };
     // Stop gameplay immediately, but retain the graphics context while started glTF
     // loaders unwind. They may allocate shared scene textures after cancellation.
-    if (this.preparation) void this.preparation.then(releaseGraphics, releaseGraphics);
+    if (this.preparation || this.cellPreparations.size)
+      void Promise.allSettled([this.preparation, ...this.cellPreparations]).then(releaseGraphics);
     else releaseGraphics();
   }
 }

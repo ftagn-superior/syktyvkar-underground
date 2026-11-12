@@ -2,7 +2,7 @@ import type { BuildingPhysicsAsset, StaticCollider, Vec3, WorldDefinition } from
 
 export function physicsFixture(): WorldDefinition {
   return {
-    formatVersion: 2,
+    formatVersion: 3,
     worldId: 'test',
     bounds: { min: { x: -20, y: -10, z: -20 }, max: { x: 20, y: 10, z: 20 } },
     simulation: {

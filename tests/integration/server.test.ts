@@ -1,3 +1,4 @@
+import { prepareSdk } from '../helpers/prepare.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Client, CloseCode, type Room } from '@colyseus/sdk';
 import { createGameServer } from '../../apps/server/src/index.js';
@@ -34,7 +35,7 @@ describe('one authoritative world over actual WebSocket connections', () => {
     room.onMessage('actionResult', () => {});
     rooms.add(room);
     if (ready) {
-      room.send('clientReady');
+      prepareSdk(room);
       await until(() => !!room.state?.players?.has(room.sessionId));
     } else await until(() => !!room.state?.worldEpoch);
     return room;
@@ -61,14 +62,18 @@ describe('one authoritative world over actual WebSocket connections', () => {
     input.send();
     await sleep(80);
     expect(app.room.state.players.size).toBe(0);
-    first.send('clientReady');
-    first.send('clientReady');
-    await until(() => first.state.players.has(first.sessionId));
+    const preparation = prepareSdk(first);
+    first.send('requestArea');
+    await until(() => preparation.plans.length > 0);
+    preparation.ready();
+    await until(() => first.state.players?.has(first.sessionId));
     const second = await join();
     await until(() => first.state.players.size === 2 && second.state.players.size === 2);
     expect(first.state.worldEpoch).toBe(second.state.worldEpoch);
-    expect(first.state.crate.entityId).toBe('crate-01');
-    expect(first.state.crate.entityId).toBe(second.state.crate.entityId);
+    expect(first.state.crates.get('crate-01')!.entityId).toBe('crate-01');
+    expect(first.state.crates.get('crate-01')!.entityId).toBe(
+      second.state.crates.get('crate-01')!.entityId,
+    );
     expect(app.room.diagnostics().players).toBe(2);
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);
   });
@@ -149,6 +154,7 @@ describe('one authoritative world over actual WebSocket connections', () => {
     await until(() => app.room.diagnostics().reserved === 1);
     const recovered = await sdk.reconnect<WorldState>(token);
     recovered.reconnection.enabled = false;
+    prepareSdk(recovered);
     recovered.onMessage('resync', () => {});
     rooms.delete(room);
     rooms.add(recovered);
@@ -182,6 +188,7 @@ describe('one authoritative world over actual WebSocket connections', () => {
     expect(app.room.diagnostics().players).toBe(1);
     expect(app.room.diagnostics().sessions).toBe(1);
     expect(app.room.diagnostics().reserved).toBe(0);
+    await until(() => app.room.diagnostics().preparing === 0);
     const input = room.input({ type: MoveInputSchema, mode: 'reliable' });
     const initialX = room.state.players.get(room.sessionId)!.x;
     for (let i = 0; i < 10; i++) {
@@ -229,7 +236,7 @@ describe('one authoritative world over actual WebSocket connections', () => {
       await until(() => app.room.diagnostics().sessions === 0);
       expect(app.room.diagnostics().bodies).toBe(initial);
     }
-    expect(app.room.state.crate.entityId).toBe('crate-01');
+    expect(app.room.state.crates.get('crate-01')!.entityId).toBe('crate-01');
   });
 
   it('preserves an unchanged axis when a diagonal delta becomes horizontal', async () => {
@@ -262,6 +269,6 @@ describe('one authoritative world over actual WebSocket connections', () => {
     await expect(sdk.reconnect(token)).rejects.toThrow();
     const fresh = await join();
     expect(fresh.state.worldEpoch).toBe(info.worldEpoch);
-    expect(fresh.state.crate.revision).toBe(0);
+    expect(fresh.state.crates.get('crate-01')!.revision).toBe(0);
   });
 });

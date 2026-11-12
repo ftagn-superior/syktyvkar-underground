@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION } from '@su/contracts';
+import { PROTOCOL_VERSION, WORLD_FORMAT_VERSION } from '@su/contracts';
 import type { GameSession } from '../network/session';
 import type { WorldView } from '../rendering/world-view';
 
@@ -11,8 +11,11 @@ export function diagnosticReport(
   graphicsLost: boolean,
 ) {
   const data = session.diagnostics();
+  const { dynamicEntities: _dynamic, ...rendering } = view?.renderingDiagnostics() ?? {};
+  const { entities: staticCount, ...streaming } = data.streaming ?? {};
+  const { entities: physicsStaticCount, ...physics } = data.physics ?? {};
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     generatedAt: new Date().toISOString(),
     build: { ...__SU_BUILD_INFO__, mode: import.meta.env.MODE },
     environment: {
@@ -28,10 +31,22 @@ export function diagnosticReport(
     },
     versions: {
       protocol: PROTOCOL_VERSION,
+      worldFormat: WORLD_FORMAT_VERSION,
       map: data.mapVersion ?? null,
       simulation: data.simulationConfigHash ?? null,
     },
-    rendering: view?.renderingDiagnostics() ?? null,
+    rendering: view ? rendering : null,
+    streaming: data.streaming ? { ...streaming, staticCount } : null,
+    physics: data.physics ? { ...physics, staticCount: physicsStaticCount } : null,
+    prediction: {
+      historyInputs: data.historyInputs,
+      historyCells: data.historyCells,
+      historyMaxAgeMs: data.historyMaxAgeMs,
+      pauses: data.predictionPauses,
+      replaySteps: data.replaySteps,
+      worlds: data.predictionWorlds,
+    },
+    preparations: data.preparations,
     metrics: {
       connection: data.connection,
       playerCount: data.playerCount,

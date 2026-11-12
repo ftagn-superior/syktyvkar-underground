@@ -6,12 +6,23 @@ import {
   type BuildingPhysicsAsset,
   type Quat,
   type Vec3,
-  type WorldBase,
+  type WorldHeader,
+  type EntityDefinition,
+  type LocalStaticSet,
   type WorldCell,
   type WorldDefinition,
   type WorldManifest,
 } from './index.js';
-import { validateWorld } from './world.js';
+import { validateWorld, validateWorldHeader, validateEntities } from './world.js';
+import {
+  createWorldGrid,
+  worldCellBounds,
+  buildingBounds,
+  primitiveBounds,
+  cellsIntersectingBounds,
+  mergeWorldCells,
+  transformWorldPoint,
+} from './world-grid.js';
 import { canonicalJson } from './world.js';
 import { validateClosedMeshTopology } from './mesh-volume.js';
 
@@ -50,16 +61,6 @@ export function validateBounds(value: unknown): asserts value is Bounds {
   for (const axis of ['x', 'y', 'z'] as const)
     requireValue(value.min[axis] < value.max[axis], 'ordered bounds');
 }
-function transformed(point: Vec3, position: Vec3, q: Quat): Vec3 {
-  const tx = 2 * (q.y * point.z - q.z * point.y);
-  const ty = 2 * (q.z * point.x - q.x * point.z);
-  const tz = 2 * (q.x * point.y - q.y * point.x);
-  return {
-    x: position.x + point.x + q.w * tx + q.y * tz - q.z * ty,
-    y: position.y + point.y + q.w * ty + q.z * tx - q.x * tz,
-    z: position.z + point.z + q.w * tz + q.x * ty - q.y * tx,
-  };
-}
 function boundsCorners(bounds: Bounds): Vec3[] {
   return [bounds.min.x, bounds.max.x].flatMap((x) =>
     [bounds.min.y, bounds.max.y].flatMap((y) =>
@@ -79,7 +80,7 @@ export function validateBuildingBounds(
 ): void {
   requireValue(
     boundsCorners(asset.bounds).every((point) =>
-      containsPoint(bounds, transformed(point, instance.position, instance.rotation)),
+      containsPoint(bounds, transformWorldPoint(point, instance.position, instance.rotation)),
     ),
     `building ${instance.entityId} outside containing bounds`,
   );
@@ -124,10 +125,20 @@ export function validateBuildingInstances(value: unknown): asserts value is Buil
 }
 export function validateWorldCell(value: unknown): WorldCell {
   requireValue(
-    object(value) && value.formatVersion === 1 && stringMatches(value.cellId, idPattern),
+    object(value) && value.formatVersion === 2 && stringMatches(value.cellId, idPattern),
     'cell',
   );
   validateBuildingInstances(value.buildings);
+  validateEntities(value.statics);
+  requireValue(
+    value.statics.every((item: EntityDefinition) => item.kind === 'obstacle'),
+    'cell statics only',
+  );
+  const ids = new Set(value.statics.map((item: EntityDefinition) => item.entityId));
+  for (const building of value.buildings) {
+    requireValue(!ids.has(building.entityId), `duplicate ID ${building.entityId}`);
+    ids.add(building.entityId);
+  }
   return value as WorldCell;
 }
 export function validateBuildingPhysicsAsset(value: unknown): BuildingPhysicsAsset {
@@ -164,7 +175,7 @@ export function validateBuildingPhysicsAsset(value: unknown): BuildingPhysicsAss
       const localBounds = { min: { x: -half.x, y: -half.y, z: -half.z }, max: half };
       requireValue(
         boundsCorners(localBounds).every((point) =>
-          containsPoint(value.bounds, transformed(point, shape.position, shape.rotation)),
+          containsPoint(value.bounds, transformWorldPoint(point, shape.position, shape.rotation)),
         ),
         'collider outside asset bounds',
       );
@@ -203,7 +214,7 @@ export function validateBuildingPhysicsAsset(value: unknown): BuildingPhysicsAss
       for (let i = 0; i < shape.vertices.length; i += 3) {
         const point = { x: shape.vertices[i], y: shape.vertices[i + 1], z: shape.vertices[i + 2] };
         requireValue(
-          containsPoint(value.bounds, transformed(point, shape.position, shape.rotation)),
+          containsPoint(value.bounds, transformWorldPoint(point, shape.position, shape.rotation)),
           'collider outside asset bounds',
         );
       }
@@ -249,6 +260,12 @@ export function validateWorldManifest(value: unknown): WorldManifest {
     'manifest hash',
   );
   validateBounds(value.bounds);
+  requireValue(object(value.grid), 'grid required');
+  const expectedGrid = createWorldGrid(value.bounds, value.grid.cellSize);
+  requireValue(
+    canonicalJson(value.grid) === canonicalJson(expectedGrid),
+    'grid disagrees with bounds',
+  );
   requireValue(
     object(value.files) &&
       Object.keys(value.files).length > 0 &&
@@ -265,7 +282,10 @@ export function validateWorldManifest(value: unknown): WorldManifest {
   };
   fileRef(value.worldFile);
   requireValue(
-    Array.isArray(value.cells) && value.cells.length > 0 && value.cells.length <= 10_000,
+    Array.isArray(value.cells) &&
+      value.cells.length > 0 &&
+      value.cells.length <= 10_000 &&
+      value.cells.length === expectedGrid.columns * expectedGrid.rows,
     'manifest cells',
   );
   const cells = new Set<string>();
@@ -277,6 +297,18 @@ export function validateWorldManifest(value: unknown): WorldManifest {
     cells.add(cell.cellId);
     fileRef(cell.file);
     validateBounds(cell.bounds);
+    requireValue(
+      canonicalJson(cell.bounds) ===
+        canonicalJson(worldCellBounds(value.bounds, expectedGrid, cell.cellId)),
+      'cell bounds disagree with grid',
+    );
+    requireValue(
+      Array.isArray(cell.assetIds) &&
+        cell.assetIds.length <= 10_000 &&
+        cell.assetIds.every((id: unknown) => stringMatches(id, assetPattern)) &&
+        canonicalJson(cell.assetIds) === canonicalJson([...new Set(cell.assetIds)].sort()),
+      'cell asset dependencies',
+    );
   }
   requireValue(
     object(value.assets) && Object.keys(value.assets).length <= 10_000,
@@ -295,6 +327,9 @@ export function validateWorldManifest(value: unknown): WorldManifest {
     fileRef(asset.partsFile);
     fileRef(asset.collisionFile);
   }
+  for (const cell of value.cells)
+    for (const id of cell.assetIds)
+      requireValue(Object.hasOwn(value.assets, id), `missing asset ${id}`);
   return value as WorldManifest;
 }
 /** Hash this canonical value to identify an immutable release, including every dependency. */
@@ -320,93 +355,236 @@ export function simulationProjection(world: WorldDefinition) {
     },
     bounds: { min: vector(world.bounds.min), max: vector(world.bounds.max) },
     spawnPoints: world.spawnPoints.map(vector),
-    entities: world.entities.map((e) => ({
-      entityId: e.entityId,
-      kind: e.kind,
-      position: vector(e.position),
-      size: vector(e.size),
-      mass: e.mass,
-      friction: e.friction,
-      restitution: e.restitution,
-    })),
-    buildings: world.buildings.map((instance) => ({
-      entityId: instance.entityId,
-      assetId: instance.assetId,
-      position: vector(instance.position),
-      rotation: rotation(instance.rotation),
-    })),
+    entities: [...world.entities]
+      .sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0))
+      .map((e) => ({
+        entityId: e.entityId,
+        kind: e.kind,
+        position: vector(e.position),
+        size: vector(e.size),
+        mass: e.mass,
+        friction: e.friction,
+        restitution: e.restitution,
+      })),
+    buildings: [...world.buildings]
+      .sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0))
+      .map((instance) => ({
+        entityId: instance.entityId,
+        assetId: instance.assetId,
+        position: vector(instance.position),
+        rotation: rotation(instance.rotation),
+      })),
     buildingAssets: Object.fromEntries(
-      Object.entries(world.buildingAssets).map(([id, a]) => [
-        id,
-        {
-          assetId: a.assetId,
-          colliders: a.colliders.map((collider) => {
-            const common = {
-              id: collider.id,
-              kind: collider.kind,
-              position: vector(collider.position),
-              rotation: rotation(collider.rotation),
-              friction: collider.friction,
-              restitution: collider.restitution,
-            };
-            return collider.kind === 'box'
-              ? { ...common, size: vector(collider.size) }
-              : { ...common, vertices: collider.vertices, indices: collider.indices };
-          }),
-        },
-      ]),
+      Object.entries(world.buildingAssets)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([id, a]) => [
+          id,
+          {
+            assetId: a.assetId,
+            colliders: a.colliders.map((collider) => {
+              const common = {
+                id: collider.id,
+                kind: collider.kind,
+                position: vector(collider.position),
+                rotation: rotation(collider.rotation),
+                friction: collider.friction,
+                restitution: collider.restitution,
+              };
+              return collider.kind === 'box'
+                ? { ...common, size: vector(collider.size) }
+                : { ...common, vertices: collider.vertices, indices: collider.indices };
+            }),
+          },
+        ]),
     ),
   };
 }
+
+export const WORLD_RESOURCE_LIMITS = Object.freeze({
+  cellBytes: 512 * 1024,
+  headerBytes: 256 * 1024,
+  modelBytes: 4 * 1024 * 1024,
+  collisionBytes: 8 * 1024 * 1024,
+  partsBytes: 512 * 1024,
+});
+export type ReadVerifiedBytes = (path: string, expectedHash: string) => Promise<Uint8Array>;
+
+async function readJson(
+  manifest: WorldManifest,
+  read: ReadVerifiedBytes,
+  path: string,
+  maxBytes: number,
+) {
+  requireValue(Object.hasOwn(manifest.files, path), `unlisted file ${path}`);
+  const bytes = await read(path, manifest.files[path]);
+  requireValue(bytes.byteLength <= maxBytes, `resource byte limit: ${path}`);
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+export async function loadWorldHeader(
+  manifest: WorldManifest,
+  read: ReadVerifiedBytes,
+): Promise<WorldHeader> {
+  validateWorldManifest(manifest);
+  const header = validateWorldHeader(
+    await readJson(manifest, read, manifest.worldFile, WORLD_RESOURCE_LIMITS.headerBytes),
+  );
+  requireValue(header.worldId === manifest.worldId, 'world identity mismatch');
+  requireValue(
+    canonicalJson(header.bounds) === canonicalJson(manifest.bounds),
+    'world bounds mismatch',
+  );
+  return header;
+}
+
+function validateCellPlacement(manifest: WorldManifest, cell: WorldCell) {
+  const entry = manifest.cells.find((item) => item.cellId === cell.cellId);
+  requireValue(entry, 'cell identity mismatch');
+  const assetIds = [...new Set(cell.buildings.map((building) => building.assetId))].sort();
+  requireValue(
+    canonicalJson(assetIds) === canonicalJson(entry.assetIds),
+    'cell asset dependency mismatch',
+  );
+  for (const item of cell.statics) {
+    requireValue(
+      cellsIntersectingBounds(manifest.bounds, manifest.grid, primitiveBounds(item)).includes(
+        cell.cellId,
+      ),
+      `static ${item.entityId} outside cell`,
+    );
+  }
+  for (const item of cell.buildings) {
+    const asset = manifest.assets[item.assetId];
+    requireValue(asset, `missing asset ${item.assetId}`);
+    validateBuildingBounds(
+      item,
+      { assetId: item.assetId, bounds: asset.bounds, colliders: [] },
+      manifest.bounds,
+    );
+    requireValue(
+      cellsIntersectingBounds(
+        manifest.bounds,
+        manifest.grid,
+        buildingBounds(item, asset.bounds),
+      ).includes(cell.cellId),
+      `building ${item.entityId} outside cell`,
+    );
+  }
+}
+
+export async function loadWorldCell(
+  manifest: WorldManifest,
+  cellId: string,
+  read: ReadVerifiedBytes,
+): Promise<WorldCell> {
+  validateWorldManifest(manifest);
+  const entry = manifest.cells.find((item) => item.cellId === cellId);
+  requireValue(entry, `unknown cell ${cellId}`);
+  const cell = validateWorldCell(
+    await readJson(manifest, read, entry.file, WORLD_RESOURCE_LIMITS.cellBytes),
+  );
+  requireValue(cell.cellId === entry.cellId, 'cell identity mismatch');
+  validateCellPlacement(manifest, cell);
+  return cell;
+}
+
+/** Reads only one cell and its collider dependencies; never fetches visual models or remote assets. */
+export async function loadCellPhysics(
+  manifest: WorldManifest,
+  cellId: string,
+  read: ReadVerifiedBytes,
+): Promise<LocalStaticSet> {
+  const cell = await loadWorldCell(manifest, cellId, read);
+  const entry = manifest.cells.find((item) => item.cellId === cellId)!;
+  const assets = await Promise.all(
+    entry.assetIds.map(async (id) => {
+      const descriptor = manifest.assets[id];
+      const asset = validateBuildingPhysicsAsset(
+        await readJson(
+          manifest,
+          read,
+          descriptor.collisionFile,
+          WORLD_RESOURCE_LIMITS.collisionBytes,
+        ),
+      );
+      requireValue(asset.assetId === id, 'asset key disagrees');
+      requireValue(
+        canonicalJson(asset.bounds) === canonicalJson(descriptor.bounds),
+        'asset bounds mismatch',
+      );
+      return [id, asset] as const;
+    }),
+  );
+  return { cell, buildingAssets: Object.fromEntries(assets) };
+}
+
 /** Read callbacks verify SHA-256 bytes at the application boundary (HTTP or filesystem). */
 export async function loadWorldBundle(
   manifest: WorldManifest,
-  readVerifiedBytes: (path: string, expectedHash: string) => Promise<Uint8Array>,
+  read: ReadVerifiedBytes,
 ): Promise<WorldDefinition> {
-  validateWorldManifest(manifest);
-  const readJson = async (path: string) =>
-    JSON.parse(new TextDecoder().decode(await readVerifiedBytes(path, manifest.files[path])));
-  const [base, cells, assets] = await Promise.all([
-    readJson(manifest.worldFile) as Promise<WorldBase>,
+  const header = await loadWorldHeader(manifest, read);
+  const [cells, assets] = await Promise.all([
     Promise.all(
       manifest.cells.map(async (entry) => {
-        const cell = validateWorldCell(await readJson(entry.file));
+        const cell = validateWorldCell(
+          await readJson(manifest, read, entry.file, WORLD_RESOURCE_LIMITS.cellBytes),
+        );
         requireValue(cell.cellId === entry.cellId, 'cell identity mismatch');
+        validateCellPlacement(manifest, cell);
         return cell;
       }),
     ),
     Promise.all(
       Object.entries(manifest.assets).map(
-        async ([assetId, entry]) => [assetId, await readJson(entry.collisionFile)] as const,
+        async ([id, entry]) =>
+          [
+            id,
+            await readJson(
+              manifest,
+              read,
+              entry.collisionFile,
+              WORLD_RESOURCE_LIMITS.collisionBytes,
+            ),
+          ] as const,
       ),
     ),
   ]);
+  const merged = mergeWorldCells(cells);
+  const { crate, ...parameters } = header;
   const world = validateWorld({
-    ...base,
-    buildings: cells.flatMap((cell) => cell.buildings),
+    ...parameters,
+    entities: [...merged.statics, crate],
+    buildings: merged.buildings,
     buildingAssets: Object.fromEntries(assets),
   });
-  requireValue(world.worldId === manifest.worldId, 'world identity mismatch');
-  requireValue(
-    canonicalJson(world.bounds) === canonicalJson(manifest.bounds),
-    'world bounds mismatch',
-  );
-  // validateWorld checks every physics asset once before we use its fields.
-  // Mesh topology validation must not repeat for the same parsed asset.
-  for (const [assetId, entry] of Object.entries(manifest.assets)) {
+  for (const [id, entry] of Object.entries(manifest.assets))
     requireValue(
-      canonicalJson(world.buildingAssets[assetId].bounds) === canonicalJson(entry.bounds),
+      canonicalJson(world.buildingAssets[id].bounds) === canonicalJson(entry.bounds),
       'asset bounds mismatch',
     );
-  }
-  for (let index = 0; index < cells.length; index++) {
-    for (const instance of cells[index].buildings) {
-      validateBuildingBounds(
-        instance,
-        world.buildingAssets[instance.assetId],
-        manifest.cells[index].bounds,
-      );
+
+  // A partial duplicate at a seam would leave another client without a required collider.
+  const memberships = new Map<string, string[]>();
+  for (const cell of cells)
+    for (const item of [...cell.statics, ...cell.buildings]) {
+      let ids = memberships.get(item.entityId);
+      if (!ids) memberships.set(item.entityId, (ids = []));
+      ids.push(cell.cellId);
     }
+  const covered = [
+    ...merged.statics.map((item) => ({ entityId: item.entityId, bounds: primitiveBounds(item) })),
+    ...merged.buildings.map((item) => ({
+      entityId: item.entityId,
+      bounds: buildingBounds(item, manifest.assets[item.assetId].bounds),
+    })),
+  ];
+  for (const { entityId, bounds } of covered) {
+    const expected = cellsIntersectingBounds(manifest.bounds, manifest.grid, bounds).sort();
+    requireValue(
+      canonicalJson([...memberships.get(entityId)!].sort()) === canonicalJson(expected),
+      `incomplete cell coverage: ${entityId}`,
+    );
   }
   return world;
 }

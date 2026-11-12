@@ -1,4 +1,10 @@
-import { WORLD_FORMAT_VERSION, type WorldDefinition, type Vec3 } from './index.js';
+import {
+  WORLD_FORMAT_VERSION,
+  type WorldDefinition,
+  type WorldHeader,
+  type EntityDefinition,
+  type Vec3,
+} from './index.js';
 import {
   validateBuildingPhysicsAsset,
   validateBuildingInstances,
@@ -18,37 +24,10 @@ function vector(value: unknown, label: string): asserts value is Vec3 {
     );
   }
 }
-/** Validate content at both process boundaries before constructing any physics objects. */
-export function validateWorld(value: unknown): WorldDefinition {
-  invariant(value && typeof value === 'object', 'object required');
-  const world = value as WorldDefinition;
-  invariant(world.formatVersion === WORLD_FORMAT_VERSION, 'unsupported formatVersion');
-  invariant(
-    typeof world.worldId === 'string' && /^[a-z0-9-]{1,64}$/.test(world.worldId),
-    'worldId',
-  );
-  invariant(world.bounds && typeof world.bounds === 'object', 'bounds');
-  vector(world.bounds.min, 'bounds.min');
-  vector(world.bounds.max, 'bounds.max');
-  for (const axis of ['x', 'y', 'z'] as const)
-    invariant(world.bounds.min[axis] < world.bounds.max[axis], 'ordered bounds');
-  invariant(world.simulation?.tickRate === 60, 'supported tick rate is 60 Hz');
-  vector(world.simulation.gravity, 'gravity');
-  const character = world.simulation.character;
-  invariant(character && typeof character === 'object', 'character');
-  for (const key of ['height', 'radius', 'speed', 'mass'] as const) {
-    invariant(
-      Number.isFinite(character[key]) && character[key] > 0 && character[key] <= 1000,
-      `character.${key}`,
-    );
-  }
-  invariant(character.height >= 2 * character.radius, 'capsule height');
-  invariant(
-    Array.isArray(world.entities) && world.entities.length > 0 && world.entities.length <= 1000,
-    'entities',
-  );
+export function validateEntities(value: unknown): asserts value is EntityDefinition[] {
+  invariant(Array.isArray(value) && value.length <= 1000, 'entities');
   const ids = new Set<string>();
-  for (const entity of world.entities) {
+  for (const entity of value as EntityDefinition[]) {
     invariant(entity && typeof entity === 'object', 'entity');
     invariant(
       typeof entity.entityId === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(entity.entityId),
@@ -78,6 +57,34 @@ export function validateWorld(value: unknown): WorldDefinition {
     );
     invariant(typeof entity.color === 'string' && /^#[a-f\d]{6}$/i.test(entity.color), 'color');
   }
+}
+/** Validate content at both process boundaries before constructing any physics objects. */
+export function validateWorld(value: unknown): WorldDefinition {
+  invariant(value && typeof value === 'object', 'object required');
+  const world = value as WorldDefinition;
+  invariant(world.formatVersion === WORLD_FORMAT_VERSION, 'unsupported formatVersion');
+  invariant(
+    typeof world.worldId === 'string' && /^[a-z0-9-]{1,64}$/.test(world.worldId),
+    'worldId',
+  );
+  invariant(world.bounds && typeof world.bounds === 'object', 'bounds');
+  vector(world.bounds.min, 'bounds.min');
+  vector(world.bounds.max, 'bounds.max');
+  for (const axis of ['x', 'y', 'z'] as const)
+    invariant(world.bounds.min[axis] < world.bounds.max[axis], 'ordered bounds');
+  invariant(world.simulation?.tickRate === 60, 'supported tick rate is 60 Hz');
+  vector(world.simulation.gravity, 'gravity');
+  const character = world.simulation.character;
+  invariant(character && typeof character === 'object', 'character');
+  for (const key of ['height', 'radius', 'speed', 'mass'] as const) {
+    invariant(
+      Number.isFinite(character[key]) && character[key] > 0 && character[key] <= 1000,
+      `character.${key}`,
+    );
+  }
+  invariant(character.height >= 2 * character.radius, 'capsule height');
+  validateEntities(world.entities);
+  const ids = new Set(world.entities.map((entity) => entity.entityId));
   invariant(
     world.entities.filter((e) => e.kind === 'crate').length === 1,
     'exactly one crate required',
@@ -139,6 +146,35 @@ export function validateWorld(value: unknown): WorldDefinition {
         'spawn points overlap',
       );
     }
+  if (world.routes !== undefined) {
+    invariant(
+      world.routes &&
+        typeof world.routes === 'object' &&
+        !Array.isArray(world.routes) &&
+        Object.keys(world.routes).length <= 32,
+      'routes',
+    );
+    for (const [id, points] of Object.entries(world.routes)) {
+      invariant(
+        /^[a-zA-Z0-9_-]{1,64}$/.test(id) &&
+          Array.isArray(points) &&
+          points.length >= 2 &&
+          points.length <= 1024,
+        'route',
+      );
+      for (const point of points)
+        invariant(
+          point &&
+            Number.isFinite(point.x) &&
+            Number.isFinite(point.z) &&
+            point.x >= world.bounds.min.x &&
+            point.x <= world.bounds.max.x &&
+            point.z >= world.bounds.min.z &&
+            point.z <= world.bounds.max.z,
+          'route point',
+        );
+    }
+  }
   return world;
 }
 /** Content addressing is stable across object key order and file formatting. */
@@ -150,4 +186,15 @@ export function canonicalJson(value: unknown): string {
       .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`)
       .join(',')}}`;
   return JSON.stringify(value);
+}
+
+/** Header validation never needs any remote cells or model resources. */
+export function validateWorldHeader(value: unknown): WorldHeader {
+  invariant(value && typeof value === 'object' && !Array.isArray(value), 'header');
+  const header = value as WorldHeader;
+  for (const field of ['entities', 'buildings', 'buildingAssets', 'statics'])
+    invariant(!Object.hasOwn(header, field), 'header must not contain static data');
+  invariant(header.crate?.kind === 'crate', 'header crate');
+  validateWorld({ ...header, entities: [header.crate], buildings: [], buildingAssets: {} });
+  return header;
 }

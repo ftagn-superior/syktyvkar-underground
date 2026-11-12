@@ -24,6 +24,7 @@ import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
 import {
+  canonicalJson,
   NEUTRAL_INPUT,
   normalizeInput,
   type EntityDefinition,
@@ -32,6 +33,11 @@ import {
   type PlayerState,
   type Quat,
   type SimulationSnapshot,
+  type LocalSimulationSnapshot,
+  type WorldHeader,
+  type StaticEntityDefinition,
+  type BuildingInstance,
+  type BuildingPhysicsAsset,
   type Vec3,
   type WorldDefinition,
 } from '@su/contracts';
@@ -87,10 +93,15 @@ export class PhysicsWorld {
   readonly spawnShape: PhysicsShapeCapsule;
   readonly gravity: Vector3;
   private readonly buildings: BuildingColliders;
-  private readonly crate: BodyRecord;
+  private crate?: BodyRecord;
+  private readonly staticReferences = new Map<
+    string,
+    { version: string; signature: string; references: number; building: boolean }
+  >();
+  private readonly crateDefinition: EntityDefinition;
   disposed = false;
   constructor(
-    readonly definition: WorldDefinition,
+    readonly definition: WorldDefinition | WorldHeader,
     havok: Awaited<ReturnType<typeof HavokPhysics>>,
     readonly prediction: boolean,
   ) {
@@ -116,23 +127,88 @@ export class PhysicsWorld {
     );
     this.buildings = new BuildingColliders(this.scene);
     try {
-      let crate: BodyRecord | undefined;
-      for (const item of definition.entities) {
-        const record = this.createBox(item);
-        this.objects.set(item.entityId, record);
-        if (item.kind === 'crate') crate = record;
-      }
-      if (!crate) throw new Error('World requires a crate');
-      this.crate = crate;
-      for (const instance of definition.buildings) {
-        const asset = definition.buildingAssets[instance.assetId];
-        if (!asset) throw new Error(`Unknown building asset: ${instance.assetId}`);
-        this.buildings.add(instance, asset);
+      if ('entities' in definition) {
+        const crate = definition.entities.find((item) => item.kind === 'crate');
+        if (!crate) throw new Error('World requires a crate');
+        this.crateDefinition = crate;
+        this.crate = this.createBox(crate);
+        this.objects.set(crate.entityId, this.crate);
+        for (const item of definition.entities) {
+          if (item.kind === 'obstacle')
+            this.retainStatic(item as StaticEntityDefinition, 'initial');
+        }
+        for (const instance of definition.buildings) {
+          const asset = definition.buildingAssets[instance.assetId];
+          if (!asset) throw new Error(`Unknown building asset: ${instance.assetId}`);
+          this.retainStatic(instance, 'initial', asset);
+        }
+      } else {
+        if (!prediction) throw new Error('Authoritative physics requires the complete world');
+        this.crateDefinition = definition.crate;
       }
     } catch (error) {
       this.dispose();
       throw error;
     }
+  }
+  /** Call between fixed steps. A reference is held by each connected cell. */
+  retainStatic(
+    item: StaticEntityDefinition | BuildingInstance,
+    version: string,
+    asset?: BuildingPhysicsAsset,
+  ): void {
+    if (this.disposed) throw new Error('Physics world is disposed');
+    const signature = canonicalJson(item);
+    const existing = this.staticReferences.get(item.entityId);
+    if (existing) {
+      if (existing.version !== version || existing.signature !== signature)
+        throw new Error(`Conflicting static entity/version: ${item.entityId}`);
+      existing.references++;
+      return;
+    }
+    if (
+      item.entityId === this.crateDefinition.entityId ||
+      this.objects.has(item.entityId) ||
+      this.characters.has(item.entityId) ||
+      this.remotePlayers.has(item.entityId)
+    )
+      throw new Error(`Occupied entity ID: ${item.entityId}`);
+    if ('assetId' in item) {
+      if (!asset) throw new Error(`Missing collider: ${item.assetId}`);
+      this.buildings.add(item, asset);
+    } else this.objects.set(item.entityId, this.createBox(item));
+    this.staticReferences.set(item.entityId, {
+      version,
+      signature,
+      references: 1,
+      building: 'assetId' in item,
+    });
+  }
+  releaseStatic(entityId: string): void {
+    const entry = this.staticReferences.get(entityId);
+    if (!entry || --entry.references > 0) return;
+    this.staticReferences.delete(entityId);
+    if (entry.building) this.buildings.remove(entityId);
+    else {
+      const record = this.objects.get(entityId)!;
+      record.body.dispose();
+      record.shape.dispose();
+      record.node.dispose();
+      this.objects.delete(entityId);
+    }
+  }
+  staticDiagnostics() {
+    return {
+      entities: this.staticReferences.size,
+      references: [...this.staticReferences.values()].reduce(
+        (sum, entry) => sum + entry.references,
+        0,
+      ),
+      buildings: this.buildings.diagnostics(),
+      bodies: this.physics.getBodies().length,
+      crate: !!this.crate,
+      remotePlayers: this.remotePlayers.size,
+    };
   }
   createBox(definition: EntityDefinition): BodyRecord {
     const node = new TransformNode(definition.entityId, this.scene);
@@ -226,6 +302,7 @@ export class PhysicsWorld {
     };
   }
   snapshot(): SimulationSnapshot {
+    if (!this.crate) throw new Error('Authoritative snapshot requires a crate');
     return {
       players: [...this.characters.keys()].map((id) => this.state(id)),
       crate: this.boxState(this.crate),
@@ -247,9 +324,23 @@ export class PhysicsWorld {
     body.setLinearVelocity(Vector3.Zero());
     body.setAngularVelocity(Vector3.Zero());
   }
-  setRemoteSnapshot(snapshot: SimulationSnapshot, ownId: string) {
+  setRemoteSnapshot(snapshot: LocalSimulationSnapshot, ownId: string) {
+    if (!this.prediction) throw new Error('Remote proxies belong to prediction');
+    if (snapshot.crate && snapshot.crate.entityId !== this.crateDefinition.entityId)
+      throw new Error('Unexpected crate ID');
+    if (!snapshot.crate && this.crate) {
+      this.crate.body.dispose();
+      this.crate.shape.dispose();
+      this.crate.node.dispose();
+      this.objects.delete(this.crateDefinition.entityId);
+      this.crate = undefined;
+    }
+    if (snapshot.crate && !this.crate) {
+      this.crate = this.createBox(this.crateDefinition);
+      this.objects.set(this.crateDefinition.entityId, this.crate);
+    }
     const crate = this.crate;
-    if (snapshot.crate.entityId === crate.definition.entityId) {
+    if (crate && snapshot.crate) {
       this.teleport(crate.body, crate.node, snapshot.crate.position, snapshot.crate.rotation);
       crate.revision = snapshot.crate.revision;
     }
@@ -344,6 +435,7 @@ export class PhysicsWorld {
   returnLostCrate() {
     const { min, max } = this.definition.bounds;
     const crate = this.crate;
+    if (!crate) throw new Error('Authoritative world requires a crate');
     const p = crate.node.position;
     if (p.y >= -5 && p.x >= min.x && p.x <= max.x && p.z >= min.z && p.z <= max.z) return;
     if (this.overlaps(crate.shape, crate.definition.position, crate.body)) return;
@@ -361,6 +453,8 @@ export class PhysicsWorld {
       item.node.dispose();
     }
     this.objects.clear();
+    this.staticReferences.clear();
+    this.crate = undefined;
     this.remotePlayers.clear();
     this.spawnShape.dispose();
     this.scene.dispose();
@@ -368,7 +462,7 @@ export class PhysicsWorld {
   }
 }
 export async function createPhysicsWorld(
-  definition: WorldDefinition,
+  definition: WorldDefinition | WorldHeader,
   wasmBinary: WasmBinary | undefined,
   prediction: boolean,
 ) {

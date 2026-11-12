@@ -1,5 +1,10 @@
 import { schema, t } from '@colyseus/schema';
-import type { EntityState, PlayerState, SimulationSnapshot } from '@su/contracts';
+import {
+  PROTOCOL_VERSION,
+  type EntityState,
+  type PlayerState,
+  type LocalSimulationSnapshot,
+} from '@su/contracts';
 
 /** Flat input is encoded and acknowledged by Colyseus, independently of actions. */
 export class MoveInputSchema extends schema(
@@ -45,13 +50,13 @@ export class WorldState extends schema(
   {
     worldEpoch: t.string().default(''),
     serverTick: t.uint32().default(0),
-    protocolVersion: t.uint16().default(1),
+    protocolVersion: t.uint16().default(PROTOCOL_VERSION),
     mapVersion: t.string().default(''),
     simulationConfigHash: t.string().default(''),
     occupancy: t.uint8().default(0),
     stepMs: t.float32().default(0),
-    players: t.map(PlayerSchema),
-    crate: t.ref(EntitySchema),
+    players: t.map(PlayerSchema).view(),
+    crates: t.map(EntitySchema).view(),
   },
   'World',
 ) {}
@@ -89,9 +94,18 @@ export function toEntityState(source: EntitySchema): EntityState {
 export function toPlayerState(source: PlayerSchema): PlayerState {
   return { ...toEntityState(source), kind: 'player', grounded: source.grounded };
 }
-export function toSimulationSnapshot(source: WorldState): SimulationSnapshot {
+/** The server owns exactly one crate; a client view contains zero or one. */
+export function visibleCrate(source: WorldState): EntitySchema | undefined {
+  if (!source.crates) return undefined;
+  if (source.crates.size > 1) throw new Error('World state contains multiple crates');
+  return source.crates.values().next().value;
+}
+export function toLocalSimulationSnapshot(source: WorldState): LocalSimulationSnapshot {
+  const crate = visibleCrate(source);
   return {
-    players: Array.from(source.players.values(), toPlayerState),
-    crate: toEntityState(source.crate),
+    players: Array.from(source.players?.values() ?? [], toPlayerState),
+    ...(crate ? { crate: toEntityState(crate) } : {}),
   };
 }
+
+export type { PrepareArea, AreaReady, AreaResult } from '@su/contracts';

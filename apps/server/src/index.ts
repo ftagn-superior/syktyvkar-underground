@@ -13,11 +13,14 @@ export interface GameServerOptions {
   clientDirectory?: string;
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
+  /** Local acceptance fixtures only: bounded authoritative publication history. */
+  testDiagnostics?: boolean;
 }
 export async function createGameServer(options: GameServerOptions = {}) {
   const worldDirectory = resolve(options.worldDirectory ?? 'dist/worlds/physics-lab');
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const { manifest, definition } = await readWorldDirectory(worldDirectory);
+  const worldPrefix = `/worlds/${manifest.worldId}`;
   const http = createServer();
   const transport = new WebSocketTransport({
     server: http,
@@ -47,7 +50,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           protocolVersion: PROTOCOL_VERSION,
           mapVersion: manifest.mapVersion,
           simulationConfigHash: manifest.simulationConfigHash,
-          manifestUrl: '/worlds/physics-lab/manifest.json',
+          manifestUrl: `${worldPrefix}/manifest.json`,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
         };
@@ -61,7 +64,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
         }
         res.json(room.diagnostics());
       });
-      app.use('/worlds/physics-lab', (req, res) => {
+      app.use(worldPrefix, (req, res) => {
         const file = req.path.slice(1);
         if (
           (req.method !== 'GET' && req.method !== 'HEAD') ||
@@ -77,6 +80,9 @@ export async function createGameServer(options: GameServerOptions = {}) {
             : 'no-cache',
         );
         res.sendFile(resolve(worldDirectory, file));
+      });
+      app.use('/worlds', (_req, res) => {
+        res.sendStatus(404);
       });
       // These routes come before the SDK matcher: arbitrary room creation is
       // deliberately absent. The sole room is created once during startup.
@@ -112,6 +118,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     manifest,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
+    testDiagnostics: options.testDiagnostics,
   });
   try {
     await server.serverless();

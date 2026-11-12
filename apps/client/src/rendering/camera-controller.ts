@@ -1,4 +1,4 @@
-import { normalizeInput, type MoveInput } from '@su/contracts';
+import { normalizeInput, INTEREST_RADII, type MoveInput } from '@su/contracts';
 
 export const INITIAL_CAMERA_ANGLE = Math.PI / 4;
 const TURN_SECONDS = 0.28;
@@ -36,4 +36,10 @@ export function screenMovement(right: number, forward: number, angle: number): M
     moveX: right * Math.sin(angle) - forward * Math.cos(angle),
     moveZ: -right * Math.cos(angle) - forward * Math.sin(angle),
   })!;
+}
+
+/** Keep very wide windows within network interest; preserve the projection's aspect ratio. */
+export function orthographicFrame(aspect: number): { halfWidth: number; halfHeight: number } {
+  const halfHeight = Math.min(aspect < 1 ? 20 : 15, (INTEREST_RADII.enter * 0.75) / aspect);
+  return { halfHeight, halfWidth: halfHeight * aspect };
 }

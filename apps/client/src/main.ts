@@ -43,6 +43,7 @@ let loaded = false;
 let starting = false;
 let keyboard: KeyboardInput;
 let graphicsLost = false;
+let previousConnection: ConnectionState = 'loading';
 
 function showNotice(message: string): void {
   notice.textContent = message;
@@ -55,8 +56,10 @@ function showNotice(message: string): void {
 function updateState(state: ConnectionState, message?: string): void {
   const playing = state === 'playing';
   const reconnecting = state === 'reconnecting';
-  welcome.hidden = graphicsLost || playing || (reconnecting && !!session.room);
-  join.disabled = graphicsLost || state === 'loading' || state === 'connecting' || reconnecting;
+  const preparing = state === 'preparing' || state === 'waiting';
+  welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && !!session.room);
+  join.disabled =
+    graphicsLost || state === 'loading' || state === 'connecting' || preparing || reconnecting;
   joinLabel.textContent =
     state === 'loading'
       ? 'Загружаем мир…'
@@ -80,6 +83,8 @@ function updateState(state: ConnectionState, message?: string): void {
         : 'Мир доступен',
     connecting: 'Подключение',
     playing: 'В сети',
+    preparing: 'Подготовка окружения',
+    waiting: 'Загрузка окружения',
     reconnecting: 'Восстановление',
     error: 'Нет соединения',
   }[state];
@@ -87,11 +92,11 @@ function updateState(state: ConnectionState, message?: string): void {
   statusDot.dataset.online = String(!graphicsLost && (playing || state === 'ready'));
   document.body.classList.toggle('connection-lost', reconnecting);
   respawn.hidden = !playing;
-  leave.hidden = !playing && !reconnecting;
-  keyboard?.clear();
+  leave.hidden = !session.room && !reconnecting;
+  if (state !== 'waiting' && !(playing && previousConnection === 'waiting')) keyboard?.clear();
+  previousConnection = state;
   if (playing && !graphicsLost) {
     canvas.focus({ preventScroll: true });
-    notice.hidden = true;
   }
   if (message) showNotice(message);
   renderRespawn();
@@ -114,7 +119,7 @@ function renderRespawn(): void {
   cameraLeft.disabled = cameraRight.disabled = !loaded || graphicsLost;
 }
 function renderMetrics(): void {
-  element('player-count').textContent = `${session.playerCount} / 8`;
+  element('player-count').textContent = `${session.occupancy} / 8`;
   if (diagnostics.hidden) return;
   const data = session.diagnostics();
   const rendering = view?.renderingDiagnostics();
@@ -133,7 +138,10 @@ function renderMetrics(): void {
     ['Коррекция · p95', `${data.correctionP95.toFixed(3)} м`],
     ['Коррекция · максимум', `${data.correctionMax.toFixed(3)} м`],
     ['Ожидают подтверждения', String(data.pendingInputs)],
-    ['Предсказание', data.stalled ? 'Ожидание сервера' : 'Активно'],
+    [
+      'Предсказание',
+      data.areaWaiting ? 'Ожидание окружения' : data.stalled ? 'Ожидание сервера' : 'Активно',
+    ],
     ['Карта', data.mapVersion?.slice(0, 12) ?? '—'],
     ['Симуляция', data.simulationConfigHash?.slice(0, 12) ?? '—'],
     [
@@ -191,7 +199,7 @@ async function start(): Promise<void> {
       );
       return;
     }
-    await view.prepareBuildings(session.manifest, (path) => session.readAsset(path));
+    session.connectGraphics(view);
     view.onFrame((now, delta) => {
       try {
         const frame = session.frame(now, delta, keyboard.read(view!.cameraAngle));
@@ -218,14 +226,18 @@ async function start(): Promise<void> {
     await session.restore();
   } catch (error) {
     loaded = false;
+    session.markPreparationFailed(readableError(error));
     view?.dispose();
     view = undefined;
-    session.markPreparationFailed(readableError(error));
     console.error('World preparation failed', error);
   } finally {
     starting = false;
   }
 }
+element('area-retry').addEventListener('click', () => {
+  if (session.reloadRequired) location.reload();
+  else session.retryArea();
+});
 join.addEventListener('click', () => {
   if (session.reloadRequired) location.reload();
   else if (loaded) void session.join();
@@ -283,6 +295,18 @@ canvas.addEventListener('webglcontextlost', (event) => {
 const uiTimer = setInterval(() => {
   renderRespawn();
   renderMetrics();
+  const loading = session.state === 'preparing' || session.state === 'waiting';
+  element('area-status').hidden = !loading || graphicsLost;
+  const problem = session.areaProblem;
+  element('area-message').textContent = problem
+    ? session.reloadRequired
+      ? 'Ресурсы мира изменились. Обновите страницу.'
+      : 'Не удалось загрузить окружение. Повторите попытку.'
+    : 'Загружаем окружение… Движение продолжится после подготовки.';
+  element('area-retry').hidden = !problem;
+  element('area-retry').textContent = session.reloadRequired
+    ? 'Обновить страницу'
+    : 'Повторить загрузку';
 }, 250);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) location.reload();
@@ -304,7 +328,10 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
     value: Object.freeze({
       snapshot: () => structuredClone(session.diagnostics()),
       corrections: () => session.correctionHistory(),
-      report: () => diagnosticReport(session, view, graphicsLost),
+      report: () => ({
+        ...diagnosticReport(session, view, graphicsLost),
+        rendering: view?.renderingDiagnostics() ?? null,
+      }),
       buildings: () => structuredClone(view?.buildingDiagnostics() ?? []),
     }),
     writable: false,

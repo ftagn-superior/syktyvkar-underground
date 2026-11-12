@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { validateWorld, canonicalJson, normalizeInput } from './index.js';
 const source = {
   ...JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')),
+  entities: [
+    ...JSON.parse(await readFile('content/worlds/physics-lab/cells/0_0.json', 'utf8')).statics,
+    JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')).crate,
+  ],
   buildings: [],
   buildingAssets: {},
 };

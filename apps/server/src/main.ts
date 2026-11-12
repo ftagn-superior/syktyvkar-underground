@@ -3,7 +3,11 @@ import { createGameServer } from './index.js';
 const port = Number(process.env.PORT ?? 2567);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error('PORT must be an integer between 1 and 65535');
-const app = await createGameServer({ port, host: process.env.HOST ?? '127.0.0.1' });
+const app = await createGameServer({
+  port,
+  host: process.env.HOST ?? '127.0.0.1',
+  worldDirectory: process.env.SU_WORLD_DIRECTORY,
+});
 console.log(`Syktyvkar Underground — ${app.url}`);
 let stopping = false;
 async function stop() {

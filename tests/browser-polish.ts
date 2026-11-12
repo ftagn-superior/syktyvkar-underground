@@ -170,8 +170,19 @@ try {
   await download.saveAs(downloadPath);
   const jsonText = await readFile(downloadPath, 'utf8');
   const exported = JSON.parse(jsonText);
-  for (const key of ['build', 'environment', 'rendering', 'metrics', 'versions'])
+  for (const key of [
+    'build',
+    'environment',
+    'rendering',
+    'metrics',
+    'versions',
+    'streaming',
+    'physics',
+    'prediction',
+    'preparations',
+  ])
     assert.ok(exported[key], `export includes ${key}`);
+  assert.equal(exported.formatVersion, 2);
   assert.equal(exported.rendering.quality, 'economy');
   inspectExport(exported);
   const sensitiveValues = await page.evaluate(() => {

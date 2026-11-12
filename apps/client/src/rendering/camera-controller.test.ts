@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CameraTurn, INITIAL_CAMERA_ANGLE, screenMovement } from './camera-controller';
+import {
+  CameraTurn,
+  INITIAL_CAMERA_ANGLE,
+  screenMovement,
+  orthographicFrame,
+} from './camera-controller';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 
 describe('orthographic camera controls', () => {
@@ -16,6 +21,17 @@ describe('orthographic camera controls', () => {
       const diagonal = screenMovement(1, 1, angle);
       expect(Math.hypot(diagonal.moveX, diagonal.moveZ)).toBeCloseTo(1);
     }
+  });
+  it('keeps the visible dynamic ground footprint within 80m on landscape, portrait and ultrawide windows', () => {
+    for (const aspect of [1920 / 1080, 360 / 800, 2560 / 1080, 3840 / 720]) {
+      const { halfWidth, halfHeight } = orthographicFrame(aspect);
+      expect(halfWidth / halfHeight).toBeCloseTo(aspect);
+      const beta = Math.PI / 3.15;
+      const groundDepth = halfHeight / Math.cos(beta) + 2 * Math.tan(beta);
+      expect(Math.hypot(halfWidth, groundDepth)).toBeLessThan(80);
+    }
+    expect(orthographicFrame(1920 / 1080).halfHeight).toBe(15);
+    expect(orthographicFrame(360 / 800).halfHeight).toBe(20);
   });
   it('completes a smooth full circuit and bounds rapid repeated turns', () => {
     const camera = new CameraTurn();

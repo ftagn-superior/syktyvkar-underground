@@ -13,6 +13,7 @@ import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPi
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
+import { REFERENCE_HOUR, skyAt, type Sky } from './day-cycle';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -24,6 +25,11 @@ const SHADOW_MAP_SIZE = 2048;
  * а края теней не дрожат при движении камеры.
  */
 const SHADOW_SNAP = (SHADOW_EXTENT / SHADOW_MAP_SIZE) * 128;
+/**
+ * Свет поворачивается шагами, а не непрерывно: каждый поворот меняет проекцию теней
+ * и требует перерисовать карту неподвижного мира. Шаг в 0,1° на глаз незаметен.
+ */
+const LIGHT_STEP_COS = Math.cos((0.1 * Math.PI) / 180);
 
 /**
  * Тени неподвижного мира. Карта рисуется один раз и обновляется только по запросу:
@@ -90,7 +96,7 @@ export class WorldLighting {
   readonly shadow: ShadowGenerator;
   /** Immovable casters: buildings, trees, primitives. Cached between invalidations. */
   readonly staticShadow: StaticShadowGenerator;
-  private readonly sky: HemisphericLight;
+  private readonly fill: HemisphericLight;
   private readonly sun: DirectionalLight;
   private pipeline?: DefaultRenderingPipeline;
   private readonly forward = new Vector3();
@@ -98,6 +104,8 @@ export class WorldLighting {
   private readonly up = new Vector3();
   private readonly position = new Vector3();
   private readonly scratch = new Vector3();
+  private readonly target = new Vector3();
+  private readonly direction = new Vector3();
 
   constructor(
     private readonly scene: Scene,
@@ -117,19 +125,13 @@ export class WorldLighting {
     scene.clearColor = Color4.FromHexString('#101820ff');
     scene.ambientColor = Color3.FromHexString('#8199ac');
 
-    // Clear afternoon light: warm sun, neutral sky fill and a restrained ground bounce.
-    const sky = (this.sky = new HemisphericLight('sky', new Vector3(0, 1, 0), scene));
+    // Colours, strengths and the direction of both lights come from the day cycle.
     // PBR's hemispheric diffuse is stronger than its directional BRDF at the same
-    // intensity; keep this fill low enough for the facade orientations to read.
-    sky.intensity = 0.45;
-    sky.diffuse = Color3.FromHexString('#d6e7f4');
-    sky.groundColor = Color3.FromHexString('#888563');
-    sky.specular = Color3.Black();
-    // About 42 degrees above the horizon; direction stays fixed as the camera turns.
-    const sun = (this.sun = new DirectionalLight('sun', new Vector3(-0.9, -1, -0.65), scene));
-    sun.position.set(20, 35, 15);
-    sun.intensity = 3;
-    sun.diffuse = Color3.FromHexString('#ffe6bd');
+    // intensity; the cycle keeps this fill low enough for the facade orientations to read.
+    const fill = (this.fill = new HemisphericLight('sky', new Vector3(0, 1, 0), scene));
+    fill.specular = Color3.Black();
+    // The direct light: the sun by day, the moon by night. It never turns with the camera.
+    const sun = (this.sun = new DirectionalLight('sun', new Vector3(0, -1, 0), scene));
     // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
     sun.shadowFrustumSize = SHADOW_EXTENT;
     sun.shadowMinZ = 0;
@@ -148,7 +150,29 @@ export class WorldLighting {
     }
     this.staticShadow.cache();
     this.shadow.getShadowMap()!.onClearObservable.add((engine) => this.startFromStatic(engine));
-    this.follow(Vector3.Zero());
+    this.setTimeOfDay(REFERENCE_HOUR);
+  }
+
+  /**
+   * Lights the world for a game hour (0..24) and returns the sky it produced.
+   * Colours and strengths follow the hour exactly. The direction of the direct light
+   * advances in small steps, each of which redraws the cached static shadows once.
+   */
+  setTimeOfDay(hour: number): Sky {
+    const sky = skyAt(hour);
+    this.fill.intensity = sky.skyIntensity;
+    this.fill.diffuse.set(...sky.skyColor);
+    this.fill.groundColor.set(...sky.groundColor);
+    this.sun.intensity = sky.lightIntensity;
+    this.sun.diffuse.set(...sky.lightColor);
+    const { x, y, z } = sky.lightDirection;
+    const direction = this.direction.set(x, y, z);
+    if (Vector3.Dot(direction, this.sun.direction) < LIGHT_STEP_COS) {
+      this.sun.direction.copyFrom(direction);
+      this.follow(this.target);
+      this.staticShadow.invalidate();
+    }
+    return sky;
   }
 
   /**
@@ -209,6 +233,7 @@ export class WorldLighting {
    * only when a step is crossed.
    */
   follow(target: Vector3): void {
+    this.target.copyFrom(target);
     const forward = this.forward.copyFrom(this.sun.direction).normalize();
     // Те же оси, что у видовой матрицы направленного света Babylon.
     Vector3.CrossToRef(Vector3.UpReadOnly, forward, this.right);
@@ -226,11 +251,6 @@ export class WorldLighting {
     this.staticShadow.invalidate();
   }
 
-  /** Direction the direct light travels. Read-only for callers. */
-  get lightDirection(): Vector3 {
-    return this.sun.direction;
-  }
-
   /** Shadow maps and caster counts for the diagnostic report. */
   shadowDiagnostics() {
     return {
@@ -246,6 +266,6 @@ export class WorldLighting {
     this.shadow.dispose();
     this.staticShadow.dispose();
     this.sun.dispose();
-    this.sky.dispose();
+    this.fill.dispose();
   }
 }

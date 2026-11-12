@@ -31,6 +31,7 @@ import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldLighting } from './lighting';
 import { WorldClouds } from './clouds';
+import { hourAt } from './day-cycle';
 import { BuildingViews } from './buildings';
 import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
@@ -71,7 +72,9 @@ export class WorldView {
   private readonly camera: ArcRotateCamera;
   private readonly lighting: WorldLighting;
   private readonly clouds: WorldClouds;
-  private readonly cloudTint = Color3.FromHexString('#f4f1ea');
+  private readonly cloudTint = new Color3();
+  private readonly lightDirection = new Vector3();
+  private fixedHour?: number;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
@@ -211,11 +214,17 @@ export class WorldView {
         true, // Following translates the rig; pitch, orbit angle and radius remain fixed.
       );
       this.lighting.follow(this.camera.target);
+      const epochMs = Date.now();
+      const sky = this.lighting.setTimeOfDay(this.fixedHour ?? hourAt(epochMs));
       this.clouds.update({
-        epochMs: Date.now(),
-        lightDirection: this.lighting.lightDirection,
-        lightStrength: 1,
-        tint: this.cloudTint,
+        epochMs,
+        lightDirection: this.lightDirection.set(
+          sky.lightDirection.x,
+          sky.lightDirection.y,
+          sky.lightDirection.z,
+        ),
+        lightStrength: sky.directLight,
+        tint: this.cloudTint.set(...sky.cloudColor),
         zoom: this.zoom,
         visible: this.radial,
       });
@@ -267,6 +276,10 @@ export class WorldView {
     this.quality = quality;
     this.applyQuality();
     this.sizeCamera();
+  }
+  /** Holds the world at one game hour (0..24); `undefined` returns to the running clock. */
+  setTimeOfDay(hour?: number): void {
+    this.fixedHour = hour === undefined ? undefined : ((hour % 24) + 24) % 24;
   }
   get cameraAngle(): number {
     return this.cameraOrbit.angle;

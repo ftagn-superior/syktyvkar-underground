@@ -120,6 +120,72 @@ describe('static shadow cache', () => {
   });
 });
 
+describe('time of day', () => {
+  const fixture = () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
+    const lighting = new WorldLighting(scene, camera);
+    lighting.setQuality('standard');
+    lighting.staticShadow.addShadowCaster(MeshBuilder.CreateBox('house', {}, scene));
+    const sun = lighting.shadow.getLight() as DirectionalLight;
+    const frames = (count: number) => {
+      for (let frame = 0; frame < count; frame++) scene.render();
+      return lighting.staticShadow.refreshes;
+    };
+    return { engine, scene, lighting, sun, frames };
+  };
+
+  it('starts at the reference light and follows the hour', () => {
+    const { engine, scene, lighting, sun } = fixture();
+    try {
+      const reference = new Vector3(-0.9, -1, -0.65).normalize();
+      expect(sun.direction.equalsWithEpsilon(reference, 1e-9)).toBe(true);
+      expect(sun.intensity).toBe(3);
+      expect(sun.diffuse.toHexString()).toBe('#FFE6BD');
+      const fill = scene.lights.find((light) => light !== sun)!;
+      expect(fill.intensity).toBe(0.45);
+
+      const night = lighting.setTimeOfDay(1);
+      expect(sun.intensity).toBe(night.lightIntensity);
+      expect(sun.intensity).toBeLessThan(1);
+      expect(sun.diffuse.b).toBeGreaterThan(sun.diffuse.r);
+      expect(sun.direction.y).toBeLessThan(0);
+      expect(scene.lights).toHaveLength(2);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it('turns the light in steps, redrawing the static shadows once per step', () => {
+    const { engine, scene, lighting, sun, frames } = fixture();
+    try {
+      lighting.setTimeOfDay(12);
+      const drawn = frames(3);
+      const direction = sun.direction.clone();
+      const intensity = sun.intensity;
+      // A few seconds of the running clock: colours move, the projection does not.
+      lighting.setTimeOfDay(12 + 0.2 / 60);
+      expect(sun.direction.equals(direction)).toBe(true);
+      expect(frames(3)).toBe(drawn);
+      // Half an hour later the sun has visibly moved: one redraw, not one per frame.
+      lighting.setTimeOfDay(12.5);
+      expect(sun.direction.equals(direction)).toBe(false);
+      expect(sun.intensity).toBe(intensity);
+      expect(frames(5)).toBe(drawn + 1);
+      // The shadow map still follows the camera under the new direction.
+      const target = new Vector3(60, 0, -40);
+      lighting.follow(target);
+      const ideal = target.subtract(sun.direction.normalizeToNew().scale(150));
+      expect(Vector3.Distance(sun.position, ideal)).toBeLessThan(5);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+});
+
 describe('world lighting ownership', () => {
   it('keeps the palette, lights and shadow casters across quality switches and camera movement', () => {
     const engine = new NullEngine();

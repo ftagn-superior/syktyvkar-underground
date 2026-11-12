@@ -545,6 +545,9 @@ async function start(): Promise<void> {
     view = undefined;
     await session.load();
     view = new WorldView(canvas, element('labels'), session.definition, quality);
+    // ?time=14.5 holds the world at one game hour: for screenshots and visual tests.
+    const fixedHour = Number.parseFloat(new URLSearchParams(location.search).get('time') ?? '');
+    if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
     view.setTouchMode(inputMode.value === 'touch');
     view.engine.onContextRestoredObservable.add(() => {
       if (!graphicsLost) return;

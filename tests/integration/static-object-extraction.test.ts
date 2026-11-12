@@ -9,6 +9,10 @@ import { generateKit } from '../../tools/world-build/src/kit.js';
 import { mergeParts } from '../../tools/world-build/src/merge.js';
 import { canonicalJson } from '../../packages/contracts/src/index.js';
 import {
+  readAuthoringRelease,
+  createLayoutPublication,
+} from '../../apps/server/src/layout/release.js';
+import {
   compareColliders,
   compareTriangles,
   extractionFixture,
@@ -84,6 +88,33 @@ describe('independent static-object extraction evidence', () => {
     if (temporary) await rm(temporary, { recursive: true, force: true });
   });
 
+  it('publishes and republishes all 829 trees without GLBs or changes to placement and physics', async () => {
+    const authored = await readAuthoringRelease(join(temporary, 'release'));
+    const { publication } = await createLayoutPublication(authored, {
+      formatVersion: 1,
+      worldId: authored.definition.worldId,
+      assetReleaseVersion: authored.metadata.assetReleaseVersion,
+      seedVersion: authored.metadata.seedVersion,
+      revision: 1,
+      instances: authored.seed,
+    });
+    expect(publication.manifest).toEqual(release.manifest);
+    const trees = Object.values(publication.manifest.assets).filter((asset) =>
+      asset.assetId.startsWith('tree-'),
+    );
+    expect(trees).toHaveLength(829);
+    for (const tree of trees) {
+      expect(tree.modelFile).toBeUndefined();
+      expect(
+        JSON.parse(new TextDecoder().decode(publication.payloads.get(tree.partsFile))).tree
+          .formatVersion,
+      ).toBe(2);
+    }
+    expect(
+      Object.keys(publication.manifest.files).filter((path) => path.endsWith('.glb')),
+    ).toHaveLength(886);
+  });
+
   it('preserves every non-planting triangle, winding and fade, allowing only bounded neutral AO', async () => {
     for (const [path, hash] of Object.entries(baseline.fixtureHashes))
       expect(sha256(await readFile(`${extractionFixture}/${path}`))).toBe(hash);
@@ -148,7 +179,9 @@ describe('independent static-object extraction evidence', () => {
       recipes.push([path, visualInvariant(recipe, path)]);
       const descriptor = release.manifest.assets[id];
       const triangles = glbTriangles(
-        await readFile(join(temporary, 'release', descriptor.modelFile)),
+        descriptor.modelFile
+          ? await readFile(join(temporary, 'release', descriptor.modelFile))
+          : encodeStaticGlb(generateKit(id, recipe).parts),
         {
           assetId: id,
           entityId: id,
@@ -235,7 +268,7 @@ describe('independent static-object extraction evidence', () => {
             expect(sha256(await readFile(join(temporary, 'release', updated[field])))).toBe(
               historicalHash(asset[field]),
             );
-          const currentModel = await readFile(join(temporary, 'release', updated.modelFile));
+          const currentModel = await readFile(join(temporary, 'release', updated.modelFile!));
           compareTriangles(
             glbTriangles(original, instance),
             glbTriangles(currentModel, instance),
@@ -269,7 +302,11 @@ describe('independent static-object extraction evidence', () => {
         expect(sha256(canonicalJson(visualInvariant(await json(path), path))), path).toBe(
           art.sourceGeometryHashes[path],
         );
-      else expect(sha256(await readFile(path)), path).toBe(hash);
+      else if (path === 'content/worlds/ring-block/world.json') {
+        const source = await readFile(path, 'utf8');
+        expect(JSON.parse(source).formatVersion).toBe(5);
+        expect(sha256(source.replace('"formatVersion": 5', '"formatVersion": 4'))).toBe(hash);
+      } else expect(sha256(await readFile(path)), path).toBe(hash);
     }
     const ground = await json('content/buildings/ring-block/ring-block-ground/source.json');
     const heights = ground.layers.map((layer: any) => layer.elevation);
@@ -281,7 +318,7 @@ describe('independent static-object extraction evidence', () => {
     const old = await oldExtractionWorld();
     const { buildings: _ob, buildingAssets: _oa, ...oldRest } = old;
     const { buildings: _nb, buildingAssets: _na, ...newRest } = release.world;
-    expect(newRest).toEqual(oldRest);
+    expect(newRest).toEqual({ ...oldRest, formatVersion: 5 });
     expect(release.manifest.grid).toEqual(baseline.grid);
     expect(release.manifest.cells.map(({ cellId, bounds }) => ({ cellId, bounds }))).toEqual(
       baseline.cells.map(({ cellId, bounds }: any) => ({ cellId, bounds })),

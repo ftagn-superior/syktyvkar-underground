@@ -123,9 +123,11 @@ export async function createLayoutPublication(
   };
   const assets: Record<string, CompiledWorldAsset> = {};
   for (const [id, descriptor] of Object.entries(release.manifest.assets)) {
-    const [model, collision, parts] = await Promise.all(
-      [descriptor.modelFile, descriptor.collisionFile, descriptor.partsFile].map(read),
-    );
+    const [model, collision, parts] = await Promise.all([
+      descriptor.modelFile ? read(descriptor.modelFile) : undefined,
+      read(descriptor.collisionFile),
+      read(descriptor.partsFile),
+    ]);
     assets[id] = {
       version: descriptor.version,
       bounds: descriptor.bounds,

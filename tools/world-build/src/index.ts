@@ -22,23 +22,23 @@ import {
   type WorldDefinition,
   type WorldSource,
   type TreeRenderRecipe,
+  type BuildingParts,
   validateBuildingParts,
 } from '@su/contracts';
 import {
   createWorldPublication,
   writeWorldPublication,
   writeAuthoringMetadata,
+  pruneWorldPublication,
 } from '@su/world-release';
-import { encodeStaticGlb, inspectStaticGlb } from './glb.js';
+import { encodeStaticGlb, inspectStaticGlb, staticMeshBounds } from './glb.js';
 import { generateHouse, type HouseRecipe } from './house.js';
 import { generateStreamingCells } from './streaming-lab.js';
 import {
   generateFootprint,
   generateGround,
-  generateTree,
   type FootprintRecipe,
   type GroundRecipe,
-  type TreeRecipe,
 } from './city.js';
 import { generateKit, type KitRecipe } from './kit.js';
 import { treeRenderRecipe } from './tree-instances.js';
@@ -49,7 +49,6 @@ const generators = {
   house: (id: string, recipe: unknown) => generateHouse(id, recipe as HouseRecipe),
   footprint: (id: string, recipe: unknown) => generateFootprint(id, recipe as FootprintRecipe),
   ground: (id: string, recipe: unknown) => generateGround(id, recipe as GroundRecipe),
-  tree: (id: string, recipe: unknown) => generateTree(id, recipe as TreeRecipe),
   kit: (id: string, recipe: unknown) => generateKit(id, recipe as KitRecipe),
 };
 
@@ -75,7 +74,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   if (descriptor.formatVersion !== 1 || (!groundRecipe && descriptor.assetId !== assetId))
     throw new Error(`Invalid asset descriptor: ${assetId}`);
   const directory = dirname(descriptorPath);
-  let model: Uint8Array, physics: BuildingPhysicsAsset;
+  let model: Uint8Array | undefined, physics: BuildingPhysicsAsset;
+  let treeParts: BuildingParts | undefined;
   let tree: TreeRenderRecipe | undefined;
   const kind = descriptor.source?.kind;
   const generator = Object.hasOwn(generators, kind)
@@ -84,9 +84,24 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   if (generator) {
     const recipe = groundRecipe ?? (await readJson(sourceFile(directory, descriptor.source.file)));
     const generated = generator(assetId, recipe);
-    model = encodeStaticGlb(generated.parts);
     physics = generated.physics;
     if (kind === 'kit') tree = treeRenderRecipe(assetId, recipe);
+    if (assetId.startsWith('tree-') && !tree)
+      throw new Error(`Tree must use the current instancing profile: ${assetId}`);
+    if (tree) {
+      physics = { ...physics, bounds: staticMeshBounds(generated.parts) };
+      treeParts = {
+        formatVersion: 1,
+        assetId,
+        tree,
+        parts: generated.parts.map(({ partId, role, occlusionGroup }, nodeIndex) => ({
+          partId,
+          role,
+          occlusionGroup,
+          nodeIndex,
+        })),
+      };
+    } else model = encodeStaticGlb(generated.parts);
   } else if (descriptor.source?.kind === 'glb') {
     model = await readFile(sourceFile(directory, descriptor.source.file));
     physics = validateBuildingPhysicsAsset(
@@ -94,18 +109,24 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     );
     if (physics.assetId !== assetId) throw new Error('Imported collision asset ID mismatch');
   } else throw new Error(`Unsupported asset source: ${assetId}`);
-  if (model.byteLength > WORLD_RESOURCE_LIMITS.modelBytes)
-    throw new Error(`Model byte limit: ${assetId}`);
-  const validation = await validateBytes(model, { uri: `${assetId}.glb`, writeTimestamp: false });
-  if (validation.issues.numErrors)
-    throw new Error(
-      `Invalid glTF ${assetId}: ${validation.issues.messages
-        .filter((m) => m.code)
-        .slice(0, 5)
-        .map((m) => m.message)
-        .join('; ')}`,
-    );
-  const inspected = inspectStaticGlb(model, assetId);
+  let inspected: { parts: BuildingParts; bounds: BuildingPhysicsAsset['bounds'] };
+  if (model !== undefined) {
+    if (model.byteLength > WORLD_RESOURCE_LIMITS.modelBytes)
+      throw new Error(`Model byte limit: ${assetId}`);
+    const validation = await validateBytes(model, { uri: `${assetId}.glb`, writeTimestamp: false });
+    if (validation.issues.numErrors)
+      throw new Error(
+        `Invalid glTF ${assetId}: ${validation.issues.messages
+          .filter((m) => m.code)
+          .slice(0, 5)
+          .map((m) => m.message)
+          .join('; ')}`,
+      );
+    inspected = inspectStaticGlb(model, assetId);
+  } else {
+    if (!treeParts) throw new Error(`Missing tree representation: ${assetId}`);
+    inspected = { parts: treeParts, bounds: physics.bounds };
+  }
   // Imported proxies may simplify the silhouette, but must share the visual asset coordinate space.
   for (const axis of ['x', 'y', 'z'] as const) {
     if (
@@ -117,14 +138,18 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   physics = { ...physics, bounds: inspected.bounds };
   validateBuildingPhysicsAsset(physics);
   const collision = jsonBytes(physics),
-    parts = jsonBytes(validateBuildingParts({ ...inspected.parts, ...(tree ? { tree } : {}) }));
+    parts = jsonBytes(validateBuildingParts(inspected.parts));
   if (
     collision.byteLength > WORLD_RESOURCE_LIMITS.collisionBytes ||
     parts.byteLength > WORLD_RESOURCE_LIMITS.partsBytes
   )
     throw new Error(`Model metadata byte limit: ${assetId}`);
   const version = hash(
-    canonicalJson({ model: hash(model), collision: hash(collision), parts: hash(parts) }),
+    canonicalJson({
+      ...(model === undefined ? {} : { model: hash(model) }),
+      collision: hash(collision),
+      parts: hash(parts),
+    }),
   );
   return { model, collision, parts, version, physics, bounds: inspected.bounds };
 }
@@ -263,8 +288,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       `content/worlds/${worldId}/world.json`,
       `dist/worlds/${worldId}`,
     );
+    const removed = await pruneWorldPublication(`dist/worlds/${worldId}`);
     console.log(
-      `World ${manifest.worldId}: ${manifest.mapVersion.slice(0, 12)} (${Object.keys(manifest.assets).length} building assets)`,
+      `World ${manifest.worldId}: ${manifest.mapVersion.slice(0, 12)} (${Object.keys(manifest.assets).length} assets, ${removed} obsolete files removed)`,
     );
   }
 }

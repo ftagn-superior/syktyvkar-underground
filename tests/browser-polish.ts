@@ -186,22 +186,10 @@ try {
   );
   await page.locator('#diagnostics-toggle').click();
 
-  await reachable(page, [
-    '#camera-left',
-    '#camera-right',
-    '#respawn',
-    '#leave',
-    '#diagnostics-toggle',
-  ]);
+  await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle']);
   await page.screenshot({ path: 'output/playwright/polish/playing-1280x600.png' });
   await page.setViewportSize({ width: 640, height: 300 });
-  await reachable(page, [
-    '#camera-left',
-    '#camera-right',
-    '#respawn',
-    '#leave',
-    '#diagnostics-toggle',
-  ]);
+  await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle']);
   await page.locator('#diagnostics-toggle').click();
   await reachable(page, ['#quality', '#download-report']);
   await page.screenshot({ path: 'output/playwright/polish/diagnostics-640x300.png' });

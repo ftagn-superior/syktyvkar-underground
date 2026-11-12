@@ -32,11 +32,12 @@ const diagnosticsToggle = element<HTMLButtonElement>('diagnostics-toggle');
 const qualitySelect = element<HTMLSelectElement>('quality');
 const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
-const cameraLeft = element<HTMLButtonElement>('camera-left');
-const cameraRight = element<HTMLButtonElement>('camera-right');
 const actions = document.querySelector<HTMLElement>('.actions')!;
 const actionsResize = new ResizeObserver(() => {
-  actions.style.setProperty('--game-actions-height', `${actions.getBoundingClientRect().height}px`);
+  document.documentElement.style.setProperty(
+    '--game-actions-height',
+    `${actions.getBoundingClientRect().height}px`,
+  );
 });
 actionsResize.observe(actions);
 const qualityStorageKey = 'su:render-quality:v1';
@@ -133,13 +134,25 @@ const accounts = new AccountPanel(
   },
   () => session.leave(),
 );
-inventory = new InventoryPanel(session, canvas, () => {
-  chat?.close(false);
-  reactions?.close(false);
-  animations?.close(false);
-  diagnostics.hidden = true;
-  diagnosticsToggle.setAttribute('aria-expanded', 'false');
-});
+inventory = new InventoryPanel(
+  session,
+  canvas,
+  () => {
+    chat?.close(false);
+    reactions?.close(false);
+    animations?.close(false);
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+  (placing) => {
+    keyboard?.setPlacementMode(placing);
+    session.neutral();
+    element('controls-title').textContent = placing ? 'Поворот предмета' : 'Свободное движение';
+    element('controls-description').textContent = placing
+      ? 'W / S — наклон · A / D — поворот · Q / E — крен'
+      : 'WASD / стрелки · Shift — быстрый бег · Q / E — камера';
+  },
+);
 const accountPreparation = accounts.load();
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
@@ -215,7 +228,9 @@ keyboard = new KeyboardInput(
   () => session.neutral(),
   rotateCamera,
   () => reactions!.toggleOpen(),
-  () => chat!.open(),
+  (initialText) => chat!.open(initialText),
+  () => animations!.toggleOpen(),
+  (axis, direction) => inventory?.rotatePlacement(axis, direction),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
@@ -226,7 +241,6 @@ function renderRespawn(): void {
     : remainingMs > 0
       ? `На старт · ${Math.ceil(remainingMs / 1000)} с`
       : 'На старт';
-  cameraLeft.disabled = cameraRight.disabled = !loaded || graphicsLost;
 }
 function renderMetrics(): void {
   element('player-count').textContent = `${session.playerCount} / 8`;
@@ -350,14 +364,6 @@ join.addEventListener('click', () => {
       if (ready) void session.join();
     });
   else void start();
-});
-cameraLeft.addEventListener('click', () => {
-  rotateCamera(-1);
-  canvas.focus({ preventScroll: true });
-});
-cameraRight.addEventListener('click', () => {
-  rotateCamera(1);
-  canvas.focus({ preventScroll: true });
 });
 respawn.addEventListener('click', () => {
   session.respawn();

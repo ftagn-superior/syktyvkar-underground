@@ -76,7 +76,7 @@ export class ChatConsole {
       options,
     );
   }
-  open(): void {
+  open(initialText = ''): void {
     if (!this.state.available) return;
     if (!this.form.hidden) {
       this.input.focus({ preventScroll: true });
@@ -85,8 +85,10 @@ export class ChatConsole {
     this.onOpenChange(true);
     this.form.hidden = false;
     this.toggle.setAttribute('aria-expanded', 'true');
+    this.input.value = initialText;
     this.render();
     this.input.focus({ preventScroll: true });
+    this.input.setSelectionRange(initialText.length, initialText.length);
   }
   close(restoreFocus = true): void {
     const wasOpen = !this.form.hidden;

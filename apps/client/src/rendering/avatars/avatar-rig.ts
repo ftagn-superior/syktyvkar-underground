@@ -101,6 +101,8 @@ export class AvatarRig {
     this.rightShoulder.rotation.set(pose.rightArm, pose.rightArmYaw, pose.rightArmRoll);
     this.leftHip.rotation.x = pose.leftLeg;
     this.rightHip.rotation.x = pose.rightLeg;
+    this.leftHip.rotation.z = pose.leftLegRoll;
+    this.rightHip.rotation.z = pose.rightLegRoll;
   }
 
   dispose(): void {

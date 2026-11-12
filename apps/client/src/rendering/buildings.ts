@@ -92,6 +92,7 @@ export class BuildingViews {
   private prepared = false;
   private readonly trees: TreeViews;
   private lastOcclusionTest = -Infinity;
+  private opaque = false;
   private minimumVisibleSize = 0;
 
   constructor(
@@ -320,7 +321,14 @@ export class BuildingViews {
     const parts = validateBuildingParts(JSON.parse(new TextDecoder().decode(partsBytes)));
     if (parts.assetId !== descriptor.assetId) throw new Error('Building part asset mismatch');
     if (this.disposed) throw new Error('Building preparation was cancelled');
-    if (parts.tree && this.trees.supported) return { descriptor, parts };
+    if (parts.tree) {
+      if (descriptor.modelFile !== undefined)
+        throw new Error('Instanced tree must not include a GLB');
+      if (!this.trees.supported)
+        throw new Error('Для отображения деревьев требуется поддержка GPU instancing');
+      return { descriptor, parts };
+    }
+    if (!descriptor.modelFile) throw new Error('GLB asset is missing its model');
     const model = await readBytes(descriptor.modelFile);
     const container = await loadBuildingContainer(model, this.scene, `${descriptor.assetId}.glb`);
     if (this.disposed) {
@@ -435,9 +443,10 @@ export class BuildingViews {
     seconds: number,
     shadowCenter = ownPosition,
     visibleRadius = Infinity,
+    opaque = false,
   ): void {
     const rays: Ray[] = [];
-    if (ownPosition) {
+    if (ownPosition && !opaque) {
       const { height, radius } = this.definition.simulation.character;
       const right = new Vector3(-direction.z, 0, direction.x).normalize();
       for (const [vertical, horizontal] of [
@@ -452,7 +461,7 @@ export class BuildingViews {
         rays.push(orthographicSightRay(cameraPosition, direction, sample, cameraNear));
       }
     }
-    this.trees.update(rays, shadowCenter, visibleRadius, now, seconds);
+    this.trees.update(rays, shadowCenter, visibleRadius, now, seconds, opaque);
     const selected = new Set(this.fading);
     for (const ray of rays) {
       const end = ray.origin.add(ray.direction.scale(ray.length));
@@ -480,7 +489,9 @@ export class BuildingViews {
       if (!shadowCandidates.has(id) && this.references.has(id)) this.setShadowed(id, false);
     for (const id of shadowCandidates)
       if (!this.shadowed.has(id) && this.references.has(id)) this.setShadowed(id, true);
-    const test = now - this.lastOcclusionTest >= OCCLUSION_TEST_INTERVAL_MS;
+    const test =
+      opaque !== this.opaque || now - this.lastOcclusionTest >= OCCLUSION_TEST_INTERVAL_MS;
+    this.opaque = opaque;
     if (test) this.lastOcclusionTest = now;
     for (const id of selected) {
       const instance = this.references.get(id)?.view;
@@ -493,14 +504,17 @@ export class BuildingViews {
       for (const group of instance.groups) {
         // Each group and each building is tested: the nearest hit must not hide a second blocker.
         // Между геометрическими проверками действует прежний результат; затухание идёт каждый кадр.
-        const blocked = test
-          ? candidates.some((ray) =>
-              group.meshes.some((mesh) => {
-                const hit = ray.intersectsMesh(mesh, true);
-                return hit.hit && hit.distance < ray.length;
-              }),
-            )
-          : group.fade.blocked;
+        const blocked = opaque
+          ? false
+          : test
+            ? candidates.some((ray) =>
+                group.meshes.some((mesh) => {
+                  const hit = ray.intersectsMesh(mesh, true);
+                  return hit.hit && hit.distance < ray.length;
+                }),
+              )
+            : group.fade.blocked;
+        if (opaque) group.fade.clear();
         const opacity = group.fade.update(blocked, now, seconds);
         if (opacity < 1) {
           this.ownMaterials(instance, group);

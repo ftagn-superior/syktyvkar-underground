@@ -76,17 +76,14 @@ async function setup(optimized: boolean, shadows: boolean, faded = false) {
   material.metallic = 0;
   material.roughness = 0.9;
   ground.material = material;
-  const manifest: WorldManifest = await (await fetch('/manifest.json')).json();
+  const manifest: WorldManifest = await (
+    await fetch(optimized ? '/manifest.json' : '/reference.json')
+  ).json();
   const header = { simulation: { character: { height: 1.8, radius: 0.35 } } } as WorldHeader;
   radial = { center: { x: 0, y: 0, z: 0 }, radius: 10000, time: performance.now(), appearMs: 300 };
   views = new BuildingViews(scene, shadow, header, radial);
   release = await views.prepareAssets(manifest, Object.keys(manifest.assets), async (path) => {
     const bytes = new Uint8Array(await (await fetch('/' + path)).arrayBuffer());
-    if (!optimized && path.endsWith('parts.json')) {
-      const parts = JSON.parse(new TextDecoder().decode(bytes));
-      delete parts.tree;
-      return new TextEncoder().encode(JSON.stringify(parts));
-    }
     return bytes;
   });
   const assets = Object.values(manifest.assets);

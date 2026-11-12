@@ -89,7 +89,7 @@ beforeAll(async () => {
           version: asset.version,
           bounds: asset.bounds,
           physics: world.buildingAssets[id],
-          model: await readFile(join(directory, asset.modelFile)),
+          model: asset.modelFile ? await readFile(join(directory, asset.modelFile)) : undefined,
           collision: await readFile(join(directory, asset.collisionFile)),
           parts: await readFile(join(directory, asset.partsFile)),
         },
@@ -264,6 +264,64 @@ describe('lazy gameplay physics', () => {
     expect(instance.info.mapVersion).toBe(next.mapVersion);
     expect(instance.definition.routes).toHaveProperty('context-b');
     expect(sessionStorage.getItem('su:static-operation:account')).toBe('pending-request');
+  });
+
+  it('sounds a fresh denied item action once but keeps its replay silent after SDK reconnect', async () => {
+    const messages = new Map<string, (value: unknown) => void>();
+    let drop: (() => void) | undefined;
+    let reconnect: (() => void) | undefined;
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      state: { players: new Map(), items: new Map(), serverTick: 0 },
+      onStateChange: vi.fn(),
+      onDrop: (callback: () => void) => {
+        drop = callback;
+      },
+      onReconnect: (callback: () => void) => {
+        reconnect = callback;
+      },
+      onLeave: vi.fn(),
+      onError: vi.fn(),
+      onMessage: (name: string, callback: (value: unknown) => void) => messages.set(name, callback),
+      send: vi.fn(),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    mocks.createPhysics.mockResolvedValueOnce({ ...physics(), syncRemote: vi.fn() });
+    const instance = session();
+    instance.accountId = 'account';
+    const feedback = vi.fn();
+    instance.onActionFeedback = feedback;
+    await instance.load();
+    instance.markPrepared();
+    await instance.join();
+    expect(instance.room).toBe(room);
+    const itemResult = messages.get('itemResult')!;
+    const pendingId = () =>
+      JSON.parse(sessionStorage.getItem('su:item-operation:account')!).operationId as string;
+
+    // Rendering/area preparation is independent of this message lifecycle regression.
+    instance.state = 'playing';
+    instance.itemAction({ kind: 'pickup', itemId: 'crate-01' });
+    const first = { operationId: pendingId(), ok: false, code: 'OUT_OF_REACH' };
+    itemResult(first);
+    itemResult(first);
+    expect(feedback).toHaveBeenCalledExactlyOnceWith('error');
+
+    instance.itemAction({ kind: 'pickup', itemId: 'crate-01' });
+    const replay = { operationId: pendingId(), ok: false, code: 'OUT_OF_REACH' };
+    drop!();
+    expect(instance.state).toBe('reconnecting');
+    expect(instance.itemPending).toBe(true);
+    reconnect!();
+    await Promise.resolve();
+    expect(instance.room).toBe(room); // SDK reconnect did not run cleanup or reserve a new room.
+    expect(mocks.reserve).toHaveBeenCalledTimes(1);
+    instance.state = 'playing';
+    itemResult(replay);
+    expect(instance.itemPending).toBe(false);
+    expect(feedback).toHaveBeenCalledExactlyOnceWith('error');
   });
 
   it('loads and streams a graphical preview without requesting WASM or creating physics', async () => {

@@ -9,6 +9,9 @@ import { applyAccent } from './ui/theme';
 import { CharacterPreview } from './ui/character-preview';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
+import { FirstPersonInput } from './input/first-person';
+import { NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
+import { firstPersonMovement } from './rendering/camera-controller';
 import { CameraPointerInput } from './input/camera-pointer';
 import { GameInputMode } from './input/mode';
 import { TouchInput } from './input/touch';
@@ -23,6 +26,9 @@ import { StaticPlacement } from './ui/static-placement';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 import { bindTouchButtons } from './ui/touch-buttons';
+import { GameAudio } from './audio/game-audio';
+import { AudioSettings } from './ui/audio-settings';
+import { MenuSounds } from './ui/menu-sounds';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -46,6 +52,15 @@ const diagnosticsToggle = element<HTMLButtonElement>('diagnostics-toggle');
 const qualitySelect = element<HTMLSelectElement>('quality');
 const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
+const audio = new GameAudio();
+const audioSettings = new AudioSettings(audio);
+const audioInputs = new AbortController();
+const unlockAudio = () => audio.unlock();
+document.addEventListener('pointerdown', unlockAudio, {
+  capture: true,
+  signal: audioInputs.signal,
+});
+document.addEventListener('keydown', unlockAudio, { capture: true, signal: audioInputs.signal });
 const unbindTouchButtons = bindTouchButtons([
   join,
   respawn,
@@ -69,6 +84,7 @@ let loaded = false;
 let starting = false;
 let keyboard: KeyboardInput;
 let cameraPointer: CameraPointerInput | undefined;
+let firstPerson: FirstPersonInput | undefined;
 let graphicsLost = false;
 let previousConnection: ConnectionState = 'loading';
 let pageActive = !document.hidden;
@@ -144,6 +160,7 @@ function closeGamePanels(): void {
   diagnosticsToggle.setAttribute('aria-expanded', 'false');
 }
 const inputMode = new GameInputMode(canvas, stick, (mode) => {
+  if (mode === 'touch') firstPerson?.overview();
   resetGameInput();
   closeGamePanels();
   view?.setTouchMode(mode === 'touch');
@@ -155,19 +172,25 @@ const inputMode = new GameInputMode(canvas, stick, (mode) => {
       : 'Управление переключено на мышь и клавиатуру. Нажмите клавишу движения ещё раз.',
   );
 });
-function renderControls(placing = false): void {
+function renderControls(placing = !!placementOwner): void {
+  element('overview-camera-controls').hidden = !!firstPerson?.selected;
+  element('first-person-camera-controls').hidden = !firstPerson?.selected;
   element('controls-title').textContent = placing
     ? placementOwner === 'static'
       ? 'Размещение скамейки'
       : 'Поворот предмета'
-    : 'Свободное движение';
+    : firstPerson?.selected
+      ? 'От первого лица'
+      : 'Свободное движение';
   element('controls-description').textContent = placing
     ? placementOwner === 'static'
       ? 'A / D — поворот на 15° · колесо — масштаб'
       : 'W / S — наклон · A / D — поворот · Q / E — крен'
-    : inputMode.value === 'touch'
-      ? 'Стик слева — ходьба · свайп справа — камера'
-      : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
+    : firstPerson?.selected
+      ? 'WASD / стрелки — ходьба и боковые шаги · мышь — взгляд · Shift — бег · T — чат · V — обзор'
+      : inputMode.value === 'touch'
+        ? 'Стик слева — ходьба · свайп справа — камера'
+        : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
 }
 function canTouch(): boolean {
   return (
@@ -184,7 +207,9 @@ function renderInputMode(): void {
   document.body.dataset.inputMode = inputMode.value;
   stick.hidden = !isTouch || session.state !== 'playing' || graphicsLost;
   keyboard?.setEnabled(!isTouch && !graphicsLost && element('chat-console').hidden);
-  inventory?.setEnabled(!isTouch && !graphicsLost);
+  inventory?.setEnabled(
+    !isTouch && !graphicsLost && !firstPerson?.selected && !firstPerson?.requesting,
+  );
   renderControls();
   syncTouchInput();
 }
@@ -192,18 +217,70 @@ function syncTouchInput(): void {
   touch?.setEnabled(canTouch());
 }
 function renderGamePanels(): void {
-  const available = inputMode.value === 'desktop' && !graphicsLost;
+  const available =
+    inputMode.value === 'desktop' &&
+    !graphicsLost &&
+    !firstPerson?.selected &&
+    !firstPerson?.requesting;
   const reaction = session.reactionStatus();
   const animation = session.animationStatus();
   reactions?.update({ ...reaction, available: available && reaction.available });
   animations?.update({ ...animation, available: available && animation.available });
   renderChat();
   inventory?.update();
+  renderFirstPerson();
+}
+function firstPersonEligible(): boolean {
+  const room = session.room;
+  return (
+    loaded &&
+    !graphicsLost &&
+    pageActive &&
+    !document.hidden &&
+    inputMode.value === 'desktop' &&
+    !placementOwner &&
+    session.gameplayInputEnabled &&
+    !!room?.state.players.get(room.sessionId)
+  );
+}
+function readMovement(): MoveInput {
+  if (inputMode.value === 'touch') return touch!.read(view?.cameraAngle ?? 0);
+  if (firstPerson?.requesting) return { ...NEUTRAL_INPUT };
+  if (firstPerson?.selected) {
+    if (
+      !firstPerson.locked ||
+      !firstPersonEligible() ||
+      help?.isOpen ||
+      !element('chat-console').hidden
+    )
+      return { ...NEUTRAL_INPUT };
+    return firstPersonMovement(keyboard.read(view?.cameraAngle), view!.facingYaw);
+  }
+  return keyboard.read(view?.cameraAngle);
+}
+function renderFirstPerson(): void {
+  const selected = firstPerson?.selected ?? false;
+  const pending = firstPerson?.requesting ?? false;
+  element<HTMLButtonElement>('view-toggle').disabled =
+    !selected && !pending && !firstPersonEligible();
+  element('view-toggle-label').textContent = selected
+    ? 'Обзор'
+    : pending
+      ? 'Отменить вход'
+      : 'От первого лица';
+  element('first-person-hud').hidden = !selected && !pending;
+  element('first-person-hint').hidden = !!firstPerson?.locked;
+  element('first-person-hint').textContent = pending
+    ? 'Ожидаем захват мыши…'
+    : 'Щёлкните по миру, чтобы продолжить · Esc — курсор';
+  element('first-person-actions').hidden = !selected;
 }
 function continuationHint(): string {
-  return inputMode.value === 'touch'
-    ? 'Коснитесь стика заново, чтобы продолжить.'
-    : 'Нажмите клавишу движения, чтобы продолжить.';
+  return firstPerson?.selected
+    ? 'Щёлкните по миру, чтобы продолжить.'
+    : inputMode.value === 'touch'
+      ? 'Коснитесь стика заново, чтобы продолжить.'
+      : 'Нажмите клавишу движения, чтобы продолжить.';
 }
 
 function showNotice(message: string, options: { toast?: { hint?: string } } = {}): void {
@@ -245,8 +322,11 @@ function showNotice(message: string, options: { toast?: { hint?: string } } = {}
 function updateState(state: ConnectionState, message?: string): void {
   if (state !== 'playing' && state !== 'waiting') staticPlacement?.close();
   const playing = state === 'playing';
+  if (!playing) audio.stopWorld();
   const reconnecting = state === 'reconnecting';
   const preparing = state === 'preparing' || state === 'waiting';
+  if (state !== 'playing') firstPerson?.suspend();
+  if (!session.room && !reconnecting && !preparing) firstPerson?.overview();
   welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && !!session.room);
   document.body.dataset.scene = welcome.hidden ? 'world' : 'lobby';
   join.disabled =
@@ -317,6 +397,14 @@ function updateState(state: ConnectionState, message?: string): void {
   syncPreview();
 }
 const session = new GameSession(updateState, showNotice);
+session.onSpawn = () => audio.playUi('spawn');
+session.onActionFeedback = (cue) => audio.playUi(cue);
+function syncAudioActivity(): void {
+  const active = pageActive && !document.hidden && !graphicsLost;
+  audio.setActive(active);
+  session.setSoundActive(active);
+}
+syncAudioActivity();
 const storageStatus = document.createElement('div');
 storageStatus.className = 'storage-status';
 storageStatus.setAttribute('role', 'status');
@@ -368,11 +456,19 @@ staticPlacement = new StaticPlacement(
 );
 session.onStaticPlacementOpen = (effect) => {
   if (inputMode.value !== 'desktop' || graphicsLost) return;
+  firstPerson?.overview();
   closeGamePanels();
   help?.close(false);
   void staticPlacement?.open(effect);
 };
-help = new HelpMenu(() => canvas.focus({ preventScroll: true }));
+help = new HelpMenu(
+  () => canvas.focus({ preventScroll: true }),
+  () => {
+    if (!firstPerson?.selected && !firstPerson?.requesting) return;
+    firstPerson?.suspend();
+    resetGameInput();
+  },
+);
 const pickups = new PickupSource(
   session,
   () => view,
@@ -405,7 +501,13 @@ reactions = new ReactionMenu(
   element('reactions-status'),
   canvas,
   (id) => {
-    if (inputMode.value !== 'desktop' || graphicsLost) return;
+    if (
+      inputMode.value !== 'desktop' ||
+      graphicsLost ||
+      firstPerson?.selected ||
+      firstPerson?.requesting
+    )
+      return;
     session.react(id);
     renderGamePanels();
   },
@@ -423,7 +525,13 @@ animations = new AnimationMenu(
   element('animations-status'),
   canvas,
   (id) => {
-    if (inputMode.value !== 'desktop' || graphicsLost) return;
+    if (
+      inputMode.value !== 'desktop' ||
+      graphicsLost ||
+      firstPerson?.selected ||
+      firstPerson?.requesting
+    )
+      return;
     session.animate(id);
     renderGamePanels();
   },
@@ -449,6 +557,7 @@ chat = new ChatConsole(
     renderChat();
   },
   (open) => {
+    if (open) firstPerson?.suspend();
     keyboard?.setEnabled(!open && !graphicsLost && inputMode.value === 'desktop');
     resetGameInput();
     if (open) {
@@ -465,6 +574,18 @@ session.onChatResult = (result) => {
   chat?.complete(result.ok);
   renderChat();
 };
+const menuSounds = new MenuSounds(
+  [
+    'help-panel',
+    'reactions-panel',
+    'animations-panel',
+    'inventory-panel',
+    'chat-console',
+    'diagnostics',
+  ].map((id) => element(id)),
+  () => pageActive && !document.hidden && !graphicsLost && session.state === 'playing',
+  (cue) => audio.playUi(cue),
+);
 function renderChat(): void {
   const state = session.chatStatus();
   chat?.update({
@@ -487,10 +608,37 @@ keyboard = new KeyboardInput(
 );
 cameraPointer = new CameraPointerInput(
   canvas,
-  () => inputMode.value === 'desktop' && loaded && !graphicsLost && keyboard.cameraEnabled,
+  () =>
+    inputMode.value === 'desktop' &&
+    loaded &&
+    !graphicsLost &&
+    keyboard.cameraEnabled &&
+    !firstPerson?.selected &&
+    !firstPerson?.requesting,
   (radians) => view?.rotateCameraBy(radians),
   () => view?.stopCamera(),
 );
+firstPerson = new FirstPersonInput(canvas, {
+  eligible: firstPersonEligible,
+  prepare: () => {
+    closeGamePanels();
+    help?.close(false);
+  },
+  reset: resetGameInput,
+  modeChanged: (enabled) => {
+    view?.setFirstPerson(enabled);
+    renderInputMode();
+    renderGamePanels();
+  },
+  stateChanged: () => {
+    renderInputMode();
+    renderGamePanels();
+  },
+  look: (x, y) => view?.lookBy(x, y),
+  notice: showNotice,
+});
+element('view-toggle').addEventListener('click', () => firstPerson!.toggle());
+element('overview-button').addEventListener('click', () => firstPerson!.overview());
 touch = new TouchInput(
   canvas,
   stick,
@@ -503,19 +651,22 @@ touch = new TouchInput(
 renderInputMode();
 window.addEventListener('blur', () => {
   pageActive = false;
+  syncAudioActivity();
   resetGameInput();
   syncTouchInput();
 });
 window.addEventListener('focus', () => {
   pageActive = true;
+  syncAudioActivity();
   syncTouchInput();
 });
 document.addEventListener('visibilitychange', () => {
+  syncAudioActivity();
   if (document.hidden) resetGameInput();
   syncTouchInput();
 });
 const resetTouchScreen = () => {
-  if (inputMode.value === 'touch') resetGameInput();
+  if (inputMode.value === 'touch' || firstPerson?.selected) resetGameInput();
 };
 window.addEventListener('resize', resetTouchScreen);
 window.addEventListener('orientationchange', resetTouchScreen);
@@ -573,6 +724,23 @@ function renderMetrics(): void {
     }),
   );
 }
+function recoverGameLoop(error: unknown): void {
+  loaded = false;
+  starting = true;
+  firstPerson?.suspend();
+  resetGameInput();
+  view?.onFrame(() => {});
+  view?.onCameraFrame(() => {});
+  console.error('Game loop failed', error);
+  updateState('loading');
+  joinLabel.textContent = 'Восстанавливаем интерфейс…';
+  void session.leave().finally(() => {
+    view?.dispose();
+    view = undefined;
+    starting = false;
+    session.markPreparationFailed(readableError(error));
+  });
+}
 async function start(): Promise<void> {
   if (starting) return;
   starting = true;
@@ -585,14 +753,18 @@ async function start(): Promise<void> {
       return;
     }
     resetGameInput();
+    firstPerson?.overview();
     view?.dispose();
     view = undefined;
     await session.load();
     view = new WorldView(canvas, element('labels'), session.definition, quality);
+    view.setAudio(audio);
     view.setTouchMode(inputMode.value === 'touch');
+    view.setOverlayTest((from, to, targetId) => session.overlayBlocked(from, to, targetId));
     view.engine.onContextRestoredObservable.add(() => {
       if (!graphicsLost) return;
       graphicsLost = false;
+      syncAudioActivity();
       graphicsRecovery.hidden = true;
       document.body.classList.remove('graphics-unavailable');
       qualitySelect.disabled = false;
@@ -618,35 +790,42 @@ async function start(): Promise<void> {
     session.connectGraphics(view);
     view.onFrame((now, delta) => {
       try {
-        const area = view!.graphicalArea();
-        view!.setStreamingRadius(session.updateVisualArea(area.center, area.drawRadius));
+        if (!firstPersonEligible() || help?.isOpen || !element('chat-console').hidden)
+          firstPerson?.suspend();
         syncTouchInput();
-        const command =
-          inputMode.value === 'touch'
-            ? touch!.read(view!.cameraAngle)
-            : keyboard.read(view!.cameraAngle);
+        const command = readMovement();
         if (command.moveX || command.moveZ) help?.noteMovement();
-        interactions?.tick(now);
         const frame = session.frame(now, delta, command);
+        if (!firstPersonEligible()) firstPerson?.suspend();
+        if (!frame.ownId && session.state !== 'reconnecting' && session.state !== 'preparing')
+          firstPerson?.overview();
         syncTouchInput();
         view!.follow(frame.ownId);
-        view!.update(frame.entities, frame.ownId, delta);
+        view!.update(frame.entities, frame.ownId, delta, session.ownPhysicalPosition());
+        for (const event of session.takeWorldSounds(now)) {
+          const own = event.actorId === session.room?.sessionId;
+          if (event.kind === 'pickup' && own) audio.playUi('pickup');
+          else
+            audio.playWorld(event.kind, event.position, {
+              typeId: event.typeId,
+              strength: event.strength,
+              own,
+              sourceId: event.entityId,
+            });
+        }
+      } catch (error) {
+        recoverGameLoop(error);
+      }
+    });
+    view.onCameraFrame((now) => {
+      try {
+        const area = view!.graphicalArea();
+        view!.setStreamingRadius(session.updateVisualArea(area.center, area.drawRadius));
+        interactions?.tick(now);
         if (placementOwner === 'static') staticPlacement?.frame();
         else inventory?.frame(view!);
       } catch (error) {
-        loaded = false;
-        starting = true;
-        resetGameInput();
-        view?.onFrame(() => {});
-        console.error('Game loop failed', error);
-        updateState('loading');
-        joinLabel.textContent = 'Восстанавливаем интерфейс…';
-        void session.leave().finally(() => {
-          view?.dispose();
-          view = undefined;
-          starting = false;
-          session.markPreparationFailed(readableError(error));
-        });
+        recoverGameLoop(error);
       }
     });
     loaded = true;
@@ -676,16 +855,19 @@ join.addEventListener('click', () => {
   else void start();
 });
 respawn.addEventListener('click', () => {
+  firstPerson?.suspend();
   resetGameInput();
   session.respawn();
   renderRespawn();
   canvas.focus({ preventScroll: true });
 });
 leave.addEventListener('click', () => {
+  firstPerson?.overview();
   resetGameInput();
   void session.leave();
 });
 diagnosticsToggle.addEventListener('click', () => {
+  firstPerson?.suspend();
   chat?.close(false);
   reactions?.close(false);
   animations?.close(false);
@@ -695,6 +877,7 @@ diagnosticsToggle.addEventListener('click', () => {
   renderMetrics();
 });
 qualitySelect.addEventListener('change', () => {
+  resetGameInput();
   quality = qualitySelect.value === 'economy' ? 'economy' : 'standard';
   view?.setQuality(quality);
   session.resetFrameMeasurements();
@@ -713,6 +896,8 @@ canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   graphicsLost = true;
   staticPlacement?.close();
+  firstPerson?.suspend();
+  syncAudioActivity();
   keyboard.setEnabled(false);
   resetGameInput();
   session.setInputEnabled(false);
@@ -758,6 +943,7 @@ window.addEventListener(
     clearTimeout(noticeTimer);
     unbindTouchButtons();
     resetGameInput();
+    firstPerson?.dispose();
     session.dispose();
     touch?.dispose();
     inputMode.dispose();
@@ -772,6 +958,10 @@ window.addEventListener(
     animations?.dispose();
     chat?.dispose();
     inventory?.dispose();
+    menuSounds.dispose();
+    audioSettings.dispose();
+    audioInputs.abort();
+    audio.dispose();
   },
   { once: true },
 );
@@ -781,10 +971,11 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
       snapshot: () => structuredClone(session.diagnostics()),
       controls: () => ({
         mode: inputMode.value,
-        input:
-          inputMode.value === 'touch'
-            ? touch!.read(view?.cameraAngle ?? 0)
-            : keyboard.read(view?.cameraAngle),
+        view: firstPerson?.selected ? 'first-person' : 'overview',
+        pointerLocked: firstPerson?.locked ?? false,
+        pointerPending: firstPerson?.requesting ?? false,
+        firstPersonAvailable: firstPersonEligible(),
+        input: readMovement(),
         touchAvailable: canTouch(),
       }),
       corrections: () => session.correctionHistory(),
@@ -794,6 +985,7 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
       }),
       buildings: () => structuredClone(view?.buildingDiagnostics() ?? []),
       avatars: () => view?.avatarDiagnostics() ?? [],
+      audio: () => audio.diagnostics(),
     }),
     writable: false,
   });

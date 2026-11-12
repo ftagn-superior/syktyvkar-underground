@@ -198,7 +198,7 @@ try {
       for (const file of [
         first.worldFile,
         first.cells[0].file,
-        Object.values(first.assets)[0].modelFile,
+        Object.values(first.assets).find((asset) => asset.modelFile)!.modelFile!,
       ]) {
         const response = await fetch(new URL(file, url + info.manifestUrl).href);
         assert.equal(response.status, 200);

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -42,6 +43,7 @@ export async function prepareScene(directory: string) {
     gzipBytes: number;
   }[] = [];
   for (const asset of Object.values(manifest.assets)) {
+    assert.ok(asset.modelFile, 'The streaming-lab fixture uses GLB houses');
     const bytes = await readBytes(asset.modelFile);
     const { document } = inspectStaticGlb(bytes, asset.assetId);
     const triangles = document.meshes.reduce(

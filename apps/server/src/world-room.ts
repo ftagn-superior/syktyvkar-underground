@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DurationMetric } from './metrics.js';
 import { DynamicInterest } from './interest.js';
+import { deliverWorldSound } from './sounds.js';
 import {
   CloseCode,
   Room,
@@ -35,7 +36,6 @@ import {
   REACTION_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
-  normalizeInput,
   worldNeighborhood,
   type PrepareArea,
   type AreaResult,
@@ -53,10 +53,12 @@ import {
   type ErrorCode,
   type WorldDefinition,
   type WorldManifest,
+  type WorldSoundEvent,
 } from '@su/contracts';
 import {
   EntitySchema,
   MoveInputSchema,
+  readMoveInput,
   PlayerSchema,
   WorldState,
   applyEntityState,
@@ -144,6 +146,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private measuredSteps = 0;
   private maxStepMs = 0;
   private resyncs = 0;
+  private soundSequence = 0;
 
   private readonly physicsTime = new DurationMetric();
   private readonly selectionTime = new DurationMetric();
@@ -179,6 +182,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       options.itemStore ?? new ItemStore(options.pool, options.definition, this.state.worldEpoch),
       this.world,
       () => this.persistenceStatus(),
+      (event) => {
+        if (event.kind === 'place') this.world.suppressImpacts(event.entityId, 0.25);
+        this.publishWorldSound(event);
+      },
     );
     try {
       await this.items.initialize();
@@ -585,7 +592,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         client?.send('resync', { serverTick: this.state.serverTick });
       }
       const command = session.connected ? input.next() : undefined;
-      session.lastInput = normalizeInput(command) ?? { ...NEUTRAL_INPUT };
+      session.lastInput = command ? readMoveInput(command) : { ...NEUTRAL_INPUT };
       this.world.setInput(session.entityId, session.lastInput);
     }
     const physicsStart = performance.now();
@@ -628,6 +635,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     this.projectItems(snapshot.items);
     this.state.serverTick++;
+    for (const impact of this.world.drainImpacts())
+      this.publishWorldSound({ ...impact, kind: 'impact' });
     this.items.step(this.state.serverTick);
     const duration = performance.now() - start;
     this.pendingCycleMs = duration;
@@ -640,6 +649,33 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.measuredSteps++;
       this.maxStepMs = Math.max(this.maxStepMs, duration);
     }
+  }
+
+  private publishWorldSound(
+    sound: Omit<WorldSoundEvent, 'worldEpoch' | 'eventId' | 'serverTick'>,
+  ): void {
+    const actorId =
+      sound.actorId &&
+      [...this.sessions].find(([, session]) => session.entityId === sound.actorId)?.[0];
+    const event: WorldSoundEvent = {
+      ...sound,
+      actorId: actorId || undefined,
+      worldEpoch: this.state.worldEpoch,
+      eventId: `${this.state.worldEpoch}:${++this.soundSequence}`,
+      serverTick: this.state.serverTick,
+    };
+    deliverWorldSound(
+      event,
+      this.clients.map((client) => {
+        const session = this.sessions.get(client.sessionId);
+        const player = this.state.players.get(client.sessionId);
+        return {
+          connected: !!session?.connected && !session.plan,
+          position: player ? { x: player.x, y: player.y, z: player.z } : undefined,
+          send: (message: WorldSoundEvent) => client.send('worldSound', message),
+        };
+      }),
+    );
   }
 
   /** Exactly at state publication, using the most recent completed physical step. */

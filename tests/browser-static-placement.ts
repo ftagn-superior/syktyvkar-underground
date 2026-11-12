@@ -29,7 +29,10 @@ async function playing(page: Page) {
 }
 async function command(page: Page, text: string) {
   await page.bringToFront();
-  await hudClick(page, '#chat-toggle');
+  if (await page.evaluate(() => (window as any).__SU_DEBUG__.controls().view === 'first-person')) {
+    await page.locator('#world').focus();
+    await page.keyboard.press('t');
+  } else await hudClick(page, '#chat-toggle');
   await page.locator('#chat-input').fill(text);
   await page.locator('#chat-send:not([disabled])').click();
 }
@@ -75,8 +78,28 @@ try {
   await observer.keyboard.press('Escape');
   await command(owner, 'Обычная реплика перед командой');
   await owner.locator('#chat-console').waitFor({ state: 'hidden' });
+  await owner.waitForFunction(() => (window as any).__SU_DEBUG__.controls().firstPersonAvailable);
+  await owner.locator('#world').focus();
+  await owner.keyboard.press('v');
+  await owner.waitForFunction(
+    () => (window as any).__SU_DEBUG__.controls().view === 'first-person',
+  );
   await command(owner, '/motherlode');
   await owner.locator('#static-placement').waitFor({ state: 'visible' });
+  await owner.waitForFunction(
+    () =>
+      (window as any).__SU_DEBUG__.controls().view === 'overview' && !document.pointerLockElement,
+  );
+  await owner.keyboard.press('v');
+  assert.equal(
+    await owner.evaluate(() => (window as any).__SU_DEBUG__.controls().firstPersonAvailable),
+    false,
+    'placement keeps the pointer in overview until the draft is closed',
+  );
+  assert.equal(
+    await owner.evaluate(() => (window as any).__SU_DEBUG__.controls().view),
+    'overview',
+  );
   // Cancel the first preview; it must never produce a row.
   await owner.keyboard.press('Escape');
   await owner.locator('#static-placement').waitFor({ state: 'hidden' });

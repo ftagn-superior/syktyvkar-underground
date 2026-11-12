@@ -111,7 +111,7 @@ it('splits large graphics packs deterministically without changing individual fi
   const first = createWorldPublication(world, grid, compiled);
   const second = createWorldPublication(world, grid, compiled);
   expect(first.manifest).toEqual(second.manifest);
-  expect(first.manifest.formatVersion).toBe(4);
+  expect(first.manifest.formatVersion).toBe(5);
   const packedPaths = new Set<string>();
   for (const path of first.manifest.cells[0].graphicsPacks!) {
     const bytes = first.payloads.get(path)!;
@@ -119,10 +119,10 @@ it('splits large graphics packs deterministically without changing individual fi
     for (const entry of decodeGraphicsPack(bytes).keys()) packedPaths.add(entry);
   }
   expect(first.manifest.cells[0].graphicsPacks).toHaveLength(2);
-  expect(packedPaths.has(first.manifest.assets['model-0'].modelFile)).toBe(true);
-  expect(packedPaths.has(first.manifest.assets['model-1'].modelFile)).toBe(true);
-  expect(packedPaths.has(first.manifest.assets['model-2'].modelFile)).toBe(true);
-  expect(first.payloads.get(first.manifest.assets['model-2'].modelFile)!.length).toBe(1024 * 1024);
+  expect(packedPaths.has(first.manifest.assets['model-0'].modelFile!)).toBe(true);
+  expect(packedPaths.has(first.manifest.assets['model-1'].modelFile!)).toBe(true);
+  expect(packedPaths.has(first.manifest.assets['model-2'].modelFile!)).toBe(true);
+  expect(first.payloads.get(first.manifest.assets['model-2'].modelFile!)!.length).toBe(1024 * 1024);
 });
 
 it('shares border assets without duplicating bytes or bundling unrelated neighboring objects', async () => {
@@ -185,7 +185,7 @@ it('shares border assets without duplicating bytes or bundling unrelated neighbo
   ).toHaveLength(1);
 });
 
-it('packs procedural tree metadata while preserving the original GLB for older clients and republication', async () => {
+it('publishes and republishes procedural trees without GLB resources', async () => {
   const authored = JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8'));
   const itemCatalog = JSON.parse(await readFile('content/items/catalog.json', 'utf8'));
   const assetId = 'tree-pilot';
@@ -196,7 +196,8 @@ it('packs procedural tree metadata while preserving the original GLB for older c
     assetId,
     parts: [{ partId: 'fading', role: 'wall', occlusionGroup: 'shell', nodeIndex: 0 }],
     tree: {
-      formatVersion: 1,
+      formatVersion: 2,
+      foliage: 'spruce',
       crowns: [
         [1, 2, 3, 3],
         [2, 0.5, 6, 4],
@@ -214,7 +215,6 @@ it('packs procedural tree metadata while preserving the original GLB for older c
       physics,
       parts,
       collision: jsonBytes(physics),
-      model: new Uint8Array([1, 2, 3, 4]),
     },
   };
   const world: WorldDefinition = {
@@ -241,8 +241,8 @@ it('packs procedural tree metadata while preserving the original GLB for older c
     ),
   );
   expect(entries.has(asset.partsFile)).toBe(true);
-  expect(entries.has(asset.modelFile)).toBe(false);
-  expect(first.payloads.get(asset.modelFile)).toEqual(compiled[assetId].model);
-  expect(first.manifest.files[asset.modelFile]).toBe(hash(compiled[assetId].model));
+  expect(asset.modelFile).toBeUndefined();
+  expect([...first.payloads.keys()].some((path) => path.endsWith('.glb'))).toBe(false);
+  expect(Object.keys(first.manifest.files).some((path) => path.endsWith('.glb'))).toBe(false);
   expect(createWorldPublication(world, grid, compiled).manifest).toEqual(first.manifest);
 });

@@ -5,10 +5,23 @@ import {
   INITIAL_CAMERA_ANGLE,
   screenMovement,
   orthographicFrame,
+  yawFromOrbit,
+  orbitFromYaw,
+  firstPersonMovement,
 } from './camera-controller';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 
 describe('orthographic camera controls', () => {
+  it('preserves the actual horizontal camera direction when switching both ways', () => {
+    for (const alpha of [0, Math.PI / 4, -Math.PI, 2.1, -1.8]) {
+      const yaw = yawFromOrbit(alpha);
+      const input = firstPersonMovement(screenMovement(0, 1, orbitFromYaw(yaw)), yaw);
+      expect(input.moveX).toBeCloseTo(Math.sin(yaw));
+      expect(input.moveZ).toBeCloseTo(Math.cos(yaw));
+      expect(Math.cos(orbitFromYaw(yaw) - alpha)).toBeCloseTo(1);
+      expect(input.facingYaw).toBe(yaw);
+    }
+  });
   it('keeps screen directions at every quarter turn and during a transition, with normalized diagonals', () => {
     for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI, -Math.PI / 2, 0.39]) {
       const up = screenMovement(0, 1, angle),

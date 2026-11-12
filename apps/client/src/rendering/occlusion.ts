@@ -25,6 +25,12 @@ export class OcclusionFade {
   blocked = false;
   private lastBlockedAt = -Infinity;
 
+  clear(): void {
+    this.opacity = 1;
+    this.blocked = false;
+    this.lastBlockedAt = -Infinity;
+  }
+
   update(blocked: boolean, now: number, seconds: number): number {
     this.blocked = blocked;
     if (blocked) this.lastBlockedAt = now;

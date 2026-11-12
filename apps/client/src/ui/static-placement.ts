@@ -156,7 +156,7 @@ export class StaticPlacement {
     const controller = (this.controller = new AbortController());
     try {
       const descriptor = this.session.manifest.assets[effect.assetId];
-      if (!descriptor) throw new Error('Missing static model');
+      if (!descriptor?.modelFile) throw new Error('Missing static model');
       const bytes = await this.session.readStaticAsset(descriptor.modelFile, controller.signal);
       if (generation !== this.generation) return;
       const ghost = await this.view()!.createStaticGhost(bytes);

@@ -51,7 +51,7 @@ const base = {
 delete base.entities;
 const hash = 'a'.repeat(64);
 const manifest: WorldManifest = {
-  formatVersion: 4,
+  formatVersion: 5,
   worldId: base.worldId,
   mapVersion: hash,
   simulationConfigHash: hash,
@@ -78,6 +78,11 @@ const manifest: WorldManifest = {
 };
 
 describe('world bundle validation', () => {
+  it('rejects releases from before the instancing-only format', () => {
+    expect(() => validateWorldManifest({ ...manifest, formatVersion: 4 })).toThrow(
+      'manifest version',
+    );
+  });
   it('accepts optional graphics packs only when all unique paths are listed', () => {
     expect(validateWorldManifest(manifest)).toBe(manifest);
     const packed = structuredClone(manifest);

@@ -7,11 +7,12 @@ export * from './item-shapes.js';
 export * from './foliage-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
+export * from './sounds.js';
 export * from './world-layout-patch.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 11;
-export const WORLD_FORMAT_VERSION = 4;
+export const PROTOCOL_VERSION = 12;
+export const WORLD_FORMAT_VERSION = 5;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
 export const PATCH_RATE = 20;
@@ -35,7 +36,7 @@ export interface BuildingInstance {
   rotation: Quat;
   sourceRef?: { provider: string; type: string; id: string };
 }
-/** Editable placement. Active instances use the existing v4/v2 cell transport. */
+/** Editable placement. Active instances use the existing v5/v2 cell transport. */
 export interface StaticObjectInstance extends BuildingInstance {
   instanceRevision: number;
   enabled: boolean;
@@ -72,15 +73,13 @@ export interface BuildingParts {
   formatVersion: 1;
   assetId: string;
   parts: BuildingPart[];
-  /** Optional render-only representation. The original GLB and colliders remain authoritative. */
+  /** The sole visual representation of an instanced tree; no GLB accompanies it. */
   tree?: TreeRenderRecipe;
 }
-/** Exact profile of generated kit trees; absent foliage retains the legacy conical crown. */
+/** Current instanced tree profile. Broadleaf crowns always use baked local AO. */
 export interface TreeRenderRecipe {
-  formatVersion: 1;
-  foliage?: 'broadleaf';
-  /** Absent on older bundles: preserve their unoccluded vertex colours. */
-  ambientOcclusion?: 'foliage-v1';
+  formatVersion: 2;
+  foliage: 'broadleaf' | 'spruce';
   /** bottom radius, top radius (including the kit's minimum tip), base Y, height */
   crowns: [[number, number, number, number], [number, number, number, number]];
   /** X/Y/Z dimensions and yaw in radians; centered on X/Z = 0. */
@@ -92,7 +91,8 @@ export interface TreeRenderRecipe {
 export interface BuildingAssetManifest {
   assetId: string;
   version: string;
-  modelFile: string;
+  /** Present for GLB assets, absent for trees rendered from partsFile. */
+  modelFile?: string;
   partsFile: string;
   collisionFile: string;
   bounds: Bounds;
@@ -117,7 +117,7 @@ export interface WorldCellManifest {
   /** Optional bounded transport packs; individual files remain the authoritative fallback. */
   graphicsPacks?: string[];
 }
-export type MoveInput = { moveX: number; moveZ: number; sprint?: boolean };
+export type MoveInput = { moveX: number; moveZ: number; sprint?: boolean; facingYaw?: number };
 export const NEUTRAL_INPUT: Readonly<MoveInput> = Object.freeze({
   moveX: 0,
   moveZ: 0,
@@ -276,7 +276,7 @@ export interface RespawnRequest {
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 export function normalizeInput(value: unknown): MoveInput | undefined {
   if (!value || typeof value !== 'object') return;
-  const { moveX, moveZ, sprint = false } = value as MoveInput;
+  const { moveX, moveZ, sprint = false, facingYaw } = value as MoveInput;
   if (
     typeof moveX !== 'number' ||
     typeof moveZ !== 'number' ||
@@ -287,7 +287,16 @@ export function normalizeInput(value: unknown): MoveInput | undefined {
     return;
   if (Math.abs(moveX) > 100 || Math.abs(moveZ) > 100) return;
   const length = Math.max(1, Math.hypot(moveX, moveZ));
-  return { moveX: moveX / length, moveZ: moveZ / length, sprint };
+  const input: MoveInput = { moveX: moveX / length, moveZ: moveZ / length, sprint };
+  if (typeof facingYaw === 'number' && Number.isFinite(facingYaw))
+    input.facingYaw = normalizeYaw(facingYaw);
+  return input;
+}
+/** World yaw: zero faces +Z. Canonical range includes -PI and excludes +PI. */
+export function normalizeYaw(yaw: number): number {
+  if (yaw >= -Math.PI && yaw < Math.PI) return yaw;
+  const turn = Math.PI * 2;
+  return (((yaw % turn) + Math.PI + turn) % turn) - Math.PI;
 }
 export { validateWorld, validateWorldHeader, validateEntities, canonicalJson } from './world.js';
 export {

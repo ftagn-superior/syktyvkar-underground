@@ -12,7 +12,7 @@ import {
   type SimulationConfig,
 } from '@su/contracts';
 import type { DisplayPlayer } from '../../presentation/display-state';
-import { CharacterAnimator } from './character-animator';
+import { CharacterAnimator, type FootstepMarkers } from './character-animator';
 import { AvatarRig } from './avatar-rig';
 import { SKIN_BUILDERS } from './skins';
 
@@ -50,7 +50,12 @@ export class AvatarView {
     this.animator.resetMotion();
   }
 
-  update(player: DisplayPlayer, delta: number, own: boolean, reducedMotion: boolean): void {
+  update(
+    player: DisplayPlayer,
+    delta: number,
+    own: boolean,
+    reducedMotion: boolean,
+  ): Readonly<FootstepMarkers> {
     const skinId = resolveAvatarSkinId(player.skinId);
     const changed = skinId !== this.skinId;
     if (changed) {
@@ -94,6 +99,7 @@ export class AvatarView {
       if (this.markerMaterial) this.markerMaterial.alpha = alpha * MARKER_ALPHA;
     }
     this.rig.applyPose(this.animator.update(player, delta, own, reducedMotion), this.config.height);
+    return this.animator.footsteps;
   }
 
   diagnostics() {

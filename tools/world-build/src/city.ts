@@ -7,7 +7,7 @@ import { mergeParts } from './merge.js';
 import { bakeLocalAo } from './ambient-occlusion.js';
 
 /**
- * Генераторы городских моделей по контурам: здание-призма, поверхность земли и дерево.
+ * Генераторы городских моделей по контурам: здание-призма и поверхность земли.
  * Все рецепты задаются в локальных метрах модели: X — восток, Z — юг, Y — вверх.
  */
 
@@ -50,19 +50,6 @@ function addHorizontal(part: StaticMeshPart, a: number[], b: number[], c: number
   const normalY = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
   if (Math.abs(normalY) > 1e-10) addFace(part, normalY * up >= 0 ? [a, b, c] : [a, c, b]);
 }
-/** Грань, нормаль которой направлена от точки center. */
-function addOutward(part: StaticMeshPart, points: number[][], center: number[]) {
-  const [a, b, c] = points;
-  const u = b.map((n, i) => n - a[i]),
-    v = c.map((n, i) => n - a[i]);
-  const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-  const away = a.map((n, i) => n - center[i]);
-  addFace(
-    part,
-    normal.reduce((s, n, i) => s + n * away[i], 0) >= 0 ? points : [...points].reverse(),
-  );
-}
-
 export interface FootprintRecipe {
   formatVersion: 1;
   /** Контур стен [x, z] без повтора первой точки. */
@@ -422,52 +409,4 @@ export function generateGround(
     parts: recipe.merge ? mergeParts(parts) : parts,
     physics: { assetId, bounds: boundsOf(parts), colliders: [collider] },
   };
-}
-
-export interface TreeRecipe {
-  formatVersion: 1;
-  height: number;
-  crownRadius: number;
-  trunkColor: string;
-  crownColor: string;
-}
-
-/** Низкополигональная ель: ствол и два конуса кроны. Столкновение — только ствол. */
-export function generateTree(
-  assetId: string,
-  recipe: TreeRecipe,
-): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
-  if (recipe.formatVersion !== 1) throw new Error('Unsupported tree recipe version');
-  if (!(recipe.height >= 3 && recipe.height <= 40)) throw new Error('Invalid tree height');
-  if (!(recipe.crownRadius >= 0.5 && recipe.crownRadius <= 10))
-    throw new Error('Invalid tree crown radius');
-  requireColor(recipe.trunkColor, 'tree trunkColor');
-  requireColor(recipe.crownColor, 'tree crownColor');
-  const h = recipe.height,
-    r = recipe.crownRadius;
-  const trunkHeight = Math.max(2.2, h * 0.3);
-  const trunk = meshPart('trunk', 'detail', recipe.trunkColor);
-  addBox(trunk, { x: 0, y: trunkHeight / 2, z: 0 }, { x: 0.34, y: trunkHeight, z: 0.34 });
-  const crown = meshPart('crown', 'detail', recipe.crownColor);
-  const cone = (bottom: number, top: number, radius: number, sides: number, phase: number) => {
-    const ring = Array.from({ length: sides }, (_, k) => {
-      const angle = phase + (k / sides) * Math.PI * 2;
-      return [Math.cos(angle) * radius, bottom, Math.sin(angle) * radius];
-    });
-    const middle = [0, (bottom + top) / 2, 0];
-    for (let k = 0; k < sides; k++)
-      addOutward(crown, [ring[k], ring[(k + 1) % sides], [0, top, 0]], middle);
-    for (let k = 1; k < sides - 1; k++) addOutward(crown, [ring[0], ring[k], ring[k + 1]], middle);
-  };
-  cone(trunkHeight * 0.75, h * 0.78, r, 7, 0);
-  cone(h * 0.5, h, r * 0.68, 7, Math.PI / 7);
-  const parts = [trunk, crown];
-  const collider: StaticCollider = {
-    id: 'trunk',
-    kind: 'box',
-    position: { x: 0, y: trunkHeight / 2, z: 0 },
-    ...fixed,
-    size: { x: 0.4, y: trunkHeight, z: 0.4 },
-  };
-  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders: [collider] } };
 }

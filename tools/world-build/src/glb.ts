@@ -33,6 +33,11 @@ const componentBounds = (positions: number[]): Bounds => {
   return bounds;
 };
 
+/** Bounds of the Float32 geometry used by the renderer, without serializing a GLB. */
+export function staticMeshBounds(parts: StaticMeshPart[]): Bounds {
+  return componentBounds(parts.flatMap((part) => part.positions.map(Math.fround)));
+}
+
 /** Deterministic glTF 2.0 writer for our generated, untextured static meshes. Imported GLBs use the same runtime loader. */
 export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
   const buffers: Buffer[] = [];

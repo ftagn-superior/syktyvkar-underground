@@ -10,7 +10,7 @@ export * from './world-layout-patch.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
 export const PROTOCOL_VERSION = 10;
-export const WORLD_FORMAT_VERSION = 4;
+export const WORLD_FORMAT_VERSION = 5;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
 export const PATCH_RATE = 20;
@@ -71,15 +71,13 @@ export interface BuildingParts {
   formatVersion: 1;
   assetId: string;
   parts: BuildingPart[];
-  /** Optional render-only representation. The original GLB and colliders remain authoritative. */
+  /** The sole visual representation of an instanced tree; no GLB accompanies it. */
   tree?: TreeRenderRecipe;
 }
-/** Exact profile of generated kit trees; absent foliage retains the legacy conical crown. */
+/** Current instanced tree profile. Broadleaf crowns always use baked local AO. */
 export interface TreeRenderRecipe {
-  formatVersion: 1;
-  foliage?: 'broadleaf';
-  /** Absent on older bundles: preserve their unoccluded vertex colours. */
-  ambientOcclusion?: 'foliage-v1';
+  formatVersion: 2;
+  foliage: 'broadleaf' | 'spruce';
   /** bottom radius, top radius (including the kit's minimum tip), base Y, height */
   crowns: [[number, number, number, number], [number, number, number, number]];
   /** X/Y/Z dimensions and yaw in radians; centered on X/Z = 0. */
@@ -91,7 +89,8 @@ export interface TreeRenderRecipe {
 export interface BuildingAssetManifest {
   assetId: string;
   version: string;
-  modelFile: string;
+  /** Present for GLB assets, absent for trees rendered from partsFile. */
+  modelFile?: string;
   partsFile: string;
   collisionFile: string;
   bounds: Bounds;

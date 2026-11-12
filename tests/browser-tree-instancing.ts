@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { launchTestBrowser } from './helpers/browser.js';
 import { generateKit, type KitRecipe } from '../tools/world-build/src/kit.js';
 import { treeRenderRecipe } from '../tools/world-build/src/tree-instances.js';
 import { encodeStaticGlb, inspectStaticGlb } from '../tools/world-build/src/glb.js';
-import { mergeParts } from '../tools/world-build/src/merge.js';
 
 const output = resolve('output/playwright/tree-instancing-visual');
+await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await build({
   entryPoints: ['tests/fixtures/tree-scene.ts'],
@@ -21,33 +21,34 @@ await build({
 });
 const payloads = new Map<string, Uint8Array>();
 const assets: Record<string, unknown> = {};
+const references: Record<string, unknown> = {};
 const palettes = new Set<string>();
-const addAsset = (id: string, recipe: KitRecipe, unoccluded = false) => {
+const addAsset = (id: string, recipe: KitRecipe) => {
   const tree = treeRenderRecipe(id, recipe)!;
   const generated = generateKit(id, recipe);
-  if (unoccluded) {
-    delete tree.ambientOcclusion;
-    // Emulate an already-published pre-AO GLB, retaining its exact original colours.
-    generated.parts = mergeParts(
-      generateKit(id, { ...recipe, merge: false }).parts.map((part) => ({
-        ...part,
-        colors: undefined,
-      })),
-    );
-  }
   const model = encodeStaticGlb(generated.parts);
-  const parts = { ...inspectStaticGlb(model, id).parts, tree };
+  const referenceParts = inspectStaticGlb(model, id).parts;
+  const parts = { ...referenceParts, tree };
   payloads.set(`/${id}/model.glb`, model);
   payloads.set(`/${id}/parts.json`, new TextEncoder().encode(JSON.stringify(parts)));
-  assets[id] = {
+  payloads.set(
+    `/${id}/reference-parts.json`,
+    new TextEncoder().encode(JSON.stringify(referenceParts)),
+  );
+  references[id] = {
     assetId: id,
     version: id,
     modelFile: `${id}/model.glb`,
+    partsFile: `${id}/reference-parts.json`,
+    bounds: generated.physics.bounds,
+  };
+  assets[id] = {
+    assetId: id,
+    version: id,
     partsFile: `${id}/parts.json`,
     bounds: generated.physics.bounds,
   };
 };
-let legacyAdded = false;
 for (const id of (await readdir('content/buildings/ring-block/objects'))
   .filter((id) => id.startsWith('tree-'))
   .sort()) {
@@ -55,25 +56,14 @@ for (const id of (await readdir('content/buildings/ring-block/objects'))
     await readFile(`content/buildings/ring-block/objects/${id}/source.json`, 'utf8'),
   );
   const tree = treeRenderRecipe(id, recipe)!;
-  const palette = `${tree.crownColor}:${tree.trunkColor}:${tree.foliage ?? 'conical'}`;
+  const palette = `${tree.crownColor}:${tree.trunkColor}:${tree.foliage}`;
   if (palettes.has(palette)) continue;
   palettes.add(palette);
   addAsset(id, recipe);
-  // Same colors, different profile: old streamed metadata must not reuse a broadleaf template.
-  if (!legacyAdded && recipe.foliage) {
-    const legacy = structuredClone(recipe);
-    delete legacy.foliage;
-    addAsset(`${id}-legacy`, legacy);
-    addAsset(`${id}-pre-ao`, recipe, true);
-    legacyAdded = true;
-  }
 }
 assert.equal(palettes.size, 3, 'birch, leafy and spruce palettes remain represented');
-assert.equal(
-  Object.keys(assets).length,
-  5,
-  'include old conical and pre-AO broadleaf bundles with the same colors',
-);
+assert.equal(Object.keys(assets).length, 3);
+payloads.set('/reference.json', new TextEncoder().encode(JSON.stringify({ assets: references })));
 payloads.set('/manifest.json', new TextEncoder().encode(JSON.stringify({ assets })));
 payloads.set('/app.js', await readFile(`${output}/app.js`));
 payloads.set(
@@ -119,7 +109,7 @@ try {
       [shadows, faded],
     );
     await page.evaluate(() => (window as any).__TREE_TEST__.compare());
-    await page.screenshot({ path: `${output}/legacy-${shadows}-${faded}.png` });
+    await page.screenshot({ path: `${output}/reference-${shadows}-${faded}.png` });
     const after = await page.evaluate(
       ([shadows, faded]) => (window as any).__TREE_TEST__.setup(true, shadows, faded),
       [shadows, faded],

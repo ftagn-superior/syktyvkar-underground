@@ -14,6 +14,7 @@ import {
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import { encodeStaticGlb, inspectStaticGlb } from '../../tools/world-build/src/glb.js';
 import { addBox, meshPart } from '../../tools/world-build/src/house.js';
+import { pruneWorldPublication } from '../../packages/world-release/src/index.js';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 async function withContent(run: (root: string, source: string) => Promise<void>) {
@@ -57,7 +58,32 @@ async function load(manifest: WorldManifest, output: string) {
     return bytes;
   });
 }
-describe('world v4 release', () => {
+describe('world v5 release', () => {
+  it('prunes obsolete generated resources only after verifying the complete current release', async () =>
+    withContent(async (root, source) => {
+      const output = join(root, 'release');
+      const manifest = await buildWorld(source, output);
+      const obsolete = join(output, 'assets/obsolete/model.glb');
+      await mkdir(join(output, 'assets/obsolete'), { recursive: true });
+      await writeFile(obsolete, 'old graphics');
+      await mkdir(join(output, 'layouts/old'), { recursive: true });
+      await writeFile(join(output, 'layouts/old/manifest.json'), 'old derived layout');
+      await writeFile(join(output, 'notes.txt'), 'keep unrelated files');
+      const current = join(output, manifest.worldFile);
+      const bytes = await readFile(current);
+      await writeFile(current, 'corrupt');
+      await expect(pruneWorldPublication(output)).rejects.toThrow('corrupt release');
+      expect(await readFile(obsolete, 'utf8')).toBe('old graphics');
+      await writeFile(current, bytes);
+      expect(await pruneWorldPublication(output)).toBe(2);
+      await expect(readFile(obsolete)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(readFile(join(output, 'layouts/old/manifest.json'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      expect(await readFile(join(output, 'notes.txt'), 'utf8')).toBe('keep unrelated files');
+      expect(await pruneWorldPublication(output)).toBe(0);
+      await load(manifest, output);
+    }));
   it('builds reproducible models and a verified graph of dependencies', async () =>
     withContent(async (root, source) => {
       const first = await buildWorld(source, join(root, 'first'));
@@ -193,7 +219,7 @@ describe('world v4 release', () => {
       await writeJson(cellPath, cell);
       const output = join(root, 'release'),
         manifest = await buildWorld(source, output);
-      expect(await readFile(join(output, manifest.assets.arch.modelFile))).toEqual(
+      expect(await readFile(join(output, manifest.assets.arch.modelFile!))).toEqual(
         Buffer.from(model),
       );
       const parts = await readJson(join(output, manifest.assets.arch.partsFile));

@@ -10,6 +10,14 @@ import { triangulate, clipRing, type Point2 } from '../../tools/world-build/src/
 import { generateFootprint, generateGround } from '../../tools/world-build/src/city.js';
 import { generateKit } from '../../tools/world-build/src/kit.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
+import {
+  clampOutOfIsland,
+  replacedByRoundabout,
+  roundaboutIslands,
+  roundaboutMarkings,
+  validateRoundabout,
+  type RoundaboutConfig,
+} from '../../tools/world-build/src/roundabout.js';
 import { createGameServer } from '../helpers/game-server.js';
 import { readWorldDirectory } from '../../apps/server/src/world-bundle.js';
 
@@ -450,6 +458,98 @@ describe('детали фасадов и модели из конструкто�
   });
 });
 
+describe('кольцевая развязка', () => {
+  const config: RoundaboutConfig = {
+    center: [0, 0],
+    inner: 30,
+    outer: 42,
+    lanes: 4,
+    arms: [
+      // Подъезд с севера: ось x = 0, направление от кольца на север (−z).
+      { id: 'north', at: [0, -80], direction: [0, -1], width: 18, island: { base: 5, length: 15 } },
+      { id: 'east', at: [80, 0], direction: [1, 0], width: 12, entry: 'full' },
+    ],
+  };
+  const radius = (p: Point2) => Math.hypot(p[0], p[1]);
+
+  it('концы дорог не заходят на центральный остров', () => {
+    const cap: Point2[] = [
+      [-5, -60],
+      [5, -60],
+      [5, -28],
+      [0, -25],
+      [-5, -28],
+    ];
+    const clamped = clampOutOfIsland(cap, config);
+    for (const p of clamped) expect(radius(p)).toBeGreaterThanOrEqual(30 - 1e-9);
+    // Точки снаружи острова не двигаются.
+    expect(clamped.slice(0, 2)).toEqual(cap.slice(0, 2));
+  });
+
+  it('островок — треугольник у кольца с вершиной на оси подъезда', () => {
+    const islands = roundaboutIslands(config);
+    expect(islands).toHaveLength(1);
+    const [left, apex, right] = islands[0];
+    expect(apex[0]).toBeCloseTo(0, 9);
+    expect(apex[1]).toBeCloseTo(-(42 + 1 + 15), 9);
+    expect(radius(left)).toBeCloseTo(43, 9);
+    expect(radius(right)).toBeCloseTo(43, 9);
+    expect(Math.abs(left[0] - right[0])).toBeCloseTo(5, 9);
+    // Положительная площадь, как у остальных многоугольников земли.
+    expect(triangulate(islands[0]).coverage).toBeCloseTo(1, 9);
+  });
+
+  it('разметка: штрихи по всему кругу и «зубы» справа по ходу въезда', () => {
+    const marks = roundaboutMarkings(config);
+    const centroid = (ring: Point2[]): Point2 => [
+      ring.reduce((s, p) => s + p[0], 0) / ring.length,
+      ring.reduce((s, p) => s + p[1], 0) / ring.length,
+    ];
+    const dashes = marks.filter((m) => m.length === 4).map(centroid);
+    const teeth = marks.filter((m) => m.length === 3).map(centroid);
+    // Три линии между четырьмя полосами, каждая — целое число штрихов во всех четвертях круга.
+    for (const r of [33, 36, 39]) {
+      const ring = dashes.filter((p) => Math.abs(radius(p) - r) < 0.2);
+      expect(ring.length).toBe(Math.round((2 * Math.PI * r) / 9));
+      for (const [sx, sz] of [
+        [1, 1],
+        [1, -1],
+        [-1, 1],
+        [-1, -1],
+      ])
+        expect(ring.some(([x, z]) => Math.sign(x) === sx && Math.sign(z) === sz)).toBe(true);
+    }
+    // Северный въезд: машины едут на юг, правая половина — запад (x < 0), за островком.
+    const north = teeth.filter(([, z]) => z < -30);
+    expect(north.length).toBeGreaterThan(3);
+    for (const [x] of north) expect(x).toBeLessThan(-2.5);
+    // Восточная въездная ветка: «зубы» во всю ширину.
+    const east = teeth.filter(([x]) => x > 30);
+    expect(Math.min(...east.map(([, z]) => z))).toBeLessThan(-4);
+    expect(Math.max(...east.map(([, z]) => z))).toBeGreaterThan(4);
+  });
+
+  it('разметка OSM на кольце и под островками заменяется, на подъезде остаётся', () => {
+    const strip = (x: number, z: number): Point2[] => [
+      [x - 0.1, z - 1],
+      [x + 0.1, z - 1],
+      [x + 0.1, z + 1],
+      [x - 0.1, z + 1],
+    ];
+    expect(replacedByRoundabout(strip(0, -36), config)).toBe(true);
+    expect(replacedByRoundabout(strip(0, -50), config)).toBe(true);
+    expect(replacedByRoundabout(strip(-7, -50), config)).toBe(false);
+    expect(replacedByRoundabout(strip(0, -70), config)).toBe(false);
+  });
+
+  it('неверные параметры кольца останавливают сборку', () => {
+    expect(() => validateRoundabout({ ...config, outer: 31 })).toThrow(/radii/);
+    expect(() =>
+      validateRoundabout({ ...config, arms: [{ ...config.arms[0], direction: [1, 1] }] }),
+    ).toThrow(/unit/);
+  });
+});
+
 const byAssetCount = (definition: { buildings: { assetId: string }[] }, assetId: string) =>
   definition.buildings.filter((b) => b.assetId === assetId).length;
 
@@ -478,9 +578,22 @@ describe('мир ring-block', () => {
     // Главный корпус СыктГУ: дубликат-мультиполигон из OSM отброшен, остался уточнённый контур.
     expect(definition.buildings.some((b) => b.assetId === 'osm-relation-13601216')).toBe(false);
     expect(definition.buildingAssets['osm-way-1258973447'].colliders.map((c) => c.id)).toEqual(
-      expect.arrayContaining(['entrance-body', 'entrance-attic-body', 'wing-south-body']),
+      expect.arrayContaining([
+        'entrance-body',
+        'entrance-attic-body',
+        'wing-south-body',
+        'wing-south-end-body',
+      ]),
     );
     expect(byAssetCount(definition, 'sorokin-monument')).toBe(1);
+    // Кольцо: островки на въездах лежат отдельным слоем земли поверх асфальта.
+    const ground = JSON.parse(
+      await readFile('content/buildings/ring-block/ring-block-ground/source.json', 'utf8'),
+    ) as { layers: { id: string; elevation: number; polygons: unknown[] }[] };
+    const groundLayer = (id: string) => ground.layers.find((l) => l.id === id)!;
+    expect(groundLayer('islands').polygons).toHaveLength(3);
+    expect(groundLayer('islands').elevation).toBeGreaterThan(groundLayer('road').elevation);
+    expect(groundLayer('islands').elevation).toBeLessThan(groundLayer('markings').elevation);
     // Памятник из manual/ стоит в центре кольца и имеет собственные столкновения.
     const monument = definition.buildings.find((b) => b.entityId === 'monument-trudovaya-slava');
     expect(monument).toMatchObject({ assetId: 'trudovaya-slava' });

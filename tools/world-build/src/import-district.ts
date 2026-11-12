@@ -18,6 +18,14 @@ import { cleanRing, clipRing, signedArea, triangulate, type Point2 } from './tri
 import { minimumRectangle } from './facade.js';
 import { toGame as osmToGame, type OsmSettings, type OsmSnapshot } from './fetch-osm.js';
 import { buildDetails } from './osm-details.js';
+import {
+  clampOutOfIsland,
+  replacedByRoundabout,
+  roundaboutIslands,
+  roundaboutMarkings,
+  validateRoundabout,
+  type RoundaboutConfig,
+} from './roundabout.js';
 
 interface ImportConfig {
   formatVersion: 1;
@@ -49,6 +57,8 @@ interface ImportConfig {
   }[];
   /** Снимок OSM для мелких объектов, входов и тегов домов; см. fetch-osm.ts. */
   osm?: OsmSettings;
+  /** Кольцевая развязка: целый центральный остров, островки на въездах и своя разметка. */
+  roundabout?: RoundaboutConfig;
 }
 /** Цвета фасадов по `building:material` для домов без ручных уточнений. */
 const MATERIALS: Record<string, string[]> = {
@@ -178,6 +188,8 @@ const GROUND = {
     { id: 'parking', color: '#7a807a', elevation: 0.007 },
     { id: 'service', color: '#8e948c', elevation: 0.008 },
     { id: 'road', color: '#6f7670', elevation: 0.01 },
+    // Островки безопасности лежат поверх асфальта и того же цвета, что и земля между ветками дороги.
+    { id: 'islands', color: '#b5b4a2', elevation: 0.011 },
     { id: 'markings', color: '#e9e9e2', elevation: 0.012 },
   ],
 };
@@ -393,10 +405,17 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   };
   for (const ground of data.grounds)
     if (['green', 'park', 'pitch'].includes(ground.kind)) addPolygon(layer(ground.kind), ground.p);
+  const roundabout = config.roundabout;
+  if (roundabout) validateRoundabout(roundabout);
+  // Скруглённые концы подъездов не должны откусывать центральный остров кольца.
+  const carRoad = (p: Point2) => toGame(p as [number, number]);
+  const clamped = roundabout
+    ? (p: Point2) => clampOutOfIsland([carRoad(p)], roundabout)[0]
+    : carRoad;
   for (const road of data.roads) {
     const target = road.walk ? 'footway' : road.kind === 'service' ? 'service' : 'road';
     for (const polygon of road.p) {
-      const added = addPolygon(layer(target), polygon);
+      const added = addPolygon(layer(target), polygon, road.walk ? carRoad : clamped);
       if (added && !road.walk) roadPolygons.push(added[0]);
     }
   }
@@ -501,8 +520,17 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     for (const polygon of details.ground.playground) addPolygon(layer('playground'), polygon, asIs);
     for (const polygon of details.ground.parking) addPolygon(layer('parking'), polygon, asIs);
     for (const polygon of details.ground.markings)
-      addPolygon(layer('markings'), polygon, asIs, 0.05);
+      if (!roundabout || !replacedByRoundabout(polygon[0], roundabout))
+        addPolygon(layer('markings'), polygon, asIs, 0.05);
     detailStats = details.stats;
+  }
+
+  if (roundabout) {
+    const asIs = (p: Point2) => p;
+    for (const island of roundaboutIslands(roundabout))
+      addPolygon(layer('islands'), [island], asIs);
+    for (const mark of roundaboutMarkings(roundabout))
+      addPolygon(layer('markings'), [mark], asIs, 0.05);
   }
 
   // Земля пишется последней: в неё входят слои площадок и парковок из OSM.
@@ -512,7 +540,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     max: clipMax,
     depth: 1,
     color: GROUND.base,
-    layers,
+    // Пустые слои (например, островки без кольца) в модель не попадают.
+    layers: layers.filter((l) => l.polygons.length),
     merge: true,
   };
   const groundId = `${config.worldId}-ground`;

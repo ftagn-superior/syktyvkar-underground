@@ -21,8 +21,14 @@ import { buildDetails } from './osm-details.js';
 import {
   clampOutOfIsland,
   replacedByRoundabout,
+  tracedGeometry,
+  roundaboutCrosswalks,
+  roundaboutApproaches,
+  roundaboutCurbPatches,
+  roundaboutFillets,
   roundaboutIslands,
   roundaboutMarkings,
+  roundaboutTracedLines,
   validateRoundabout,
   type RoundaboutConfig,
 } from './roundabout.js';
@@ -407,6 +413,12 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     if (['green', 'park', 'pitch'].includes(ground.kind)) addPolygon(layer(ground.kind), ground.p);
   const roundabout = config.roundabout;
   if (roundabout) validateRoundabout(roundabout);
+  // Трассировка по спутниковому снимку: края дороги, островки и «зебры».
+  if (roundabout?.trace)
+    roundabout.traced = tracedGeometry(
+      JSON.parse(await readFile(resolve(root, roundabout.trace), 'utf8')),
+      { smooth: true },
+    );
   // Скруглённые концы подъездов не должны откусывать центральный остров кольца.
   const carRoad = (p: Point2) => toGame(p as [number, number]);
   const clamped = roundabout
@@ -419,6 +431,16 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       if (added && !road.walk) roadPolygons.push(added[0]);
     }
   }
+  // Скругления между подъездами и кольцом: дорога течёт плавно, без угловых срезов.
+  if (roundabout)
+    for (const fillet of [
+      ...roundaboutFillets(roundabout),
+      ...roundaboutCurbPatches(roundabout),
+      ...roundaboutApproaches(roundabout),
+    ]) {
+      const added = addPolygon(layer('road'), [fillet], (p) => p);
+      if (added) roadPolygons.push(added[0]);
+    }
   // 3. Штучные объекты: ручные модели из manual/, например памятник в центре кольца.
   for (const prop of config.props ?? []) {
     const descriptor = `${MANUAL_DIRECTORY}/${prop.assetId}/asset.json`;
@@ -529,7 +551,11 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     const asIs = (p: Point2) => p;
     for (const island of roundaboutIslands(roundabout))
       addPolygon(layer('islands'), [island], asIs);
-    for (const mark of roundaboutMarkings(roundabout))
+    for (const mark of [
+      ...roundaboutMarkings(roundabout),
+      ...roundaboutCrosswalks(roundabout),
+      ...roundaboutTracedLines(roundabout),
+    ])
       addPolygon(layer('markings'), [mark], asIs, 0.05);
   }
 
@@ -579,7 +605,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     midX = (minX + maxX) / 2,
     midZ = (minZ + maxZ) / 2;
   const world: WorldSource = {
-    formatVersion: 3,
+    formatVersion: 4,
+    cellSize: 125,
     worldId: config.worldId,
     bounds: {
       min: { x: minX, y: -5, z: minZ },
@@ -618,7 +645,11 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   await mkdir(join(worldDir, 'cells'), { recursive: true });
   await writeFile(
     join(worldDir, 'cells/0_0.json'),
-    JSON.stringify({ formatVersion: 1, cellId: '0_0', buildings: instances }, null, 2) + '\n',
+    JSON.stringify(
+      { formatVersion: 2, cellId: '0_0', statics: [], buildings: instances },
+      null,
+      2,
+    ) + '\n',
   );
   await writeFile(join(worldDir, 'world.json'), JSON.stringify(world, null, 2) + '\n');
   await writeFile(

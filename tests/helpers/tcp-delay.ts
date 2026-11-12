@@ -13,6 +13,14 @@ export interface NetworkProfile {
 export async function createDelayRelay(target: URL, profile: NetworkProfile) {
   if (target.protocol !== 'http:')
     throw new Error('The local TCP acceptance relay requires an http:// target');
+  // Kernel netem already delays the real connection. A zero-delay relay would
+  // add a second impaired TCP leg and double the intended end-to-end RTT.
+  if (profile.rttMs === 0 && profile.jitterMs === 0)
+    return {
+      url: target.origin,
+      metrics: () => ({ maxQueuedBytes: 0, forwardedBytes: 0 }),
+      close: async () => {},
+    };
   const sockets = new Set<Socket>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let seed = 0x52a1;

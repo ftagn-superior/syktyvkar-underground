@@ -9,3 +9,5 @@ content/worlds/ring-block/cells
 content/worlds/ring-block/world.json
 # Снимок OSM: один объект на строку, обновляется pnpm world:fetch-osm
 content/sources
+# Трассировка по снимку: одна трасса в строке, сохраняется из предпросмотра кольца
+content/worlds/ring-block/ring-trace.json

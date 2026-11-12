@@ -1426,44 +1426,53 @@
     "center": [0, 0],
     "inner": 32.3,
     "outer": 44.9,
-    "lanes": 4,
+    "lanes": 2,
+    "lines": [37.5],
+    "trace": "content/worlds/ring-block/ring-trace.json",
     "arms": [
       {
-        "id": "kommunisticheskaya-north",
+        "id": "oktyabrsky-north",
         "at": [-30.29, -61.83],
         "direction": [-0.4399, -0.898],
         "width": 18.6,
+        "approach": { "length": 40, "taper": 60 },
+        "entry": "none",
         "island": {
           "base": 5,
           "length": 16
         }
       },
       {
-        "id": "kommunisticheskaya-south",
+        "id": "oktyabrsky-south",
         "at": [24.5, 50.2],
         "direction": [0.4368, 0.8995],
         "width": 18.66,
+        "approach": { "length": 40, "taper": 60 },
+        "entry": "none",
         "island": {
           "base": 5,
           "length": 16
         }
       },
       {
-        "id": "oktyabrsky-west",
+        "id": "kommunisticheskaya-west",
         "at": [-87.2, 44.2],
         "direction": [-0.8956, 0.4448],
         "width": 18.56,
+        "approach": { "length": 40, "taper": 60 },
+        "entry": "none",
         "island": {
           "base": 5,
           "length": 16
         }
       },
       {
-        "id": "oktyabrsky-east-in",
+        "id": "kommunisticheskaya-east-in",
         "at": [46.26, -30.5],
         "direction": [0.9611, -0.2762],
         "width": 12.86,
-        "entry": "full"
+        "approach": { "length": 40, "taper": 60 },
+        "entry": "none"
       }
     ]
   }

@@ -68,7 +68,7 @@ try {
       () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
     );
   }
-  await pages[0].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 8);
+  await pages[0].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().occupancy === 8);
   console.log(`Started ${durationSeconds}s soak: 6 SDK clients + 2 rendered Chromium contexts.`);
   started = performance.now();
   let nextSample = 0,
@@ -79,7 +79,7 @@ try {
     for (const [index, page] of pages.entries()) {
       const state = states[index];
       assert.equal(state.connection, 'playing');
-      assert.equal(state.playerCount, 8);
+      assert.equal(state.occupancy, 8);
       assert.ok(state.pendingInputs <= 32);
       const position = state.authoritative.position;
       let target = route[targets[index]];
@@ -108,6 +108,7 @@ try {
           correctionP95: state.correctionP95,
           pendingInputs: state.pendingInputs,
           playerCount: state.playerCount,
+          occupancy: state.occupancy,
           serverTick: state.serverTick,
         })),
         receivedBytes: [...receivedBytes],
@@ -178,5 +179,15 @@ try {
       .click({ timeout: 2000 })
       .catch(() => {});
   bots.kill('SIGTERM');
+  await new Promise<void>((resolve) => {
+    if (bots.exitCode !== null) return resolve();
+    const timeout = setTimeout(() => {
+      bots.kill('SIGKILL');
+    }, 3000);
+    bots.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
   await browser.close();
 }

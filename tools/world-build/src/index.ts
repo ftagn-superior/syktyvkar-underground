@@ -14,13 +14,24 @@ import {
   worldManifestIdentity,
   type BuildingAssetManifest,
   type BuildingPhysicsAsset,
-  type WorldBase,
+  type WorldHeader,
+  type WorldCell,
+  type StaticEntityDefinition,
+  createWorldGrid,
+  worldCellBounds,
+  buildingBounds,
+  primitiveBounds,
+  cellsIntersectingBounds,
+  mergeWorldCells,
+  validateWorldHeader,
+  WORLD_RESOURCE_LIMITS,
   type WorldDefinition,
   type WorldManifest,
   type WorldSource,
 } from '@su/contracts';
 import { encodeStaticGlb, inspectStaticGlb } from './glb.js';
 import { generateHouse, type HouseRecipe } from './house.js';
+import { generateStreamingCells } from './streaming-lab.js';
 import {
   generateFootprint,
   generateGround,
@@ -32,7 +43,7 @@ import {
 import { generateKit, type KitRecipe } from './kit.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
-export const WORLDS = ['ring-block', 'physics-lab'] as const;
+export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab'] as const;
 const generators = {
   house: (id: string, recipe: unknown) => generateHouse(id, recipe as HouseRecipe),
   footprint: (id: string, recipe: unknown) => generateFootprint(id, recipe as FootprintRecipe),
@@ -58,9 +69,9 @@ function sourceFile(directory: string, path: unknown): string {
   return absolute;
 }
 
-async function compileAsset(assetId: string, descriptorPath: string) {
+async function compileAsset(assetId: string, descriptorPath: string, groundRecipe?: GroundRecipe) {
   const descriptor = await readJson(descriptorPath);
-  if (descriptor.formatVersion !== 1 || descriptor.assetId !== assetId)
+  if (descriptor.formatVersion !== 1 || (!groundRecipe && descriptor.assetId !== assetId))
     throw new Error(`Invalid asset descriptor: ${assetId}`);
   const directory = dirname(descriptorPath);
   let model: Uint8Array, physics: BuildingPhysicsAsset;
@@ -69,7 +80,7 @@ async function compileAsset(assetId: string, descriptorPath: string) {
     ? generators[kind as keyof typeof generators]
     : undefined;
   if (generator) {
-    const recipe = await readJson(sourceFile(directory, descriptor.source.file));
+    const recipe = groundRecipe ?? (await readJson(sourceFile(directory, descriptor.source.file)));
     const generated = generator(assetId, recipe);
     model = encodeStaticGlb(generated.parts);
     physics = generated.physics;
@@ -80,6 +91,8 @@ async function compileAsset(assetId: string, descriptorPath: string) {
     );
     if (physics.assetId !== assetId) throw new Error('Imported collision asset ID mismatch');
   } else throw new Error(`Unsupported asset source: ${assetId}`);
+  if (model.byteLength > WORLD_RESOURCE_LIMITS.modelBytes)
+    throw new Error(`Model byte limit: ${assetId}`);
   const validation = await validateBytes(model, { uri: `${assetId}.glb`, writeTimestamp: false });
   if (validation.issues.numErrors)
     throw new Error(
@@ -102,6 +115,11 @@ async function compileAsset(assetId: string, descriptorPath: string) {
   validateBuildingPhysicsAsset(physics);
   const collision = jsonBytes(physics),
     parts = jsonBytes(inspected.parts);
+  if (
+    collision.byteLength > WORLD_RESOURCE_LIMITS.collisionBytes ||
+    parts.byteLength > WORLD_RESOURCE_LIMITS.partsBytes
+  )
+    throw new Error(`Model metadata byte limit: ${assetId}`);
   const version = hash(
     canonicalJson({ model: hash(model), collision: hash(collision), parts: hash(parts) }),
   );
@@ -109,68 +127,150 @@ async function compileAsset(assetId: string, descriptorPath: string) {
 }
 
 export async function buildWorld(
-  source = 'content/worlds/physics-lab/world.json',
-  output = 'dist/worlds/physics-lab',
+  source = 'content/worlds/ring-block/world.json',
+  output?: string,
 ): Promise<WorldManifest> {
   const authored = (await readJson(source)) as WorldSource;
   if (
     authored.formatVersion !== WORLD_FORMAT_VERSION ||
     !Array.isArray(authored.cells) ||
-    authored.cells.length === 0 ||
+    authored.cells.length > 10_000 ||
     typeof authored.assetCatalog !== 'string' ||
     typeof authored.itemCatalog !== 'string'
   )
-    throw new Error('World source must use formatVersion 3, cells and assetCatalog');
-  const base: WorldBase = {
+    throw new Error('World source must use formatVersion 4, cells, itemCatalog and assetCatalog');
+  const base: WorldHeader = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: authored.worldId,
     bounds: authored.bounds,
     simulation: authored.simulation,
     spawnPoints: authored.spawnPoints,
-    entities: authored.entities,
     itemCatalog: await readJson(resolve(dirname(resolve(source)), authored.itemCatalog)),
     initialItems: authored.initialItems,
     // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
     ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
+    ...(authored.routes ? { routes: authored.routes } : {}),
   };
-  validateWorld({ ...base, buildings: [], buildingAssets: {} });
+  validateWorldHeader(base);
+  const grid = createWorldGrid(base.bounds, authored.cellSize ?? 125);
+  const outputDirectory = output ?? `dist/worlds/${base.worldId}`;
   const sourceDirectory = dirname(resolve(source));
   const catalogPath = resolve(sourceDirectory, authored.assetCatalog);
   const catalog = await readJson(catalogPath);
   if (catalog.formatVersion !== 1 || !catalog.assets || typeof catalog.assets !== 'object')
     throw new Error('Invalid building asset catalog');
-  const cells = await Promise.all(
-    authored.cells.map(async (path) =>
-      validateWorldCell(await readJson(sourceFile(sourceDirectory, path))),
-    ),
-  );
-  if (new Set(cells.map((cell) => cell.cellId)).size !== cells.length)
-    throw new Error('Duplicate world cell ID');
-  const buildings = cells.flatMap((cell) => cell.buildings);
-  const assetIds = [...new Set(buildings.map((instance) => instance.assetId))].sort();
-  const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
-  for (const assetId of assetIds) {
-    if (!Object.hasOwn(catalog.assets, assetId))
-      throw new Error(`Unknown building asset ${assetId}`);
-    compiled.set(
-      assetId,
-      await compileAsset(assetId, sourceFile(dirname(catalogPath), catalog.assets[assetId])),
+  let authoredCells: WorldCell[];
+  if (authored.generator) {
+    if (authored.generator.kind !== 'streaming-lab' || authored.cells.length !== 0)
+      throw new Error('A generated world must use only the streaming-lab generator');
+    authoredCells = generateStreamingCells(authored);
+  } else {
+    if (authored.cells.length === 0) throw new Error('World source requires cells');
+    authoredCells = await Promise.all(
+      authored.cells.map(async (path) =>
+        validateWorldCell(await readJson(sourceFile(sourceDirectory, path))),
+      ),
     );
+  }
+  if (new Set(authoredCells.map((cell) => cell.cellId)).size !== authoredCells.length)
+    throw new Error('Duplicate world cell ID');
+  if (authored.entities?.length)
+    authoredCells.push({
+      formatVersion: 2,
+      cellId: 'source-statics',
+      statics: authored.entities,
+      buildings: [],
+    });
+  const merged = mergeWorldCells(authoredCells);
+  const buildings: WorldDefinition['buildings'] = [];
+  const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
+  for (const instance of merged.buildings) {
+    if (!Object.hasOwn(catalog.assets, instance.assetId))
+      throw new Error(`Unknown building asset ${instance.assetId}`);
+    const descriptorPath = sourceFile(dirname(catalogPath), catalog.assets[instance.assetId]);
+    const descriptor = await readJson(descriptorPath);
+    if (descriptor.source?.kind !== 'ground') {
+      buildings.push(instance);
+      if (!compiled.has(instance.assetId))
+        compiled.set(instance.assetId, await compileAsset(instance.assetId, descriptorPath));
+      continue;
+    }
+    // Ground alone is partitioned; all city building identities and source refs stay intact.
+    const q = instance.rotation;
+    if (Math.abs(q.x) + Math.abs(q.y) + Math.abs(q.z) > 1e-8 || Math.abs(q.w - 1) > 1e-8)
+      throw new Error('Ground tiling requires axis-aligned source placement');
+    const recipe = (await readJson(
+      sourceFile(dirname(descriptorPath), descriptor.source.file),
+    )) as GroundRecipe;
+    const extent = {
+      min: {
+        x: recipe.min[0] + instance.position.x,
+        y: -recipe.depth + instance.position.y,
+        z: recipe.min[1] + instance.position.z,
+      },
+      max: {
+        x: recipe.max[0] + instance.position.x,
+        y: 0.05 + instance.position.y,
+        z: recipe.max[1] + instance.position.z,
+      },
+    };
+    for (const cellId of cellsIntersectingBounds(base.bounds, grid, extent)) {
+      const cell = worldCellBounds(base.bounds, grid, cellId);
+      const assetId = `${instance.assetId}-${cellId.replace('_', '-')}`;
+      const tile: GroundRecipe = {
+        ...recipe,
+        min: [
+          Math.max(extent.min.x, cell.min.x) - instance.position.x,
+          Math.max(extent.min.z, cell.min.z) - instance.position.z,
+        ],
+        max: [
+          Math.min(extent.max.x, cell.max.x) - instance.position.x,
+          Math.min(extent.max.z, cell.max.z) - instance.position.z,
+        ],
+      };
+      buildings.push({ ...instance, entityId: `${instance.entityId}-${cellId}`, assetId });
+      compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
+    }
   }
   const world: WorldDefinition = validateWorld({
     ...base,
+    entities: merged.statics,
     buildings,
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });
+  const cells = new Map<string, WorldCell>();
+  for (let z = 0; z < grid.rows; z++)
+    for (let x = 0; x < grid.columns; x++) {
+      const cellId = `${x}_${z}`;
+      cells.set(cellId, { formatVersion: 2, cellId, statics: [], buildings: [] });
+    }
+  for (const item of merged.statics) {
+    const ids = cellsIntersectingBounds(base.bounds, grid, primitiveBounds(item));
+    if (ids.length === 0) throw new Error(`Static outside world: ${item.entityId}`);
+    for (const id of ids) cells.get(id)!.statics.push(item as StaticEntityDefinition);
+  }
+  for (const item of buildings) {
+    const ids = cellsIntersectingBounds(
+      base.bounds,
+      grid,
+      buildingBounds(item, compiled.get(item.assetId)!.bounds),
+    );
+    for (const id of ids) cells.get(id)!.buildings.push(item);
+  }
   const files: Record<string, string> = {};
   const payloads = new Map<string, Uint8Array>();
-  const put = (path: string, bytes: Uint8Array) => {
+  const put = (path: string, bytes: Uint8Array, maxBytes: number) => {
+    if (bytes.byteLength > maxBytes) throw new Error(`World resource byte limit: ${path}`);
     files[path] = hash(bytes);
     payloads.set(path, bytes);
     return path;
   };
   const baseBytes = jsonBytes(base);
-  const worldFile = put(`world.${hash(baseBytes)}.json`, baseBytes);
+  const worldFile = put(
+    `header.${hash(baseBytes)}.json`,
+    baseBytes,
+    WORLD_RESOURCE_LIMITS.headerBytes,
+  );
   const assets: Record<string, BuildingAssetManifest> = {};
   for (const [assetId, asset] of compiled) {
     const prefix = `assets/${asset.version}`;
@@ -178,17 +278,22 @@ export async function buildWorld(
       assetId,
       version: asset.version,
       bounds: asset.bounds,
-      modelFile: put(`${prefix}/model.glb`, asset.model),
-      collisionFile: put(`${prefix}/colliders.json`, asset.collision),
-      partsFile: put(`${prefix}/parts.json`, asset.parts),
+      modelFile: put(`${prefix}/model.glb`, asset.model, WORLD_RESOURCE_LIMITS.modelBytes),
+      collisionFile: put(
+        `${prefix}/colliders.json`,
+        asset.collision,
+        WORLD_RESOURCE_LIMITS.collisionBytes,
+      ),
+      partsFile: put(`${prefix}/parts.json`, asset.parts, WORLD_RESOURCE_LIMITS.partsBytes),
     };
   }
-  const cellEntries = cells.map((cell) => {
+  const cellEntries = [...cells.values()].map((cell) => {
     const bytes = jsonBytes(cell);
     return {
       cellId: cell.cellId,
-      file: put(`cells/${cell.cellId}.${hash(bytes)}.json`, bytes),
-      bounds: base.bounds,
+      file: put(`cells/${cell.cellId}.${hash(bytes)}.json`, bytes, WORLD_RESOURCE_LIMITS.cellBytes),
+      bounds: worldCellBounds(base.bounds, grid, cell.cellId),
+      assetIds: [...new Set(cell.buildings.map((building) => building.assetId))].sort(),
     };
   });
   const manifest: WorldManifest = {
@@ -198,22 +303,23 @@ export async function buildWorld(
     mapVersion: '0'.repeat(64),
     simulationConfigHash: hash(canonicalJson(simulationProjection(world))),
     bounds: world.bounds,
+    grid,
     cells: cellEntries,
     assets,
     files,
   };
   manifest.mapVersion = hash(canonicalJson(worldManifestIdentity(manifest)));
   validateWorldManifest(manifest);
-  await mkdir(output, { recursive: true });
+  await mkdir(outputDirectory, { recursive: true });
   for (const [path, bytes] of payloads) {
-    const destination = resolve(output, path);
+    const destination = resolve(outputDirectory, path);
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, bytes);
   }
   // Content files are immutable; publishing the small manifest is the final step.
-  const temporary = resolve(output, '.manifest.tmp');
+  const temporary = resolve(outputDirectory, '.manifest.tmp');
   await writeFile(temporary, JSON.stringify(manifest, null, 2) + '\n');
-  await rename(temporary, resolve(output, 'manifest.json'));
+  await rename(temporary, resolve(outputDirectory, 'manifest.json'));
   return manifest;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

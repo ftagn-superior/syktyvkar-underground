@@ -20,7 +20,7 @@ let definition: WorldDefinition;
 const readBytes = (path: string) => readFile(join(directory, path));
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'su-render-buildings-'));
-  manifest = await buildWorld(undefined, directory);
+  manifest = await buildWorld('content/worlds/physics-lab/world.json', directory);
   definition = await loadWorldBundle(manifest, readBytes);
 });
 afterAll(async () => {
@@ -188,37 +188,88 @@ describe('building rendering from the real world bundle', () => {
     }
   });
 
-  it('waits for every started loader before reporting a failed asset and allowing scene teardown', async () => {
+  it('does not start distant models after an earlier model fails', async () => {
     const view = fixture();
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let settled = false;
-    const pending = view.buildings.prepare(manifest, async (path) => {
-      if (path === manifest.assets['house-a'].modelFile) throw new Error('model hash mismatch');
-      if (path.startsWith(`assets/${manifest.assets['house-b'].version}/`)) await gate;
-      return readBytes(path);
-    });
-    void pending.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
+    const reads: string[] = [];
     try {
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(settled).toBe(false);
-      release();
-      await expect(pending).rejects.toThrow('model hash mismatch');
+      await expect(
+        view.buildings.prepare(manifest, async (path) => {
+          reads.push(path);
+          if (path === manifest.assets['house-a'].modelFile) throw new Error('model hash mismatch');
+          return readBytes(path);
+        }),
+      ).rejects.toThrow('model hash mismatch');
+      expect(reads).not.toContain(manifest.assets['house-b'].modelFile);
       expect(view.scene.meshes).toHaveLength(0);
-      expect(view.scene.materials).toHaveLength(0);
       expect(view.buildings.aggregateDiagnostics().assets).toBe(0);
     } finally {
+      view.dispose();
+    }
+  });
+});
+
+describe('incremental building ownership', () => {
+  it('pins one shared template across cells, keeps seam instances and disposes its last user', async () => {
+    const view = fixture();
+    const id = 'house-a',
+      version = manifest.assets[id].version;
+    const instance = {
+      ...definition.buildings.find((item) => item.assetId === id)!,
+      entityId: 'seam',
+    };
+    const reads: string[] = [];
+    const read = async (path: string) => {
+      reads.push(path);
+      return readBytes(path);
+    };
+    try {
+      const [releaseA, releaseB] = await Promise.all([
+        view.buildings.prepareAssets(manifest, [id], read),
+        view.buildings.prepareAssets(manifest, [id], read),
+      ]);
+      expect(reads.filter((path) => path.endsWith('.glb'))).toHaveLength(1);
+      view.buildings.add(instance, version);
+      view.buildings.add(instance, version);
+      view.buildings.remove(instance.entityId);
+      releaseA();
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 1, assets: 1 });
+      expect(() => view.buildings.add(instance, 'different')).toThrow('version');
+      view.buildings.remove(instance.entityId);
+      releaseB();
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 0, assets: 0 });
+      expect(view.scene.geometries).toHaveLength(0);
+      expect(view.scene.materials).toHaveLength(0);
+      expect(view.shadow.getShadowMap()!.renderList).toHaveLength(0);
+    } finally {
+      view.dispose();
+    }
+  });
+  it('cancels one cell without aborting another owner of an in-flight model', async () => {
+    const view = fixture();
+    const controller = new AbortController();
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const signals: AbortSignal[] = [];
+    const read = async (path: string, signal?: AbortSignal) => {
+      signals.push(signal!);
+      await gate;
+      return readBytes(path);
+    };
+    const cancelled = view.buildings.prepareAssets(manifest, ['house-a'], read, controller.signal);
+    const retained = view.buildings.prepareAssets(manifest, ['house-a'], read);
+    controller.abort();
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    finish();
+    try {
+      await expect(cancelled).rejects.toThrow('cancelled');
+      const release = await retained;
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(1);
       release();
-      await pending.catch(() => {});
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+      expect(view.buildings.aggregateDiagnostics().assets).toBe(0);
+    } finally {
       view.dispose();
     }
   });

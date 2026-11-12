@@ -12,15 +12,26 @@ const movementKeys = new Set([
   'ArrowRight',
 ]);
 const sprintKeys = new Set(['ShiftLeft', 'ShiftRight']);
+const placementRotations: Readonly<Record<string, { axis: 'x' | 'y' | 'z'; direction: -1 | 1 }>> = {
+  KeyW: { axis: 'x', direction: -1 },
+  KeyS: { axis: 'x', direction: 1 },
+  KeyA: { axis: 'y', direction: -1 },
+  KeyD: { axis: 'y', direction: 1 },
+  KeyQ: { axis: 'z', direction: -1 },
+  KeyE: { axis: 'z', direction: 1 },
+};
 export class KeyboardInput {
   private enabled = true;
+  private placementMode = false;
   private readonly held = new Set<string>();
   private readonly controller = new AbortController();
   constructor(
     onRelease: () => void,
-    onRotate?: (direction: -1 | 1) => void,
+    private readonly onRotate?: (direction: -1 | 0 | 1) => void,
     onReactions?: () => void,
-    onChat?: () => void,
+    onChat?: (initialText: string) => void,
+    onAnimations?: () => void,
+    onPlacementRotate?: (axis: 'x' | 'y' | 'z', direction: -1 | 1) => void,
   ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
@@ -35,19 +46,37 @@ export class KeyboardInput {
           (event.target instanceof HTMLElement && event.target.isContentEditable)
         )
           return;
+        if (this.placementMode) {
+          const rotation = placementRotations[event.code];
+          if (rotation) {
+            event.preventDefault();
+            onPlacementRotate?.(rotation.axis, rotation.direction);
+            return;
+          }
+          if (movementKeys.has(event.code) || sprintKeys.has(event.code)) {
+            event.preventDefault();
+            return;
+          }
+        }
         if (event.code === 'KeyR') {
           event.preventDefault();
           onReactions?.();
           return;
         }
-        if (event.code === 'KeyT') {
+        if (event.code === 'KeyT' || event.key === '/') {
           event.preventDefault();
-          onChat?.();
+          onChat?.(event.key === '/' ? '/' : '');
+          return;
+        }
+        if (event.code === 'KeyF') {
+          event.preventDefault();
+          onAnimations?.();
           return;
         }
         if (event.code === 'KeyQ' || event.code === 'KeyE') {
           event.preventDefault();
-          onRotate?.(event.code === 'KeyQ' ? -1 : 1);
+          this.held.add(event.code);
+          this.publishRotation();
           return;
         }
         if (!movementKeys.has(event.code) && !sprintKeys.has(event.code)) return;
@@ -60,14 +89,28 @@ export class KeyboardInput {
       'keyup',
       (event) => {
         this.held.delete(event.code);
+        if (event.code === 'KeyQ' || event.code === 'KeyE') this.publishRotation();
       },
       options,
     );
     const clear = () => {
-      this.held.clear();
+      this.clear();
       onRelease();
     };
     window.addEventListener('blur', clear, options);
+    window.addEventListener(
+      'focusin',
+      (event) => {
+        if (
+          event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLTextAreaElement ||
+          event.target instanceof HTMLSelectElement ||
+          (event.target instanceof HTMLElement && event.target.isContentEditable)
+        )
+          clear();
+      },
+      options,
+    );
     document.addEventListener(
       'visibilitychange',
       () => {
@@ -76,8 +119,15 @@ export class KeyboardInput {
       options,
     );
   }
+  get cameraEnabled(): boolean {
+    return this.enabled && !this.placementMode && !document.hidden;
+  }
+  private publishRotation(): void {
+    const direction = Number(this.held.has('KeyE')) - Number(this.held.has('KeyQ'));
+    this.onRotate?.(direction as -1 | 0 | 1);
+  }
   read(cameraAngle = INITIAL_CAMERA_ANGLE): MoveInput {
-    if (!this.enabled || document.hidden) return { ...NEUTRAL_INPUT };
+    if (!this.enabled || this.placementMode || document.hidden) return { ...NEUTRAL_INPUT };
     const right =
       Number(this.held.has('KeyD') || this.held.has('ArrowRight')) -
       Number(this.held.has('KeyA') || this.held.has('ArrowLeft'));
@@ -91,13 +141,18 @@ export class KeyboardInput {
   }
   clear(): void {
     this.held.clear();
+    this.publishRotation();
   }
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     this.clear();
   }
+  setPlacementMode(active: boolean): void {
+    this.placementMode = active;
+    this.clear();
+  }
   dispose(): void {
     this.controller.abort();
-    this.held.clear();
+    this.clear();
   }
 }

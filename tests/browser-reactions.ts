@@ -4,6 +4,7 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { rotateCamera } from './helpers/camera.js';
 
 // Run after build: the two real browsers share an isolated, freshly created world.
 const app = await createGameServer({
@@ -78,12 +79,18 @@ try {
   const senderId = (await snapshot(sender)).authoritative.entityId;
   const sticker = `.player-reaction[data-entity-id="${senderId}"]`;
   for (const reaction of REACTIONS) {
+    await sender.waitForFunction(() => {
+      const state = (window as any).__SU_DEBUG__.snapshot();
+      const velocity = state.authoritative.velocity;
+      return Math.hypot(velocity.x, velocity.z) <= 0.08 && !state.animation.moving;
+    });
     await sender.keyboard.press('r');
     const choice = sender.locator(
       `.reaction-choice[data-reaction-id="${reaction.id}"]:not([disabled])`,
     );
     await choice.waitFor({ timeout: 6000 });
-    await choice.click();
+    if (reaction.id === 'hello') await sender.keyboard.press('1');
+    else await choice.click();
     await Promise.all([
       sender.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
       observer.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
@@ -114,16 +121,22 @@ try {
     }
     const movingStarted = Date.now();
     if (reaction.id === 'hello') {
-      const before = await sender
+      const before = await observer
         .locator(sticker)
         .evaluate((node) => (node as HTMLElement).style.transform);
       await sender.keyboard.down('d');
       await sender.waitForTimeout(300);
       await sender.keyboard.up('d');
-      await sender.keyboard.press('q');
-      await sender.waitForTimeout(200);
+      await rotateCamera(observer, -0.39, false);
+      await observer.waitForFunction(
+        ({ selector, before }) => {
+          const node = document.querySelector<HTMLElement>(selector);
+          return node && node.style.transform !== before;
+        },
+        { selector: sticker, before },
+      );
       assert.notEqual(
-        await sender.locator(sticker).evaluate((node) => (node as HTMLElement).style.transform),
+        await observer.locator(sticker).evaluate((node) => (node as HTMLElement).style.transform),
         before,
       );
       await sender.keyboard.press('r');
@@ -192,8 +205,6 @@ try {
       '#reactions-toggle',
       '#respawn',
       '#leave',
-      '#camera-left',
-      '#camera-right',
     ]) {
       const fits = await sender.locator(selector).evaluate((node) => {
         const rect = node.getBoundingClientRect();

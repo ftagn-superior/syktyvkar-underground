@@ -1,3 +1,4 @@
+import { prepareSdk } from '../helpers/prepare.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
@@ -49,7 +50,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       room.onMessage('problem', () => {});
       room.onMessage('resync', () => {});
       rooms.push(room);
-      room.send('clientReady');
+      prepareSdk(room);
       await until(() => !!room.state?.players?.has(room.sessionId));
       return { room, inventories, results };
     }

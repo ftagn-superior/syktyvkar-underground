@@ -1,4 +1,5 @@
-import { REACTIONS } from '@su/contracts';
+import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '@su/contracts';
+import { bindCatalogShortcuts } from './catalog-shortcuts';
 
 export interface ReactionMenuStatus {
   pending: boolean;
@@ -12,6 +13,7 @@ export class ReactionMenu {
   private readonly controller = new AbortController();
   private sent = false;
   private wasPending = false;
+  private readonly cooldown: HTMLProgressElement;
   constructor(
     private readonly toggle: HTMLButtonElement,
     private readonly panel: HTMLElement,
@@ -21,6 +23,9 @@ export class ReactionMenu {
     private readonly onOpen?: () => void,
   ) {
     const options = { signal: this.controller.signal };
+    panel.querySelector('[data-catalog-count]')!.textContent = String(REACTIONS.length);
+    this.cooldown = panel.querySelector<HTMLProgressElement>('.reaction-cooldown')!;
+    this.cooldown.max = WORLD_ACTIVITY_MOVE_DURATION_MS;
     const grid = panel.querySelector('.reaction-choices')!;
     for (const reaction of REACTIONS) {
       const button = document.createElement('button');
@@ -30,21 +35,22 @@ export class ReactionMenu {
       const image = document.createElement('img');
       image.src = `/reactions/${reaction.asset}`;
       image.alt = '';
-      image.width = image.height = 44;
+      image.width = image.height = 52;
       const label = document.createElement('span');
       label.textContent = reaction.label;
       button.append(image, label);
       button.addEventListener(
         'click',
         () => {
-          choose(reaction.id);
           this.sent = true;
+          choose(reaction.id);
         },
         options,
       );
       grid.append(button);
       this.choices.push(button);
     }
+    bindCatalogShortcuts(panel, this.choices, this.controller.signal);
     toggle.addEventListener('click', () => this.toggleOpen(), options);
     panel
       .querySelector('button[data-close]')!
@@ -100,11 +106,15 @@ export class ReactionMenu {
     }
     this.wasPending = state.pending;
     this.toggle.setAttribute('aria-busy', String(state.pending));
+    this.panel.setAttribute('aria-busy', String(state.pending));
+    this.status.dataset.state = state.pending || state.remainingMs > 0 ? 'waiting' : 'ready';
+    this.cooldown.hidden = state.remainingMs <= 0;
+    this.cooldown.value = Math.max(0, state.remainingMs);
     const message = state.pending
       ? 'Отправляем…'
       : state.remainingMs > 0
         ? `Следующая реакция через ${Math.ceil(state.remainingMs / 1000)} с`
-        : 'Выберите реакцию · в мире на 3 секунды';
+        : 'Готово к отправке';
     if (this.status.textContent !== message) this.status.textContent = message;
     for (const button of this.choices)
       button.disabled = !state.available || state.pending || state.remainingMs > 0;

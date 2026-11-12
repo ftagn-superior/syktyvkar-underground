@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CameraTurn, INITIAL_CAMERA_ANGLE, screenMovement } from './camera-controller';
+import {
+  CameraOrbit,
+  INITIAL_CAMERA_ANGLE,
+  screenMovement,
+  orthographicFrame,
+} from './camera-controller';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 
 describe('orthographic camera controls', () => {
@@ -17,23 +22,91 @@ describe('orthographic camera controls', () => {
       expect(Math.hypot(diagonal.moveX, diagonal.moveZ)).toBeCloseTo(1);
     }
   });
-  it('completes a smooth full circuit and bounds rapid repeated turns', () => {
-    const camera = new CameraTurn();
-    camera.rotate(1);
-    camera.advance(0.14);
-    expect(camera.angle).toBeCloseTo(INITIAL_CAMERA_ANGLE + Math.PI / 4);
-    camera.rotate(1);
-    camera.advance(0.14);
-    expect(camera.turning).toBe(false);
-    expect(camera.angle).toBeCloseTo(INITIAL_CAMERA_ANGLE + Math.PI / 2);
-    for (let i = 0; i < 3; i++) {
-      camera.rotate(1);
-      camera.advance(1);
+  it('preserves full zoom and aspect without a network radius cap', () => {
+    for (const aspect of [1920 / 1080, 360 / 800, 3840 / 720]) {
+      for (const zoom of [0.6, 1, 30]) {
+        const { halfWidth, halfHeight } = orthographicFrame(aspect, zoom);
+        expect(halfWidth / halfHeight).toBeCloseTo(aspect);
+        expect(halfHeight).toBe((aspect < 1 ? 20 : 15) * zoom);
+      }
     }
-    expect(camera.angle).toBeCloseTo(INITIAL_CAMERA_ANGLE);
-    camera.rotate(-1);
-    camera.advance(1);
-    expect(camera.angle).toBeCloseTo(-Math.PI / 4);
+    expect(orthographicFrame(3840 / 720, 30).halfWidth).toBe(2400);
+  });
+  const settle = (camera: CameraOrbit) => {
+    for (let i = 0; i < 90; i++) camera.advance(1 / 60);
+    expect(camera.turning).toBe(false);
+  };
+  const angleDifference = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+  it('settles at any requested mouse angle and accepts a reversal during smoothing', () => {
+    const camera = new CameraOrbit();
+    camera.rotateBy(0.39);
+    const intermediate = camera.advance(1 / 60);
+    expect(intermediate).toBeGreaterThan(INITIAL_CAMERA_ANGLE);
+    expect(intermediate).toBeLessThan(INITIAL_CAMERA_ANGLE + 0.39);
+    camera.rotateBy(-0.12);
+    settle(camera);
+    expect(camera.angle).toBeCloseTo(INITIAL_CAMERA_ANGLE + 0.27, 10);
+    expect(camera.advance(1)).toBe(camera.angle);
+  });
+  it('orbits continuously while held and stops at the angle requested before release', () => {
+    const camera = new CameraOrbit();
+    camera.setDirection(1);
+    for (let i = 0; i < 137; i++) camera.advance(1 / 60);
+    expect(camera.turning).toBe(true);
+    camera.setDirection(0);
+    const released = camera.angle;
+    settle(camera);
+    const expected = INITIAL_CAMERA_ANGLE + ((137 / 60) * Math.PI) / 2;
+    expect(angleDifference(camera.angle, expected)).toBeCloseTo(0, 10);
+    expect(Math.abs(angleDifference(camera.angle, released))).toBeLessThan(0.08);
+  });
+  it('has the same orbit at 30, 60 and 144 fps, including direction changes', () => {
+    const angles = [30, 60, 144].map((fps) => {
+      const camera = new CameraOrbit();
+      camera.setDirection(1);
+      for (let i = 0; i < fps * 2; i++) camera.advance(1 / fps);
+      camera.setDirection(-1);
+      for (let i = 0; i < fps; i++) camera.advance(1 / fps);
+      return camera.angle;
+    });
+    for (const angle of angles) expect(angleDifference(angle, angles[0])).toBeCloseTo(0, 10);
+  });
+  it('crosses the angle boundary smoothly in both directions over repeated full orbits', () => {
+    for (const direction of [-1, 1] as const) {
+      const camera = new CameraOrbit();
+      camera.setDirection(direction);
+      let traveled = 0;
+      for (let i = 0; i < 60 * 12; i++) {
+        const before = camera.angle;
+        camera.advance(1 / 60);
+        const change = angleDifference(camera.angle, before);
+        expect(change * direction).toBeGreaterThan(0);
+        expect(Math.abs(change)).toBeLessThan(0.03);
+        traveled += change;
+      }
+      expect(Math.abs(traveled)).toBeGreaterThan(5 * Math.PI);
+      camera.setDirection(0);
+      settle(camera);
+      expect(angleDifference(camera.angle, INITIAL_CAMERA_ANGLE)).toBeCloseTo(0, 10);
+    }
+  });
+  it('cancels held input and pending mouse motion without resuming after a reset', () => {
+    const camera = new CameraOrbit();
+    camera.setDirection(1);
+    camera.rotateBy(2);
+    camera.advance(1 / 60);
+    camera.stop();
+    const stopped = camera.angle;
+    settle(camera);
+    expect(camera.angle).toBe(stopped);
+  });
+  it('bounds a stalled frame and does not move for zero or negative elapsed time', () => {
+    const camera = new CameraOrbit();
+    camera.setDirection(1);
+    expect(camera.advance(-1)).toBe(INITIAL_CAMERA_ANGLE);
+    expect(camera.advance(0)).toBe(INITIAL_CAMERA_ANGLE);
+    expect(camera.advance(30) - INITIAL_CAMERA_ANGLE).toBeLessThan(Math.PI / 20);
   });
   it('casts parallel rays through off-centre samples from the camera near plane and stops before the player', () => {
     const camera = new Vector3(10, 10, 10);

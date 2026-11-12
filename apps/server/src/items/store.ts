@@ -196,9 +196,11 @@ export class ItemStore {
       const items = await this.worldItems();
       const world = await createAuthoritativeWorld({ ...this.definition, initialItems: [] });
       try {
-        world.replaceItems(items);
+        // Validate against the new static geometry. Other saved dynamics can occupy
+        // an earlier safePose, and normal contact snapshots may slightly overlap.
+        // Neither changes whether the map itself is compatible with this snapshot.
         for (const item of items) {
-          const error = world.checkPlacement(item.typeId, item, undefined, item.entityId);
+          const error = world.checkSavedItem(item);
           if (error)
             throw new Error(`Saved item ${item.entityId} cannot stay in the new map: ${error}`);
         }

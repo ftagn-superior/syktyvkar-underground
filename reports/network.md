@@ -1,5 +1,7 @@
 # Browser network acceptance — T03
 
+> Исторический отчёт отдельного этапа. Указанные ниже ограничения и открытые на тот момент пункты относятся к описанному прогону. Текущая версия работает в production, все приёмки завершены по подтверждению владельца проекта от 12 ноября 2026 года. Актуальные инструкции — в [документации](../docs/README.md).
+
 Measured on 11 November 2026 with Node.js 26.10.0, Chromium 155.0.8059.12, Babylon.js 9.35.0, Havok 1.3.14 and Colyseus SDK 0.18.10. Two independent browser contexts use the real rendered application, WebSocket connections and keyboard input. The viewport is 800 × 600; Chromium uses SwiftShader in this environment. These measurements do not establish the graphical performance budget on reference hardware.
 
 ## Reproduce

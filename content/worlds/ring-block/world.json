@@ -1,5 +1,5 @@
 {
-  "formatVersion": 3,
+  "formatVersion": 4,
   "worldId": "ring-block",
   "bounds": {
     "min": {
@@ -221,5 +221,6 @@
         "w": 1
       }
     }
-  ]
+  ],
+  "cellSize": 125
 }

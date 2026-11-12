@@ -8,7 +8,6 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -20,12 +19,21 @@ import {
   type ItemPose,
   type Vec3,
   type WorldDefinition,
+  type WorldHeader,
+  type WorldCell,
+  type StaticEntityDefinition,
+  type BuildingInstance,
   type WorldManifest,
 } from '@su/contracts';
-import { decorateWorld, obstacleAccent } from './world-decoration';
+import { decorateWorld } from './world-decoration';
+import { StaticViews } from './statics';
+import { applyRadialFog, radialOpacity, type RadialState } from './radial-fog';
+import { Frustum } from '@babylonjs/core/Maths/math.frustum';
+import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
+import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { BuildingViews } from './buildings';
-import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
+import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
@@ -67,7 +75,24 @@ export class WorldView {
   private readonly sun: DirectionalLight;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
-  private readonly cameraTurn = new CameraTurn();
+  private readonly statics: StaticViews;
+  private manifest?: WorldManifest;
+  private readonly cellPreparations = new Set<Promise<unknown>>();
+  private readonly radial: RadialState = {
+    center: { x: 0, y: 0, z: 0 },
+    radius: 0,
+    time: 0,
+    appearMs: 300,
+  };
+  private readonly dynamicRadial: RadialState = {
+    center: { x: 0, y: 0, z: 0 },
+    radius: 500,
+    dynamic: true,
+    time: 0,
+    appearMs: 300,
+  };
+  private streamingRadius = 0;
+  private readonly cameraOrbit = new CameraOrbit();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
   private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
@@ -98,7 +123,7 @@ export class WorldView {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly labels: HTMLElement,
-    private readonly definition: WorldDefinition,
+    private readonly definition: WorldDefinition | WorldHeader,
     quality: RenderQuality = 'standard',
   ) {
     this.quality = quality;
@@ -147,35 +172,24 @@ export class WorldView {
     this.shadow.blurKernel = 16;
     this.shadow.setDarkness(0.25);
     this.buildings = new BuildingViews(this.scene, this.shadow, definition);
-    const staticMaterials = new Map<string, StandardMaterial>();
-    for (const entity of definition.entities) {
-      if (entity.kind !== 'obstacle') continue;
-      const mesh = MeshBuilder.CreateBox(
-        entity.entityId,
-        { width: entity.size.x, height: entity.size.y, depth: entity.size.z },
-        this.scene,
-      );
-      mesh.position.copyFrom(vector(entity.position));
-      let material = staticMaterials.get(entity.color);
-      if (!material) {
-        material = this.material(`static-${entity.color}`, entity.color);
-        staticMaterials.set(entity.color, material);
-      }
-      mesh.material = material;
-      mesh.receiveShadows = true;
-      mesh.isPickable = false;
-      mesh.freezeWorldMatrix();
-      if (entity.entityId !== 'ground-01') {
-        this.shadow.addShadowCaster(mesh);
-        mesh.enableEdgesRendering();
-        mesh.edgesWidth = 0.6;
-        const accent = obstacleAccent(entity);
-        mesh.edgesColor = accent
-          ? Color4.FromHexString(`${accent}66`)
-          : new Color4(0.65, 0.77, 0.79, 0.18);
-      }
+    this.statics = new StaticViews(this.scene, this.shadow);
+    if ('entities' in definition) {
+      for (const entity of definition.entities)
+        if (entity.kind === 'obstacle')
+          this.statics.add(entity as StaticEntityDefinition, 'initial');
+      decorateWorld(this.scene, definition);
+      this.streamingRadius = this.radial.radius = Infinity;
     }
-    decorateWorld(this.scene, definition);
+    if (!(
+      definition.bounds.min.x <= 0 &&
+      definition.bounds.max.x >= 0 &&
+      definition.bounds.min.z <= 0 &&
+      definition.bounds.max.z >= 0
+    )) {
+      this.target.copyFrom(vector(definition.spawnPoints[0]));
+      this.target.y = 0;
+      this.camera.setTarget(this.target);
+    }
     for (const landmark of definition.landmarks ?? []) {
       const label = document.createElement('div');
       label.className = 'landmark-label';
@@ -191,7 +205,7 @@ export class WorldView {
       const now = performance.now();
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
-      this.camera.alpha = this.cameraTurn.advance(delta);
+      this.camera.alpha = this.cameraOrbit.advance(delta);
       this.frameHook?.(now, delta);
       this.camera.setTarget(
         Vector3.Lerp(this.camera.target, this.target, 1 - Math.exp(-Math.min(delta, 0.1) * 5)),
@@ -214,7 +228,22 @@ export class WorldView {
         this.camera.minZ,
         now,
         delta,
+        this.ownPosition ?? this.target,
+        this.radial.radius,
       );
+      this.statics.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
+      const center = this.ownPosition ?? this.target;
+      this.radial.center = this.dynamicRadial.center = center;
+      this.radial.time = this.dynamicRadial.time = now;
+      this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
+      // Closing is immediate; opening follows only the completely prepared circle.
+      this.radial.radius =
+        this.streamingRadius < this.radial.radius
+          ? this.streamingRadius
+          : Math.min(
+              this.streamingRadius,
+              this.radial.radius + (Math.max(1, this.streamingRadius) * delta) / 0.3,
+            );
       this.scene.render();
       this.positionLabels();
     });
@@ -239,10 +268,16 @@ export class WorldView {
     this.sizeCamera();
   }
   get cameraAngle(): number {
-    return this.cameraTurn.angle;
+    return this.cameraOrbit.angle;
   }
-  rotateCamera(direction: -1 | 1): void {
-    this.cameraTurn.rotate(direction);
+  setCameraRotation(direction: -1 | 0 | 1): void {
+    this.cameraOrbit.setDirection(direction);
+  }
+  rotateCameraBy(radians: number): void {
+    this.cameraOrbit.rotateBy(radians);
+  }
+  stopCamera(): void {
+    this.cameraOrbit.stop();
   }
   prepareBuildings(
     manifest: WorldManifest,
@@ -250,6 +285,70 @@ export class WorldView {
   ): Promise<void> {
     this.preparation = this.buildings.prepare(manifest, readBytes);
     return this.preparation;
+  }
+  prepareCellAssets(
+    manifest: WorldManifest,
+    ids: string[],
+    read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
+    signal?: AbortSignal,
+  ) {
+    this.manifest = manifest;
+    const pending = this.buildings.prepareAssets(manifest, ids, read, signal);
+    this.cellPreparations.add(pending);
+    void pending.then(
+      () => this.cellPreparations.delete(pending),
+      () => this.cellPreparations.delete(pending),
+    );
+    return pending;
+  }
+  /** Decorations stay local to a one-cell arena and are released with that cell. */
+  activateCell(cell: WorldCell): () => void {
+    const meshes = new Set(this.scene.meshes);
+    const materials = new Set(this.scene.materials);
+    const textures = new Set(this.scene.textures);
+    const release = () => {
+      for (const mesh of [...this.scene.meshes]) if (!meshes.has(mesh)) mesh.dispose();
+      for (const material of [...this.scene.materials])
+        if (!materials.has(material)) material.dispose(false, false);
+      for (const texture of [...this.scene.textures]) if (!textures.has(texture)) texture.dispose();
+    };
+    try {
+      decorateWorld(this.scene, {
+        bounds: this.definition.bounds,
+        spawnPoints: this.definition.spawnPoints,
+        entities: cell.statics,
+        worldId: this.definition.worldId,
+        initialItems: this.definition.initialItems,
+      });
+      // Capture only decoration resources; later characters/buildings belong to other owners.
+      const ownedMeshes = this.scene.meshes.filter((mesh) => !meshes.has(mesh));
+      const ownedMaterials = this.scene.materials.filter((material) => !materials.has(material));
+      const ownedTextures = this.scene.textures.filter((texture) => !textures.has(texture));
+      return () => {
+        for (const mesh of ownedMeshes) mesh.dispose();
+        for (const material of ownedMaterials) material.dispose(false, false);
+        for (const texture of ownedTextures) texture.dispose();
+      };
+    } catch (error) {
+      release();
+      throw error;
+    }
+  }
+  retainStatic(item: StaticEntityDefinition | BuildingInstance, version: string) {
+    if ('assetId' in item) this.buildings.add(item, version);
+    else this.statics.add(item, version);
+    const root =
+      this.scene.getTransformNodeByName(item.entityId) ?? this.scene.getMeshByName(item.entityId);
+    if (root) {
+      const meshes = root instanceof TransformNode ? root.getChildMeshes() : [];
+      if ('material' in root)
+        meshes.push(root as import('@babylonjs/core/Meshes/abstractMesh').AbstractMesh);
+      for (const mesh of meshes) applyRadialFog(mesh, this.radial, performance.now());
+    }
+  }
+  releaseStatic(entityId: string) {
+    this.buildings.remove(entityId);
+    this.statics.remove(entityId);
   }
   buildingDiagnostics() {
     return this.buildings.diagnostics();
@@ -270,14 +369,59 @@ export class WorldView {
       pixelRatio: window.devicePixelRatio,
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
+      dynamicEntities: [...this.entities].map(([entityId, view]) => ({
+        entityId,
+        position: { x: view.root.position.x, y: view.root.position.y, z: view.root.position.z },
+      })),
+      geometries: this.scene.geometries.length,
+      nodes: this.scene.transformNodes.length,
+      textures: this.scene.textures.length,
+      shadowCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
+      streaming: {
+        drawRadius: this.graphicalArea().drawRadius,
+        readyRadius: this.streamingRadius,
+        shownRadius: this.radial.radius,
+      },
       meshes: this.scene.meshes.length,
       transformNodes: this.scene.transformNodes.length,
       materials: this.scene.materials.length,
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),
-      camera: { azimuth: this.cameraAngle, turning: this.cameraTurn.turning },
+      camera: {
+        azimuth: this.cameraAngle,
+        turning: this.cameraOrbit.turning,
+        halfWidth: this.camera.orthoRight!,
+        halfHeight: this.camera.orthoTop!,
+        beta: this.camera.beta,
+        zoom: this.zoom,
+      },
       buildings: this.buildings.aggregateDiagnostics(),
     };
+  }
+  graphicalArea() {
+    this.camera.getViewMatrix(true);
+    const center = this.ownPosition ?? this.target;
+    let frameRadius = 0;
+    if (this.manifest) {
+      const planes = Frustum.GetPlanes(this.camera.getTransformationMatrix());
+      for (const cell of this.manifest.cells) {
+        const bounds = worldCellBounds(this.manifest.bounds, this.manifest.grid, cell.cellId);
+        if (!new BoundingInfo(vector(bounds.min), vector(bounds.max)).isInFrustum(planes)) continue;
+        for (const x of [bounds.min.x, bounds.max.x])
+          for (const z of [bounds.min.z, bounds.max.z])
+            frameRadius = Math.max(frameRadius, Math.hypot(x - center.x, z - center.z));
+      }
+    }
+    const drawRadius = Math.max(500, frameRadius + 125);
+    return {
+      center: { x: center.x, y: center.y, z: center.z },
+      drawRadius,
+      preloadRadius: drawRadius + 125,
+      retainRadius: Math.max(800, drawRadius + 300),
+    };
+  }
+  setStreamingRadius(radius: number) {
+    this.streamingRadius = Math.max(0, radius);
   }
   private sizeCamera(): void {
     // Quality changes raster resolution, never the world visible through the camera.
@@ -291,12 +435,7 @@ export class WorldView {
     const depthScale = Math.max(1, this.zoom);
     this.camera.radius = 120 * depthScale;
     this.camera.maxZ = 300 * depthScale;
-    // Квадрат теней должен накрывать весь видимый кадр с запасом на высокие дома за краем.
-    if (this.sun)
-      this.sun.shadowFrustumSize = Math.max(
-        SHADOW_EXTENT,
-        2 * halfHeight * Math.max(1, aspect) + 40,
-      );
+    if (this.sun) this.sun.shadowFrustumSize = SHADOW_EXTENT;
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();
@@ -314,7 +453,15 @@ export class WorldView {
   }
   follow(id?: string): void {
     this.followed = id;
-    if (!id) this.target.setAll(0);
+    if (!id) {
+      const bounds = this.definition.bounds;
+      if (bounds.min.x <= 0 && bounds.max.x >= 0 && bounds.min.z <= 0 && bounds.max.z >= 0)
+        this.target.setAll(0);
+      else {
+        this.target.copyFrom(vector(this.definition.spawnPoints[0]));
+        this.target.y = 0;
+      }
+    }
   }
   update(entities: DisplayEntity[], ownId: string | undefined, delta: number): void {
     this.ownPosition = undefined;
@@ -324,6 +471,8 @@ export class WorldView {
         this.disposeEntity(view);
         this.entities.delete(id);
       }
+    const shadowCenter =
+      entities.find((entity) => entity.entityId === ownId)?.position ?? this.target;
     for (const entity of entities) {
       let view = this.entities.get(entity.entityId);
       if (!view) {
@@ -351,6 +500,18 @@ export class WorldView {
       if (entity.kind === 'player')
         view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
       else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
+      const shadowCasters = new Set(this.shadow.getShadowMap()?.renderList ?? []);
+      const nearShadow =
+        Math.hypot(entity.position.x - shadowCenter.x, entity.position.z - shadowCenter.z) <= 80;
+      for (const mesh of view.root.getChildMeshes()) {
+        applyRadialFog(mesh, this.dynamicRadial, performance.now());
+        // Remember authored eligibility: returning into range must restore body shadows,
+        // while markers and other intentionally unshadowed avatar pieces remain excluded.
+        mesh.metadata.suStreamingShadow ??= shadowCasters.has(mesh);
+        if (nearShadow && mesh.metadata.suStreamingShadow && !shadowCasters.has(mesh))
+          this.shadow.addShadowCaster(mesh);
+        else if (!nearShadow && shadowCasters.has(mesh)) this.shadow.removeShadowCaster(mesh);
+      }
       this.updateReaction(view, entity);
       this.updateChat(view, entity);
       if (entity.entityId === this.followed)
@@ -509,11 +670,12 @@ export class WorldView {
     const cssWidth = this.canvas.clientWidth;
     const cssHeight = this.canvas.clientHeight;
     const labelHeight = this.definition.simulation.character.height / 2 + 0.5;
-    const anchors: [LabelAnchor, Vector3, number][] = [];
+    const anchors: [LabelAnchor, Vector3, number, number][] = [];
     for (const view of this.entities.values())
-      if (view.label) anchors.push([view as LabelAnchor, view.root.position, labelHeight]);
-    for (const landmark of this.landmarks) anchors.push([landmark, landmark.position, 0]);
-    for (const [view, position, lift] of anchors) {
+      if (view.label) anchors.push([view as LabelAnchor, view.root.position, labelHeight, 500]);
+    for (const landmark of this.landmarks)
+      anchors.push([landmark, landmark.position, 0, this.radial.radius]);
+    for (const [view, position, lift, radius] of anchors) {
       this.labelPosition.copyFrom(position);
       this.labelPosition.y += lift;
       Vector3.ProjectToRef(
@@ -525,7 +687,10 @@ export class WorldView {
       );
       const x = (this.projectedLabel.x * cssWidth) / width;
       const y = (this.projectedLabel.y * cssHeight) / height;
+      const opacity = radialOpacity(this.radial.center, position, radius);
+      view.label.style.opacity = String(opacity);
       const hidden =
+        opacity <= 0.01 ||
         this.projectedLabel.z < 0 ||
         this.projectedLabel.z > 1 ||
         x < 0 ||
@@ -535,10 +700,12 @@ export class WorldView {
       if (view.label.hidden !== hidden) view.label.hidden = hidden;
       if (view.reaction) {
         view.reaction.hidden = hidden;
+        view.reaction.style.filter = `opacity(${opacity})`;
         view.reaction.style.transform = `translate(${(x + 38).toFixed(2)}px, ${(y - 30).toFixed(2)}px) translate(-50%, -100%)`;
       }
       if (view.chat) {
         view.chat.hidden = hidden;
+        view.chat.style.filter = `opacity(${opacity})`;
         // Keep text above the name and any simultaneous reaction. Clamp horizontally
         // so a long line near the edge of the viewport remains readable.
         const halfWidth = view.chat.offsetWidth / 2;
@@ -565,6 +732,7 @@ export class WorldView {
     this.entities.clear();
     this.labels.replaceChildren();
     this.buildings.dispose();
+    this.statics.dispose();
     this.instrumentation.dispose();
     const releaseGraphics = () => {
       this.scene.dispose();
@@ -572,7 +740,8 @@ export class WorldView {
     };
     // Stop gameplay immediately, but retain the graphics context while started glTF
     // loaders unwind. They may allocate shared scene textures after cancellation.
-    if (this.preparation) void this.preparation.then(releaseGraphics, releaseGraphics);
+    if (this.preparation || this.cellPreparations.size)
+      void Promise.allSettled([this.preparation, ...this.cellPreparations]).then(releaseGraphics);
     else releaseGraphics();
   }
 }

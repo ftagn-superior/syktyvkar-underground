@@ -97,18 +97,26 @@ try {
   corrupt = false;
   await page.goto(url + '/?diagnostics=1');
   await page.waitForFunction(() => (window as any).__SU_DEBUG__?.snapshot().connection === 'ready');
-  assert.equal(assetRequests, 2, 'cached corruption is replaced by one network reload');
-  assert.equal(matchmakingRequests, 0, 'preparation cannot reserve a guest seat');
+  await page.waitForFunction(
+    () => (window as any).__SU_DEBUG__?.snapshot().streaming?.backgroundReady,
+  );
+  assert.equal(
+    assetRequests,
+    2,
+    'static preview replaces corrupt cached bytes with one verified network reload',
+  );
+  assert.equal(matchmakingRequests, 0, 'the header alone cannot reserve a guest seat');
   assert.equal(await page.locator('#join-label').textContent(), 'Войти');
   await page.locator('#join').click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
   );
+  assert.equal(assetRequests, 2, 'cached corruption is replaced by one network reload');
   await page.locator('#leave').click();
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().connection === 'ready');
   await context.close();
 
-  // A fresh cache receives bad bytes twice. No JOIN/reconnect is allowed, even on reload.
+  // Static preview verifies models without a reserved seat; persistent damage never creates a character.
   corrupt = true;
   const beforeRequests = assetRequests;
   const beforeMatchmaking = matchmakingRequests;
@@ -119,18 +127,28 @@ try {
   );
   await broken.goto(url + '/?diagnostics=1');
   await broken.waitForFunction(
-    () => (window as any).__SU_DEBUG__?.snapshot().connection === 'error',
+    () => (window as any).__SU_DEBUG__?.snapshot().connection === 'ready',
   );
+  assert.equal(matchmakingRequests, beforeMatchmaking);
+  await broken.waitForFunction(() => !!(window as any).__SU_DEBUG__?.snapshot().areaProblem);
   assert.equal(assetRequests - beforeRequests, 2, 'permanent damage receives only one retry');
   assert.equal(matchmakingRequests, beforeMatchmaking);
+  assert.equal(app.room.diagnostics().sessions, 0);
   assert.equal(app.room.state.players.size, 0);
-  assert.equal(await broken.locator('#join-label').textContent(), 'Перезагрузить страницу');
-  await Promise.all([broken.waitForEvent('load'), broken.locator('#join').click()]);
+  await broken.locator('#area-retry').waitFor();
   await broken.waitForFunction(
-    () => (window as any).__SU_DEBUG__?.snapshot().connection === 'error',
+    () => document.querySelector('#area-retry')?.textContent === 'Обновить страницу',
   );
-  assert.equal(matchmakingRequests, beforeMatchmaking, 'reload must not join with a broken model');
-  assert.equal(app.room.state.players.size, 0);
+  await Promise.all([broken.waitForEvent('load'), broken.locator('#area-retry').click()]);
+  await broken.waitForFunction(
+    () => (window as any).__SU_DEBUG__?.snapshot().connection === 'ready',
+  );
+  await broken.waitForFunction(() => !!(window as any).__SU_DEBUG__?.snapshot().areaProblem);
+  assert.equal(
+    app.room.state.players.size,
+    0,
+    'a corrupt model never activates a character after reload',
+  );
   assert.deepEqual(errors, []);
   const result = {
     date: new Date().toISOString(),
@@ -139,7 +157,7 @@ try {
     checks: [
       'A corrupt immutable HTTP cache entry is replaced by one verified network retry.',
       'The recovered world can enter and leave a real multiplayer session.',
-      'Persistent GLB corruption produces an error before join and remains blocked after reload.',
+      'Persistent GLB corruption leaves static preview without reserving a seat or spawning, including after reload.',
     ],
     browserErrors: errors,
   };

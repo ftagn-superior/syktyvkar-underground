@@ -1,3 +1,4 @@
+import { prepareSdk } from '../helpers/prepare.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { createGameServer } from '../helpers/game-server.js';
@@ -43,7 +44,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     room.onMessage('resync', () => {});
     rooms.add(room);
     if (ready) {
-      room.send('clientReady');
+      prepareSdk(room);
       await until(() => !!room.state?.players?.has(room.sessionId));
     }
     return {
@@ -171,8 +172,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     owner.send('/giveme wooden-crate', 1);
     await until(() => owner.results.length === 1);
     expect(owner.results[0].code).toBe('WORLD_NOT_READY');
-    owner.room.send('clientReady');
-    await until(() => owner.room.state.players.has(owner.room.sessionId));
+    prepareSdk(owner.room);
+    await until(() => owner.room.state.players?.has(owner.room.sessionId));
     owner.send('/giveme wooden-crate', 2, 'old-epoch');
     await until(() => owner.results.length === 2);
     expect(owner.results[1].code).toBe('STALE_WORLD');

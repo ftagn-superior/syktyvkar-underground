@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "assetId": "house-remote-a",
+  "source": {
+    "kind": "house",
+    "file": "source.json"
+  }
+}

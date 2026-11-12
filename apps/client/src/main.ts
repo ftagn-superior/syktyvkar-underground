@@ -1,6 +1,7 @@
 import './style.css';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
+import { CameraPointerInput } from './input/camera-pointer';
 import { GameSession, readableError, type ConnectionState } from './network/session';
 import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
@@ -32,11 +33,12 @@ const diagnosticsToggle = element<HTMLButtonElement>('diagnostics-toggle');
 const qualitySelect = element<HTMLSelectElement>('quality');
 const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
-const cameraLeft = element<HTMLButtonElement>('camera-left');
-const cameraRight = element<HTMLButtonElement>('camera-right');
 const actions = document.querySelector<HTMLElement>('.actions')!;
 const actionsResize = new ResizeObserver(() => {
-  actions.style.setProperty('--game-actions-height', `${actions.getBoundingClientRect().height}px`);
+  document.documentElement.style.setProperty(
+    '--game-actions-height',
+    `${actions.getBoundingClientRect().height}px`,
+  );
 });
 actionsResize.observe(actions);
 const qualityStorageKey = 'su:render-quality:v1';
@@ -52,11 +54,18 @@ let view: WorldView | undefined;
 let loaded = false;
 let starting = false;
 let keyboard: KeyboardInput;
+let cameraPointer: CameraPointerInput | undefined;
 let graphicsLost = false;
+let previousConnection: ConnectionState = 'loading';
 let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
 let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
+
+function resetCameraInput(): void {
+  cameraPointer?.cancel();
+  view?.stopCamera();
+}
 
 function showNotice(message: string): void {
   notice.textContent = message;
@@ -69,9 +78,15 @@ function showNotice(message: string): void {
 function updateState(state: ConnectionState, message?: string): void {
   const playing = state === 'playing';
   const reconnecting = state === 'reconnecting';
-  welcome.hidden = graphicsLost || playing || (reconnecting && !!session.room);
+  const preparing = state === 'preparing' || state === 'waiting';
+  welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && !!session.room);
   join.disabled =
-    graphicsLost || accounts.busy || state === 'loading' || state === 'connecting' || reconnecting;
+    graphicsLost ||
+    accounts.busy ||
+    state === 'loading' ||
+    state === 'connecting' ||
+    preparing ||
+    reconnecting;
   joinLabel.textContent =
     state === 'loading'
       ? 'Загружаем мир…'
@@ -97,6 +112,8 @@ function updateState(state: ConnectionState, message?: string): void {
         : 'Мир доступен',
     connecting: 'Подключение',
     playing: 'В сети',
+    preparing: 'Подготовка окружения',
+    waiting: 'Загрузка окружения',
     reconnecting: 'Восстановление',
     error: 'Нет соединения',
   }[state];
@@ -104,11 +121,18 @@ function updateState(state: ConnectionState, message?: string): void {
   statusDot.dataset.online = String(!graphicsLost && (playing || state === 'ready'));
   document.body.classList.toggle('connection-lost', reconnecting);
   respawn.hidden = !playing;
-  leave.hidden = !playing && !reconnecting;
-  keyboard?.clear();
-  if (playing && !graphicsLost) {
+  leave.hidden = !session.room && !reconnecting;
+  if (state !== 'waiting' && !(playing && previousConnection === 'waiting')) {
+    keyboard?.clear();
+    resetCameraInput();
+  }
+  previousConnection = state;
+  if (
+    playing &&
+    !graphicsLost &&
+    !document.querySelector('.inventory-panel:not([hidden]), .chat-console:not([hidden])')
+  ) {
     canvas.focus({ preventScroll: true });
-    notice.hidden = true;
   }
   if (message) showNotice(message);
   renderRespawn();
@@ -133,17 +157,30 @@ const accounts = new AccountPanel(
   },
   () => session.leave(),
 );
-inventory = new InventoryPanel(session, canvas, () => {
-  chat?.close(false);
-  reactions?.close(false);
-  animations?.close(false);
-  diagnostics.hidden = true;
-  diagnosticsToggle.setAttribute('aria-expanded', 'false');
-});
+inventory = new InventoryPanel(
+  session,
+  canvas,
+  () => {
+    chat?.close(false);
+    reactions?.close(false);
+    animations?.close(false);
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+  (placing) => {
+    keyboard?.setPlacementMode(placing);
+    resetCameraInput();
+    session.neutral();
+    element('controls-title').textContent = placing ? 'Поворот предмета' : 'Свободное движение';
+    element('controls-description').textContent = placing
+      ? 'W / S — наклон · A / D — поворот · Q / E — крен'
+      : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
+  },
+);
 const accountPreparation = accounts.load();
-function rotateCamera(direction: -1 | 1): void {
+function setCameraRotation(direction: -1 | 0 | 1): void {
   if (!loaded || graphicsLost) return;
-  view?.rotateCamera(direction);
+  view?.setCameraRotation(direction);
 }
 reactions = new ReactionMenu(
   element<HTMLButtonElement>('reactions-toggle'),
@@ -193,6 +230,7 @@ chat = new ChatConsole(
   },
   (open) => {
     keyboard?.setEnabled(!open && !graphicsLost);
+    resetCameraInput();
     session.neutral();
     if (open) {
       reactions?.close(false);
@@ -212,10 +250,21 @@ function renderChat(): void {
   chat?.update({ ...state, available: state.available && !graphicsLost });
 }
 keyboard = new KeyboardInput(
-  () => session.neutral(),
-  rotateCamera,
+  () => {
+    resetCameraInput();
+    session.neutral();
+  },
+  setCameraRotation,
   () => reactions!.toggleOpen(),
-  () => chat!.open(),
+  (initialText) => chat!.open(initialText),
+  () => animations!.toggleOpen(),
+  (axis, direction) => inventory?.rotatePlacement(axis, direction),
+);
+cameraPointer = new CameraPointerInput(
+  canvas,
+  () => loaded && !graphicsLost && keyboard.cameraEnabled,
+  (radians) => view?.rotateCameraBy(radians),
+  () => view?.stopCamera(),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
@@ -226,10 +275,9 @@ function renderRespawn(): void {
     : remainingMs > 0
       ? `На старт · ${Math.ceil(remainingMs / 1000)} с`
       : 'На старт';
-  cameraLeft.disabled = cameraRight.disabled = !loaded || graphicsLost;
 }
 function renderMetrics(): void {
-  element('player-count').textContent = `${session.playerCount} / 8`;
+  element('player-count').textContent = `${session.occupancy} / 8`;
   if (diagnostics.hidden) return;
   const data = session.diagnostics();
   const rendering = view?.renderingDiagnostics();
@@ -248,7 +296,10 @@ function renderMetrics(): void {
     ['Коррекция · p95', `${data.correctionP95.toFixed(3)} м`],
     ['Коррекция · максимум', `${data.correctionMax.toFixed(3)} м`],
     ['Ожидают подтверждения', String(data.pendingInputs)],
-    ['Предсказание', data.stalled ? 'Ожидание сервера' : 'Активно'],
+    [
+      'Предсказание',
+      data.areaWaiting ? 'Ожидание окружения' : data.stalled ? 'Ожидание сервера' : 'Активно',
+    ],
     ['Карта', data.mapVersion?.slice(0, 12) ?? '—'],
     ['Симуляция', data.simulationConfigHash?.slice(0, 12) ?? '—'],
     [
@@ -278,6 +329,7 @@ async function start(): Promise<void> {
       );
       return;
     }
+    resetCameraInput();
     view?.dispose();
     view = undefined;
     await session.load();
@@ -306,9 +358,11 @@ async function start(): Promise<void> {
       );
       return;
     }
-    await view.prepareBuildings(session.manifest, (path) => session.readAsset(path));
+    session.connectGraphics(view);
     view.onFrame((now, delta) => {
       try {
+        const area = view!.graphicalArea();
+        view!.setStreamingRadius(session.updateVisualArea(area.center, area.drawRadius));
         const frame = session.frame(now, delta, keyboard.read(view!.cameraAngle));
         view!.follow(frame.ownId);
         view!.update(frame.entities, frame.ownId, delta);
@@ -335,14 +389,18 @@ async function start(): Promise<void> {
     await session.restore();
   } catch (error) {
     loaded = false;
+    session.markPreparationFailed(readableError(error));
     view?.dispose();
     view = undefined;
-    session.markPreparationFailed(readableError(error));
     console.error('World preparation failed', error);
   } finally {
     starting = false;
   }
 }
+element('area-retry').addEventListener('click', () => {
+  if (session.reloadRequired) location.reload();
+  else session.retryArea();
+});
 join.addEventListener('click', () => {
   if (session.reloadRequired) location.reload();
   else if (loaded)
@@ -350,14 +408,6 @@ join.addEventListener('click', () => {
       if (ready) void session.join();
     });
   else void start();
-});
-cameraLeft.addEventListener('click', () => {
-  rotateCamera(-1);
-  canvas.focus({ preventScroll: true });
-});
-cameraRight.addEventListener('click', () => {
-  rotateCamera(1);
-  canvas.focus({ preventScroll: true });
 });
 respawn.addEventListener('click', () => {
   session.respawn();
@@ -396,6 +446,7 @@ canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   graphicsLost = true;
   keyboard.setEnabled(false);
+  resetCameraInput();
   session.setInputEnabled(false);
   graphicsRecovery.hidden = false;
   qualitySelect.disabled = true;
@@ -408,6 +459,18 @@ const uiTimer = setInterval(() => {
   storageStatus.hidden = !session.storageUnavailable;
   renderRespawn();
   renderMetrics();
+  const loading = session.state === 'preparing' || session.state === 'waiting';
+  const problem = session.areaProblem;
+  element('area-status').hidden = (!loading && !problem) || graphicsLost;
+  element('area-message').textContent = problem
+    ? session.reloadRequired
+      ? 'Ресурсы мира изменились. Обновите страницу.'
+      : 'Не удалось загрузить окружение. Повторите попытку.'
+    : 'Загружаем окружение… Движение продолжится после подготовки.';
+  element('area-retry').hidden = !problem;
+  element('area-retry').textContent = session.reloadRequired
+    ? 'Обновить страницу'
+    : 'Повторить загрузку';
   reactions?.update(session.reactionStatus());
   animations?.update(session.animationStatus());
   renderChat();
@@ -424,6 +487,7 @@ window.addEventListener(
     actionsResize.disconnect();
     session.neutral();
     session.dispose();
+    cameraPointer?.dispose();
     view?.dispose();
     keyboard.dispose();
     reactions?.dispose();
@@ -438,7 +502,10 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
     value: Object.freeze({
       snapshot: () => structuredClone(session.diagnostics()),
       corrections: () => session.correctionHistory(),
-      report: () => diagnosticReport(session, view, graphicsLost),
+      report: () => ({
+        ...diagnosticReport(session, view, graphicsLost),
+        rendering: view?.renderingDiagnostics() ?? null,
+      }),
       buildings: () => structuredClone(view?.buildingDiagnostics() ?? []),
       avatars: () => view?.avatarDiagnostics() ?? [],
     }),

@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "width": 8,
+  "depth": 10,
+  "floors": 2,
+  "floorHeight": 3,
+  "roofHeight": 1.5,
+  "wallColor": "#ab9876",
+  "roofColor": "#626a78",
+  "windowColor": "#304957",
+  "doorColor": "#5b5148"
+}

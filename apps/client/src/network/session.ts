@@ -396,7 +396,8 @@ export class GameSession {
                 : CHAT_MAX_DURATION_MS;
             this.chatAvailableAt = performance.now() + delay;
           }
-          if (!result.ok && result.code)
+          if (result.message) this.onNotice(result.message);
+          else if (!result.ok && result.code)
             this.onNotice(
               result.code === 'RATE_LIMITED'
                 ? 'Дождитесь окончания показа текущего сообщения.'

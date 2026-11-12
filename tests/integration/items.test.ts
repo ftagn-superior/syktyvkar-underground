@@ -36,6 +36,106 @@ describe.skipIf(!databaseUrl)(
     const operation = (action: ItemAction, operationId = randomUUID()) =>
       store.operation(accountId, operationId, action, () => undefined);
 
+    it('creates single catalog items, fills stacks, persists the cooldown and replays grants after restart', async () => {
+      const initial = await open();
+      const give = { kind: 'give' as const, typeId: 'wooden-crate' };
+      const operationId = randomUUID();
+      const first = await store.operation(accountId, operationId, give, () => undefined);
+      expect(first).toMatchObject({ operationId, ok: true, itemId: expect.any(String) });
+      expect(await store.operation(accountId, operationId, give, () => 'AUTH_REQUIRED')).toEqual(
+        first,
+      );
+      expect((await store.operation(accountId, randomUUID(), give, () => undefined)).code).toBe(
+        'RATE_LIMITED',
+      );
+      expect(
+        (
+          await store.operation(
+            accountId,
+            operationId,
+            { ...give, typeId: 'other' },
+            () => undefined,
+          )
+        ).code,
+      ).toBe('OPERATION_CONFLICT');
+      await store.close();
+      expect(await open()).toEqual(initial);
+      expect((await store.operation(accountId, randomUUID(), give, () => undefined)).code).toBe(
+        'RATE_LIMITED',
+      );
+      expect(await store.operation(accountId, operationId, give, () => undefined)).toEqual(first);
+
+      const ids = new Set([first.itemId]);
+      for (let n = 1; n < 11; n++) {
+        // Advance only this fixture's recorded grants; exercise stack limits without waiting 20s.
+        await fixture.pool.query(
+          "UPDATE item_operations SET created_at=now()-interval '3 seconds'",
+        );
+        const result = await store.operation(accountId, randomUUID(), give, () => undefined);
+        expect(result.ok).toBe(true);
+        ids.add(result.itemId);
+      }
+      const inventory = await store.inventory(accountId);
+      expect(inventory.slots.map((s) => s.items.length)).toEqual([10, 1]);
+      expect(new Set(inventory.slots.flatMap((s) => s.items.map((i) => i.itemId)))).toEqual(ids);
+      for (const typeId of ['missing', '__proto__', 'constructor'])
+        expect(
+          (
+            await store.operation(
+              accountId,
+              randomUUID(),
+              { kind: 'give', typeId },
+              () => undefined,
+            )
+          ).code,
+        ).toBe('INVALID_INPUT');
+      expect(await store.inventory(accountId)).toEqual(inventory);
+      expect(await store.worldItems()).toEqual(initial);
+      await store.close();
+      await open();
+      expect(await store.inventory(accountId)).toEqual(inventory);
+      expect(
+        (await fixture.pool.query('SELECT count(*)::int AS count FROM item_instances')).rows[0]
+          .count,
+      ).toBe(12);
+    });
+
+    it('recovers an uncertain committed grant without duplicating it or rechecking the expired actor', async () => {
+      const world = await createAuthoritativeWorld({ ...definition, initialItems: [] });
+      const runtime = new ItemRuntime(
+        new ItemStore(fixture.pool, definition, randomUUID()),
+        world,
+        () => {},
+      );
+      await runtime.initialize();
+      const original = runtime.store.operation.bind(runtime.store);
+      const operationId = randomUUID();
+      let valid = true;
+      const spy = vi.spyOn(runtime.store, 'operation').mockImplementationOnce(async (...args) => {
+        await original(...args);
+        valid = false;
+        throw new Error('Lost COMMIT response');
+      });
+      try {
+        const pending = runtime.give(accountId, operationId, 'wooden-crate', () =>
+          valid ? undefined : 'AUTH_REQUIRED',
+        );
+        expect(runtime.paused).toBe(false);
+        const result = await pending;
+        expect(result.ok).toBe(true);
+        expect((await runtime.inventory(accountId)).slots[0].items).toHaveLength(1);
+        expect((await runtime.inventory(accountId)).slots[0].items[0].itemId).toBe(result.itemId);
+        expect(
+          (await fixture.pool.query('SELECT count(*)::int AS count FROM item_operations')).rows[0]
+            .count,
+        ).toBe(1);
+      } finally {
+        spy.mockRestore();
+        await runtime.close();
+        world.dispose();
+      }
+    });
+
     it('upgrades the existing account schema in place and can reapply migrations safely', async () => {
       await fixture.pool
         .query(`DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;

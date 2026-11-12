@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import {
   canonicalJson,
+  ITEM_GIVE_COOLDOWN_MS,
   initialItemState,
   validPose,
   validVector,
@@ -26,6 +27,9 @@ interface Row {
   physical: ItemState | null;
   placement_version: number;
 }
+// Creation is a server-side mutation reached through chat, not a raw itemCommand action.
+export type ItemMutation = ItemAction | { kind: 'give'; typeId: string };
+export type ItemMutationResult = ItemResult & { itemId?: string };
 export class ItemRejection extends Error {
   constructor(readonly code: ItemError) {
     super(code);
@@ -282,6 +286,22 @@ export class ItemStore {
     );
     return id;
   }
+  private async receivingSlot(
+    accountId: string,
+    typeId: string,
+    properties: Record<string, unknown>,
+  ): Promise<string> {
+    const inventory = await this.inventory(accountId);
+    return (
+      inventory.slots.find(
+        (s) =>
+          s.items.length < this.definition.itemCatalog.types[typeId].maxStack &&
+          s.items.every(
+            (i) => i.typeId === typeId && canonicalJson(i.properties) === canonicalJson(properties),
+          ),
+      )?.slotId ?? (await this.newSlot(accountId))
+    );
+  }
   private async normalizeStacks(accountId: string) {
     for (const slot of (await this.inventory(accountId)).slots) {
       const first = slot.items[0];
@@ -307,9 +327,9 @@ export class ItemStore {
   async operation(
     accountId: string,
     operationId: string,
-    action: ItemAction,
-    validate: (action: ItemAction, typeId?: string) => ItemError | undefined,
-  ): Promise<ItemResult> {
+    action: ItemMutation,
+    validate: (action: ItemMutation, typeId?: string) => ItemError | undefined,
+  ): Promise<ItemMutationResult> {
     return this.transaction(async () => {
       const prior = await this.db.query(
         'SELECT request,result FROM item_operations WHERE account_id=$1 AND operation_id=$2',
@@ -322,12 +342,12 @@ export class ItemStore {
           : { operationId, ok: false, code: 'OPERATION_CONFLICT' };
       // A savepoint allows a definite validation failure to be remembered atomically too.
       await this.db.query('SAVEPOINT item_action');
-      let result: ItemResult;
+      let result: ItemMutationResult;
       try {
         const initialError = validate(action);
         if (initialError) reject(initialError);
-        await this.applyAction(accountId, action, validate);
-        result = { operationId, ok: true };
+        const itemId = await this.applyAction(accountId, action, validate);
+        result = { operationId, ok: true, ...(itemId ? { itemId } : {}) };
       } catch (error) {
         if (!(error instanceof ItemRejection)) throw error;
         await this.db.query('ROLLBACK TO SAVEPOINT item_action');
@@ -348,9 +368,27 @@ export class ItemStore {
   }
   private async applyAction(
     accountId: string,
-    action: ItemAction,
-    validate: (a: ItemAction, typeId?: string) => ItemError | undefined,
+    action: ItemMutation,
+    validate: (a: ItemMutation, typeId?: string) => ItemError | undefined,
   ) {
+    if (action.kind === 'give') {
+      if (!Object.hasOwn(this.definition.itemCatalog.types, action.typeId))
+        return reject('INVALID_INPUT');
+      const recent = await this.db.query(
+        `SELECT 1 FROM item_operations WHERE account_id=$1
+          AND request->'action'->>'kind'='give' AND result->>'ok'='true'
+          AND created_at > clock_timestamp() - $2 * INTERVAL '1 millisecond' LIMIT 1`,
+        [accountId, ITEM_GIVE_COOLDOWN_MS],
+      );
+      if (recent.rowCount) return reject('RATE_LIMITED');
+      const slotId = await this.receivingSlot(accountId, action.typeId, {});
+      const itemId = randomUUID();
+      await this.db.query(
+        'INSERT INTO item_instances(id,type_id,slot_id,placement_version) VALUES($1,$2,$3,1)',
+        [itemId, action.typeId, slotId],
+      );
+      return itemId;
+    }
     if (action.kind === 'pickup' || action.kind === 'place') {
       const row = (
         await this.db.query<Row>('SELECT * FROM item_instances WHERE id=$1 FOR UPDATE', [
@@ -362,17 +400,7 @@ export class ItemStore {
         if (row.world_id !== this.definition.worldId) return reject('ITEM_UNAVAILABLE');
         const error = validate(action, row.type_id);
         if (error) reject(error);
-        const inventory = await this.inventory(accountId);
-        let slotId = inventory.slots.find(
-          (s) =>
-            s.items.length < this.definition.itemCatalog.types[row.type_id].maxStack &&
-            s.items.every(
-              (i) =>
-                i.typeId === row.type_id &&
-                canonicalJson(i.properties) === canonicalJson(row.properties),
-            ),
-        )?.slotId;
-        slotId ??= await this.newSlot(accountId);
+        const slotId = await this.receivingSlot(accountId, row.type_id, row.properties);
         await this.db.query(
           'UPDATE item_instances SET world_id=NULL,physical=NULL,slot_id=$2,placement_version=placement_version+1 WHERE id=$1',
           [row.id, slotId],

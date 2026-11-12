@@ -91,6 +91,62 @@ function fixture(clockStep = 0) {
   };
 }
 describe('segmented world ownership', () => {
+  it('limits a close preview to the camera area while gameplay keeps the full physics circle', async () => {
+    const v = fixture();
+    const center = { x: 0, y: 0, z: 0 };
+    try {
+      v.stream.setPreview(center, 125);
+      await until(v.stream, () => v.stream.backgroundReady);
+      const preview = v.stream.diagnostics();
+      expect(preview.graphicsRequired).toEqual(circularCells(manifest, center, 250));
+      expect(preview.physicsRequired).toHaveLength(0);
+      expect(preview.graphicsRequired.length).toBeLessThan(
+        circularCells(manifest, center, 625).length,
+      );
+      v.stream.setArea(center);
+      await until(v.stream, () => v.stream.backgroundReady);
+      const playing = v.stream.diagnostics();
+      expect(playing.physicsRequired.sort()).toEqual(circularCells(manifest, center, 500).sort());
+      expect(playing.graphicsRequired.length).toBeLessThan(playing.physicsRequired.length);
+      expect(playing.criticalReady).toBe(true);
+      // Far preview models are released after zooming back in; collider ownership survives.
+      v.stream.setVisualArea(center, 3000);
+      await until(v.stream, () => v.stream.backgroundReady);
+      v.stream.setVisualArea(center, 125);
+      v.advance();
+      await until(v.stream, () => v.stream.backgroundReady);
+      expect(v.stream.diagnostics().graphicsRequired.length).toBeLessThan(256);
+      expect(v.stream.diagnostics().physicsRequired.sort()).toEqual(playing.physicsRequired);
+    } finally {
+      v.stream.dispose();
+    }
+  });
+  it('makes more preparation progress on slow preview frames with a bounded pump budget', async () => {
+    const usual = fixture(0.1);
+    const preparing = fixture(0.1);
+    try {
+      for (const v of [usual, preparing]) v.stream.setPreview({ x: 0, y: 0, z: 0 }, 3000);
+      const deadline = performance.now() + 10000;
+      while (
+        (usual.stream.diagnostics().requested.length ||
+          preparing.stream.diagnostics().requested.length) &&
+        performance.now() < deadline
+      )
+        await tick();
+      expect(preparing.stream.diagnostics().requested).toHaveLength(0);
+      usual.stream.pump(2);
+      preparing.stream.pumpFrame(1 / 20);
+      expect(preparing.graphical.size).toBeGreaterThan(usual.graphical.size);
+      // The simulated clock also charges for the identical whole-grid maintenance pass.
+      expect(
+        preparing.stream.diagnostics().peakPumpMs - usual.stream.diagnostics().peakPumpMs,
+      ).toBeLessThan(5);
+      expect(preparing.physics.size).toBe(0);
+    } finally {
+      usual.stream.dispose();
+      preparing.stream.dispose();
+    }
+  });
   it('selects a clipped circle, permits all 256 graphical cells without attaching distant physics', async () => {
     expect(cellNeighborhood(manifest, { x: 1000, y: 0, z: 1000 })).toHaveLength(4);
     const selected = circularCells(manifest, { x: 0, y: 0, z: 0 }, 500);

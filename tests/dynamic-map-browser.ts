@@ -43,7 +43,8 @@ try {
   await page.waitForFunction(
     () => {
       const debug = (window as any).__SU_DEBUG__;
-      return debug?.report().rendering.streaming.shownRadius >= 499;
+      const rendering = debug?.report().rendering;
+      return rendering && rendering.streaming.shownRadius >= rendering.streaming.drawRadius - 1;
     },
     undefined,
     { timeout: 90_000 },
@@ -119,11 +120,12 @@ try {
     () => {
       const debug = (window as any).__SU_DEBUG__,
         s = debug.snapshot();
+      const rendering = debug.report().rendering;
       return (
         s.connection === 'ready' &&
         s.physics.bodies === 0 &&
-        debug.report().rendering.dynamicEntities.length === 0 &&
-        debug.report().rendering.streaming.shownRadius >= 499
+        rendering.dynamicEntities.length === 0 &&
+        rendering.streaming.shownRadius >= rendering.streaming.drawRadius - 1
       );
     },
     undefined,

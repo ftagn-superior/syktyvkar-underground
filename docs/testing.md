@@ -37,6 +37,7 @@ pnpm build
 | Реакции, выбираемые анимации, чат | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser` |
 | Перезапуск и восстановление | `pnpm test:restart:browser` |
 | Город, подготовка, камера 30× и выход в просмотр | `pnpm test:dynamic-map:browser` |
+| Загрузка предпросмотра: холодный/тёплый кеш, задержка, запросы и отсутствие ранней физики | `pnpm test:loading:browser` |
 
 Настоящий вход через Telegram проверяется на зарегистрированном callback; локальный OIDC-провайдер проверяет протокол и поведение приложения, не доступность внешнего провайдера.
 
@@ -102,6 +103,10 @@ pnpm load -- --clients 6 --seconds 60 --scenario crowd --report output/validatio
 `pnpm test:network:netem` и `pnpm test:streaming:netem` проверяют потери TCP в отдельном Linux network namespace. Нужны `unshare`, `ip`, `tc`, `curl`, соответствующие права и доступный тестовый PostgreSQL; streaming-netem использует Unix socket. Удаление сообщений приложения не эквивалентно потере TCP-пакетов.
 
 ## Измерения и свидетельства
+
+После `pnpm world:build` команда `pnpm test:loading:browser` собирает текущий production-клиент отдельно в `output/playwright/loading-profile/` и запускает локальный сервер только для чтения. БД и игровая комната не требуются. По умолчанию выполняются три холодных загрузки, одна тёплая и холодная с добавленными 20 мс на ответ; это синтетическая задержка, не измерение сетевого RTT. Результат содержит время готовности видимой области и всего заказанного окружения, запросы и байты, объекты сцены, кадры загрузки и длинные задачи. Проверяются отсутствие WASM-запросов и физических тел до входа.
+
+Параметры: `SU_PROFILE_COLD_RUNS=1..5`, `SU_PROFILE_QUALITY=economy|standard`, `SU_PROFILE_OUTPUT` (каталог), `SU_PROFILE_WORLD_DIRECTORY`, `SU_PROFILE_ZOOM=1` (дополнительно 30× и возврат), `SU_TEST_RENDERER=hardware` для обычного графического backend. Программный профиль не подтверждает производительность Safari или аппаратный FPS.
 
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` выбирает установленный Chromium. Функциональные сценарии обычно используют SwiftShader. `SU_TEST_RENDERER=hardware` отключает принудительный программный рендерер в общих браузерных helpers; фактический рендерер фиксируется в отчёте.
 

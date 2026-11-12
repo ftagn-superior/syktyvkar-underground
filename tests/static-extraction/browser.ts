@@ -21,8 +21,18 @@ function distribution(values: number[]) {
   return { count: sorted.length, p50: at(0.5), p95: at(0.95), p99: at(0.99), max: at(1) };
 }
 
-export async function createExtractionProbe(options: { cancelLate?: 'glb' | 'collision' } = {}) {
+export async function createExtractionProbe(
+  options: { cancelLate?: 'glb' | 'pack' | 'collision' } = {},
+) {
   const manifest: WorldManifest = await (await fetch('/extraction-manifest')).json();
+  // Keep the legacy individual-model cancellation path explicit alongside packs.
+  if (options.cancelLate === 'glb')
+    manifest.cells = manifest.cells.map(({ graphicsPacks: _packs, ...cell }) => cell);
+  if (options.cancelLate === 'pack')
+    check(
+      manifest.cells.some((cell) => cell.graphicsPacks?.length),
+      'Fixture has no graphics packs',
+    );
   let signalLateStart!: () => void;
   let signalLateFinish!: () => void;
   const lateStarted = new Promise<void>((resolve) => {
@@ -34,7 +44,12 @@ export async function createExtractionProbe(options: { cancelLate?: 'glb' | 'col
   let delayedOnce = false;
   const resources = new VerifiedResources(manifest, '/extraction-assets/', {
     fetch: async (url, init) => {
-      const suffix = options.cancelLate === 'glb' ? '/model.glb' : '/colliders.json';
+      const suffix =
+        options.cancelLate === 'pack'
+          ? '.pack'
+          : options.cancelLate === 'glb'
+            ? '/model.glb'
+            : '/colliders.json';
       if (options.cancelLate && !delayedOnce && String(url).endsWith(suffix)) {
         delayedOnce = true;
         signalLateStart();
@@ -114,7 +129,8 @@ export async function createExtractionProbe(options: { cancelLate?: 'glb' | 'col
   if (options.cancelLate) {
     target.set(center.x, 0, center.z);
     camera.setTarget(target, false, false, true);
-    stream.setPreview(center, view.graphicalArea().drawRadius);
+    if (options.cancelLate === 'collision') stream.setArea(center);
+    else stream.setPreview(center, view.graphicalArea().drawRadius);
     await Promise.race([
       lateStarted,
       delay(15000).then(() => {

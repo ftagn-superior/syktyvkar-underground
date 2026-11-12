@@ -47,6 +47,8 @@ type BuildingView = {
   maximum: Vector3;
 };
 const plain = ({ x, y, z }: Vector3) => ({ x, y, z });
+// Bound parsing as well as I/O: cells share the global VerifiedResources queue.
+const MODEL_PREPARATION_CONCURRENCY = 4;
 
 function semanticPart(node: Node): BuildingPart | undefined {
   let current: Node | null = node;
@@ -120,55 +122,80 @@ export class BuildingViews {
       signal?.removeEventListener('abort', release);
       for (const dispose of releases) dispose();
     };
-    try {
-      signal?.addEventListener('abort', release, { once: true });
-      for (const id of new Set(ids)) {
-        if (released || signal?.aborted)
-          throw new DOMException('Preparation cancelled', 'AbortError');
-        const descriptor = manifest.assets[id];
-        if (!descriptor) throw new Error(`Unknown building model: ${id}`);
-        let record = this.cache.get(descriptor.version);
-        if (!record) {
-          const controller = new AbortController();
-          record = {
-            users: 0,
-            controller,
-            promise: this.loadAsset(descriptor, (path) => read(path, controller.signal)),
-          };
-          this.cache.set(descriptor.version, record);
-          const entry = record;
-          record.promise = record.promise.then((asset) => {
-            if (this.cache.get(descriptor.version) !== entry || this.disposed) {
-              asset.container.dispose();
-              if (this.assets.get(descriptor.version) === asset)
-                this.assets.delete(descriptor.version);
-              throw new DOMException('Preparation cancelled', 'AbortError');
-            }
-            entry.value = asset;
-            this.assets.set(descriptor.version, asset);
-            return asset;
-          });
-        }
-        const entry = record;
-        entry.users++;
-        releases.push(() => {
-          if (--entry.users) return;
-          entry.controller.abort();
-          if (this.cache.get(descriptor.version) === entry) this.cache.delete(descriptor.version);
-          if (entry.value) {
-            entry.value.container.dispose();
-            if (this.assets.get(descriptor.version) === entry.value)
-              this.assets.delete(descriptor.version);
+    const pendingIds = [...new Set(ids)];
+    let next = 0;
+    const worker = async () => {
+      try {
+        for (;;) {
+          if (this.disposed || released || signal?.aborted)
+            throw new DOMException('Preparation cancelled', 'AbortError');
+          const id = pendingIds[next++];
+          if (id === undefined) return;
+          const descriptor = manifest.assets[id];
+          if (!descriptor) throw new Error(`Unknown building model: ${id}`);
+          let record = this.cache.get(descriptor.version);
+          if (!record) {
+            const controller = new AbortController();
+            record = {
+              users: 0,
+              controller,
+              promise: Promise.resolve().then(() => {
+                if (controller.signal.aborted || this.disposed)
+                  throw new DOMException('Preparation cancelled', 'AbortError');
+                return this.loadAsset(descriptor, (path) => read(path, controller.signal));
+              }),
+            };
+            this.cache.set(descriptor.version, record);
+            const entry = record;
+            record.promise = record.promise.then((asset) => {
+              if (this.cache.get(descriptor.version) !== entry || this.disposed) {
+                asset.container.dispose();
+                if (this.assets.get(descriptor.version) === asset)
+                  this.assets.delete(descriptor.version);
+                throw new DOMException('Preparation cancelled', 'AbortError');
+              }
+              entry.value = asset;
+              this.assets.set(descriptor.version, asset);
+              return asset;
+            });
           }
-        });
-        await entry.promise;
+          const entry = record;
+          entry.users++;
+          releases.push(() => {
+            if (--entry.users) return;
+            entry.controller.abort();
+            if (this.cache.get(descriptor.version) === entry) this.cache.delete(descriptor.version);
+            if (entry.value) {
+              entry.value.container.dispose();
+              if (this.assets.get(descriptor.version) === entry.value)
+                this.assets.delete(descriptor.version);
+            }
+          });
+          await entry.promise;
+        }
+      } catch (error) {
+        // Stop the other workers before any can reserve the next model. Shared
+        // reservations owned by another cell stay alive through the reference count.
+        release();
+        throw error;
       }
+    };
+    signal?.addEventListener('abort', release, { once: true });
+    const workers = Array.from(
+      { length: Math.min(MODEL_PREPARATION_CONCURRENCY, pendingIds.length) },
+      worker,
+    );
+    try {
+      await Promise.all(workers);
       if (this.disposed || released) throw new DOMException('Preparation cancelled', 'AbortError');
       // Once prepared, the caller owns this pin until its last instance has been removed.
       signal?.removeEventListener('abort', release);
       return release;
     } catch (error) {
       release();
+      // A loader may complete after abort. Drain the bounded in-flight set so its
+      // generation guard has disposed all abandoned containers before reporting failure.
+      await Promise.allSettled(workers);
       throw error;
     }
   }
@@ -251,7 +278,10 @@ export class BuildingViews {
   }
 
   private instantiate(definition: BuildingInstance, asset: Asset): BuildingView {
-    const existingNodes = new Set([...this.scene.meshes, ...this.scene.transformNodes]);
+    // Babylon clones synchronously and appends new nodes to these arrays. Recording
+    // their lengths avoids copying the entire growing city for every instance.
+    const firstMesh = this.scene.meshes.length;
+    const firstTransform = this.scene.transformNodes.length;
     const root = new TransformNode(definition.entityId, this.scene);
     let entries: InstantiatedEntries | undefined;
     const ownedMaterials = new Set<Material>();
@@ -269,7 +299,7 @@ export class BuildingViews {
         definition.rotation.w,
       );
       for (const node of entries.rootNodes) node.parent = root;
-      root.computeWorldMatrix(true);
+      root.freezeWorldMatrix();
       const meshes = root
         .getChildMeshes()
         .filter((mesh): mesh is Mesh => mesh instanceof Mesh && mesh.getTotalVertices() > 0);
@@ -295,6 +325,8 @@ export class BuildingViews {
         }
         return copy;
       };
+      const minimum = new Vector3(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
+      const maximum = minimum.negate();
       for (const mesh of meshes) {
         const semantic = semanticPart(mesh);
         const part = semantic && partMap.get(semantic.partId);
@@ -307,8 +339,11 @@ export class BuildingViews {
         seenParts.add(part.partId);
         mesh.isPickable = false;
         mesh.receiveShadows = true;
-        mesh.computeWorldMatrix(true);
+        // freezeWorldMatrix computes the final transform and bounding box itself.
         mesh.freezeWorldMatrix();
+        const bounds = mesh.getBoundingInfo().boundingBox;
+        Vector3.CheckExtends(bounds.minimumWorld, minimum, maximum);
+        Vector3.CheckExtends(bounds.maximumWorld, minimum, maximum);
         this.shadow.addShadowCaster(mesh);
         if (part.occlusionGroup !== null) {
           let group = groups.get(part.occlusionGroup);
@@ -328,7 +363,6 @@ export class BuildingViews {
       }
       if (seenParts.size !== partMap.size)
         throw new Error(`Building model has missing parts: ${definition.assetId}`);
-      const bounds = root.getHierarchyBoundingVectors(true);
       return {
         definition,
         root,
@@ -336,17 +370,20 @@ export class BuildingViews {
         meshes,
         materials: ownedMaterials,
         groups: [...groups.values()],
-        minimum: bounds.min,
-        maximum: bounds.max,
+        minimum,
+        maximum,
       };
     } catch (error) {
+      // Capture the appended nodes before any dispose can reorder the scene arrays.
+      // This also catches unparented clones when Babylon throws before returning entries.
+      const ownedNodes = [
+        ...this.scene.meshes.slice(firstMesh),
+        ...this.scene.transformNodes.slice(firstTransform),
+      ];
       for (const mesh of root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
       entries?.dispose();
       root.dispose();
-      // Also cover a cloning failure before Babylon returned InstantiatedEntries.
-      for (const node of [...this.scene.meshes, ...this.scene.transformNodes]) {
-        if (!existingNodes.has(node)) node.dispose();
-      }
+      for (const node of ownedNodes) if (!node.isDisposed()) node.dispose();
       for (const material of ownedMaterials) material.dispose(false, false);
       throw error;
     }

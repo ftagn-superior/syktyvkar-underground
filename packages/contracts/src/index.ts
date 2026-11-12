@@ -95,6 +95,8 @@ export interface WorldCellManifest {
   file: string;
   bounds: Bounds;
   assetIds: string[];
+  /** Optional bounded transport packs; individual files remain the authoritative fallback. */
+  graphicsPacks?: string[];
 }
 export type MoveInput = { moveX: number; moveZ: number; sprint?: boolean };
 export const NEUTRAL_INPUT: Readonly<MoveInput> = Object.freeze({
@@ -277,6 +279,7 @@ export {
 } from './world-grid.js';
 export * from './reactions.js';
 export * from './chat.js';
+export { GRAPHICS_PACK_LIMITS, encodeGraphicsPack, decodeGraphicsPack } from './graphics-pack.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,

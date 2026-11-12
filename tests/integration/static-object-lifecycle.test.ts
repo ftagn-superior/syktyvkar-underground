@@ -238,7 +238,8 @@ describe('independent whole static objects', () => {
           .getChildMeshes()
           .find((mesh) => mesh.getTotalVertices() > 0) as Mesh;
       expect(signalMesh('signal-first').geometry).toBe(signalMesh('signal-second').geometry);
-      expect(signalMesh('signal-first').material).not.toBe(signalMesh('signal-second').material);
+      // Непрозрачные экземпляры делят материал шаблона; копия создаётся только при затухании.
+      expect(signalMesh('signal-first').material).toBe(signalMesh('signal-second').material);
       for (const item of original) {
         const oldPoints = points(oldView.scene, item.entityId);
         const newPoints = points(newView.scene, item.entityId);

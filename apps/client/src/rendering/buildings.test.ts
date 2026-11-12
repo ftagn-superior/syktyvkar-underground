@@ -113,7 +113,8 @@ describe('building rendering from the real world bundle', () => {
         far = wall('far'),
         clear = wall('clear');
       expect(near.geometry).toBe(far.geometry);
-      expect(near.material).not.toBe(far.material);
+      // Opaque buildings share the template material; copies appear only while fading.
+      expect(near.material).toBe(far.material);
       const direction = new Vector3(0, -0.2, -1).normalize();
       for (let frame = 0; frame < 30; frame++)
         view.buildings.update(
@@ -126,6 +127,7 @@ describe('building rendering from the real world bundle', () => {
         );
       const diagnostics = view.buildings.diagnostics();
       expect(diagnostics.buildings.map((building) => building.opacity)).toEqual([0.22, 0.22, 1]);
+      expect(near.material).not.toBe(far.material);
       expect(near.material!.alpha).toBeCloseTo(0.22);
       expect(near.material!.transparencyMode).toBe(Material.MATERIAL_ALPHABLEND);
       expect(clear.material!.alpha).toBe(1);
@@ -145,6 +147,7 @@ describe('building rendering from the real world bundle', () => {
         view.buildings.diagnostics().buildings.every((building) => building.opacity === 1),
       ).toBe(true);
       expect(near.material!.transparencyMode).toBe(Material.MATERIAL_OPAQUE);
+      expect(near.material).toBe(far.material);
       expect(view.shadow.getShadowMap()!.renderList).toContain(near);
       view.buildings.dispose();
       view.buildings.dispose();

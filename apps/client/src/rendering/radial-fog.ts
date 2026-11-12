@@ -90,7 +90,9 @@ export class RadialFog extends MaterialPluginBase {
 }
 const plugins = new WeakMap<Material, RadialFog>();
 export function applyRadialFog(mesh: AbstractMesh, state: RadialState, born: number): void {
-  mesh.metadata = { ...mesh.metadata, suStreamingBorn: mesh.metadata?.suStreamingBorn ?? born };
+  // Вызывается каждый кадр для динамических сущностей: не пересоздаём metadata без нужды.
+  if (mesh.metadata?.suStreamingBorn === undefined)
+    mesh.metadata = { ...mesh.metadata, suStreamingBorn: born };
   const apply = (material: Material | null) => {
     if (material instanceof MultiMaterial) {
       for (const child of material.subMaterials) apply(child);

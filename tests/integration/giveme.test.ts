@@ -133,6 +133,32 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     );
   });
 
+  it('keeps an active animation while an inventory-only grant commits', async () => {
+    const owner = await join(await login('animated-creator'));
+    const player = () => app.room.state.players.get(owner.room.sessionId)!;
+    await until(() => player().grounded);
+    owner.room.send('requestAnimation', {
+      requestId: 1,
+      worldEpoch: info.worldEpoch,
+      animationId: 'wave',
+    });
+    await until(() => owner.results.length === 1);
+    expect(owner.results[0].ok).toBe(true);
+    const end = player().animationEndsAtTick;
+    const bodies = app.room.diagnostics().bodies;
+    owner.send('/giveme wooden-crate', 2);
+    await until(
+      () => owner.results.length === 2 && owner.inventories.at(-1)?.slots[0]?.items.length === 1,
+    );
+    expect(owner.results[1].ok).toBe(true);
+    expect(player().animationId).toBe('wave');
+    expect(player().animationSequence).toBe(1);
+    expect(player().animationEndsAtTick).toBe(end);
+    expect(player().chatText).toBe('');
+    expect(app.room.state.paused).toBe(false);
+    expect(app.room.diagnostics().bodies).toBe(bodies);
+  });
+
   it('rejects guests, stale requests, malformed commands and unknown catalog types without broadcasting them', async () => {
     const guest = await join();
     guest.send('/giveme wooden-crate', 1);

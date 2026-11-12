@@ -29,11 +29,13 @@ import {
   NEUTRAL_INPUT,
   normalizeInput,
   findReaction,
+  findAnimation,
   normalizeChatText,
   chatDurationMs,
   findAvatarSkin,
   DEFAULT_AVATAR_SKIN,
   type AvatarSkinId,
+  type MoveInput,
   type ActionResult,
   type ErrorCode,
   type WorldDefinition,
@@ -62,6 +64,7 @@ interface Session {
   skinId: AvatarSkinId;
   lastRequest: number;
   lastRespawn: number;
+  lastInput: MoveInput;
   results: Map<number, ActionResult>;
   pendingActions: Set<number>;
   auth?: AuthenticatedAccount;
@@ -150,6 +153,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('clientReady', (client) => this.ready(client));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
+    this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
     this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
     this.onMessage('resync', (client) => {
       this.inputs.get(client.sessionId).clear();
@@ -232,6 +236,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         PLAYER_COLORS[ordinal % PLAYER_COLORS.length],
       lastRequest: 0,
       lastRespawn: -Infinity,
+      lastInput: { ...NEUTRAL_INPUT },
       results: new Map(),
     });
     if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
@@ -298,14 +303,24 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         client?.send('resync', { serverTick: this.state.serverTick });
       }
       const command = session.connected ? input.next() : undefined;
-      this.world.setInput(session.entityId, normalizeInput(command) ?? NEUTRAL_INPUT);
+      session.lastInput = normalizeInput(command) ?? { ...NEUTRAL_INPUT };
+      const player = this.state.players.get(sessionId)!;
+      if (
+        findAnimation(player.animationId)?.mode === 'fullBody' &&
+        (session.lastInput.moveX !== 0 || session.lastInput.moveZ !== 0)
+      )
+        this.cancelAnimation(player, this.state.serverTick + 1);
+      this.world.setInput(session.entityId, session.lastInput);
     }
     this.world.step(ctx.dt);
     const snapshot = this.world.getSnapshot();
     const byId = new Map(snapshot.players.map((player) => [player.entityId, player]));
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
+      if (actual && (!actual.grounded || actual.revision !== player.revision))
+        this.cancelAnimation(player, this.state.serverTick + 1);
       if (actual) applyEntityState(player, actual);
+      this.expireAnimation(player, this.state.serverTick + 1);
       if (player.reactionId && this.state.serverTick >= player.reactionExpiresAtTick) {
         player.reactionId = '';
         player.reactionExpiresAtTick = 0;
@@ -385,6 +400,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       else {
         session.lastRespawn = performance.now();
         this.inputs.get(client.sessionId).clear();
+        session.lastInput = { ...NEUTRAL_INPUT };
+        this.cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
       }
     }
     const result: ActionResult = {
@@ -434,6 +451,63 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
               ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
               : REACTION_DURATION_MS,
           }
+        : {}),
+    });
+  }
+
+  private expireAnimation(player: PlayerSchema, tick: number): void {
+    if (player.animationId && tick >= player.animationEndsAtTick) {
+      player.animationId = '';
+      player.animationChangedAtTick = player.animationEndsAtTick;
+    }
+  }
+
+  private cancelAnimation(player: PlayerSchema, tick = this.state.serverTick): void {
+    this.expireAnimation(player, tick);
+    if (!player.animationId) return;
+    player.animationId = '';
+    player.animationSequence++;
+    player.animationChangedAtTick = tick;
+  }
+
+  private animate(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const animation = findAnimation((request as { animationId?: unknown }).animationId);
+    const player = this.state.players.get(client.sessionId);
+    if (player) this.expireAnimation(player, this.state.serverTick);
+    const remainingTicks = player?.animationId
+      ? Math.max(0, player.animationEndsAtTick - this.state.serverTick)
+      : 0;
+    if (!code) {
+      const actual = this.world.getSnapshot().players.find((p) => p.entityId === session.entityId);
+      if (!animation) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else if (
+        !actual?.grounded ||
+        findAvatarSkin(player!.skinId)?.rig !== animation.rig ||
+        (animation.mode === 'fullBody' &&
+          (Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08 ||
+            session.lastInput.moveX !== 0 ||
+            session.lastInput.moveZ !== 0))
+      )
+        code = 'ANIMATION_NOT_ALLOWED';
+      else {
+        player!.animationSequence++;
+        player!.animationId = animation.id;
+        player!.animationStartedAtTick = player!.animationChangedAtTick = this.state.serverTick;
+        player!.animationEndsAtTick =
+          this.state.serverTick + Math.ceil((animation.durationMs * TICK_RATE) / 1000);
+      }
+    }
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === 'RATE_LIMITED'
+        ? { retryAfterMs: Math.ceil((remainingTicks * 1000) / TICK_RATE) }
         : {}),
     });
   }
@@ -544,7 +618,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.world.setInput(session.entityId, NEUTRAL_INPUT);
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
-    if (player) player.connected = false;
+    if (player) {
+      player.connected = false;
+      this.cancelAnimation(player);
+    }
     // 4010 is the SDK's intentional offline/drop signal, not an application
     // rejection. Only terminal codes release an established session immediately.
     const terminal =
@@ -588,6 +665,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   onLeave(client: Client): void {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
+    const player = this.state.players.get(client.sessionId);
+    if (player) this.cancelAnimation(player);
     this.world.removePlayer(session.entityId);
     this.state.players.delete(client.sessionId);
     this.sessions.delete(client.sessionId);
@@ -600,6 +679,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       if (session.auth?.authSessionId !== authSessionId) continue;
       session.auth.expiresAt = 0;
       session.connected = false;
+      const player = this.state.players.get(sessionId);
+      if (player) this.cancelAnimation(player);
       this.world.setInput(session.entityId, NEUTRAL_INPUT);
       session.cancelReconnect?.();
       const client = this.clients.getById(sessionId);
@@ -630,6 +711,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       : this.items.closing
         ? 'WORLD_NOT_READY'
         : '';
+    if (!wasPaused && this.state.paused)
+      for (const player of this.state.players.values()) this.cancelAnimation(player);
     if (wasPaused && !this.state.paused) {
       this.projectItems(this.world.getSnapshot().items);
       for (const id of this.sessions.keys()) this.inputs.get(id).clear();

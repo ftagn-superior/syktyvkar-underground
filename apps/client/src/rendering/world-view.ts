@@ -271,6 +271,7 @@ export class WorldView {
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
       meshes: this.scene.meshes.length,
+      transformNodes: this.scene.transformNodes.length,
       materials: this.scene.materials.length,
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),

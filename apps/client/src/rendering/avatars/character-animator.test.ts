@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CharacterAnimator, type AvatarMotion } from './character-animator';
+import { ANIMATION_CLIPS } from './animation-clips';
+import type { AnimationId } from '@su/contracts';
 
 function frame(): AvatarMotion {
   return {
@@ -28,6 +30,124 @@ function advance(
 }
 
 describe('character animation from displayed motion', () => {
+  const playback = (id: AnimationId, tick = 60) => ({
+    worldEpoch: 'epoch',
+    animationId: id,
+    sequence: 1,
+    startedAtTick: 0,
+    endsAtTick: id === 'dance' ? 300 : 180,
+    changedAtTick: 0,
+    displayTick: tick,
+  });
+
+  it.each(['wave', 'clap'] as const)('keeps unmasked locomotion under %s', (id) => {
+    const base = new CharacterAnimator(4, 14),
+      selected = new CharacterAnimator(4, 14);
+    const input = frame();
+    input.velocity.z = 4;
+    advance(base, input, 1);
+    const other = frame();
+    other.velocity.z = 4;
+    other.animation = playback(id);
+    advance(selected, other, 1);
+    expect(selected.pose.leftLeg).toBeCloseTo(base.pose.leftLeg);
+    expect(selected.pose.rightLeg).toBeCloseTo(base.pose.rightLeg);
+    if (id === 'wave') expect(selected.pose.leftArm).toBeCloseTo(base.pose.leftArm);
+    expect(selected.pose.rightArmRoll).not.toBeCloseTo(base.pose.rightArmRoll);
+  });
+  it('uses absolute phase at all frame rates, survives motion resets, and expires without a patch', () => {
+    const poses = [30, 60, 120].map((fps) => {
+      const animator = new CharacterAnimator(4, 14),
+        input = frame();
+      input.animation = playback('dance', 0);
+      for (let i = 0; i <= fps; i++) {
+        input.animation.displayTick = (i * 60) / fps;
+        animator.update(input, 1 / fps, true);
+      }
+      const pose = { ...animator.pose };
+      input.motionRevision++;
+      animator.resetMotion();
+      animator.update(input, 10, true);
+      expect(animator.pose).toEqual(pose);
+      input.animation.displayTick = 305;
+      animator.update(input, 4, true);
+      expect(animator.diagnostics().animation.reason).toBe('expired');
+      expect(animator.pose.rightArm).toBeCloseTo(0);
+      return pose;
+    });
+    expect(poses[0]).toEqual(poses[1]);
+    expect(poses[1]).toEqual(poses[2]);
+  });
+  it('suppresses the same dance after local movement and gives falling priority', () => {
+    const animator = new CharacterAnimator(4, 14),
+      input = frame();
+    input.animation = playback('dance');
+    animator.update(input, 1 / 60, true);
+    input.animationMoving = true;
+    animator.update(input, 1 / 60, true);
+    input.animationMoving = false;
+    animator.update(input, 1 / 60, true);
+    expect(animator.diagnostics().animation.reason).toBe('local-movement');
+    input.animation.sequence++;
+    animator.update(input, 1 / 60, true);
+    expect(animator.diagnostics().animation.reason).toBe('playing');
+    input.grounded = false;
+    animator.update(input, 1 / 60, true);
+    expect(animator.diagnostics().animation.weight).toBe(0);
+  });
+  it('fades cancellation into the current base and allows another clip during the fade', () => {
+    const animator = new CharacterAnimator(4, 14),
+      input = frame();
+    input.animation = playback('wave');
+    animator.update(input, 1 / 60, true);
+    const arm = animator.pose.rightArmRoll;
+    input.animation = { ...input.animation, animationId: null, sequence: 2, changedAtTick: 60 };
+    animator.update(input, 1 / 60, true);
+    expect(animator.pose.rightArmRoll).toBe(arm);
+    input.animation.displayTick = 63;
+    animator.update(input, 1 / 60, true);
+    expect(animator.pose.rightArmRoll).toBeGreaterThan(0.1);
+    const mid = animator.pose.rightArmRoll;
+    input.animation = { ...playback('clap', 63), sequence: 3, startedAtTick: 63 };
+    animator.update(input, 1 / 60, true);
+    expect(animator.pose.rightArmRoll).toBe(mid);
+    input.animation.displayTick = 80;
+    animator.update(input, 1 / 60, true);
+    expect(animator.pose.rightArm).toBeCloseTo(-Math.PI / 2);
+  });
+  it('finishes a decorative cancellation while the simulation tick is paused', () => {
+    const animator = new CharacterAnimator(4, 14),
+      input = frame();
+    input.animation = { ...playback('wave'), displayTimeMs: 1000 };
+    animator.update(input, 1 / 60, true);
+    input.animation = { ...input.animation, animationId: null, sequence: 2 };
+    animator.update(input, 1 / 60, true);
+    expect(animator.pose.rightArmRoll).toBeGreaterThan(1);
+    input.animation.displayTimeMs = 1150;
+    animator.update(input, 1 / 60, true);
+    expect(animator.pose.rightArmRoll).toBeCloseTo(0.1);
+  });
+  it('reduces body motion, diagnoses unavailable clips, and joins their current phase when restored', () => {
+    const animator = new CharacterAnimator(4, 14),
+      input = frame();
+    input.animation = playback('dance', 72);
+    animator.update(input, 1 / 60, true);
+    const normal = { ...animator.pose };
+    animator.update(input, 1 / 60, true, true);
+    expect(Math.abs(animator.pose.roll)).toBeLessThan(Math.abs(normal.roll));
+    expect(animator.pose.rightArm).toBe(normal.rightArm);
+    const clip = ANIMATION_CLIPS.dance;
+    try {
+      delete (ANIMATION_CLIPS as Partial<typeof ANIMATION_CLIPS>).dance;
+      animator.update(input, 1 / 60, true);
+      expect(animator.diagnostics().animation.reason).toBe('missing-clip');
+      expect(animator.pose.rightArm).toBeCloseTo(0);
+    } finally {
+      ANIMATION_CLIPS.dance = clip;
+    }
+    animator.update(input, 1 / 60, true);
+    expect(animator.diagnostics().animation.elapsedMs).toBe(1200);
+  });
   it('walks with opposing limbs, runs with a larger swing, and settles when physically blocked', () => {
     const animator = new CharacterAnimator(4, 14);
     const input = frame();
@@ -125,7 +245,7 @@ describe('character animation from displayed motion', () => {
     advance(animator, input, 1);
     expect(animator.diagnostics().phase).toBe(fall.phase);
     expect(animator.diagnostics().mode).toBe('airborne');
-    expect(animator.pose.armSpread).toBeGreaterThan(0.6);
+    expect(animator.pose.rightArmRoll).toBeGreaterThan(0.6);
     expect(animator.pose.leftLeg).toBeCloseTo(animator.pose.rightLeg, 4);
     input.grounded = true;
     advance(animator, input, 1, { reduced: true });

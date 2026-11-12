@@ -97,8 +97,8 @@ export class AvatarRig {
     this.facing.rotation.y = pose.facingOffset;
     this.body.rotation.set(pose.lean, 0, pose.roll);
     this.body.position.y = pose.lift * height;
-    this.leftShoulder.rotation.set(pose.leftArm, 0, -pose.armSpread);
-    this.rightShoulder.rotation.set(pose.rightArm, 0, pose.armSpread);
+    this.leftShoulder.rotation.set(pose.leftArm, pose.leftArmYaw, pose.leftArmRoll);
+    this.rightShoulder.rotation.set(pose.rightArm, pose.rightArmYaw, pose.rightArmRoll);
     this.leftHip.rotation.x = pose.leftLeg;
     this.rightHip.rotation.x = pose.rightLeg;
   }

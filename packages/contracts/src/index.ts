@@ -3,9 +3,10 @@ export * from './accounts.js';
 export * from './items.js';
 export * from './item-shapes.js';
 export * from './avatars.js';
+export * from './animations.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 export const WORLD_FORMAT_VERSION = 3;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -163,6 +164,7 @@ export type ErrorCode =
   | 'SPAWN_UNAVAILABLE'
   | 'INVALID_INPUT'
   | 'INVALID_SKIN'
+  | 'ANIMATION_NOT_ALLOWED'
   | 'COMMAND_DISABLED'
   | 'UNKNOWN_COMMAND'
   | 'RATE_LIMITED'

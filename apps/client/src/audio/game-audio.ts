@@ -54,6 +54,9 @@ export class GameAudio {
   private disposed = false;
   private ready = false;
   private unlockRequested = false;
+  private unlockedOnce = false;
+  private contextTransition?: Promise<void>;
+  private contextWatchdog?: ReturnType<typeof setInterval>;
   private loadedAssets = 0;
   private failedAssets = 0;
   private errors = 0;
@@ -98,12 +101,7 @@ export class GameAudio {
   unlock(): void {
     if (this.disposed) return;
     this.unlockRequested = true;
-    this.safely(() => {
-      if (this.active && this.engine)
-        void this.engine.unlockAsync().catch(() => {
-          this.errors++;
-        });
-    });
+    this.safely(() => this.reconcileContext());
   }
 
   setActive(active: boolean): void {
@@ -112,11 +110,7 @@ export class GameAudio {
     this.safely(() => {
       this.stopAll();
       this.applyVolume();
-      if (!active)
-        void this.engine?.pauseAsync().catch(() => {
-          this.errors++;
-        });
-      else if (this.unlockRequested) this.unlock();
+      this.reconcileContext();
     });
   }
 
@@ -199,6 +193,7 @@ export class GameAudio {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    clearInterval(this.contextWatchdog);
     this.safely(() => {
       this.stopAll();
       this.engine?.dispose();
@@ -213,6 +208,8 @@ export class GameAudio {
     return {
       ready: this.ready,
       unlocked: this.engine?.state === 'running',
+      contextState: this.engine?.state ?? 'unavailable',
+      contextTransition: !!this.contextTransition,
       active: this.active,
       disposed: this.disposed,
       loadedAssets: this.loadedAssets,
@@ -242,7 +239,20 @@ export class GameAudio {
     }
     this.engine = engine;
     this.applyVolume();
-    if (this.unlockRequested) this.unlock();
+    this.reconcileContext();
+    // Browsers may suspend/interrupt a previously unlocked context without a visibility
+    // event. Use our active state, not Babylon's unconditional resumeOnPause timer.
+    this.contextWatchdog = setInterval(
+      () =>
+        this.safely(() => {
+          if (this.disposed || !this.engine) return;
+          if (this.engine.state === 'running') this.unlockedOnce = true;
+          if (this.active && !this.unlockedOnce) return;
+          if (this.engine.state !== 'running') this.stopAll();
+          this.reconcileContext();
+        }),
+      1000,
+    );
     [this.worldBus, this.uiBus] = await Promise.all([
       engine.createBusAsync('world'),
       engine.createBusAsync('ui'),
@@ -311,6 +321,43 @@ export class GameAudio {
       return false;
     }
     return true;
+  }
+
+  private reconcileContext(): void {
+    const engine = this.engine;
+    if (this.disposed || !engine || this.contextTransition || engine.state === 'closed') return;
+    const active = this.active;
+    if (active) {
+      // Babylon 9.35 caches resumeAsync's promise until statechange -> running.
+      // Calling it while already running leaves a fulfilled cache, preventing the
+      // next real resume after suspend. Ordinary movement keydowns must be no-ops.
+      if (engine.state === 'running') {
+        this.unlockedOnce = true;
+        return;
+      }
+      if (!this.unlockRequested && !this.unlockedOnce) return;
+    } else if (engine.state === 'suspended') return;
+
+    // A delayed pause must finish before focus returning may resume, and vice versa.
+    // Mute and voice disposal are immediate; this only orders native context work.
+    const transition = active ? engine.unlockAsync() : engine.pauseAsync();
+    this.contextTransition = transition;
+    void transition
+      .then(
+        () => {
+          if (engine.state === 'running') this.unlockedOnce = true;
+        },
+        () => {
+          this.errors++;
+        },
+      )
+      .then(() => {
+        if (this.contextTransition !== transition) return;
+        this.contextTransition = undefined;
+        // Reconcile changed intent once. Failed unchanged intent waits for a later
+        // gesture/watchdog tick instead of spinning in a rejected-promise loop.
+        if (this.active !== active) this.safely(() => this.reconcileContext());
+      });
   }
 
   private allow(key: string, now: number, interval: number): boolean {

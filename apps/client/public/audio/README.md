@@ -15,3 +15,7 @@ file hash. The mirror archives were not compared byte-for-byte with the Kenney d
 Processing: decode to 44,100 Hz PCM16 WAV; average stereo channels to mono; no trimming,
 normalization or gain applied. Runtime gain and variation live in `src/audio/policy.ts`.
 The three optional grass recordings from the audition bank are intentionally not shipped.
+
+Panel transitions use `click_001.wav` (open, 115 ms) and `click_005.wav` (close, 19 ms).
+These short click recordings replace the high-frequency `open_001` / `close_001` effects;
+the closing cue has a lower runtime gain. The original files were not pitch-shifted or filtered.

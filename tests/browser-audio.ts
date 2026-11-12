@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from 'playwright';
+import type { CDPSession, Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
@@ -67,10 +67,22 @@ async function audible(page: Page): Promise<void> {
   });
 }
 async function cueCount(page: Page, cue: string, expected: number): Promise<void> {
-  await page.waitForFunction(
-    ({ cue, expected }) => ((window as any).__SU_DEBUG__.audio().played[cue] ?? 0) >= expected,
-    { cue, expected },
-  );
+  try {
+    await page.waitForFunction(
+      ({ cue, expected }) => ((window as any).__SU_DEBUG__.audio().played[cue] ?? 0) >= expected,
+      { cue, expected },
+    );
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      audio: (window as any).__SU_DEBUG__.audio(),
+      connection: (window as any).__SU_DEBUG__.snapshot().connection,
+      hidden: document.hidden,
+      focused: document.hasFocus(),
+      transitions: (window as any).__audioProbe.transitions,
+    }));
+    console.error('Missing audio cue', JSON.stringify({ cue, expected, ...state }));
+    throw error;
+  }
   assert.equal(count(await audio(page), cue), expected, `${cue} plays exactly ${expected} times`);
 }
 async function settle(page: Page): Promise<void> {
@@ -113,12 +125,14 @@ try {
   app = await createGameServer({ port: 0, accounts: fixture, worldDirectory: release });
   fixture.config.publicOrigin = app.url;
   browser = await launchTestBrowser({
+    channel: 'chromium', // Full Chromium is needed for native tab focus/visibility transitions.
     args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding'],
   });
   const contexts = await Promise.all(
     [0, 1].map(() => browser!.newContext({ viewport: { width: 1280, height: 900 } })),
   );
   const [owner, observer] = await Promise.all(contexts.map((context) => context.newPage()));
+  const focusSessions: CDPSession[] = [];
   for (const [index, page] of [owner, observer].entries()) {
     page.setDefaultTimeout(15_000);
     page.on('pageerror', (error) => errors.push(`page ${index}: ${error.message}`));
@@ -129,7 +143,39 @@ try {
     // Both clients need real active AudioContexts while inspecting a shared event. This is
     // browser focus emulation, not a production hook or a replacement of playback counters.
     const cdp = await page.context().newCDPSession(page);
+    focusSessions.push(cdp);
     await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    // Observe real AudioContexts and the signal sent to the output, without changing game
+    // methods/counters. The extra analyser branch neither replaces nor mutes the destination.
+    await page.addInitScript(() => {
+      const probe = { contexts: [] as AudioContext[], peak: 0, transitions: [] as string[] };
+      (window as any).__audioProbe = probe;
+      const NativeAudioContext = window.AudioContext;
+      window.AudioContext = class extends NativeAudioContext {
+        constructor(options?: AudioContextOptions) {
+          super(options);
+          probe.contexts.push(this);
+          this.addEventListener('statechange', () => probe.transitions.push(this.state));
+        }
+      };
+      const originalConnect = AudioNode.prototype.connect;
+      const tapped = new WeakSet<AudioNode>();
+      AudioNode.prototype.connect = function (destination: any, ...args: any[]): any {
+        const result = (originalConnect as any).call(this, destination, ...args);
+        if (destination === this.context.destination && !tapped.has(this)) {
+          tapped.add(this);
+          const analyser = this.context.createAnalyser();
+          analyser.fftSize = 2048;
+          (originalConnect as any).call(this, analyser);
+          const samples = new Float32Array(analyser.fftSize);
+          setInterval(() => {
+            analyser.getFloatTimeDomainData(samples);
+            for (const sample of samples) probe.peak = Math.max(probe.peak, Math.abs(sample));
+          }, 10);
+        }
+        return result;
+      };
+    });
   }
   await owner.goto(app.url + '/?diagnostics=1', { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await owner.locator('#telegram-login').click();
@@ -164,6 +210,56 @@ try {
   assert.equal(count(await audio(owner), 'ui:close'), count(beforeHelp, 'ui:close') + 1);
   checked('help menu has one sound per actual open and close transition');
 
+  // A redundant unlock while running used to poison Babylon's cached resume promise.
+  // Native blur then suspended the context permanently until a mouse click bypassed it.
+  await owner.keyboard.press('Shift');
+  await Promise.all(
+    focusSessions.map((cdp) => cdp.send('Emulation.setFocusEmulationEnabled', { enabled: false })),
+  );
+  const otherTab = await owner.context().newPage();
+  await otherTab.goto('about:blank');
+  const otherTabCdp = await owner.context().newCDPSession(otherTab);
+  await otherTabCdp.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+  await otherTab.bringToFront();
+  await owner.waitForFunction(() => !document.hasFocus());
+  await owner.waitForFunction(() => {
+    const state = (window as any).__SU_DEBUG__.audio();
+    return !state.active && !state.unlocked;
+  });
+  const beforeFocus = total(await audio(owner));
+  await otherTab.waitForTimeout(1200);
+  assert.equal((await audio(owner)).unlocked, false, 'background audio stays paused');
+  await owner.bringToFront();
+  await owner.waitForFunction(
+    () => {
+      const state = (window as any).__SU_DEBUG__.audio();
+      return state.active && state.unlocked;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+  assert.equal(total(await audio(owner)), beforeFocus, 'focus does not replay old sounds');
+  checked('native tab return resumes audio without a click after repeated keyboard unlocks');
+  await otherTab.close();
+  await Promise.all(
+    focusSessions.map((cdp) => cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true })),
+  );
+  await Promise.all([audible(owner), audible(observer)]);
+
+  // Model an OS/browser interruption while the game remains visible. No user gesture is
+  // delivered to the observer between suspension and the recovered remote pickup below.
+  const beforeInterruption = total(await audio(observer));
+  await observer.evaluate(async () => {
+    const probe = (window as any).__audioProbe;
+    await Promise.all(probe.contexts.map((context: AudioContext) => context.suspend()));
+    probe.peak = 0;
+  });
+  await observer.waitForFunction(() => (window as any).__SU_DEBUG__.audio().unlocked, undefined, {
+    timeout: 5000,
+  });
+  assert.equal(total(await audio(observer)), beforeInterruption, 'recovery does not replay sounds');
+  checked('an externally suspended active AudioContext recovers without another user gesture');
+
   const beforePickup = await Promise.all([audio(owner), audio(observer)]);
   await owner.locator('#world').focus();
   await owner.locator('.su-ctx[aria-keyshortcuts="Z"]:not([hidden])').waitFor();
@@ -179,6 +275,7 @@ try {
     cueCount(owner, 'ui:pickup', count(beforePickup[0], 'ui:pickup') + 1),
     cueCount(observer, 'pickup', count(beforePickup[1], 'pickup') + 1),
   ]);
+  await observer.waitForFunction(() => (window as any).__audioProbe.peak > 0.00001);
   await owner.waitForTimeout(600);
   assert.equal(count(await audio(owner), 'ui:pickup'), count(beforePickup[0], 'ui:pickup') + 1);
   assert.equal(count(await audio(owner), 'pickup'), count(beforePickup[0], 'pickup'));

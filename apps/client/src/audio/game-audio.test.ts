@@ -2,20 +2,60 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GameAudio } from './game-audio';
 import { AUDIO_SAMPLES, MAX_UI_VOICES, MAX_WORLD_VOICES } from './policy';
 
-const mock = vi.hoisted(() => ({ failures: new Set<string>(), engine: undefined as any }));
-vi.mock('@babylonjs/core/AudioV2/webAudio/webAudioEngine', () => ({
-  CreateAudioEngineAsync: async () => {
-    const vector = () => ({ set: vi.fn() });
-    const engine = {
-      state: 'suspended',
-      volume: 1,
-      listener: { position: vector(), rotation: vector(), update: vi.fn() },
-      createBusAsync: async () => ({ volume: 1 }),
-      createSoundBufferAsync: async (path: string) => {
+const mock = vi.hoisted(() => ({
+  failures: new Set<string>(),
+  engine: undefined as any,
+  context: undefined as any,
+  deferPause: false,
+  finishPause: undefined as (() => void) | undefined,
+}));
+vi.mock('@babylonjs/core/AudioV2/webAudio/webAudioEngine', async (importOriginal) => {
+  const { _WebAudioEngine } =
+    await importOriginal<typeof import('@babylonjs/core/AudioV2/webAudio/webAudioEngine')>();
+  return {
+    CreateAudioEngineAsync: async (options: object) => {
+      const vector = () => ({ set: vi.fn() });
+      // Keep Babylon's actual pause/resume cache and statechange handler. Only the browser
+      // device and sample decoding are replaced, so lifecycle regressions are not mocked away.
+      class Context extends EventTarget {
+        state = 'suspended';
+        listener = { setPosition: vi.fn(), setOrientation: vi.fn() };
+        resume = vi.fn(async () => {
+          if (this.state !== 'running') {
+            this.state = 'running';
+            queueMicrotask(() => this.dispatchEvent(new Event('statechange')));
+          }
+        });
+        suspend = vi.fn(
+          () =>
+            new Promise<void>((resolve) => {
+              const finish = () => {
+                this.state = 'suspended';
+                resolve();
+                queueMicrotask(() => this.dispatchEvent(new Event('statechange')));
+              };
+              if (mock.deferPause) mock.finishPause = finish;
+              else queueMicrotask(finish);
+            }),
+        );
+        close = async () => {
+          this.state = 'closed';
+        };
+      }
+      const context = new Context();
+      const engine = new _WebAudioEngine({
+        ...options,
+        audioContext: context as unknown as AudioContext,
+      }) as any;
+      engine._initAudioContextAsync = async () =>
+        context.addEventListener('statechange', engine._onAudioContextStateChange);
+      await engine._initAsync(options);
+      engine.createBusAsync = async () => ({ volume: 1 });
+      engine.createSoundBufferAsync = async (path: string) => {
         if ([...mock.failures].some((file) => path.includes(file))) throw new Error('missing');
         return { duration: 0.5 };
-      },
-      createSoundAsync: async (_name: string, buffer: { duration: number }) => ({
+      };
+      engine.createSoundAsync = async (_name: string, buffer: { duration: number }) => ({
         state: 1,
         buffer,
         playbackRate: 1,
@@ -23,38 +63,83 @@ vi.mock('@babylonjs/core/AudioV2/webAudio/webAudioEngine', () => ({
         play: vi.fn(),
         stop: vi.fn(),
         dispose: vi.fn(),
-      }),
-      unlockAsync: async () => {
-        engine.state = 'running';
-      },
-      pauseAsync: async () => {
-        engine.state = 'suspended';
-      },
-      dispose: () => {
-        engine.state = 'closed';
-      },
-    };
-    mock.engine = engine;
-    return engine;
-  },
-}));
+      });
+      mock.engine = engine;
+      mock.context = context;
+      return engine;
+    },
+  };
+});
 
 describe('GameAudio lifecycle and voice limits', () => {
   let audio: GameAudio;
   beforeEach(() => {
     mock.failures.clear();
+    mock.deferPause = false;
+    mock.finishPause = undefined;
+    vi.stubGlobal('OfflineAudioContext', class {});
+    vi.stubGlobal('document', new EventTarget());
     vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
   });
   afterEach(() => {
     audio?.dispose();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
   const prepare = async () => {
     audio = new GameAudio();
     await vi.waitFor(() => expect(audio.diagnostics().ready).toBe(true));
     audio.setListener({ x: 0, y: 0, z: 0 });
   };
+
+  it('does not poison Babylon resume cache on ordinary key presses while already running', async () => {
+    await prepare();
+    audio.unlock();
+    await Promise.resolve();
+    await vi.waitFor(() => expect(audio.diagnostics().contextTransition ?? false).toBe(false));
+    audio.unlock(); // A subsequent movement keydown must not call native resume again.
+    await Promise.resolve();
+    audio.setActive(false);
+    await vi.waitFor(() => expect(mock.engine.state).toBe('suspended'));
+    audio.setActive(true);
+    await vi.waitFor(() => expect(mock.engine.state).toBe('running'));
+    audio.playUi('click');
+    expect(audio.diagnostics().played['ui:click']).toBe(1);
+  });
+
+  it('reconciles a delayed pause with focus returning before suspend completes', async () => {
+    await prepare();
+    audio.unlock();
+    await Promise.resolve();
+    await vi.waitFor(() => expect(audio.diagnostics().contextTransition ?? false).toBe(false));
+    mock.deferPause = true;
+    audio.setActive(false);
+    audio.setActive(true);
+    mock.finishPause!();
+    await vi.waitFor(() => expect(mock.engine.state).toBe('running'));
+    audio.playUi('click');
+    expect(audio.diagnostics().played['ui:click']).toBe(1);
+  });
+
+  it('recovers external browser suspension without a new gesture, but never retries in the background', async () => {
+    vi.useFakeTimers();
+    await prepare();
+    audio.unlock();
+    await Promise.resolve();
+    await mock.context.suspend(); // OS/browser interruption, not GameAudio.setActive(false).
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mock.engine.state).toBe('running');
+    audio.playUi('click');
+    expect(audio.diagnostics().played['ui:click']).toBe(1);
+    audio.setActive(false);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(mock.engine.state).toBe('suspended');
+    const resumeCalls = mock.context.resume.mock.calls.length;
+    audio.dispose();
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(mock.context.resume.mock.calls.length).toBe(resumeCalls);
+  });
 
   it('drops blocked events without replay after unlock or returning to the tab', async () => {
     await prepare();

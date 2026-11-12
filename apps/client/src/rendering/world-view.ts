@@ -103,6 +103,7 @@ export class WorldView {
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private quality: RenderQuality;
   private zoom = 1;
+  private touchMode = false;
   private readonly resize = () => {
     this.applyQuality();
     this.sizeCamera();
@@ -256,7 +257,7 @@ export class WorldView {
     return material;
   }
   private applyQuality(): void {
-    const settings = renderQualitySettings(this.quality, window.devicePixelRatio);
+    const settings = renderQualitySettings(this.quality);
     this.scene.shadowsEnabled = settings.shadows;
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
@@ -439,6 +440,7 @@ export class WorldView {
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();
+    if (this.touchMode) return;
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * Math.exp(event.deltaY * 0.001)));
     if (zoom === this.zoom) return;
     this.zoom = zoom;
@@ -447,6 +449,13 @@ export class WorldView {
   /** Масштаб кадра: 1 — исходный ракурс, больше — дальше. */
   get cameraZoom(): number {
     return this.zoom;
+  }
+  setTouchMode(enabled: boolean): void {
+    this.touchMode = enabled;
+    if (enabled) {
+      this.zoom = 1;
+      this.sizeCamera();
+    }
   }
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;

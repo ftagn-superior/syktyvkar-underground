@@ -2,6 +2,8 @@ import './style.css';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
 import { CameraPointerInput } from './input/camera-pointer';
+import { GameInputMode } from './input/mode';
+import { TouchInput } from './input/touch';
 import { GameSession, readableError, type ConnectionState } from './network/session';
 import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
@@ -11,6 +13,7 @@ import { AnimationMenu } from './ui/animations';
 import { ChatConsole } from './ui/chat';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
+import { bindTouchButtons } from './ui/touch-buttons';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -18,6 +21,7 @@ function element<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 const canvas = element<HTMLCanvasElement>('world');
+const stick = element('touch-stick');
 const welcome = element('welcome');
 const join = element<HTMLButtonElement>('join');
 const joinLabel = element('join-label');
@@ -33,6 +37,15 @@ const diagnosticsToggle = element<HTMLButtonElement>('diagnostics-toggle');
 const qualitySelect = element<HTMLSelectElement>('quality');
 const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
+const unbindTouchButtons = bindTouchButtons([
+  join,
+  respawn,
+  leave,
+  graphicsReload,
+  diagnosticsToggle,
+  element<HTMLButtonElement>('area-retry'),
+  element<HTMLButtonElement>('download-report'),
+]);
 const actions = document.querySelector<HTMLElement>('.actions')!;
 const actionsResize = new ResizeObserver(() => {
   document.documentElement.style.setProperty(
@@ -57,6 +70,8 @@ let keyboard: KeyboardInput;
 let cameraPointer: CameraPointerInput | undefined;
 let graphicsLost = false;
 let previousConnection: ConnectionState = 'loading';
+let pageActive = !document.hidden;
+let touch: TouchInput | undefined;
 let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
 let chat: ChatConsole | undefined;
@@ -65,6 +80,78 @@ let inventory: InventoryPanel | undefined;
 function resetCameraInput(): void {
   cameraPointer?.cancel();
   view?.stopCamera();
+}
+
+function resetGameInput(): void {
+  keyboard?.clear();
+  touch?.reset();
+  resetCameraInput();
+  session.neutral();
+}
+function closeGamePanels(): void {
+  reactions?.close(false);
+  animations?.close(false);
+  chat?.close(false);
+  inventory?.close();
+  view?.showPlacement();
+  diagnostics.hidden = true;
+  diagnosticsToggle.setAttribute('aria-expanded', 'false');
+}
+const inputMode = new GameInputMode(canvas, stick, (mode) => {
+  resetGameInput();
+  closeGamePanels();
+  view?.setTouchMode(mode === 'touch');
+  renderInputMode();
+  renderGamePanels();
+  showNotice(
+    mode === 'touch'
+      ? 'Сенсорное управление включено. Стик слева — ходьба, свайп справа — камера.'
+      : 'Управление переключено на мышь и клавиатуру. Нажмите клавишу движения ещё раз.',
+  );
+});
+function renderControls(placing = false): void {
+  element('controls-title').textContent = placing ? 'Поворот предмета' : 'Свободное движение';
+  element('controls-description').textContent = placing
+    ? 'W / S — наклон · A / D — поворот · Q / E — крен'
+    : inputMode.value === 'touch'
+      ? 'Стик слева — ходьба · свайп справа — камера'
+      : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
+}
+function canTouch(): boolean {
+  return (
+    inputMode.value === 'touch' &&
+    loaded &&
+    !graphicsLost &&
+    pageActive &&
+    !document.hidden &&
+    session.gameplayInputEnabled
+  );
+}
+function renderInputMode(): void {
+  const isTouch = inputMode.value === 'touch';
+  document.body.dataset.inputMode = inputMode.value;
+  stick.hidden = !isTouch || session.state !== 'playing' || graphicsLost;
+  keyboard?.setEnabled(!isTouch && !graphicsLost && element('chat-console').hidden);
+  inventory?.setEnabled(!isTouch && !graphicsLost);
+  renderControls();
+  syncTouchInput();
+}
+function syncTouchInput(): void {
+  touch?.setEnabled(canTouch());
+}
+function renderGamePanels(): void {
+  const available = inputMode.value === 'desktop' && !graphicsLost;
+  const reaction = session.reactionStatus();
+  const animation = session.animationStatus();
+  reactions?.update({ ...reaction, available: available && reaction.available });
+  animations?.update({ ...animation, available: available && animation.available });
+  renderChat();
+  inventory?.update();
+}
+function continuationHint(): string {
+  return inputMode.value === 'touch'
+    ? 'Коснитесь стика заново, чтобы продолжить.'
+    : 'Нажмите клавишу движения, чтобы продолжить.';
 }
 
 function showNotice(message: string): void {
@@ -122,11 +209,14 @@ function updateState(state: ConnectionState, message?: string): void {
   document.body.classList.toggle('connection-lost', reconnecting);
   respawn.hidden = !playing;
   leave.hidden = !session.room && !reconnecting;
-  if (state !== 'waiting' && !(playing && previousConnection === 'waiting')) {
-    keyboard?.clear();
-    resetCameraInput();
-  }
+  if (
+    inputMode.value === 'touch' ||
+    (state !== 'waiting' && !(playing && previousConnection === 'waiting'))
+  )
+    resetGameInput();
   previousConnection = state;
+  stick.hidden = inputMode.value !== 'touch' || !playing || graphicsLost;
+  syncTouchInput();
   if (
     playing &&
     !graphicsLost &&
@@ -136,10 +226,7 @@ function updateState(state: ConnectionState, message?: string): void {
   }
   if (message) showNotice(message);
   renderRespawn();
-  reactions?.update(session.reactionStatus());
-  animations?.update(session.animationStatus());
-  renderChat();
-  inventory?.update();
+  renderGamePanels();
 }
 const session = new GameSession(updateState, showNotice);
 const storageStatus = document.createElement('div');
@@ -169,12 +256,8 @@ inventory = new InventoryPanel(
   },
   (placing) => {
     keyboard?.setPlacementMode(placing);
-    resetCameraInput();
-    session.neutral();
-    element('controls-title').textContent = placing ? 'Поворот предмета' : 'Свободное движение';
-    element('controls-description').textContent = placing
-      ? 'W / S — наклон · A / D — поворот · Q / E — крен'
-      : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
+    resetGameInput();
+    renderControls(placing);
   },
 );
 const accountPreparation = accounts.load();
@@ -188,8 +271,9 @@ reactions = new ReactionMenu(
   element('reactions-status'),
   canvas,
   (id) => {
+    if (inputMode.value !== 'desktop' || graphicsLost) return;
     session.react(id);
-    reactions!.update(session.reactionStatus());
+    renderGamePanels();
   },
   () => {
     animations?.close(false);
@@ -205,8 +289,9 @@ animations = new AnimationMenu(
   element('animations-status'),
   canvas,
   (id) => {
+    if (inputMode.value !== 'desktop' || graphicsLost) return;
     session.animate(id);
-    animations!.update(session.animationStatus());
+    renderGamePanels();
   },
   () => {
     reactions?.close(false);
@@ -225,13 +310,13 @@ chat = new ChatConsole(
   element<HTMLButtonElement>('chat-send'),
   canvas,
   (text) => {
+    if (inputMode.value !== 'desktop' || graphicsLost) return;
     session.sendChat(text);
     renderChat();
   },
   (open) => {
-    keyboard?.setEnabled(!open && !graphicsLost);
-    resetCameraInput();
-    session.neutral();
+    keyboard?.setEnabled(!open && !graphicsLost && inputMode.value === 'desktop');
+    resetGameInput();
     if (open) {
       reactions?.close(false);
       animations?.close(false);
@@ -247,13 +332,13 @@ session.onChatResult = (result) => {
 };
 function renderChat(): void {
   const state = session.chatStatus();
-  chat?.update({ ...state, available: state.available && !graphicsLost });
+  chat?.update({
+    ...state,
+    available: state.available && !graphicsLost && inputMode.value === 'desktop',
+  });
 }
 keyboard = new KeyboardInput(
-  () => {
-    resetCameraInput();
-    session.neutral();
-  },
+  resetGameInput,
   setCameraRotation,
   () => reactions!.toggleOpen(),
   (initialText) => chat!.open(initialText),
@@ -262,10 +347,39 @@ keyboard = new KeyboardInput(
 );
 cameraPointer = new CameraPointerInput(
   canvas,
-  () => loaded && !graphicsLost && keyboard.cameraEnabled,
+  () => inputMode.value === 'desktop' && loaded && !graphicsLost && keyboard.cameraEnabled,
   (radians) => view?.rotateCameraBy(radians),
   () => view?.stopCamera(),
 );
+touch = new TouchInput(
+  canvas,
+  stick,
+  element('touch-thumb'),
+  canTouch,
+  (radians) => view?.rotateCameraBy(radians),
+  () => session.neutral(),
+  resetGameInput,
+);
+renderInputMode();
+window.addEventListener('blur', () => {
+  pageActive = false;
+  resetGameInput();
+  syncTouchInput();
+});
+window.addEventListener('focus', () => {
+  pageActive = true;
+  syncTouchInput();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) resetGameInput();
+  syncTouchInput();
+});
+const resetTouchScreen = () => {
+  if (inputMode.value === 'touch') resetGameInput();
+};
+window.addEventListener('resize', resetTouchScreen);
+window.addEventListener('orientationchange', resetTouchScreen);
+screen.orientation?.addEventListener('change', resetTouchScreen);
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
   respawn.disabled = graphicsLost || session.state !== 'playing' || pending || remainingMs > 0;
@@ -325,28 +439,30 @@ async function start(): Promise<void> {
   try {
     if (!Engine.isSupported()) {
       session.markPreparationFailed(
-        'Для полигона нужен браузер с WebGL2. Откройте страницу в настольном Chromium и включите аппаратное ускорение.',
+        'Для полигона нужен браузер с WebGL2. Включите аппаратное ускорение и откройте страницу в браузере с WebGL2.',
       );
       return;
     }
-    resetCameraInput();
+    resetGameInput();
     view?.dispose();
     view = undefined;
     await session.load();
     view = new WorldView(canvas, element('labels'), session.definition, quality);
+    view.setTouchMode(inputMode.value === 'touch');
     view.engine.onContextRestoredObservable.add(() => {
       if (!graphicsLost) return;
       graphicsLost = false;
       graphicsRecovery.hidden = true;
       document.body.classList.remove('graphics-unavailable');
       qualitySelect.disabled = false;
-      keyboard.setEnabled(true);
+      resetGameInput();
       session.setInputEnabled(true);
+      renderInputMode();
       session.resetFrameMeasurements();
       updateState(session.state);
       showNotice(
         session.state === 'playing'
-          ? 'Графика восстановлена. Нажмите клавишу движения, чтобы продолжить.'
+          ? `Графика восстановлена. ${continuationHint()}`
           : 'Графика восстановлена.',
       );
     });
@@ -354,7 +470,7 @@ async function start(): Promise<void> {
       view.dispose();
       view = undefined;
       session.markPreparationFailed(
-        'Браузер не поддерживает WebGL2. Используйте настольный Chromium с аппаратным ускорением.',
+        'Браузер не поддерживает WebGL2. Используйте браузер с WebGL2 и аппаратным ускорением.',
       );
       return;
     }
@@ -363,14 +479,20 @@ async function start(): Promise<void> {
       try {
         const area = view!.graphicalArea();
         view!.setStreamingRadius(session.updateVisualArea(area.center, area.drawRadius));
-        const frame = session.frame(now, delta, keyboard.read(view!.cameraAngle));
+        syncTouchInput();
+        const command =
+          inputMode.value === 'touch'
+            ? touch!.read(view!.cameraAngle)
+            : keyboard.read(view!.cameraAngle);
+        const frame = session.frame(now, delta, command);
+        syncTouchInput();
         view!.follow(frame.ownId);
         view!.update(frame.entities, frame.ownId, delta);
         inventory?.frame(view!);
       } catch (error) {
         loaded = false;
         starting = true;
-        keyboard.clear();
+        resetGameInput();
         view?.onFrame(() => {});
         console.error('Game loop failed', error);
         updateState('loading');
@@ -410,12 +532,13 @@ join.addEventListener('click', () => {
   else void start();
 });
 respawn.addEventListener('click', () => {
+  resetGameInput();
   session.respawn();
   renderRespawn();
   canvas.focus({ preventScroll: true });
 });
 leave.addEventListener('click', () => {
-  keyboard.clear();
+  resetGameInput();
   void session.leave();
 });
 diagnosticsToggle.addEventListener('click', () => {
@@ -446,8 +569,9 @@ canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   graphicsLost = true;
   keyboard.setEnabled(false);
-  resetCameraInput();
+  resetGameInput();
   session.setInputEnabled(false);
+  renderInputMode();
   graphicsRecovery.hidden = false;
   qualitySelect.disabled = true;
   document.body.classList.add('graphics-unavailable');
@@ -456,6 +580,7 @@ canvas.addEventListener('webglcontextlost', (event) => {
 });
 // Feedback remains alive even when WebGL has stopped producing frames.
 const uiTimer = setInterval(() => {
+  syncTouchInput();
   storageStatus.hidden = !session.storageUnavailable;
   renderRespawn();
   renderMetrics();
@@ -466,15 +591,12 @@ const uiTimer = setInterval(() => {
     ? session.reloadRequired
       ? 'Ресурсы мира изменились. Обновите страницу.'
       : 'Не удалось загрузить окружение. Повторите попытку.'
-    : 'Загружаем окружение… Движение продолжится после подготовки.';
+    : `Загружаем окружение… После подготовки: ${continuationHint()}`;
   element('area-retry').hidden = !problem;
   element('area-retry').textContent = session.reloadRequired
     ? 'Обновить страницу'
     : 'Повторить загрузку';
-  reactions?.update(session.reactionStatus());
-  animations?.update(session.animationStatus());
-  renderChat();
-  inventory?.update();
+  renderGamePanels();
 }, 250);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) location.reload();
@@ -485,8 +607,11 @@ window.addEventListener(
     clearInterval(uiTimer);
     clearTimeout(noticeTimer);
     actionsResize.disconnect();
-    session.neutral();
+    unbindTouchButtons();
+    resetGameInput();
     session.dispose();
+    touch?.dispose();
+    inputMode.dispose();
     cameraPointer?.dispose();
     view?.dispose();
     keyboard.dispose();
@@ -501,6 +626,14 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
   Object.defineProperty(window, '__SU_DEBUG__', {
     value: Object.freeze({
       snapshot: () => structuredClone(session.diagnostics()),
+      controls: () => ({
+        mode: inputMode.value,
+        input:
+          inputMode.value === 'touch'
+            ? touch!.read(view?.cameraAngle ?? 0)
+            : keyboard.read(view?.cameraAngle),
+        touchAvailable: canTouch(),
+      }),
       corrections: () => session.correctionHistory(),
       report: () => ({
         ...diagnosticReport(session, view, graphicsLost),

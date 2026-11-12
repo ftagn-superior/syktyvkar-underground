@@ -12,6 +12,10 @@ const movementKeys = new Set([
   'ArrowRight',
 ]);
 const sprintKeys = new Set(['ShiftLeft', 'ShiftRight']);
+export const isMovementKey = (code: string): boolean => movementKeys.has(code);
+export const isTextInput = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  (target.matches('input,textarea,select') || target.isContentEditable);
 const placementRotations: Readonly<Record<string, { axis: 'x' | 'y' | 'z'; direction: -1 | 1 }>> = {
   KeyW: { axis: 'x', direction: -1 },
   KeyS: { axis: 'x', direction: 1 },
@@ -39,13 +43,7 @@ export class KeyboardInput {
       (event) => {
         if (!this.enabled || event.repeat) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
-        if (
-          event.target instanceof HTMLInputElement ||
-          event.target instanceof HTMLTextAreaElement ||
-          event.target instanceof HTMLSelectElement ||
-          (event.target instanceof HTMLElement && event.target.isContentEditable)
-        )
-          return;
+        if (isTextInput(event.target)) return;
         if (this.placementMode) {
           const rotation = placementRotations[event.code];
           if (rotation) {

@@ -315,13 +315,27 @@
       </div>
       <div class="su-row" data-touch-hidden>
         <span>Камера</span
-        ><span class="k"
+        ><span class="k" id="overview-camera-controls"
           ><kbd class="su-kbd">Q</kbd><kbd class="su-kbd">E</kbd><span class="su-or">или</span
           ><kbd class="su-kbd">ПКМ</kbd></span
         >
+        <span id="first-person-camera-controls" class="hint" hidden>Мышь · Esc — курсор</span>
       </div>
       <div class="su-row"><span>Действие</span><span class="hint">по подсказке</span></div>
       <div id="help-menu-rows" class="su-menu-rows">
+        <button
+          id="view-toggle"
+          class="su-row su-row-btn"
+          type="button"
+          aria-keyshortcuts="V"
+          disabled
+          data-touch-hidden
+        >
+          <span id="view-toggle-label">От первого лица</span><kbd class="su-kbd">V</kbd>
+        </button>
+        <p id="first-person-actions" class="su-mode-note" hidden>
+          Предметы, реакции и анимации доступны в обзоре.
+        </p>
         <button
           id="chat-toggle"
           class="su-row su-row-btn"
@@ -510,5 +524,11 @@
       <button id="area-retry" class="button quiet" hidden>Повторить загрузку</button>
     </aside>
     <script type="module" src="/src/main.ts"></script>
+    <div id="first-person-hud" class="first-person-hud" hidden>
+      <button id="overview-button" class="su-btn" type="button">Обзор · V</button>
+      <span id="first-person-hint" role="status"
+        >Щёлкните по миру, чтобы продолжить · Esc — курсор</span
+      >
+    </div>
   </body>
 </html>

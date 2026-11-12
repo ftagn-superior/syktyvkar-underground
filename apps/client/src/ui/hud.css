@@ -484,3 +484,22 @@ body:not([data-input-mode='touch']) .placement-toolbar {
   flex: none;
   white-space: nowrap;
 }
+.first-person-hud {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  background: var(--surface, #15242e);
+  color: var(--ink, #edf6f5);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.first-person-hud[hidden] {
+  display: none;
+}

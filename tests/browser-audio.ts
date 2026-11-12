@@ -11,6 +11,9 @@ import { buildWorld } from '../tools/world-build/src/index.js';
 // Run after the client build. All SQL writes live in the fixture's private schema.
 if (!process.env.SU_TEST_DATABASE_URL)
   throw new Error('Set SU_TEST_DATABASE_URL and build the client before running browser-audio.ts.');
+const quality = process.env.SU_AUDIO_QUALITY;
+if (quality && quality !== 'economy' && quality !== 'standard')
+  throw new Error('SU_AUDIO_QUALITY must be economy or standard.');
 
 interface AudioSnapshot {
   ready: boolean;
@@ -75,7 +78,17 @@ async function cueCount(page: Page, cue: string, expected: number): Promise<void
   } catch (error) {
     const state = await page.evaluate(() => ({
       audio: (window as any).__SU_DEBUG__.audio(),
-      connection: (window as any).__SU_DEBUG__.snapshot().connection,
+      session: {
+        connection: (window as any).__SU_DEBUG__.snapshot().connection,
+        stalled: (window as any).__SU_DEBUG__.snapshot().stalled,
+        reaction: (window as any).__SU_DEBUG__.snapshot().reaction,
+      },
+      controls: (window as any).__SU_DEBUG__.controls(),
+      frames: (window as any).__audioProbe.frames.slice(-30),
+      reactions: Array.from(document.querySelectorAll('.player-reaction'), (node) => ({
+        id: (node as HTMLElement).dataset.reactionId,
+        visible: !(node as HTMLElement).hidden,
+      })),
       hidden: document.hidden,
       focused: document.hasFocus(),
       transitions: (window as any).__audioProbe.transitions,
@@ -131,6 +144,12 @@ try {
   const contexts = await Promise.all(
     [0, 1].map(() => browser!.newContext({ viewport: { width: 1280, height: 900 } })),
   );
+  if (quality)
+    for (const context of contexts)
+      await context.addInitScript(
+        (value) => localStorage.setItem('su:render-quality:v1', value),
+        quality,
+      );
   const [owner, observer] = await Promise.all(contexts.map((context) => context.newPage()));
   const focusSessions: CDPSession[] = [];
   for (const [index, page] of [owner, observer].entries()) {
@@ -148,7 +167,12 @@ try {
     // Observe real AudioContexts and the signal sent to the output, without changing game
     // methods/counters. The extra analyser branch neither replaces nor mutes the destination.
     await page.addInitScript(() => {
-      const probe = { contexts: [] as AudioContext[], peak: 0, transitions: [] as string[] };
+      const probe = {
+        contexts: [] as AudioContext[],
+        peak: 0,
+        transitions: [] as string[],
+        frames: [] as number[],
+      };
       (window as any).__audioProbe = probe;
       const NativeAudioContext = window.AudioContext;
       window.AudioContext = class extends NativeAudioContext {
@@ -175,6 +199,23 @@ try {
         }
         return result;
       };
+    });
+    // Keep the recursive callback as browser source: tsx's function-name helper is not
+    // available inside a serialized init function.
+    await page.addInitScript({
+      content: `(() => {
+        let lastFrame = performance.now();
+        function sampleFrame(now) {
+          const frames = window.__audioProbe?.frames;
+          if (frames) {
+            frames.push(now - lastFrame);
+            if (frames.length > 120) frames.shift();
+          }
+          lastFrame = now;
+          requestAnimationFrame(sampleFrame);
+        }
+        requestAnimationFrame(sampleFrame);
+      })();`,
     });
   }
   await owner.goto(app.url + '/?diagnostics=1', { waitUntil: 'domcontentloaded', timeout: 30_000 });
@@ -318,13 +359,13 @@ try {
   const beforeReaction = await Promise.all([audio(owner), audio(observer)]);
   await owner.keyboard.press('r');
   await owner.locator('.reaction-choice[data-reaction-id="hello"]:not([disabled])').click();
+  await observer
+    .locator(`.player-reaction[data-entity-id="${ownerId}"][data-reaction-id="hello"]`)
+    .waitFor();
   await Promise.all([
     cueCount(owner, 'reaction', count(beforeReaction[0], 'reaction') + 1),
     cueCount(observer, 'reaction', count(beforeReaction[1], 'reaction') + 1),
   ]);
-  await observer
-    .locator(`.player-reaction[data-entity-id="${ownerId}"][data-reaction-id="hello"]`)
-    .waitFor();
   await owner.waitForTimeout(900);
   assert.equal(count(await audio(owner), 'reaction'), count(beforeReaction[0], 'reaction') + 1);
   assert.equal(count(await audio(observer), 'reaction'), count(beforeReaction[1], 'reaction') + 1);

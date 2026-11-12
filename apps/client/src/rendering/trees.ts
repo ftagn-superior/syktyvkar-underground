@@ -178,6 +178,7 @@ export class TreeViews {
     visibleRadius: number,
     now: number,
     seconds: number,
+    opaque = false,
   ) {
     const selected = new Set(this.fading);
     for (const ray of rays) {
@@ -214,6 +215,7 @@ export class TreeViews {
           treeIntersectsRay(tree.recipe, Ray.Transform(ray, tree.inverse)),
       );
       const previousOpacity = tree.fade.opacity;
+      if (opaque) tree.fade.clear();
       const opacity = tree.fade.update(blocked, now, seconds);
       const shadow = this.shadowed.has(id) && opacity >= 0.98;
       const transparent = opacity < 1;

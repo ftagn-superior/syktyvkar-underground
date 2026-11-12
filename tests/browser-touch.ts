@@ -85,7 +85,16 @@ class Fingers {
   }
 }
 async function touchLayout(page: Page) {
+  const help = page.locator('#help-panel');
+  if (await help.isVisible()) await page.locator('#help-close').tap();
   for (const selector of ['#touch-stick', '#respawn', '#leave', '#diagnostics-toggle']) {
+    if (selector !== '#touch-stick' && !(await help.isVisible())) {
+      await page.locator('#help-toggle').tap();
+      await help.evaluate((node) =>
+        Promise.all(node.getAnimations().map((animation) => animation.finished)),
+      );
+    }
+    await page.locator(selector).scrollIntoViewIfNeeded();
     const result = await page.locator(selector).evaluate((node) => {
       const r = node.getBoundingClientRect();
       const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
@@ -97,9 +106,13 @@ async function touchLayout(page: Page) {
       };
     });
     assert.ok(result.inside && result.hit, `${selector} is reachable`);
-    assert.ok(result.width >= 44 && result.height >= 44, `${selector} is at least 44×44`);
+    assert.ok(
+      result.width >= 44 && result.height >= 44,
+      `${selector} is at least 44×44: ${JSON.stringify(result)}`,
+    );
   }
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.locator('#help-close').tap();
 }
 try {
   await mkdir('output/playwright/touch', { recursive: true });
@@ -133,6 +146,9 @@ try {
   await page.goto(app.url + '/?diagnostics=1');
   assert.equal((await controls(page)).mode, 'touch');
   await page.locator('#telegram-login').tap();
+  await page.locator('#profile-form').waitFor({ state: 'visible' });
+  // The OIDC callback drops the diagnostics query; restore the test's read-only hooks.
+  await page.goto(app.url + '/?diagnostics=1');
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   // Typing movement letters in a form never switches the input mode.
   await page.locator('#profile-name').fill('Touch WASD');
@@ -425,6 +441,7 @@ try {
   recordCheck('phone and tablet portrait/landscape controls fit and retain 44px service targets');
 
   const beforeService = (await rendering(page)).camera.azimuth;
+  await page.locator('#help-toggle').tap();
   const untouchedRevision = (await snapshot(page)).authoritative.revision;
   const servicePoint = await point(page, '#respawn');
   await fingers.down(1, center.x, center.y - 35);
@@ -450,6 +467,7 @@ try {
   await fingers.cancel();
   assert.ok(Math.abs(angleDelta((await rendering(page)).camera.azimuth, beforeService)) < 0.001);
   recordCheck('touch respawn with a held stick stops movement and does not rotate the camera');
+  await page.locator('#help-close').tap();
 
   // Deliberate switches consume their trigger; mouse movement and compatibility clicks do not switch.
   await page.mouse.move(280, 450);
@@ -478,9 +496,12 @@ try {
   assert.equal((await rendering(page)).camera.zoom, 1, 'wheel disabled in touch');
   await page.mouse.click(300, 400, { button: 'right' });
   assert.equal((await controls(page)).mode, 'desktop');
-  await page.waitForFunction(
-    () => !(document.querySelector('[aria-keyshortcuts="Z"]') as HTMLButtonElement).disabled,
-  );
+  await page.waitForFunction(() => {
+    const prompt = document.querySelector<HTMLButtonElement>(
+      '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
+    );
+    return prompt && !prompt.disabled && getComputedStyle(prompt).visibility !== 'hidden';
+  });
   await page.keyboard.press('z');
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 1,
@@ -501,6 +522,7 @@ try {
     'hybrid input: consumed switching presses, fresh keyboard input, zoom reset/wheel gating, placement cancellation',
   );
   await page.screenshot({ path: 'output/playwright/touch/portrait.png' });
+  await page.locator('#help-toggle').tap();
   await fingers.down(1, center.x, center.y - 30);
   const exit = await point(page, '#leave');
   await fingers.down(2, exit.x, exit.y);
@@ -539,9 +561,13 @@ try {
       recordCheck('touch retry recovers a failed initial world load');
     }
     await qualityPage.locator('#join:not([disabled])').waitFor();
+    await qualityPage.locator('#join').tap();
+    await playing(qualityPage);
     const standard = await rendering(qualityPage);
     assert.deepEqual(standard.renderSize, { width: 390, height: 844 });
+    await qualityPage.locator('#help-toggle').tap();
     await qualityPage.locator('#diagnostics-toggle').tap();
+    await qualityPage.locator('#help-close').tap();
     await qualityPage.locator('#quality').selectOption('economy');
     const economy = await rendering(qualityPage);
     assert.equal(economy.hardwareScaling, 1.5);

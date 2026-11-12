@@ -31,6 +31,34 @@ function advance(
 }
 
 describe('character animation from displayed motion', () => {
+  it.each([true, false])(
+    'reads backward and side steps relative to the same body yaw (predicted=%s)',
+    (predicted) => {
+      const forward = new CharacterAnimator(4, 14),
+        backward = new CharacterAnimator(4, 14),
+        side = new CharacterAnimator(4, 14);
+      const a = frame(),
+        b = frame(),
+        c = frame();
+      a.velocity.z = 4;
+      b.velocity.z = -4;
+      c.velocity.x = 4;
+      advance(forward, a, 0.4, { predicted });
+      advance(backward, b, 0.4, { predicted });
+      advance(side, c, 0.4, { predicted });
+      expect(Math.abs(forward.pose.leftLeg)).toBeGreaterThan(0.1);
+      expect(backward.pose.leftLeg).toBeCloseTo(-forward.pose.leftLeg);
+      expect(backward.pose.lean).toBeCloseTo(-forward.pose.lean);
+      expect(side.pose.leftLeg).toBeCloseTo(0);
+      expect(Math.abs(side.pose.leftLegRoll)).toBeGreaterThan(0.1);
+      expect(side.pose.rightLegRoll).toBe(-side.pose.leftLegRoll);
+      a.grounded = b.grounded = false;
+      advance(forward, a, 1, { predicted });
+      advance(backward, b, 1, { predicted });
+      expect(backward.pose.leftArm).toBeCloseTo(forward.pose.leftArm);
+      expect(backward.pose.leftLegRoll).toBe(0);
+    },
+  );
   const playback = (id: AnimationId, tick = 60) => ({
     worldEpoch: 'epoch',
     animationId: id,

@@ -3,6 +3,8 @@ export interface AvatarPose {
   rightArm: number;
   leftLeg: number;
   rightLeg: number;
+  leftLegRoll: number;
+  rightLegRoll: number;
   leftArmYaw: number;
   rightArmYaw: number;
   leftArmRoll: number;
@@ -21,6 +23,8 @@ export function restingPose(): AvatarPose {
     rightArm: 0,
     leftLeg: 0,
     rightLeg: 0,
+    leftLegRoll: 0,
+    rightLegRoll: 0,
     leftArmYaw: 0,
     rightArmYaw: 0,
     leftArmRoll: -0.1,
@@ -45,6 +49,7 @@ export function sampleLocomotion(
   const swing = Math.sin(phase) * (0.62 + 0.4 * running) * groundedMovement;
   pose.leftLeg = -swing + 0.2 * airborne;
   pose.rightLeg = swing + 0.2 * airborne;
+  pose.leftLegRoll = pose.rightLegRoll = 0;
   pose.leftArm = swing * 0.8 - 0.3 * airborne;
   pose.rightArm = -swing * 0.8 - 0.3 * airborne;
   pose.leftArmYaw = pose.rightArmYaw = 0;

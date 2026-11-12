@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { WorldLighting } from './lighting';
@@ -11,7 +12,8 @@ describe('world lighting ownership', () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
-    const lighting = new WorldLighting(scene, camera);
+    const eyeCamera = new FreeCamera('eyes', Vector3.Zero(), scene);
+    const lighting = new WorldLighting(scene, camera, [eyeCamera]);
     try {
       const caster = MeshBuilder.CreateBox('caster', {}, scene);
       lighting.shadow.addShadowCaster(caster);
@@ -37,6 +39,11 @@ describe('world lighting ownership', () => {
         expect(palette()).toEqual(initialPalette);
         expect(scene.shadowsEnabled).toBe(quality === 'standard');
         expect(scene.lights).toEqual(lights);
+        if (quality === 'standard') {
+          const pipelines = scene.postProcessRenderPipelineManager.supportedPipelines;
+          expect(pipelines).toHaveLength(1);
+          expect(pipelines[0].cameras).toEqual([camera, eyeCamera]);
+        }
         expect(lighting.shadow.getShadowMap()).toBe(shadowMap);
         expect(shadowMap?.renderList).toHaveLength(1);
         expect(shadowMap?.renderList?.[0]).toBe(caster);

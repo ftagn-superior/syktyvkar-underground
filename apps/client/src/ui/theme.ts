@@ -17,7 +17,9 @@ export function luminance(hex: string): number {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
 const channel = (value: number) =>
-  Math.round(Math.min(255, Math.max(0, value))).toString(16).padStart(2, '0');
+  Math.round(Math.min(255, Math.max(0, value)))
+    .toString(16)
+    .padStart(2, '0');
 export function mixHex(hex: string, toward: string, amount: number): string {
   const a = parseHex(hex);
   const b = parseHex(toward);

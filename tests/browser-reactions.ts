@@ -5,6 +5,7 @@ import { createGameServer } from './helpers/game-server.js';
 import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 // Run after build: the two real browsers share an isolated, freshly created world.
 const app = await createGameServer({
@@ -199,12 +200,12 @@ try {
   assert.equal(await observer.locator('.player-reaction').count(), 0);
   checks.push('restoring a session does not replay an expired reaction');
 
-  await sender.locator('#diagnostics-toggle').click();
-  await sender.locator('#reactions-toggle').click();
+  await hudClick(sender, '#diagnostics-toggle');
+  await hudClick(sender, '#reactions-toggle');
   assert.equal(await sender.locator('#diagnostics').isVisible(), false);
-  await sender.locator('#diagnostics-toggle').click();
+  await hudClick(sender, '#diagnostics-toggle');
   assert.equal(await sender.locator('#reactions-panel').isVisible(), false);
-  await sender.locator('#diagnostics-toggle').click();
+  await hudClick(sender, '#diagnostics-toggle');
   checks.push('diagnostics and reactions do not cover each other');
 
   for (const viewport of [
@@ -214,7 +215,7 @@ try {
     { width: 640, height: 360 },
   ]) {
     await sender.setViewportSize(viewport);
-    await sender.locator('#reactions-toggle').click();
+    await hudClick(sender, '#reactions-toggle');
     await sender.locator('#reactions-panel').waitFor();
     const panel = sender.locator('#reactions-panel');
     const layout = await panel.evaluate((node) => ({

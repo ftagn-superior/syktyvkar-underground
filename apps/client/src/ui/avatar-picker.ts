@@ -38,9 +38,7 @@ export class AvatarPicker {
       this.tabButtons.set(id, button);
       void label;
     }
-    document
-      .getElementById('preview-prev')!
-      .addEventListener('click', () => this.step(-1));
+    document.getElementById('preview-prev')!.addEventListener('click', () => this.step(-1));
     document.getElementById('preview-next')!.addEventListener('click', () => this.step(1));
     this.render();
   }
@@ -136,7 +134,13 @@ export class AvatarPicker {
     };
     for (const { id, label } of FILTERS) {
       const button = this.tabButtons.get(id)!;
-      button.replaceChildren(label, Object.assign(document.createElement('span'), { className: 'c', textContent: String(counts[id]) }));
+      button.replaceChildren(
+        label,
+        Object.assign(document.createElement('span'), {
+          className: 'c',
+          textContent: String(counts[id]),
+        }),
+      );
       button.classList.toggle('is-on', this.filter === id);
       button.setAttribute('aria-pressed', String(this.filter === id));
     }
@@ -181,8 +185,16 @@ export class AvatarPicker {
         const shift = row % 2 ? width / 2 : 0;
         const x = column * width - shift;
         const y = row * height;
-        triangle([[x, y], [x + width, y], [x + width / 2, y + height]]);
-        triangle([[x + width / 2, y + height], [x - width / 2, y + height], [x, y]]);
+        triangle([
+          [x, y],
+          [x + width, y],
+          [x + width / 2, y + height],
+        ]);
+        triangle([
+          [x + width / 2, y + height],
+          [x - width / 2, y + height],
+          [x, y],
+        ]);
       }
   }
 }
@@ -229,6 +241,7 @@ function lockIcon(): SVGSVGElement {
   svg.setAttribute('stroke', 'currentColor');
   svg.setAttribute('stroke-width', '2.4');
   svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = '<rect x="5" y="11" width="14" height="10" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>';
+  svg.innerHTML =
+    '<rect x="5" y="11" width="14" height="10" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>';
   return svg;
 }

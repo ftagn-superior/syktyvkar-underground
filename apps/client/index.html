@@ -128,13 +128,35 @@
           <span class="su-chip" id="preview-index">1 / 2</span>
         </div>
         <div class="su-stagebox">
-          <svg class="su-stage-art" width="520" height="540" viewBox="0 0 520 540" aria-hidden="true">
+          <svg
+            class="su-stage-art"
+            width="520"
+            height="540"
+            viewBox="0 0 520 540"
+            aria-hidden="true"
+          >
             <g fill="var(--accent)" stroke="#ffffff" stroke-opacity="0.04" id="stage-mesh"></g>
             <polygon points="0,430 520,430 520,540 0,540" fill="#0a1012" fill-opacity="0.55" />
-            <polygon points="40,470 260,392 480,470 260,540" fill="var(--accent)" fill-opacity="0.07" />
-            <polygon points="150,460 205,488 205,508 150,480" fill="var(--accent)" fill-opacity="0.5" />
-            <polygon points="205,488 315,488 315,508 205,508" fill="var(--accent)" fill-opacity="0.78" />
-            <polygon points="315,488 370,460 370,480 315,508" fill="var(--accent)" fill-opacity="0.34" />
+            <polygon
+              points="40,470 260,392 480,470 260,540"
+              fill="var(--accent)"
+              fill-opacity="0.07"
+            />
+            <polygon
+              points="150,460 205,488 205,508 150,480"
+              fill="var(--accent)"
+              fill-opacity="0.5"
+            />
+            <polygon
+              points="205,488 315,488 315,508 205,508"
+              fill="var(--accent)"
+              fill-opacity="0.78"
+            />
+            <polygon
+              points="315,488 370,460 370,480 315,508"
+              fill="var(--accent)"
+              fill-opacity="0.34"
+            />
             <polygon
               points="150,460 205,432 315,432 370,460 315,488 205,488"
               fill="#172126"
@@ -151,11 +173,45 @@
           </svg>
           <img id="preview-fallback" class="su-figbig" alt="" width="220" height="352" />
           <canvas id="preview-canvas" class="su-figbig live" aria-hidden="true" hidden></canvas>
-          <button id="preview-prev" class="su-arrow l" type="button" aria-label="Предыдущий персонаж">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          <button
+            id="preview-prev"
+            class="su-arrow l"
+            type="button"
+            aria-label="Предыдущий персонаж"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
           </button>
-          <button id="preview-next" class="su-arrow r" type="button" aria-label="Следующий персонаж">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          <button
+            id="preview-next"
+            class="su-arrow r"
+            type="button"
+            aria-label="Следующий персонаж"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
         <div class="su-plate" aria-live="polite">
@@ -177,7 +233,7 @@
         </fieldset>
       </section>
     </main>
-    <div id="notice" class="notice" role="status" hidden></div>
+    <div id="notice" class="notice su-facet" role="status" hidden></div>
     <section
       id="graphics-recovery"
       class="graphics-recovery"
@@ -193,143 +249,194 @@
       </p>
       <button id="graphics-reload" class="button primary">Перезагрузить страницу</button>
     </section>
-    <footer class="bottom-bar">
-      <div class="controls">
-        <div class="keys" aria-hidden="true">
-          <kbd>W</kbd>
-          <div><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
-        </div>
-        <div>
-          <strong id="controls-title">Свободное движение</strong>
-          <span id="controls-description"
-            >WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера</span
-          >
-        </div>
+    <button
+      id="help-toggle"
+      class="su-help-btn"
+      type="button"
+      aria-label="Управление и меню"
+      aria-expanded="false"
+      aria-controls="help-panel"
+      aria-keyshortcuts="H"
+    >
+      ?
+    </button>
+    <div id="help-tip" class="su-pop su-coach su-facet" role="status" hidden>
+      <p>Интерфейс скрыт. Управление и меню — здесь.</p>
+      <button id="help-tip-ok" class="su-btn accent" type="button">Понятно</button>
+    </div>
+    <section id="help-panel" class="su-pop su-help su-facet" aria-labelledby="help-title" hidden>
+      <span class="su-corner"></span>
+      <div class="su-help-head">
+        <h2 id="help-title" class="su-h"><span class="su-gem"></span>Управление</h2>
+        <button id="help-close" class="su-close" type="button" aria-label="Закрыть (Esc)">×</button>
       </div>
-      <div class="actions">
+      <p class="su-sub">Кнопки действий появляются сами, когда вы подходите к предмету.</p>
+      <div class="su-row mode">
+        <span><strong id="controls-title">Свободное движение</strong></span>
+      </div>
+      <p class="su-mode-note" id="controls-description"></p>
+      <div class="su-row" data-touch-hidden>
+        <span>Ходьба</span
+        ><span class="k"
+          ><kbd class="su-kbd">W</kbd><kbd class="su-kbd">A</kbd><kbd class="su-kbd">S</kbd
+          ><kbd class="su-kbd">D</kbd><span class="su-or">или</span><kbd class="su-kbd">↑</kbd
+          ><kbd class="su-kbd">↓</kbd><kbd class="su-kbd">←</kbd><kbd class="su-kbd">→</kbd></span
+        >
+      </div>
+      <div class="su-row" data-touch-hidden>
+        <span>Бег</span><span class="k"><kbd class="su-kbd">Shift</kbd></span>
+      </div>
+      <div class="su-row" data-touch-hidden>
+        <span>Камера</span
+        ><span class="k"
+          ><kbd class="su-kbd">Q</kbd><kbd class="su-kbd">E</kbd><span class="su-or">или</span
+          ><kbd class="su-kbd">ПКМ</kbd></span
+        >
+      </div>
+      <div class="su-row"><span>Действие</span><span class="hint">по подсказке</span></div>
+      <div id="help-menu-rows" class="su-menu-rows">
         <button
           id="chat-toggle"
-          class="button quiet"
+          class="su-row su-row-btn"
+          type="button"
           aria-expanded="false"
           aria-controls="chat-console"
           aria-keyshortcuts="T"
           hidden
         >
-          Чат <kbd>T</kbd>
+          <span>Чат</span><kbd class="su-kbd">T</kbd>
         </button>
-        <div class="reactions-control">
-          <button
-            id="reactions-toggle"
-            class="button quiet"
-            aria-expanded="false"
-            aria-controls="reactions-panel"
-            aria-keyshortcuts="R"
-            hidden
-          >
-            Реакции <kbd>R</kbd>
-          </button>
-          <section
-            id="reactions-panel"
-            class="reactions-panel hud-panel"
-            aria-labelledby="reactions-title"
-            hidden
-          >
-            <div class="catalog-heading">
-              <div>
-                <span class="catalog-eyebrow">Быстрый выбор</span>
-                <h2 id="reactions-title">
-                  Реакции <span class="catalog-count" data-catalog-count></span>
-                </h2>
-              </div>
-              <button
-                class="reaction-close catalog-close"
-                data-close
-                aria-label="Закрыть реакции (Escape)"
-                title="Закрыть (Esc)"
-              >
-                ×
-              </button>
-            </div>
-            <p class="catalog-description">
-              В покое стикер остаётся над персонажем. После начала движения исчезнет через 5 секунд.
-              Прокрутите каталог, чтобы увидеть все реакции.
-            </p>
-            <div class="reaction-choices" role="group" aria-label="Выбор реакции"></div>
-            <div class="catalog-feedback">
-              <p id="reactions-status" class="catalog-status" role="status"></p>
-              <progress
-                class="reaction-cooldown"
-                aria-label="Ожидание следующей реакции"
-                hidden
-              ></progress>
-            </div>
-            <div class="catalog-footer">
-              <span>1–9 — первые девять</span>
-              <span><kbd>Esc</kbd> закрыть</span>
-            </div>
-          </section>
-        </div>
-        <div class="reactions-control">
-          <button
-            id="animations-toggle"
-            class="button quiet"
-            aria-expanded="false"
-            aria-controls="animations-panel"
-            aria-keyshortcuts="F"
-            hidden
-          >
-            Анимации <kbd>F</kbd>
-          </button>
-          <section
-            id="animations-panel"
-            class="reactions-panel animation-panel hud-panel"
-            aria-labelledby="animations-title"
-            hidden
-          >
-            <div class="catalog-heading">
-              <div>
-                <span class="catalog-eyebrow">В движении</span>
-                <h2 id="animations-title">
-                  Анимации <span class="catalog-count" data-catalog-count></span>
-                </h2>
-              </div>
-              <button
-                class="reaction-close catalog-close"
-                data-close
-                aria-label="Закрыть анимации (Escape)"
-                title="Закрыть (Esc)"
-              >
-                ×
-              </button>
-            </div>
-            <p class="catalog-description">
-              Общайтесь, танцуйте и разминайтесь. Прокрутите каталог, чтобы увидеть все анимации.
-            </p>
-            <div class="animation-choices" role="group" aria-label="Выбор анимации"></div>
-            <div class="catalog-feedback">
-              <p id="animations-status" class="catalog-status" role="status"></p>
-            </div>
-            <div class="catalog-footer">
-              <span>1–9 — первые девять</span><span><kbd>Esc</kbd> закрыть</span>
-            </div>
-          </section>
-        </div>
-        <button id="respawn" class="button quiet" hidden>
-          ↺ <span id="respawn-label">На старт</span></button
-        ><button id="leave" class="button quiet" hidden>Выйти</button
-        ><button
-          id="diagnostics-toggle"
-          class="icon-button"
-          aria-label="Диагностика"
+        <button
+          id="reactions-toggle"
+          class="su-row su-row-btn"
+          type="button"
           aria-expanded="false"
-          title="Диагностика"
+          aria-controls="reactions-panel"
+          aria-keyshortcuts="R"
+          hidden
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 17v-4m5 4V7m5 10V4m5 13v-7" />
-          </svg>
+          <span>Реакции</span><kbd class="su-kbd">R</kbd>
+        </button>
+        <button
+          id="animations-toggle"
+          class="su-row su-row-btn"
+          type="button"
+          aria-expanded="false"
+          aria-controls="animations-panel"
+          aria-keyshortcuts="F"
+          hidden
+        >
+          <span>Анимации</span><kbd class="su-kbd">F</kbd>
         </button>
       </div>
-    </footer>
+      <div class="su-row" data-touch-hidden>
+        <span>Это меню</span><span class="k"><kbd class="su-kbd">H</kbd></span>
+      </div>
+      <button
+        id="diagnostics-toggle"
+        class="su-row su-row-btn"
+        type="button"
+        aria-expanded="false"
+        aria-controls="diagnostics"
+      >
+        <span>Диагностика соединения</span>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 17v-4m5 4V7m5 10V4m5 13v-7" />
+        </svg>
+      </button>
+      <div class="su-help-foot">
+        <span class="su-online"
+          ><span class="su-gem sm"></span><span id="help-online">0 / 8 в сети</span></span
+        >
+        <span class="su-btns">
+          <button id="respawn" class="su-btn" type="button" hidden>
+            ⟲ <span id="respawn-label">На старт</span>
+          </button>
+          <button id="leave" class="su-btn" type="button" hidden>Выйти</button>
+        </span>
+      </div>
+    </section>
+    <section
+      id="reactions-panel"
+      class="reactions-panel hud-panel"
+      aria-labelledby="reactions-title"
+      hidden
+    >
+      <div class="catalog-heading">
+        <div>
+          <span class="catalog-eyebrow">Быстрый выбор</span>
+          <h2 id="reactions-title">
+            Реакции <span class="catalog-count" data-catalog-count></span>
+          </h2>
+        </div>
+        <button
+          class="reaction-close catalog-close"
+          data-close
+          aria-label="Закрыть реакции (Escape)"
+          title="Закрыть (Esc)"
+        >
+          ×
+        </button>
+      </div>
+      <p class="catalog-description">
+        В покое стикер остаётся над персонажем. После начала движения исчезнет через 5 секунд.
+        Прокрутите каталог, чтобы увидеть все реакции.
+      </p>
+      <div class="reaction-choices" role="group" aria-label="Выбор реакции"></div>
+      <div class="catalog-feedback">
+        <p id="reactions-status" class="catalog-status" role="status"></p>
+        <progress
+          class="reaction-cooldown"
+          aria-label="Ожидание следующей реакции"
+          hidden
+        ></progress>
+      </div>
+      <div class="catalog-footer">
+        <span>1–9 — первые девять</span><span><kbd>Esc</kbd> закрыть</span>
+      </div>
+    </section>
+    <section
+      id="animations-panel"
+      class="reactions-panel animation-panel hud-panel"
+      aria-labelledby="animations-title"
+      hidden
+    >
+      <div class="catalog-heading">
+        <div>
+          <span class="catalog-eyebrow">В движении</span>
+          <h2 id="animations-title">
+            Анимации <span class="catalog-count" data-catalog-count></span>
+          </h2>
+        </div>
+        <button
+          class="reaction-close catalog-close"
+          data-close
+          aria-label="Закрыть анимации (Escape)"
+          title="Закрыть (Esc)"
+        >
+          ×
+        </button>
+      </div>
+      <p class="catalog-description">
+        Общайтесь, танцуйте и разминайтесь. Прокрутите каталог, чтобы увидеть все анимации.
+      </p>
+      <div class="animation-choices" role="group" aria-label="Выбор анимации"></div>
+      <div class="catalog-feedback">
+        <p id="animations-status" class="catalog-status" role="status"></p>
+      </div>
+      <div class="catalog-footer">
+        <span>1–9 — первые девять</span><span><kbd>Esc</kbd> закрыть</span>
+      </div>
+    </section>
     <form
       id="chat-console"
       class="chat-console"

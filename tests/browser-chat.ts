@@ -8,6 +8,7 @@ import {
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 // Run after build with SU_TEST_DATABASE_URL to use a disposable database schema.
 const app = await createGameServer({
@@ -99,6 +100,7 @@ try {
   await sender.keyboard.press('Escape');
   await sender.keyboard.press('t');
   assert.equal(await sender.locator('#chat-input').inputValue(), '');
+  await sender.locator('#help-toggle').click();
   await sender.locator('#chat-toggle').focus();
   await sender.keyboard.press('Escape');
   assert.equal(await sender.locator('#chat-console').isVisible(), false);
@@ -174,7 +176,7 @@ try {
     'Enter delivers literal text to both players; text follows the character and camera, coexists with reactions, and expires five seconds after movement even after stopping',
   );
 
-  await sender.locator('#chat-toggle').click();
+  await hudClick(sender, '#chat-toggle');
   await input.fill('я'.repeat(CHAT_MAX_LENGTH - 1));
   await input.press('End');
   await sender.keyboard.type('абв');
@@ -201,7 +203,7 @@ try {
     { width: 640, height: 360 },
   ]) {
     await sender.setViewportSize(viewport);
-    await sender.locator('#chat-toggle').click();
+    await hudClick(sender, '#chat-toggle');
     for (const selector of ['#chat-console', '#chat-input', '#chat-send', bubble]) {
       assert.equal(
         await sender.locator(selector).evaluate((node) => {
@@ -238,12 +240,12 @@ try {
   await playing(observer);
   assert.equal(await observer.locator('.player-chat').count(), 0);
   checks.push('reloading a session does not replay an expired message');
-  await sender.locator('#chat-toggle').click();
+  await hudClick(sender, '#chat-toggle');
   await input.fill('До встречи!');
   await sender.locator('#chat-send:not([disabled])').waitFor();
   await input.press('Enter');
   await observer.locator(bubble).waitFor();
-  await sender.locator('#leave').click();
+  await hudClick(sender, '#leave');
   await observer.locator(bubble).waitFor({ state: 'detached', timeout: 2000 });
   checks.push(
     'chat works with the minifigure skin and is removed with the avatar when its player leaves',

@@ -269,7 +269,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       name: auth?.profile.displayName ?? `Гость ${ordinal}`,
       skinId: auth?.profile.skinId ?? findAvatarSkin(options.skinId)?.id ?? DEFAULT_AVATAR_SKIN,
       color:
-        (auth ? (resolveProfileColor(auth.profile.colorId)?.hex ?? PROFILE_COLORS[0].hex) : undefined) ??
+        (auth
+          ? (resolveProfileColor(auth.profile.colorId)?.hex ?? PROFILE_COLORS[0].hex)
+          : undefined) ??
         PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
         PLAYER_COLORS[ordinal % PLAYER_COLORS.length],
       lastRequest: 0,

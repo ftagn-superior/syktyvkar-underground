@@ -80,7 +80,9 @@ export class CharacterPreview {
       const delta = Math.min(0.1, this.engine.getDeltaTime() / 1000);
       this.idleTime += delta;
       if (!this.dragging && !this.reducedMotion.matches) this.yaw += delta * 0.45;
-      const bob = this.reducedMotion.matches ? 0 : Math.sin((this.idleTime / 3.2) * Math.PI * 2) * 0.03;
+      const bob = this.reducedMotion.matches
+        ? 0
+        : Math.sin((this.idleTime / 3.2) * Math.PI * 2) * 0.03;
       this.root.position.y = config.height / 2 + bob;
       this.root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), this.yaw);
       this.view.update(this.player, delta, false, this.reducedMotion.matches);

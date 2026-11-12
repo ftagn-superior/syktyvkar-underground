@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { hudClick } from './helpers/hud.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('Use pnpm test:accounts:browser.');
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
@@ -20,7 +21,7 @@ try {
   await page.locator('#telegram-login').waitFor({ state: 'visible' });
   await page.locator('#telegram-login').click();
   await page.locator('#profile-form').waitFor({ state: 'visible' });
-  await page.locator('#profile-name').fill('Игрок из Сыктывкара');
+  await page.locator('#profile-name').fill('Игрок Сыктывкара');
   await page.locator('input[name="profile-color"][value="indigo"]').check();
   await page.locator('input[name="avatar-skin"][value="standard"]').check();
   await mkdir('output/playwright', { recursive: true });
@@ -31,18 +32,18 @@ try {
     () => document.querySelector('#connection-status')?.textContent === 'В сети',
   );
   const first = await page.evaluate(async () => (await fetch('/api/me')).json());
-  assert.equal(first.account.profile.displayName, 'Игрок из Сыктывкара');
+  assert.equal(first.account.profile.displayName, 'Игрок Сыктывкара');
   assert.equal(first.account.profile.skinId, 'standard');
   assert.equal(first.account.profile.colorId, 'indigo');
   await page.waitForFunction(
     () => document.querySelector('#connection-status')?.textContent === 'В сети',
   );
   await page.waitForFunction(() =>
-    document.querySelector('.player-label')?.textContent?.includes('Игрок из Сыктывкара'),
+    document.querySelector('.player-label')?.textContent?.includes('Игрок Сыктывкара'),
   );
   assert.equal([...app.room.state.players.values()][0].color, '#7D86F0');
   assert.equal([...app.room.state.players.values()][0].skinId, 'standard');
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   // Entering saves a changed selection before the server reads the account profile.
   await page.locator('input[name="avatar-skin"][value="minifigure"]').check();
@@ -55,14 +56,14 @@ try {
     (await page.evaluate(async () => (await fetch('/api/me')).json())).account.profile.skinId,
     'minifigure',
   );
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await page.locator('#profile-form').waitFor({ state: 'visible' });
   await app.close();
   app = await createGameServer({ port: 0, accounts: fixture });
   fixture.config.publicOrigin = app.url;
   await page.goto(app.url);
   await page.locator('#profile-form').waitFor({ state: 'visible' });
-  assert.equal(await page.locator('#profile-name').inputValue(), 'Игрок из Сыктывкара');
+  assert.equal(await page.locator('#profile-name').inputValue(), 'Игрок Сыктывкара');
   assert.equal(await page.locator('input[name="profile-color"]:checked').inputValue(), 'indigo');
   assert.equal(await page.locator('input[name="avatar-skin"]:checked').inputValue(), 'minifigure');
   const other = await browser.newContext({ viewport: { width: 960, height: 720 } });
@@ -81,7 +82,7 @@ try {
   await second.waitForFunction(() =>
     document.querySelector('#notice')?.textContent?.includes('уже находится в игре'),
   );
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await page.locator('#account-logout').click();
   await page.locator('#telegram-login').waitFor({ state: 'visible' });
   assert.equal((await page.evaluate(async () => (await fetch('/api/me')).json())).account, null);

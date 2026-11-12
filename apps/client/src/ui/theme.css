@@ -85,7 +85,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0 34%, rgba(255, 255, 255, 0.06) 34%);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.14) 0 34%,
+    rgba(255, 255, 255, 0.06) 34%
+  );
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
@@ -106,13 +110,21 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
 }
 .su-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.14);
 }
 .su-btn.accent {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 30%, transparent 30%), var(--accent);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 30%, transparent 30%), var(--accent);
   color: var(--accent-ink);
 }
 .su-btn:disabled {

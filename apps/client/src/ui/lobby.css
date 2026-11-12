@@ -330,8 +330,20 @@ body[data-scene='world'] .topbar {
 }
 .su-wheel .su-hx-i {
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.3) 0 34%, transparent 34% 62%, rgba(0, 0, 0, 0.18) 62%),
-    conic-gradient(#ef6b6b 0 60deg, #f5c451 60deg 120deg, #a7d96a 120deg 180deg, #4fc9e0 180deg 240deg, #7d86f0 240deg 300deg, #f28ab8 300deg 360deg);
+    linear-gradient(
+      150deg,
+      rgba(255, 255, 255, 0.3) 0 34%,
+      transparent 34% 62%,
+      rgba(0, 0, 0, 0.18) 62%
+    ),
+    conic-gradient(
+      #ef6b6b 0 60deg,
+      #f5c451 60deg 120deg,
+      #a7d96a 120deg 180deg,
+      #4fc9e0 180deg 240deg,
+      #7d86f0 240deg 300deg,
+      #f28ab8 300deg 360deg
+    );
 }
 .su-wheel .su-hx-c {
   width: 14px;
@@ -355,7 +367,12 @@ body[data-scene='world'] .topbar {
   padding: 0 24px;
   border: 0;
   background:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 28%, transparent 28% 72%, rgba(0, 0, 0, 0.14) 72%),
+    linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.3) 0 28%,
+      transparent 28% 72%,
+      rgba(0, 0, 0, 0.14) 72%
+    ),
     var(--accent);
   color: var(--accent-ink);
   font-family: var(--font-display);
@@ -367,7 +384,14 @@ body[data-scene='world'] .topbar {
   gap: 16px;
   cursor: pointer;
   flex: none;
-  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
   transition:
     filter 0.15s,
     transform 0.08s;
@@ -553,7 +577,8 @@ body[data-scene='world'] .topbar {
   background: rgba(255, 255, 255, 0.12);
 }
 .su-tab.is-on {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 30%, transparent 30%), var(--accent);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 30%, transparent 30%), var(--accent);
   color: var(--accent-ink);
 }
 .su-tab:focus-visible {
@@ -611,7 +636,14 @@ body[data-scene='world'] .topbar {
   inset: 0;
   z-index: -1;
   background: rgba(255, 255, 255, 0.1);
-  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  clip-path: polygon(
+    12px 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%,
+    0 12px
+  );
   transition: background 0.15s;
 }
 .su-card::after {
@@ -620,7 +652,14 @@ body[data-scene='world'] .topbar {
   inset: 2px;
   z-index: -1;
   background: var(--card);
-  clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+  clip-path: polygon(
+    11px 0,
+    100% 0,
+    100% calc(100% - 11px),
+    calc(100% - 11px) 100%,
+    0 100%,
+    0 11px
+  );
 }
 .su-card:hover::before {
   background: rgba(255, 255, 255, 0.26);
@@ -629,9 +668,7 @@ body[data-scene='world'] .topbar {
   background: var(--accent);
 }
 .su-card.is-on::after {
-  background:
-    linear-gradient(var(--accent-soft), var(--accent-soft)),
-    var(--card);
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--card);
 }
 .su-card:has(input:focus-visible) {
   outline: 2px solid var(--ink);

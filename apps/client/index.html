@@ -121,6 +121,14 @@
             Выйти из аккаунта
           </button>
         </div>
+        <button
+          id="audio-lobby-toggle"
+          class="su-link audio-lobby-toggle"
+          type="button"
+          aria-pressed="true"
+        >
+          Звук включён
+        </button>
       </section>
       <section class="su-win su-preview su-facet" aria-label="Предпросмотр персонажа">
         <div class="su-win-head">
@@ -275,6 +283,25 @@
         <span><strong id="controls-title">Свободное движение</strong></span>
       </div>
       <p class="su-mode-note" id="controls-description"></p>
+      <details class="audio-settings">
+        <summary>Звуки</summary>
+        <button id="audio-toggle" class="su-row su-row-btn" type="button" aria-pressed="true">
+          Звук включён
+        </button>
+        <label for="audio-volume"
+          >Общая громкость <output id="audio-volume-value" for="audio-volume">100%</output></label
+        >
+        <input id="audio-volume" type="range" min="0" max="100" value="100" />
+        <label for="audio-world-volume"
+          >Окружение
+          <output id="audio-world-volume-value" for="audio-world-volume">100%</output></label
+        >
+        <input id="audio-world-volume" type="range" min="0" max="100" value="100" />
+        <label for="audio-ui-volume"
+          >Интерфейс <output id="audio-ui-volume-value" for="audio-ui-volume">100%</output></label
+        >
+        <input id="audio-ui-volume" type="range" min="0" max="100" value="100" />
+      </details>
       <div class="su-row" data-touch-hidden>
         <span>Ходьба</span
         ><span class="k"

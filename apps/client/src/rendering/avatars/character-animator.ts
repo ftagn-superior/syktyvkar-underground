@@ -25,9 +25,16 @@ const TAU = Math.PI * 2;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const angleDifference = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
+export interface FootstepMarkers {
+  /** Contacts crossed in this displayed frame, not accumulated physics steps. */
+  count: number;
+  running: boolean;
+}
+
 /** One visual update per rendered frame, never from a physics replay step. */
 export class CharacterAnimator {
   readonly pose = restingPose();
+  readonly footsteps: FootstepMarkers = { count: 0, running: false };
   private previous?: { x: number; z: number; revision: number; motionRevision: number };
   private phase = 0;
   private speed = 0;
@@ -49,9 +56,11 @@ export class CharacterAnimator {
 
   resetMotion(): void {
     this.previous = undefined;
+    this.footsteps.count = 0;
   }
 
   update(frame: AvatarMotion, delta: number, predicted: boolean, reducedMotion = false) {
+    this.footsteps.count = 0;
     const previousPose = { ...this.pose };
     const q = frame.rotation;
     // Remote quaternion components are interpolated before the root normalizes them.
@@ -101,7 +110,11 @@ export class CharacterAnimator {
       this.airborne += ((frame.grounded ? 0 : 1) - this.airborne) * blend;
       if (moving) {
         const cyclesPerSecond = 1.85 * clamp(this.speed / this.walkSpeed) + 0.95 * this.running;
-        this.phase = (this.phase + TAU * cyclesPerSecond * delta) % TAU;
+        const nextPhase = this.phase + TAU * cyclesPerSecond * delta;
+        // The procedural body's vertical motion reaches the ground at 0 and PI.
+        // Count crossings before wrapping so one cycle has exactly two contacts.
+        this.footsteps.count = Math.floor(nextPhase / Math.PI) - Math.floor(this.phase / Math.PI);
+        this.phase = nextPhase % TAU;
       }
       this.yaw += angleDifference(targetYaw - this.yaw) * (1 - Math.exp(-18 * delta));
     }
@@ -112,6 +125,7 @@ export class CharacterAnimator {
         : this.speed > this.walkSpeed * 1.15
           ? 'run'
           : 'walk';
+    this.footsteps.running = this.mode === 'run';
     sampleLocomotion(
       this.pose,
       this.phase,

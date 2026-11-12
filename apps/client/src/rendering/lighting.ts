@@ -226,6 +226,11 @@ export class WorldLighting {
     this.staticShadow.invalidate();
   }
 
+  /** Direction the direct light travels. Read-only for callers. */
+  get lightDirection(): Vector3 {
+    return this.sun.direction;
+  }
+
   /** Shadow maps and caster counts for the diagnostic report. */
   shadowDiagnostics() {
     return {

@@ -30,6 +30,7 @@ import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldLighting } from './lighting';
+import { WorldClouds } from './clouds';
 import { BuildingViews } from './buildings';
 import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
@@ -69,6 +70,8 @@ export class WorldView {
   readonly scene: Scene;
   private readonly camera: ArcRotateCamera;
   private readonly lighting: WorldLighting;
+  private readonly clouds: WorldClouds;
+  private readonly cloudTint = Color3.FromHexString('#f4f1ea');
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
@@ -153,6 +156,8 @@ export class WorldView {
     this.camera.maxZ = 300;
     this.camera.inputs.clear();
     this.lighting = new WorldLighting(this.scene, this.camera);
+    // Before any world material exists: cloud shadows attach to materials as they are created.
+    this.clouds = new WorldClouds(this.scene, this.camera);
     this.shadow = this.lighting.shadow;
     this.applyQuality();
     this.sizeCamera();
@@ -206,6 +211,14 @@ export class WorldView {
         true, // Following translates the rig; pitch, orbit angle and radius remain fixed.
       );
       this.lighting.follow(this.camera.target);
+      this.clouds.update({
+        epochMs: Date.now(),
+        lightDirection: this.lighting.lightDirection,
+        lightStrength: 1,
+        tint: this.cloudTint,
+        zoom: this.zoom,
+        visible: this.radial,
+      });
       // Update the orbit before casting parallel orthographic rays; alpha may be mid-turn.
       this.camera.getViewMatrix(true);
       this.buildings.update(
@@ -247,6 +260,7 @@ export class WorldView {
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
     this.lighting.setQuality(this.quality);
+    this.clouds.setEnabled(renderQualitySettings(this.quality).clouds);
   }
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
@@ -844,6 +858,7 @@ export class WorldView {
     this.statics.dispose();
     this.instrumentation.dispose();
     const releaseGraphics = () => {
+      this.clouds.dispose();
       this.lighting.dispose();
       this.scene.dispose();
       this.engine.dispose();

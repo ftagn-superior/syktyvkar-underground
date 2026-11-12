@@ -160,7 +160,11 @@ export class TreeViews {
         ? Material.MATERIAL_ALPHABLEND
         : Material.MATERIAL_OPAQUE;
       new TreeMaterial(material, this.radial, recipe.foliage);
-      material.shadowDepthWrapper = new ShadowDepthWrapper(material, this.scene);
+      // Standalone: the depth shader must not wait for the batch to be drawn on screen first.
+      // A chunk beside the view still casts into it, and may never enter the main pass.
+      material.shadowDepthWrapper = new ShadowDepthWrapper(material, this.scene, {
+        standalone: true,
+      });
       this.materials.set(materialKey, material);
     }
     const mesh = template.clone(`tree-batch:${key}`, null, true)!;

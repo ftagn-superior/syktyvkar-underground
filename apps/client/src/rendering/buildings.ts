@@ -271,10 +271,15 @@ export class BuildingViews {
     const minimum = metresPerPixel * MIN_VISIBLE_PIXELS;
     if (minimum === this.minimumVisibleSize) return;
     this.minimumVisibleSize = minimum;
+    let changed = false;
     for (const view of this.instances) {
       const enabled = view.size >= minimum;
-      if (view.root.isEnabled(false) !== enabled) view.root.setEnabled(enabled);
+      if (view.root.isEnabled(false) === enabled) continue;
+      view.root.setEnabled(enabled);
+      changed = true;
     }
+    // Hidden objects stop casting without leaving the caster list.
+    if (changed) this.shadow.getShadowMap()?.resetRefreshCounter();
   }
   /**
    * Копии материалов нужны только для затухания. Пока здание непрозрачно, оно рисуется

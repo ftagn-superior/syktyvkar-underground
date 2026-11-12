@@ -156,8 +156,14 @@ export class WorldView {
     this.shadow = this.lighting.shadow;
     this.applyQuality();
     this.sizeCamera();
-    this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
-    this.statics = new StaticViews(this.scene, this.shadow);
+    // Неподвижный мир отбрасывает тени в кэшируемую карту; аватары и предметы — в покадровую.
+    this.buildings = new BuildingViews(
+      this.scene,
+      this.lighting.staticShadow,
+      definition,
+      this.radial,
+    );
+    this.statics = new StaticViews(this.scene, this.lighting.staticShadow);
     this.sizeCamera();
     if ('entities' in definition) {
       for (const entity of definition.entities)
@@ -350,6 +356,7 @@ export class WorldView {
     );
   }
   renderingDiagnostics() {
+    const shadows = this.lighting.shadowDiagnostics();
     return {
       quality: this.quality,
       canvasSize: { width: this.canvas.clientWidth, height: this.canvas.clientHeight },
@@ -367,7 +374,8 @@ export class WorldView {
       geometries: this.scene.geometries.length,
       nodes: this.scene.transformNodes.length,
       textures: this.scene.textures.length,
-      shadowCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
+      shadowCasters: shadows.staticCasters + shadows.dynamicCasters,
+      shadowMaps: shadows,
       streaming: {
         drawRadius: this.graphicalArea().drawRadius,
         readyRadius: this.streamingRadius,

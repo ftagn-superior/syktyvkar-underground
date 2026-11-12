@@ -271,6 +271,8 @@ export class TreeViews {
       mesh.setBoundingInfo(new BoundingInfo(minimum, maximum));
       mesh.setEnabled(true);
     }
+    // A batch keeps its place in the caster list while its instances change.
+    if (this.dirty.size) this.shadows.getShadowMap()?.resetRefreshCounter();
     this.dirty.clear();
   }
   aggregateDiagnostics() {

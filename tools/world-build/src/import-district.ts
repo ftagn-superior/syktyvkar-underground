@@ -226,6 +226,20 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       if (key !== 'note' && !(OVERRIDABLE as readonly string[]).includes(key))
         throw new Error(`Building override ${osm} has unsupported field ${key}`);
   }
+  // Одно здание бывает в OSM дважды (линия и мультиполигон с тем же контуром).
+  // Остаётся одна копия: с ручной правкой, иначе линия `way/`.
+  const outlineKey = (b: (typeof selected)[number]) =>
+    b.p[0]
+      .map(([x, y]) => `${Math.round(x * 10)},${Math.round(y * 10)}`)
+      .sort()
+      .join(';');
+  const rank = (id: string) => (overrides[id] ? 0 : id.startsWith('way/') ? 1 : 2);
+  const keeper = new Map<string, string>();
+  for (const b of selected) {
+    const key = outlineKey(b),
+      current = keeper.get(key);
+    if (!current || rank(b.id) < rank(current)) keeper.set(key, b.id);
+  }
   // Снимок OSM необязателен: без него участок собирается только из прототипа.
   const snapshot: OsmSnapshot | undefined = config.osm
     ? await readFile(resolve(root, config.osm.snapshot), 'utf8').then(JSON.parse, () => undefined)
@@ -262,6 +276,11 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   let tallest = 10;
   const identity = { x: 0, y: 0, z: 0, w: 1 };
   for (const b of selected.sort((a, z) => (a.id < z.id ? -1 : 1))) {
+    const duplicateOf = keeper.get(outlineKey(b));
+    if (duplicateOf !== b.id) {
+      report.skipped.push(`${b.id}: дубликат ${duplicateOf}`);
+      continue;
+    }
     const outline = cleanRing(b.p[0].map(toGame));
     if (outline.length < 3 || Math.abs(signedArea(outline)) < 4) {
       report.skipped.push(`${b.id}: вырожденный контур`);
@@ -543,15 +562,6 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
       character: { height: 1.8, radius, speed: 4, sprintSpeed: 14, mass: 70 },
     },
     spawnPoints: config.spawnPoints,
-    itemCatalog: relative(worldDir, 'content/items/catalog.json').replaceAll('\\', '/'),
-    initialItems: [
-      {
-        seedId: 'crate-01',
-        typeId: 'wooden-crate',
-        position: config.crate,
-        rotation: { x: 0, y: 0, z: 0, w: 1 },
-      },
-    ],
     entities: [
       wall('boundary-north', { x: midX, y: 0.75, z: minZ + 0.25 }, { x: width, y: 1.5, z: 0.5 }),
       wall('boundary-south', { x: midX, y: 0.75, z: maxZ - 0.25 }, { x: width, y: 1.5, z: 0.5 }),
@@ -565,6 +575,16 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     }),
     cells: ['cells/0_0.json'],
     assetCatalog: relative(worldDir, join(buildingsDir, 'catalog.json')).replaceAll('\\', '/'),
+    // Порядок ключей совпадает с world.json в репозитории, чтобы импорт не давал лишних правок.
+    itemCatalog: relative(worldDir, 'content/items/catalog.json').replaceAll('\\', '/'),
+    initialItems: [
+      {
+        seedId: 'crate-01',
+        typeId: 'wooden-crate',
+        position: config.crate,
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    ],
   };
   await mkdir(join(worldDir, 'cells'), { recursive: true });
   await writeFile(

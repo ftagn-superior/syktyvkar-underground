@@ -352,9 +352,37 @@ describe('детали фасадов и модели из конструкто�
     expect(() =>
       generateFootprint('test-sign', {
         ...base,
-        details: { roofSign: { facing: 'S', text: 'Ы', width: 6, height: 2, color: '#ffffff' } },
+        details: { roofSign: { facing: 'S', text: 'Ж', width: 6, height: 2, color: '#ffffff' } },
       }),
     ).toThrow(/glyph/);
+  });
+
+  it('надпись на стене висит на нужной высоте прямо на южном фасаде', () => {
+    const { parts } = generateFootprint('test-wall-text', {
+      ...base,
+      details: {
+        wallText: [
+          {
+            facing: 'S',
+            text: 'СЫКТЫВКАРСКИЙ УНИВЕРСИТЕТ',
+            fromTop: 1,
+            height: 1.4,
+            width: 20,
+            color: '#c9a64a',
+          },
+        ],
+      },
+    });
+    const text = parts.find((p) => p.partId === 'wall-text-0')!;
+    expect(text).toBeDefined();
+    const axis = (k: number) => text.positions.filter((_, i) => i % 3 === k);
+    // Верх строки на метр ниже верха стены (15 м), высота строки не больше заданной.
+    expect(Math.max(...axis(1))).toBeCloseTo(14, 6);
+    expect(Math.min(...axis(1))).toBeGreaterThanOrEqual(14 - 1.4 - 1e-9);
+    // Буквы чуть выступают из южной стены z = 6 и не выходят за её ширину.
+    expect(Math.min(...axis(2))).toBeGreaterThan(6);
+    expect(Math.max(...axis(2))).toBeLessThan(6.2);
+    expect(Math.max(...axis(0).map(Math.abs))).toBeLessThanOrEqual(10 + 1e-9);
   });
 
   it('конструктор собирает части, цилиндры и повёрнутые коробки столкновений', () => {
@@ -422,6 +450,9 @@ describe('детали фасадов и модели из конструкто�
   });
 });
 
+const byAssetCount = (definition: { buildings: { assetId: string }[] }, assetId: string) =>
+  definition.buildings.filter((b) => b.assetId === assetId).length;
+
 describe('мир ring-block', () => {
   let temporary: string;
   let release: string;
@@ -442,7 +473,14 @@ describe('мир ring-block', () => {
       'Баня №4',
       'Театр оперы и балета',
       'Театральная площадь',
+      'СыктГУ им. Питирима Сорокина',
     ]);
+    // Главный корпус СыктГУ: дубликат-мультиполигон из OSM отброшен, остался уточнённый контур.
+    expect(definition.buildings.some((b) => b.assetId === 'osm-relation-13601216')).toBe(false);
+    expect(definition.buildingAssets['osm-way-1258973447'].colliders.map((c) => c.id)).toEqual(
+      expect.arrayContaining(['entrance-body', 'entrance-attic-body', 'wing-south-body']),
+    );
+    expect(byAssetCount(definition, 'sorokin-monument')).toBe(1);
     // Памятник из manual/ стоит в центре кольца и имеет собственные столкновения.
     const monument = definition.buildings.find((b) => b.entityId === 'monument-trudovaya-slava');
     expect(monument).toMatchObject({ assetId: 'trudovaya-slava' });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CameraTurn, INITIAL_CAMERA_ANGLE, screenMovement } from './camera-controller';
+import {
+  CameraTurn,
+  INITIAL_CAMERA_ANGLE,
+  screenMovement,
+  orthographicFrame,
+} from './camera-controller';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 
 describe('orthographic camera controls', () => {
@@ -16,6 +21,16 @@ describe('orthographic camera controls', () => {
       const diagonal = screenMovement(1, 1, angle);
       expect(Math.hypot(diagonal.moveX, diagonal.moveZ)).toBeCloseTo(1);
     }
+  });
+  it('preserves full zoom and aspect without a network radius cap', () => {
+    for (const aspect of [1920 / 1080, 360 / 800, 3840 / 720]) {
+      for (const zoom of [0.6, 1, 30]) {
+        const { halfWidth, halfHeight } = orthographicFrame(aspect, zoom);
+        expect(halfWidth / halfHeight).toBeCloseTo(aspect);
+        expect(halfHeight).toBe((aspect < 1 ? 20 : 15) * zoom);
+      }
+    }
+    expect(orthographicFrame(3840 / 720, 30).halfWidth).toBe(2400);
   });
   it('completes a smooth full circuit and bounds rapid repeated turns', () => {
     const camera = new CameraTurn();

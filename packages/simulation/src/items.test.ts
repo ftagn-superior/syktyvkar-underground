@@ -7,6 +7,34 @@ import { initialItemState, itemSupportDistance } from '@su/contracts';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 
 describe('item placement and dynamic collections in Havok', () => {
+  it('validates saved airborne dynamics separately from supported placement without changing state', async () => {
+    const world = await createPhysicsWorld(physicsFixture(), await loadServerWasm(), false);
+    try {
+      const saved = initialItemState({
+        seedId: 'airborne',
+        typeId: 'wooden-crate',
+        position: { x: -5, y: 3, z: -5 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+      });
+      saved.velocity = { x: 1, y: 2, z: 3 };
+      saved.safePose = { position: { x: -5, y: 0.515, z: -5 }, rotation: saved.rotation };
+      const before = structuredClone(saved);
+      expect(world.checkSavedItem(saved)).toBeUndefined();
+      expect(saved).toEqual(before);
+      expect(world.checkPlacement(saved.typeId, saved)).toBe('NO_SUPPORT');
+      expect(world.checkSavedItem({ ...saved, position: { x: 5, y: 1.5, z: 0 } })).toBe('BLOCKED');
+      expect(
+        world.checkSavedItem({
+          ...saved,
+          safePose: { ...saved.safePose, position: { x: 21, y: 1, z: 0 } },
+        }),
+      ).toBe('OUT_OF_BOUNDS');
+      expect(world.checkSavedItem({ ...saved, typeId: 'removed-type' })).toBe('INVALID_INPUT');
+    } finally {
+      world.dispose();
+    }
+  });
+
   it('places the new shapes using their actual rotated support and rejects penetrations', async () => {
     const definition = physicsFixture();
     const world = await createPhysicsWorld(definition, await loadServerWasm(), false);

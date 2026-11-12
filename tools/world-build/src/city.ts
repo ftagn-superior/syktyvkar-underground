@@ -47,7 +47,7 @@ function boundsOf(parts: StaticMeshPart[]): Bounds {
 /** Треугольник с заданным направлением нормали по Y: +1 — вверх, −1 — вниз. */
 function addHorizontal(part: StaticMeshPart, a: number[], b: number[], c: number[], up: 1 | -1) {
   const normalY = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
-  addFace(part, normalY * up >= 0 ? [a, b, c] : [a, c, b]);
+  if (Math.abs(normalY) > 1e-10) addFace(part, normalY * up >= 0 ? [a, b, c] : [a, c, b]);
 }
 /** Грань, нормаль которой направлена от точки center. */
 function addOutward(part: StaticMeshPart, points: number[][], center: number[]) {
@@ -345,6 +345,32 @@ export interface GroundRecipe {
   merge?: boolean;
 }
 
+/** Sutherland–Hodgman on triangles: triangulation already accounts for holes. */
+export function clipGroundPolygon(points: Point2[], min: Point2, max: Point2): Point2[] {
+  let polygon = points;
+  for (const [axis, edge, direction] of [
+    [0, min[0], 1],
+    [0, max[0], -1],
+    [1, min[1], 1],
+    [1, max[1], -1],
+  ]) {
+    const output: Point2[] = [];
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i],
+        b = polygon[(i + 1) % polygon.length];
+      const insideA = direction * (a[axis] - edge) >= 0;
+      const insideB = direction * (b[axis] - edge) >= 0;
+      if (insideA) output.push(a);
+      if (insideA !== insideB) {
+        const t = (edge - a[axis]) / (b[axis] - a[axis]);
+        output.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    polygon = output;
+  }
+  return polygon;
+}
+
 /** Плита земли с плоскими слоями покрытия. Слои только визуальные; столкновение — одна плита. */
 export function generateGround(
   assetId: string,
@@ -379,13 +405,12 @@ export function generateGround(
       for (let t = 0; t < shape.triangles.length; t += 3) {
         const [a, b, c] = shape.triangles.slice(t, t + 3).map((i) => shape.points[i]);
         const y = layer.elevation;
-        // Слой не выходит за плиту: это сохраняет общие границы модели и коллайдера.
-        const clamp = ([x, z]: Point2) => [
-          Math.min(x1, Math.max(x0, x)),
-          y,
-          Math.min(z1, Math.max(z0, z)),
-        ];
-        addHorizontal(part, clamp(a), clamp(b), clamp(c), 1);
+        // Clip the triangulated surface, preserving holes and every layer at cell seams.
+        const clipped = clipGroundPolygon([a, b, c], recipe.min, recipe.max);
+        for (let i = 1; i + 1 < clipped.length; i++) {
+          const point = ([x, z]: Point2) => [x, y, z];
+          addHorizontal(part, point(clipped[0]), point(clipped[i]), point(clipped[i + 1]), 1);
+        }
       }
     }
     if (part.indices.length) parts.push(part);

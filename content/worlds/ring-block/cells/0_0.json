@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "cellId": "0_0",
   "buildings": [
     {
@@ -5017,5 +5017,6 @@
         "w": 1
       }
     }
-  ]
+  ],
+  "statics": []
 }

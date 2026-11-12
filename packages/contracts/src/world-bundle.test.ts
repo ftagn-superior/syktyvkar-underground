@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   loadWorldBundle,
+  createWorldGrid,
   validateBuildingParts,
   validateBuildingPhysicsAsset,
   validateWorldCell,
@@ -16,7 +17,12 @@ const instance = {
   position: { x: -8, y: 0, z: -14 },
   rotation: { x: 0, y: 0, z: 0, w: 1 },
 };
-const cell = { formatVersion: 1, cellId: '0_0', buildings: [instance] };
+const cell = {
+  formatVersion: 2,
+  cellId: '0_0',
+  buildings: [instance],
+  statics: JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')).entities,
+};
 const parts = {
   formatVersion: 1,
   assetId: 'house-a',
@@ -42,13 +48,15 @@ const base = {
   ...JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')),
   itemCatalog: JSON.parse(await readFile('content/items/catalog.json', 'utf8')),
 };
+delete base.entities;
 const hash = 'a'.repeat(64);
 const manifest: WorldManifest = {
-  formatVersion: 3,
+  formatVersion: 4,
   worldId: base.worldId,
   mapVersion: hash,
   simulationConfigHash: hash,
   bounds: base.bounds,
+  grid: createWorldGrid(base.bounds, 125),
   worldFile: 'world.json',
   files: Object.fromEntries(
     ['world.json', 'cell.json', 'colliders.json', 'model.glb', 'parts.json'].map((path) => [
@@ -56,7 +64,7 @@ const manifest: WorldManifest = {
       hash,
     ]),
   ),
-  cells: [{ cellId: '0_0', file: 'cell.json', bounds: base.bounds }],
+  cells: [{ cellId: '0_0', file: 'cell.json', bounds: base.bounds, assetIds: ['house-a'] }],
   assets: {
     'house-a': {
       assetId: 'house-a',

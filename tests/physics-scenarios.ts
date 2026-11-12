@@ -30,7 +30,7 @@ export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) 
   const cadence = [];
   for (const fps of [30, 60, 120]) {
     const definition = physicsFixture();
-    definition.entities[2].position.y = 3;
+    definition.initialItems.find((item) => item.seedId === 'crate-01')!.position.y = 3;
     const world = await createAuthoritativeWorld(definition, wasmBinary);
     try {
       world.addPlayer('local');
@@ -53,9 +53,10 @@ export async function runPhysicsScenarios(wasmBinary: ArrayBuffer | Uint8Array) 
     }
   }
   const definition = physicsFixture();
-  definition.entities[1].size.z = 40;
+  const wall = definition.entities.find((entity) => entity.entityId === 'wall')!;
+  wall.size.z = 40;
   definition.entities.push({
-    ...definition.entities[1],
+    ...wall,
     entityId: 'corner',
     position: { x: 0, y: 1.5, z: 3 },
     size: { x: 10, y: 3, z: 1 },

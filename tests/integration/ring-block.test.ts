@@ -973,10 +973,22 @@ describe('мир ring-block', () => {
     expect(
       definition.buildings.filter((b) => b.sourceRef?.provider === 'osm').length,
     ).toBeGreaterThan(90);
-    expect(definition.buildings[0]).toMatchObject({
-      entityId: 'ground',
-      assetId: 'ring-block-ground',
-    });
+    const groundTiles = definition.buildings.filter((building) =>
+      building.entityId.startsWith('ground-'),
+    );
+    expect(groundTiles).toHaveLength(40);
+    expect(new Set(groundTiles.map((tile) => tile.assetId)).size).toBe(40);
+    expect(groundTiles.find((tile) => tile.entityId === 'ground-0_0')?.assetId).toBe(
+      'ring-block-ground-0-0',
+    );
+    expect(definition.buildingAssets['ring-block-ground']).toBeUndefined();
+    const manifest = JSON.parse(await readFile(join(release, 'manifest.json'), 'utf8'));
+    for (const cell of manifest.cells) {
+      const expected = `ring-block-ground-${cell.cellId.replace('_', '-')}`;
+      expect(
+        cell.assetIds.filter((asset: string) => asset.startsWith('ring-block-ground-')),
+      ).toEqual([expected]);
+    }
     if (!process.env.SU_TEST_DATABASE_URL) return;
     const app = await createGameServer({ port: 0, worldDirectory: release });
     try {

@@ -7,12 +7,14 @@ if [[ "${1-}" != "--inside" ]]; then
     command -v "$executable" >/dev/null || { echo "Missing test prerequisite: $executable" >&2; exit 1; }
   done
   export SU_TEST_HOST_NETNS="$(readlink /proc/self/ns/net)"
-  exec unshare --net bash "$0" --inside
+  exec unshare --user --map-root-user --net bash "$0" --inside
 fi
+# A PostgreSQL Unix socket stays accessible inside the isolated network namespace.
+: "${SU_TEST_DATABASE_URL:?Set a test PostgreSQL URL using an accessible Unix-domain socket}"
 ip link set lo up
 mkdir -p output/playwright/network
 SU_TEST_SERVER_PORT=2573
-HOST=127.0.0.1 PORT="$SU_TEST_SERVER_PORT" node dist/server/main.mjs >output/playwright/network/netem-server.log 2>&1 &
+SU_TEST_SERVER_PORT="$SU_TEST_SERVER_PORT" node --import tsx tests/helpers/persistent-test-server.ts >output/playwright/network/netem-server.log 2>&1 &
 SU_TEST_SERVER_PID=$!
 cleanup() {
   kill "$SU_TEST_SERVER_PID" 2>/dev/null || true

@@ -605,7 +605,8 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
     midX = (minX + maxX) / 2,
     midZ = (minZ + maxZ) / 2;
   const world: WorldSource = {
-    formatVersion: 3,
+    formatVersion: 4,
+    cellSize: 125,
     worldId: config.worldId,
     bounds: {
       min: { x: minX, y: -5, z: minZ },
@@ -644,7 +645,11 @@ export async function importDistrict(configPath: string, root = process.cwd()) {
   await mkdir(join(worldDir, 'cells'), { recursive: true });
   await writeFile(
     join(worldDir, 'cells/0_0.json'),
-    JSON.stringify({ formatVersion: 1, cellId: '0_0', buildings: instances }, null, 2) + '\n',
+    JSON.stringify(
+      { formatVersion: 2, cellId: '0_0', statics: [], buildings: instances },
+      null,
+      2,
+    ) + '\n',
   );
   await writeFile(join(worldDir, 'world.json'), JSON.stringify(world, null, 2) + '\n');
   await writeFile(

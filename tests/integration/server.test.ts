@@ -1,3 +1,4 @@
+import { prepareSdk } from '../helpers/prepare.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Client, CloseCode, type Room } from '@colyseus/sdk';
 import { createGameServer } from '../helpers/game-server.js';
@@ -40,7 +41,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     room.onMessage('actionResult', () => {});
     rooms.add(room);
     if (ready) {
-      room.send('clientReady');
+      prepareSdk(room);
       await until(() => !!room.state?.players?.has(room.sessionId));
     } else await until(() => !!room.state?.worldEpoch);
     return room;
@@ -67,9 +68,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     input.send();
     await sleep(80);
     expect(app.room.state.players.size).toBe(0);
-    first.send('clientReady');
-    first.send('clientReady');
-    await until(() => first.state.players.has(first.sessionId));
+    const preparation = prepareSdk(first);
+    await until(() => preparation.plans.length > 0);
+    preparation.ready();
+    await until(() => first.state.players?.has(first.sessionId));
     const second = await join();
     await until(() => first.state.players.size === 2 && second.state.players.size === 2);
     expect(first.state.worldEpoch).toBe(second.state.worldEpoch);
@@ -97,7 +99,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
   it('replicates the selected guest skin to everyone and rejects unknown IDs', async () => {
     const first = await join();
     const second = await join(true, 'standard');
-    await until(() => first.state.players.has(second.sessionId));
+    await until(() => first.state.players?.has(second.sessionId));
     expect(first.state.players.get(first.sessionId)!.skinId).toBe('minifigure');
     expect(first.state.players.get(second.sessionId)!.skinId).toBe('standard');
     expect(second.state.players.get(second.sessionId)!.skinId).toBe('standard');
@@ -196,6 +198,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     room.connection.close(1000);
     await until(() => app.room.diagnostics().reserved === 1);
     const recovered = await sdk.reconnect<WorldState>(token);
+    prepareSdk(recovered);
     recovered.reconnection.enabled = false;
     recovered.onMessage('resync', () => {});
     rooms.delete(room);
@@ -242,6 +245,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     request(1, 'love');
     request(2, 'love');
     sender.send('requestRespawn', { requestId: 3, worldEpoch: info.worldEpoch });
+    await until(() => results.length === 4);
     request(4, 'love', 'old-world');
     request(5, '__proto__');
     await until(() => results.length === 6);
@@ -284,8 +288,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     await until(() => problems.length === 5 && results.length === 1);
     expect(problems.every((code) => code === 'INVALID_INPUT')).toBe(true);
     expect(results[0].code).toBe('WORLD_NOT_READY');
-    room.send('clientReady');
-    await until(() => room.state.players.has(room.sessionId));
+    prepareSdk(room);
+    await until(() => room.state.players?.has(room.sessionId));
     room.send('requestReaction', {
       requestId: 2,
       worldEpoch: info.worldEpoch,
@@ -317,6 +321,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     late.connection.close(1000);
     await until(() => app.room.diagnostics().reserved === 1);
     const recovered = await sdk.reconnect<WorldState>(token);
+    prepareSdk(recovered);
     recovered.reconnection.enabled = false;
     recovered.onMessage('resync', () => {});
     rooms.delete(late);
@@ -402,8 +407,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     await until(() => problems.length === 5 && results.length === 1);
     expect(problems.every((code) => code === 'INVALID_INPUT')).toBe(true);
     expect(results[0].code).toBe('WORLD_NOT_READY');
-    room.send('clientReady');
-    await until(() => room.state.players.has(room.sessionId));
+    prepareSdk(room);
+    await until(() => room.state.players?.has(room.sessionId));
     room.send('requestChat', { requestId: 2, worldEpoch: info.worldEpoch });
     await until(() => results.length === 2);
     expect(results[1].code).toBe('INVALID_INPUT');

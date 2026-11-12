@@ -22,11 +22,14 @@ export interface GameServerOptions {
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
   itemCreationEnabled?: boolean;
+  testDiagnostics?: boolean;
   accounts?: { config: AccountConfig; store: AccountStore; provider?: LoginProvider };
 }
 export async function createGameServer(options: GameServerOptions = {}) {
   const itemCreationEnabled = options.itemCreationEnabled ?? readItemCreationEnabled();
-  const worldDirectory = resolve(options.worldDirectory ?? 'dist/worlds/physics-lab');
+  const worldDirectory = resolve(
+    options.worldDirectory ?? `dist/worlds/${process.env.SU_WORLD ?? 'ring-block'}`,
+  );
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const { manifest, definition } = await readWorldDirectory(worldDirectory);
   // worldId проверен по шаблону [a-z0-9-] и безопасен как сегмент URL.
@@ -168,6 +171,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
     itemCreationEnabled,
+    testDiagnostics: options.testDiagnostics,
     accounts,
   });
   try {

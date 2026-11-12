@@ -5,7 +5,7 @@ import {
   type EntityState,
   type ItemState,
   type PlayerState,
-  type SimulationSnapshot,
+  type LocalSimulationSnapshot,
 } from '@su/contracts';
 
 /** Flat input is encoded and acknowledged by Colyseus, independently of actions. */
@@ -72,8 +72,8 @@ export class WorldState extends schema(
     simulationConfigHash: t.string().default(''),
     occupancy: t.uint8().default(0),
     stepMs: t.float32().default(0),
-    players: t.map(PlayerSchema),
-    items: t.map(EntitySchema),
+    players: t.map(PlayerSchema).view(),
+    items: t.map(EntitySchema).view(),
     paused: t.boolean().default(false),
     pauseReason: t.string().default(''),
   },
@@ -117,8 +117,9 @@ export function toEntityState(source: EntitySchema): EntityState {
 export function toPlayerState(source: PlayerSchema): PlayerState {
   return { ...toEntityState(source), kind: 'player', grounded: source.grounded };
 }
-export function toSimulationSnapshot(source: WorldState): SimulationSnapshot {
+export function toLocalSimulationSnapshot(source: WorldState): LocalSimulationSnapshot {
   return {
+    scope: 'local',
     players: Array.from(source.players.values(), toPlayerState),
     items: Array.from(source.items.values(), toItemState),
   };
@@ -134,3 +135,5 @@ export function toItemState(source: EntitySchema): ItemState {
     safePose: { position: entity.position, rotation: entity.rotation },
   };
 }
+
+export type { PrepareArea, AreaReady, AreaResult } from '@su/contracts';

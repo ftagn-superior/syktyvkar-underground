@@ -2,8 +2,10 @@ import { launchTestBrowser } from './helpers/browser.js';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createGameServer } from './helpers/game-server.js';
+import { createDatabaseFixture } from './helpers/database-fixture.js';
 
-let app = await createGameServer({ port: 0 });
+const database = await createDatabaseFixture();
+let app = await createGameServer({ port: 0, pool: database.pool });
 const address = new URL(app.url);
 const port = Number(address.port);
 const browser = await launchTestBrowser();
@@ -20,7 +22,7 @@ try {
   const old = await page.evaluate(() => (window as any).__SU_DEBUG__.snapshot());
   await app.close();
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  app = await createGameServer({ port });
+  app = await createGameServer({ port, pool: database.pool });
   await page.waitForFunction(
     () => document.querySelector('#notice')?.textContent?.includes('перезапущен'),
     undefined,
@@ -34,6 +36,11 @@ try {
   assert.notEqual(old.worldEpoch, fresh.worldEpoch);
   assert.notEqual(old.authoritative.entityId, fresh.authoritative.entityId);
   assert.equal(fresh.playerCount, 1);
+  assert.deepEqual(
+    fresh.items.map((item: any) => item.entityId).sort(),
+    old.items.map((item: any) => item.entityId).sort(),
+    'restart preserves item identities without repeating seeds',
+  );
   assert.deepEqual(errors, []);
   await page.locator('#leave').click();
   const result = {
@@ -42,6 +49,7 @@ try {
     result: 'passed',
     oldEpoch: old.worldEpoch,
     newEpoch: fresh.worldEpoch,
+    persistentItemIdentitiesPreserved: true,
     browserErrors: errors,
   };
   await mkdir('output/playwright', { recursive: true });
@@ -50,4 +58,5 @@ try {
 } finally {
   await browser.close();
   await app.close();
+  await database.close();
 }

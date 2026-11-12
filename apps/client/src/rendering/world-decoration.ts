@@ -20,7 +20,10 @@ export function obstacleAccent(entity: EntityDefinition): string | undefined {
 }
 
 /** Visual marks are owned by the scene and never create collision bodies. */
-export function decorateWorld(scene: Scene, world: WorldDefinition): void {
+export function decorateWorld(
+  scene: Scene,
+  world: Pick<WorldDefinition, 'bounds' | 'spawnPoints' | 'entities' | 'worldId' | 'initialItems'>,
+): void {
   const point = (x: number, z: number) => new Vector3(x, floorY, z);
   const lineSystem = (name: string, lines: Vector3[][], color: string, alpha: number) => {
     if (lines.length === 0) return;

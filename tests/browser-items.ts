@@ -74,6 +74,18 @@ try {
   await page.locator('.inventory-choice').first().click();
   await page.getByRole('button', { name: 'Переместить / объединить' }).click();
   assert.equal(await page.locator('.inventory-slot:last-child .inventory-choice:focus').count(), 1);
+  // Preparing a return preserves the open inventory and selected move source.
+  const beforeReturn = await page.evaluate(
+    () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
+  );
+  // Keyboard activation avoids the HUD's intentional outside-pointer dismissal.
+  await page.locator('#respawn').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction((revision) => {
+    const state = (window as any).__SU_DEBUG__.snapshot();
+    return state.connection === 'playing' && state.authoritative.revision > revision;
+  }, beforeReturn);
+  assert.equal(await page.locator('.inventory-panel').isVisible(), true);
   await page.locator('.inventory-choice').last().click();
   await page.getByRole('button', { name: 'Поменять местами' }).click();
   await page.waitForFunction(
@@ -151,18 +163,28 @@ try {
   await confirm.click();
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().items.length === 1);
   assert.equal(app.room.state.items.values().next().value!.entityId, chosenId);
-  const placed = app.room.state.items.values().next().value!;
+  // Inspect the accepted command before gravity/contact can rotate the live body.
+  const placement = await fixture.pool.query(
+    `SELECT request->'action'->'pose'->'rotation' AS rotation, result
+     FROM item_operations
+     WHERE request->'action'->>'kind'='place' AND request->'action'->>'itemId'=$1
+     ORDER BY created_at DESC LIMIT 1`,
+    [chosenId],
+  );
+  assert.equal(placement.rowCount, 1);
+  assert.equal(placement.rows[0].result.ok, true);
+  const rotation = placement.rows[0].rotation;
   const sin = Math.sin(Math.PI / 24),
     cos = Math.cos(Math.PI / 24);
   const expectedRotation = {
-    qx: sin * cos * (cos - sin),
-    qy: sin * cos * (cos + sin),
-    qz: sin * cos * (cos - sin),
-    qw: cos ** 3 + sin ** 3,
+    x: sin * cos * (cos - sin),
+    y: sin * cos * (cos + sin),
+    z: sin * cos * (cos - sin),
+    w: cos ** 3 + sin ** 3,
   };
-  for (const key of ['qx', 'qy', 'qz', 'qw'] as const)
+  for (const key of ['x', 'y', 'z', 'w'] as const)
     assert.ok(
-      Math.abs(placed[key] - expectedRotation[key]) < 0.025,
+      Math.abs(rotation[key] - expectedRotation[key]) < 0.000001,
       `${key}: all six keys rotate the object by the expected 15-degree steps`,
     );
   await page.waitForFunction(
@@ -215,6 +237,7 @@ try {
           'three pickups',
           'empty-world prediction',
           'split',
+          'return preserves open inventory and selected move source',
           'swap',
           'merge',
           'rotated preview',
@@ -233,6 +256,23 @@ try {
     ) + '\n',
   );
   console.log('Items browser journey passed. Artifacts: output/playwright/items*.');
+} catch (error) {
+  for (const context of browser?.contexts() ?? [])
+    for (const page of context.pages()) {
+      console.error(
+        'ITEM_TEST_DIAGNOSTICS',
+        JSON.stringify(
+          await page
+            .evaluate(() => ({
+              snapshot: (window as any).__SU_DEBUG__?.snapshot(),
+              panel: document.querySelector('.inventory-panel')?.outerHTML,
+              notice: document.querySelector('#notice')?.textContent,
+            }))
+            .catch(() => null),
+        ),
+      );
+    }
+  throw error;
 } finally {
   await browser?.close();
   await app?.close();

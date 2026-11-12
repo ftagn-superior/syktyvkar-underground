@@ -12,6 +12,7 @@ import {
   type PhysicsShape,
 } from '@babylonjs/core/Physics/v2/physicsShape.js';
 import {
+  canonicalJson,
   pointInsideClosedMesh,
   type Bounds,
   type BuildingInstance,
@@ -26,23 +27,47 @@ type MeshVolume = {
   inverse: Matrix;
 };
 type AssetShapes = {
+  definition: BuildingPhysicsAsset;
+  users: number;
   container: PhysicsShapeContainer;
   children: PhysicsShape[];
   volumes: MeshVolume[];
 };
-type BuildingBody = { node: TransformNode; body: PhysicsBody; asset: AssetShapes; inverse: Matrix };
+type BuildingBody = {
+  node: TransformNode;
+  body: PhysicsBody;
+  asset: AssetShapes;
+  inverse: Matrix;
+  signature: string;
+  references: number;
+};
 
 /** Static physics resources belong to one world; instances share their asset's native shape. */
 export class BuildingColliders {
   private readonly assets = new Map<string, AssetShapes>();
-  private readonly bodies: BuildingBody[] = [];
+  private readonly bodies = new Map<string, BuildingBody>();
   private readonly worldPoint = Vector3.Zero();
   private readonly bodyPoint = Vector3.Zero();
   private readonly shapePoint = Vector3.Zero();
   constructor(private readonly scene: Scene) {}
 
   add(instance: BuildingInstance, asset: BuildingPhysicsAsset): void {
+    if (instance.assetId !== asset.assetId) throw new Error('Building asset ID mismatch');
     let shapes = this.assets.get(asset.assetId);
+    if (
+      shapes &&
+      shapes.definition !== asset &&
+      canonicalJson(shapes.definition) !== canonicalJson(asset)
+    )
+      throw new Error(`Conflicting building asset: ${asset.assetId}`);
+    const signature = canonicalJson(instance);
+    const existing = this.bodies.get(instance.entityId);
+    if (existing) {
+      if (existing.signature !== signature)
+        throw new Error(`Conflicting building ID: ${instance.entityId}`);
+      existing.references++;
+      return;
+    }
     if (!shapes) {
       shapes = this.createAsset(asset);
       this.assets.set(asset.assetId, shapes);
@@ -56,15 +81,19 @@ export class BuildingColliders {
     try {
       body = new PhysicsBody(node, PhysicsMotionType.STATIC, false, this.scene);
       body.shape = shapes.container;
-      this.bodies.push({
+      this.bodies.set(instance.entityId, {
         node,
         body,
         asset: shapes,
         inverse: node.getWorldMatrix().clone().invert(),
+        signature,
+        references: 1,
       });
+      shapes.users++;
     } catch (error) {
       body?.dispose();
       node.dispose();
+      if (shapes.users === 0) this.releaseAsset(asset.assetId, shapes);
       throw error;
     }
   }
@@ -106,7 +135,7 @@ export class BuildingColliders {
           });
         }
       }
-      return { container, children, volumes };
+      return { container, children, volumes, definition: asset, users: 0 };
     } catch (error) {
       container.dispose();
       for (const child of children) child.dispose();
@@ -117,7 +146,7 @@ export class BuildingColliders {
   /** Havok mesh queries test triangle surfaces; reject a placement fully inside a solid too. */
   contains(point: Vec3): boolean {
     this.worldPoint.set(point.x, point.y, point.z);
-    for (const { asset, inverse } of this.bodies) {
+    for (const { asset, inverse } of this.bodies.values()) {
       if (asset.volumes.length === 0) continue;
       Vector3.TransformCoordinatesToRef(this.worldPoint, inverse, this.bodyPoint);
       for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
@@ -162,17 +191,35 @@ export class BuildingColliders {
     }
   }
 
+  /** A cell and prediction history may independently retain the same physical instance. */
+  remove(entityId: string): void {
+    const item = this.bodies.get(entityId);
+    if (!item || --item.references > 0) return;
+    item.body.dispose();
+    item.node.dispose();
+    this.bodies.delete(entityId);
+    if (--item.asset.users === 0) this.releaseAsset(item.asset.definition.assetId, item.asset);
+  }
+
+  private releaseAsset(assetId: string, asset: AssetShapes): void {
+    asset.container.dispose();
+    for (const child of asset.children) child.dispose();
+    this.assets.delete(assetId);
+  }
+
+  diagnostics() {
+    return {
+      instances: this.bodies.size,
+      assets: this.assets.size,
+      shapes: [...this.assets.values()].reduce((sum, asset) => sum + 1 + asset.children.length, 0),
+      references: [...this.bodies.values()].reduce((sum, item) => sum + item.references, 0),
+    };
+  }
+
   dispose(): void {
-    // Bodies must release their references before the shared containers and children.
-    for (const { body, node } of this.bodies) {
-      body.dispose();
-      node.dispose();
+    for (const [id, item] of this.bodies) {
+      item.references = 1;
+      this.remove(id);
     }
-    this.bodies.length = 0;
-    for (const { container, children } of this.assets.values()) {
-      container.dispose();
-      for (const child of children) child.dispose();
-    }
-    this.assets.clear();
   }
 }

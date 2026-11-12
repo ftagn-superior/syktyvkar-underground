@@ -1,3 +1,4 @@
+import { prepareSdk } from './helpers/prepare.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -39,7 +40,7 @@ try {
   try {
     for (let index = 0; index < 6; index++) {
       const room = await new Client(url).joinById(info.roomId, info);
-      room.send('clientReady');
+      prepareSdk(room);
       fillers.push(room);
     }
     const fullContext = await browser.newContext();

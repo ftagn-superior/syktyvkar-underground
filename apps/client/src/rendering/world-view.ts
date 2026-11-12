@@ -34,7 +34,7 @@ import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { BuildingViews } from './buildings';
-import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
+import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
@@ -92,7 +92,7 @@ export class WorldView {
     appearMs: 300,
   };
   private streamingRadius = 0;
-  private readonly cameraTurn = new CameraTurn();
+  private readonly cameraOrbit = new CameraOrbit();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
   private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
@@ -205,7 +205,7 @@ export class WorldView {
       const now = performance.now();
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
-      this.camera.alpha = this.cameraTurn.advance(delta);
+      this.camera.alpha = this.cameraOrbit.advance(delta);
       this.frameHook?.(now, delta);
       this.camera.setTarget(
         Vector3.Lerp(this.camera.target, this.target, 1 - Math.exp(-Math.min(delta, 0.1) * 5)),
@@ -268,10 +268,16 @@ export class WorldView {
     this.sizeCamera();
   }
   get cameraAngle(): number {
-    return this.cameraTurn.angle;
+    return this.cameraOrbit.angle;
   }
-  rotateCamera(direction: -1 | 1): void {
-    this.cameraTurn.rotate(direction);
+  setCameraRotation(direction: -1 | 0 | 1): void {
+    this.cameraOrbit.setDirection(direction);
+  }
+  rotateCameraBy(radians: number): void {
+    this.cameraOrbit.rotateBy(radians);
+  }
+  stopCamera(): void {
+    this.cameraOrbit.stop();
   }
   prepareBuildings(
     manifest: WorldManifest,
@@ -383,7 +389,7 @@ export class WorldView {
       renderer: this.engine.getGlInfo(),
       camera: {
         azimuth: this.cameraAngle,
-        turning: this.cameraTurn.turning,
+        turning: this.cameraOrbit.turning,
         halfWidth: this.camera.orthoRight!,
         halfHeight: this.camera.orthoTop!,
         beta: this.camera.beta,

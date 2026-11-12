@@ -9,6 +9,7 @@ import { buildWorld } from '../tools/world-build/src/index.js';
 import { PROTOCOL_VERSION } from '../packages/contracts/src/index.js';
 import { WorldState } from '../packages/protocol/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { rotateCamera } from './helpers/camera.js';
 import { prepareSdk } from './helpers/prepare.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
 import { interestProfile } from './large-map/interest-profile.js';
@@ -334,7 +335,7 @@ try {
   ]) {
     await observer.setViewportSize(size);
     for (let turn = 0; turn < 4; turn++) {
-      await observer.keyboard.press('e');
+      await rotateCamera(observer, 0.83 + turn * 0.19);
       await observer.waitForFunction(
         () => !(window as any).__SU_DEBUG__.report().rendering.camera.turning,
       );

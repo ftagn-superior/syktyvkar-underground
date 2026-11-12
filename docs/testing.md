@@ -28,7 +28,7 @@ pnpm build
 | Хранение, сетевые операции, миграции и физика предметов | `pnpm test:items`, `pnpm test:items:browser` |
 | Выдача предметов и приватность ответов | `pnpm test:giveme:browser` |
 | Эквивалентность физики Node/Chromium | `pnpm test:physics:browser` |
-| GLB, независимая прозрачность, камера и коллизии | `pnpm test:buildings:browser` |
+| GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser` |
 | Повреждённый кеш и неверные ресурсы | `pnpm test:assets:browser` |
 | Скины, походка, возврат и переподключение | `pnpm test:avatars:browser` |
 | Реакции, выбираемые анимации, чат | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser` |

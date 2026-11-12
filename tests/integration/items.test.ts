@@ -152,7 +152,14 @@ describe.skipIf(!databaseUrl)(
       expect(
         (await fixture.pool.query('SELECT version FROM su_schema_migrations ORDER BY version'))
           .rows,
-      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }]);
+      ).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+        { version: 5 },
+        { version: 6 },
+      ]);
       expect(await open()).toHaveLength(1);
     });
 
@@ -184,7 +191,14 @@ describe.skipIf(!databaseUrl)(
       expect(
         (await fixture.pool.query('SELECT version FROM su_schema_migrations ORDER BY version'))
           .rows,
-      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }]);
+      ).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+        { version: 5 },
+        { version: 6 },
+      ]);
       expect(await open()).toHaveLength(1);
     });
 

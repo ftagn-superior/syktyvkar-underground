@@ -491,7 +491,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('database static placement', 
     expect(
       (await fixture.pool.query('SELECT max(version) AS version FROM su_schema_migrations')).rows[0]
         .version,
-    ).toBe(5);
+    ).toBe(6);
   });
   it('publishes a catalog model without a seed instance and permits a new SQL placement after registration', async () => {
     const p = await initialize();

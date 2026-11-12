@@ -24,4 +24,6 @@
 
 Объём сенсорной доработки — в [плане MVP](plans/touch-controls-mvp.md), фактические проверки и открытая ручная мобильная приёмка — в [отчёте](../reports/touch-controls-mvp.md).
 
+Ядро размещения статики реализовано по [плану MVP](plans/static-placement-core-mvp.md): `/motherlode`, одна модель скамейки, сохранение и общая переподготовка клиентов. Проверки и ограничения описаны в [отчёте](../reports/static-placement-core-mvp.md); `/vilievna` пока отсутствует. Эта поставка ещё не развёрнута в production.
+
 При изменении поведения обновляйте соответствующий рабочий документ. Версии сверяйте с `packages/contracts/src/index.ts` и `apps/server/src/migrations.ts`, команды — с `package.json` и `Makefile`. Результаты прогона сохраняйте в отчёте с версией и окружением.

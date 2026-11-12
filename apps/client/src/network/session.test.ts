@@ -1,8 +1,17 @@
+import {
+  createWorldPublication,
+  type WorldPublication,
+} from '../../../../packages/world-release/src/index.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { PROTOCOL_VERSION, type WorldInfo, type WorldManifest } from '@su/contracts';
+import {
+  PROTOCOL_VERSION,
+  loadWorldBundle,
+  type WorldInfo,
+  type WorldManifest,
+} from '@su/contracts';
 import type { PredictionWorld } from '@su/simulation/prediction';
 import { buildWorld } from '../../../../tools/world-build/src/index.js';
 import { GameSession } from './session';
@@ -27,6 +36,7 @@ vi.mock('@colyseus/sdk', () => ({
 let directory: string;
 let manifest: WorldManifest;
 let info: WorldInfo;
+let publicationA: WorldPublication, publicationB: WorldPublication;
 const sessions: GameSession[] = [];
 const requests: string[] = [];
 const events: string[] = [];
@@ -70,8 +80,53 @@ function session() {
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'su-session-lazy-'));
   manifest = await buildWorld(resolve('content/worlds/physics-lab/world.json'), directory);
+  const world = await loadWorldBundle(manifest, (path) => readFile(join(directory, path)));
+  const compiled = Object.fromEntries(
+    await Promise.all(
+      Object.entries(manifest.assets).map(async ([id, asset]) => [
+        id,
+        {
+          version: asset.version,
+          bounds: asset.bounds,
+          physics: world.buildingAssets[id],
+          model: await readFile(join(directory, asset.modelFile)),
+          collision: await readFile(join(directory, asset.collisionFile)),
+          parts: await readFile(join(directory, asset.partsFile)),
+        },
+      ]),
+    ),
+  );
+  publicationA = createWorldPublication(
+    {
+      ...world,
+      routes: {
+        'context-a': [
+          { x: 0, z: 0 },
+          { x: 1, z: 1 },
+        ],
+      },
+    },
+    manifest.grid,
+    compiled,
+  );
+  publicationB = createWorldPublication(
+    {
+      ...world,
+      routes: {
+        'context-b': [
+          { x: 0, z: 0 },
+          { x: 2, z: 2 },
+        ],
+      },
+    },
+    manifest.grid,
+    compiled,
+  );
   info = {
     roomId: 'room',
+    assetReleaseVersion: 'a'.repeat(64),
+    layoutRevision: 1,
+    layoutHash: 'b'.repeat(64),
     worldEpoch: 'epoch',
     protocolVersion: PROTOCOL_VERSION,
     mapVersion: manifest.mapVersion,
@@ -127,6 +182,90 @@ afterEach(() => {
 });
 
 describe('lazy gameplay physics', () => {
+  it('can report diagnostics before metadata arrives', () => {
+    expect(session().diagnostics()).toMatchObject({
+      connection: 'loading',
+      publication: { mapVersion: undefined },
+    });
+  });
+
+  it('ignores an old manifest response after a newer publication has replaced the context', async () => {
+    const instance = session();
+    await instance.load();
+    instance.markPrepared();
+    const delayed = deferred<Response>();
+    const previousFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(url), 'http://localhost/').pathname;
+      if (path === '/worlds/layout-a/manifest.json') return delayed.promise;
+      if (path.startsWith('/worlds/layout-b/')) {
+        const file = path.slice('/worlds/layout-b/'.length);
+        return file === 'manifest.json'
+          ? Response.json(publicationB.manifest)
+          : new Response(Uint8Array.from(publicationB.payloads.get(file)!));
+      }
+      return previousFetch(url, init);
+    });
+    const context = instance as unknown as {
+      changePublication: (info: WorldInfo) => Promise<void>;
+    };
+    const old = context.changePublication({
+      ...info,
+      mapVersion: publicationA.manifest.mapVersion,
+      simulationConfigHash: publicationA.manifest.simulationConfigHash,
+      manifestUrl: '/worlds/layout-a/manifest.json',
+      layoutRevision: 2,
+    });
+    await context.changePublication({
+      ...info,
+      mapVersion: publicationB.manifest.mapVersion,
+      simulationConfigHash: publicationB.manifest.simulationConfigHash,
+      manifestUrl: '/worlds/layout-b/manifest.json',
+      layoutRevision: 3,
+    });
+    delayed.resolve(Response.json(publicationA.manifest));
+    await old;
+    expect(instance.info.mapVersion).toBe(publicationB.manifest.mapVersion);
+    expect(instance.info.layoutRevision).toBe(3);
+    expect(instance.definition.routes).toHaveProperty('context-b');
+    expect(instance.state).toBe('ready');
+  });
+
+  it('recovers a restarted world with a new layout through preflight without requiring an application reload', async () => {
+    const instance = session();
+    await instance.load();
+    instance.markPrepared();
+    const next = {
+      ...info,
+      worldEpoch: 'new-epoch',
+      mapVersion: publicationB.manifest.mapVersion,
+      simulationConfigHash: publicationB.manifest.simulationConfigHash,
+      manifestUrl: '/worlds/layout-b/manifest.json',
+      layoutRevision: 3,
+    };
+    const previousFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(url), 'http://localhost/').pathname;
+      if (path === '/api/world') return Response.json(next);
+      if (path.startsWith('/worlds/layout-b/')) {
+        const file = path.slice('/worlds/layout-b/'.length);
+        return file === 'manifest.json'
+          ? Response.json(publicationB.manifest)
+          : new Response(Uint8Array.from(publicationB.payloads.get(file)!));
+      }
+      return previousFetch(url, init);
+    });
+    sessionStorage.setItem('su:static-operation:account', 'pending-request');
+    instance.state = 'reconnecting';
+    (instance as unknown as { beginRecoveryCheck: () => void }).beginRecoveryCheck();
+    await until(() => instance.state === 'ready');
+    expect(instance.reloadRequired).toBe(false);
+    await instance.join();
+    expect(instance.info.mapVersion).toBe(next.mapVersion);
+    expect(instance.definition.routes).toHaveProperty('context-b');
+    expect(sessionStorage.getItem('su:static-operation:account')).toBe('pending-request');
+  });
+
   it('loads and streams a graphical preview without requesting WASM or creating physics', async () => {
     const instance = session();
     await instance.load();

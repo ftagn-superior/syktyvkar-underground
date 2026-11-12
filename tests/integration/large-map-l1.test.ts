@@ -203,14 +203,16 @@ describe('L1 spatial world release', () => {
       try {
         const info = await fetch(`${app.url}/api/world`).then((response) => response.json());
         expect(info.protocolVersion).toBe(PROTOCOL_VERSION);
-        expect(info.manifestUrl).toBe('/worlds/streaming-lab/manifest.json');
+        expect(info.manifestUrl).toMatch(
+          /^\/worlds\/streaming-lab\/layouts\/[a-f0-9]{64}\/[a-f0-9]{64}\/manifest\.json$/,
+        );
         const received = await fetch(app.url + info.manifestUrl).then((response) =>
           response.json(),
         );
         expect(received).toEqual(manifest);
-        expect((await fetch(`${app.url}/worlds/streaming-lab/${manifest.worldFile}`)).status).toBe(
-          200,
-        );
+        expect(
+          (await fetch(new URL(manifest.worldFile, app.url + info.manifestUrl).href)).status,
+        ).toBe(200);
         expect((await fetch(`${app.url}/worlds/streaming-lab/private.txt`)).status).toBe(404);
         expect((await fetch(`${app.url}/worlds/physics-lab/manifest.json`)).status).toBe(404);
         expect((await fetch(`${app.url}/worlds/streaming-lab/../private.txt`)).status).toBe(404);

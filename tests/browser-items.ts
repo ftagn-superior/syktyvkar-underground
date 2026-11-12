@@ -30,8 +30,9 @@ try {
   app = await createGameServer({ port: 0, accounts: fixture, worldDirectory: release });
   fixture.config.publicOrigin = app.url;
   const port = Number(new URL(app.url).port);
-  browser = await launchTestBrowser();
+  browser = await launchTestBrowser({ channel: 'chromium' });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await page.addInitScript(() => localStorage.setItem('su:render-quality:v1', 'economy'));
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(app.url + '/?diagnostics=1');
@@ -50,12 +51,18 @@ try {
       .sort(),
   );
   for (let count = 1; count <= 3; count++) {
-    await page.waitForFunction(
-      () =>
-        document.querySelector<HTMLButtonElement>(
-          '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
-        ) !== null,
-    );
+    await page.waitForFunction(() => {
+      const prompt = document.querySelector<HTMLButtonElement>(
+        '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
+      );
+      const state = (window as any).__SU_DEBUG__.snapshot();
+      return (
+        prompt &&
+        !state.itemPending &&
+        !state.storagePaused &&
+        state.items.some((item: any) => item.entityId === prompt.dataset.interactionId)
+      );
+    });
     await page.keyboard.press('z');
     await page.waitForFunction((expected) => {
       const state = (window as any).__SU_DEBUG__.snapshot();
@@ -83,7 +90,7 @@ try {
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
   );
   // Keyboard activation avoids the HUD's intentional outside-pointer dismissal.
-  await page.locator('#help-toggle').click();
+  await page.keyboard.press('h');
   await page.locator('#respawn').focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction((revision) => {
@@ -120,7 +127,7 @@ try {
   // A key held before placement must not resume movement when placement ends.
   await page.keyboard.down('ArrowUp');
   await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
-  assert.equal(await page.locator('.placement-toolbar button').count(), 2);
+  assert.equal(await page.locator('#item-placement button').count(), 2);
   await page.waitForTimeout(200);
   const beforeCancel = await controls();
   await page.keyboard.down('d');
@@ -129,7 +136,7 @@ try {
   await page.waitForTimeout(250);
   assert.ok(distance((await controls()).position, beforeCancel.position) < 0.03);
   await page.keyboard.press('Escape');
-  assert.equal(await page.locator('.placement-toolbar').isVisible(), false);
+  assert.equal(await page.locator('#item-placement').isVisible(), false);
   assert.equal(await page.locator('#controls-title').textContent(), 'Свободное движение');
   await page.waitForTimeout(250);
   assert.ok(distance((await controls()).position, beforeCancel.position) < 0.03);
@@ -193,7 +200,7 @@ try {
       `${key}: all six keys rotate the object by the expected 15-degree steps`,
     );
   await page.waitForFunction(
-    () => (document.querySelector('.placement-toolbar') as HTMLElement).hidden,
+    () => (document.querySelector('#item-placement') as HTMLElement).hidden,
   );
   assert.equal(await page.locator('#controls-title').textContent(), 'Свободное движение');
   await rotateCamera(page, 0.39);
@@ -222,7 +229,10 @@ try {
       .sort(),
   );
   assert.deepEqual(restored, originalIds);
-  await page.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
+  await page.waitForFunction(
+    () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
+  );
+  await page.keyboard.press('x');
   await page.locator('#inventory-panel').waitFor({ state: 'visible' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'output/playwright/items-inventory-small.png' });

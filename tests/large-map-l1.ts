@@ -188,7 +188,10 @@ try {
       assert.equal((await fetch(url)).status, 200);
       const info = await fetch(`${url}/api/world`).then((response) => response.json());
       assert.equal(info.protocolVersion, PROTOCOL_VERSION);
-      assert.equal(info.manifestUrl, `/worlds/${worldId}/manifest.json`);
+      assert.match(
+        info.manifestUrl,
+        new RegExp(`^/worlds/${worldId}/layouts/[a-f0-9]{64}/[a-f0-9]{64}/manifest\\.json$`),
+      );
       assert.equal(info.mapVersion, first.mapVersion);
       const received = await fetch(url + info.manifestUrl).then((response) => response.json());
       assert.deepEqual(received, first);
@@ -197,7 +200,7 @@ try {
         first.cells[0].file,
         Object.values(first.assets)[0].modelFile,
       ]) {
-        const response = await fetch(`${url}/worlds/${worldId}/${file}`);
+        const response = await fetch(new URL(file, url + info.manifestUrl).href);
         assert.equal(response.status, 200);
         assert.equal(hash(new Uint8Array(await response.arrayBuffer())), first.files[file]);
       }

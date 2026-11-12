@@ -9,6 +9,7 @@ export function prepareSdk(room: Room<any>, automatic = true) {
     if (plan)
       room.send('areaReady', {
         prepareId: plan.prepareId,
+        layoutRevision: plan.layoutRevision,
         worldEpoch: plan.worldEpoch,
         mapVersion: plan.mapVersion,
       });

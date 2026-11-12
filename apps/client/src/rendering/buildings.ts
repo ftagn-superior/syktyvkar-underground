@@ -4,12 +4,10 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Material } from '@babylonjs/core/Materials/material';
 import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial';
 import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { LoadAssetContainerAsync } from '@babylonjs/core/Loading/sceneLoader';
+import { loadBuildingContainer } from './building-container';
 import type { AssetContainer, InstantiatedEntries } from '@babylonjs/core/assetContainer';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import type { Node } from '@babylonjs/core/node';
-import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
-import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { Ray } from '@babylonjs/core/Culling/ray';
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import '@babylonjs/loaders/glTF/2.0/Extensions/ExtrasAsMetadata';
@@ -324,32 +322,7 @@ export class BuildingViews {
     if (this.disposed) throw new Error('Building preparation was cancelled');
     if (parts.tree && this.trees.supported) return { descriptor, parts };
     const model = await readBytes(descriptor.modelFile);
-    // A failed glTF parse does not return its partially populated AssetContainer.
-    // Keep loader-owned resources until success so that errors can release them as well.
-    const meshes = new Set<AbstractMesh>();
-    const materials = new Set<Material>();
-    const textures = new Set<BaseTexture>();
-    let container: AssetContainer;
-    try {
-      container = await LoadAssetContainerAsync(model, this.scene, {
-        pluginExtension: '.glb',
-        name: `${descriptor.assetId}.glb`,
-        pluginOptions: {
-          gltf: {
-            createInstances: false,
-            animationStartMode: 0,
-            onMeshLoaded: (mesh) => meshes.add(mesh),
-            onMaterialLoaded: (material) => materials.add(material),
-            onTextureLoaded: (texture) => textures.add(texture),
-          },
-        },
-      });
-    } catch (error) {
-      for (const mesh of meshes) mesh.dispose(false, false);
-      for (const material of materials) material.dispose(false, false);
-      for (const texture of textures) texture.dispose();
-      throw error;
-    }
+    const container = await loadBuildingContainer(model, this.scene, `${descriptor.assetId}.glb`);
     if (this.disposed) {
       container.dispose();
       throw new Error('Building preparation was cancelled');

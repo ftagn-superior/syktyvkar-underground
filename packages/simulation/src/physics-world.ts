@@ -28,6 +28,7 @@ import { BuildingColliders } from './building-colliders.js';
 import { createItemShape } from './item-shapes.js';
 import {
   canonicalJson,
+  buildingBounds,
   NEUTRAL_INPUT,
   ITEM_REACH,
   initialItemState,
@@ -37,6 +38,7 @@ import {
   type ItemState,
   type ItemPose,
   type ItemError,
+  type StaticPlacementError,
   normalizeInput,
   validPose,
   type EntityDefinition,
@@ -581,6 +583,78 @@ export class PhysicsWorld {
     } finally {
       shape.dispose();
     }
+  }
+  /** The live editor accepts exactly one box asset. Queries use Havok's actual shapes. */
+  checkStaticPlacement(
+    instance: BuildingInstance,
+    asset: BuildingPhysicsAsset,
+  ): StaticPlacementError | undefined {
+    const collider = asset.colliders[0];
+    if (asset.colliders.length !== 1 || collider?.kind !== 'box') return 'INVALID_INPUT';
+    const q = new Quaternion(
+      instance.rotation.x,
+      instance.rotation.y,
+      instance.rotation.z,
+      instance.rotation.w,
+    );
+    const localQ = new Quaternion(
+      collider.rotation.x,
+      collider.rotation.y,
+      collider.rotation.z,
+      collider.rotation.w,
+    );
+    const center = vector(collider.position)
+      .applyRotationQuaternion(q)
+      .add(vector(instance.position));
+    const orientation = q.multiply(localQ).normalize();
+    const physical = buildingBounds(
+      { ...instance, position: plain(center), rotation: rotation(orientation) },
+      {
+        min: { x: -collider.size.x / 2, y: -collider.size.y / 2, z: -collider.size.z / 2 },
+        max: { x: collider.size.x / 2, y: collider.size.y / 2, z: collider.size.z / 2 },
+      },
+    );
+    for (const b of [physical, buildingBounds(instance, asset.bounds)])
+      for (const axis of ['x', 'y', 'z'] as const)
+        if (
+          b.min[axis] < this.definition.bounds.min[axis] - 1e-8 ||
+          b.max[axis] > this.definition.bounds.max[axis] + 1e-8
+        )
+          return 'OUT_OF_BOUNDS';
+    for (const x of [-0.5, 0, 0.5])
+      for (const y of [-0.5, 0, 0.5])
+        for (const z of [-0.5, 0, 0.5]) {
+          const point = new Vector3(x * collider.size.x, y * collider.size.y, z * collider.size.z)
+            .applyRotationQuaternion(orientation)
+            .add(center);
+          if (this.buildings.contains(point)) return 'BLOCKED';
+        }
+    const shape = new PhysicsShapeBox(
+      Vector3.Zero(),
+      Quaternion.Identity(),
+      vector(collider.size),
+      this.scene,
+    );
+    try {
+      const hit = new ProximityCastResult();
+      this.plugin.shapeProximity(
+        {
+          shape,
+          position: center,
+          rotation: orientation,
+          maxDistance: 0,
+          shouldHitTriggers: false,
+        },
+        new ProximityCastResult(),
+        hit,
+      );
+      if (hit.hasHit && hit.hitDistance < -0.005) return 'BLOCKED';
+    } finally {
+      shape.dispose();
+    }
+  }
+  addStatic(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
+    this.retainStatic(instance, 'initial', asset);
   }
   /** Stored dynamic poses can be airborne; new placement still requires support. */
   checkSavedItem(item: ItemState): ItemError | undefined {

@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { WorldOwnership } from './world-ownership.js';
+import { LayoutPublications } from './layout/live.js';
 import { prepareLayoutWorld } from './layout/prepare.js';
 import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
@@ -56,6 +57,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     throw error;
   }
   const { manifest, definition } = prepared;
+  const layouts = new LayoutPublications(prepared);
   let room: WorldRoom | undefined;
   const accounts = options.accounts
     ? new AccountHttp(
@@ -107,17 +109,14 @@ export async function createGameServer(options: GameServerOptions = {}) {
       });
       app.get('/api/world', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
-        if (!ready || !room?.isReady()) {
+        if (!ready || !room?.isReady(false)) {
           res.status(503).json({ code: 'WORLD_NOT_READY' });
           return;
         }
         const info: WorldInfo = {
           roomId: room.roomId,
-          worldEpoch: room.state.worldEpoch,
+          ...layouts.info(room.state.worldEpoch),
           protocolVersion: PROTOCOL_VERSION,
-          mapVersion: manifest.mapVersion,
-          simulationConfigHash: manifest.simulationConfigHash,
-          manifestUrl: `${worldPath}/manifest.json`,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
         };
@@ -132,21 +131,13 @@ export async function createGameServer(options: GameServerOptions = {}) {
         res.json(room.diagnostics());
       });
       app.use(worldPath, (req, res) => {
-        const file = req.path.slice(1);
-        if (
-          (req.method !== 'GET' && req.method !== 'HEAD') ||
-          (file !== 'manifest.json' && !Object.hasOwn(manifest.files, file))
-        ) {
+        const found = layouts.find(worldPath + req.path);
+        if ((req.method !== 'GET' && req.method !== 'HEAD') || !found) {
           res.sendStatus(404);
           return;
         }
-        res.setHeader(
-          'Cache-Control',
-          /(?:^|[/.])[a-f0-9]{64}(?:[/.]|$)/.test(file)
-            ? 'public, max-age=31536000, immutable'
-            : 'no-cache',
-        );
-        res.sendFile(resolve(prepared.directory, file));
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        res.sendFile(resolve(found.p.directory, found.file));
       });
       // These routes come before the SDK matcher: arbitrary room creation is
       // deliberately absent. The sole room is created once during startup.
@@ -183,6 +174,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     pool,
     ownership,
     itemStore: prepared.items,
+    layouts,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
     itemCreationEnabled,
@@ -234,6 +226,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           http.close(() => done());
           http.closeAllConnections();
         });
+        await layouts.close().catch((error) => console.error('Layout cleanup failed', error));
         await ownership.close();
         await ownedPool?.end();
         if (saveError) throw saveError;

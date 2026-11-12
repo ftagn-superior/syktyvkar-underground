@@ -89,6 +89,7 @@ export async function startLoad(options: LoadOptions) {
       room.onMessage<PrepareArea>('prepareArea', (plan) =>
         room.send('areaReady', {
           prepareId: plan.prepareId,
+          layoutRevision: plan.layoutRevision,
           worldEpoch: plan.worldEpoch,
           mapVersion: plan.mapVersion,
         }),

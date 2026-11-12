@@ -1,6 +1,8 @@
 import {
   NEUTRAL_INPUT,
   type ItemState,
+  type BuildingInstance,
+  type BuildingPhysicsAsset,
   type ItemPose,
   type MoveInput,
   type Vec3,
@@ -58,6 +60,13 @@ export class AuthoritativeWorld {
   }
   checkSavedItem(item: ItemState) {
     return this.world.checkSavedItem(item);
+  }
+  checkStaticPlacement(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
+    return this.world.checkStaticPlacement(instance, asset);
+  }
+  addStatic(instance: BuildingInstance, definition: WorldDefinition) {
+    this.world.addStatic(instance, definition.buildingAssets[instance.assetId]);
+    Object.assign(this.world.definition, definition);
   }
   respawnPlayer(id: string, spawn?: Vec3): boolean {
     const character = this.world.characters.get(id);

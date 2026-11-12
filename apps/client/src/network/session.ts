@@ -29,6 +29,8 @@ import {
   REACTION_COOLDOWN_MS,
   CHAT_MAX_COOLDOWN_MS,
   normalizeChatText,
+  DEFAULT_DAY_CLOCK,
+  type DayClock,
   TICK_RATE,
   findReaction,
   findAnimation,
@@ -165,6 +167,9 @@ export class GameSession {
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
+  dayClock: DayClock = DEFAULT_DAY_CLOCK;
+  onDayClock?: (clock: DayClock) => void;
   state: ConnectionState = 'loading';
   definition!: WorldHeader;
   manifest!: WorldManifest;
@@ -721,6 +726,10 @@ export class GameSession {
       if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
         this.onNotice(messages.STORAGE_UNAVAILABLE);
     }
+    this.setDayClock({
+      offsetMs: room.state.dayOffsetMs,
+      frozenHour: room.state.dayFrozenHour,
+    });
     const self = room.state.players.get(room.sessionId);
     this.physics?.syncRemote(toLocalSimulationSnapshot(room.state), self?.entityId ?? '');
     const previousRevision = self && this.revisions.get(self.entityId);
@@ -744,6 +753,12 @@ export class GameSession {
     if (!this.predictor) return;
     for (const player of room.state.players?.values() ?? []) this.attach(player);
     for (const item of room.state.items.values()) this.attach(item);
+  }
+  private setDayClock(clock: DayClock): void {
+    if (clock.offsetMs === this.dayClock.offsetMs && clock.frozenHour === this.dayClock.frozenHour)
+      return;
+    this.dayClock = clock;
+    this.onDayClock?.(clock);
   }
   private clearEntityTracking(): void {
     for (const entity of this.trackedEntities.values()) this.predictor?.detach(entity);
@@ -1416,6 +1431,7 @@ export class GameSession {
     this.inventory = { slots: [] };
     this.pendingItem = undefined;
     this.persistencePaused = false;
+    this.setDayClock(DEFAULT_DAY_CLOCK);
     this.onInventoryChange?.();
     this.respawnAvailableAt = 0;
     this.reactionAvailableAt = 0;

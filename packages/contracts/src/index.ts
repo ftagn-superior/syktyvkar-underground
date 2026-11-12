@@ -6,9 +6,10 @@ export * from './foliage-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
 export * from './world-layout-patch.js';
+export * from './day-clock.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 export const WORLD_FORMAT_VERSION = 4;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;

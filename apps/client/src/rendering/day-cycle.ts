@@ -23,8 +23,8 @@ export type Sky = {
   cloudColor: Rgb;
 };
 
-/** One game day in real time. Hours below are game hours, 0..24. */
-export const DAY_LENGTH_MS = 24 * 60 * 1000;
+/** Длина суток и ход часов общие с сервером; часы ниже — игровые, 0..24. */
+export { DAY_LENGTH_MS, hourAt } from '@su/contracts';
 const NOON_HOUR = 13;
 
 const rgb = (hex: string): Rgb => [
@@ -78,12 +78,6 @@ const NIGHT = {
 };
 const SUN_INTENSITY = 3;
 const MOON_INTENSITY = 0.9;
-
-/** Game hour for a moment of wall-clock time; the same on every client. */
-export function hourAt(epochMs: number): number {
-  const phase = epochMs / DAY_LENGTH_MS;
-  return (phase - Math.floor(phase)) * 24;
-}
 
 /** Unit vector towards the sun. Below the horizon at night. */
 export function sunPosition(hour: number): { x: number; y: number; z: number } {

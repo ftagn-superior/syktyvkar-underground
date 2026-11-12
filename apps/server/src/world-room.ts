@@ -43,8 +43,13 @@ import {
   chatCooldownMs,
   WORLD_ACTIVITY_MOVE_DURATION_MS,
   findAvatarSkin,
+  applyDayClockAction,
+  dayClockHour,
+  formatGameHour,
   DEFAULT_AVATAR_SKIN,
   type AvatarSkinId,
+  type DayClock,
+  type DayClockAction,
   type MoveInput,
   type ActionResult,
   type ErrorCode,
@@ -63,6 +68,7 @@ import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
 import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
 
+const TIME_COMMAND_COOLDOWN_MS = 1000;
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 type Plan = { message: PrepareArea; deadline: number; readyAt?: number; spawnDeadline?: number };
 interface Session {
@@ -123,6 +129,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private definition!: WorldDefinition;
   private items!: ItemRuntime;
   private itemRequests = 0;
+  private timeChangeAvailableAt = 0;
   private shutdown?: Promise<void>;
   private sessions = new Map<string, Session>();
   private guestCounter = 0;
@@ -853,7 +860,13 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       session.auth.expiresAt <= Date.now() ||
       this.accounts?.wasRevoked(session.auth.authSessionId)
     )
-      return fail('AUTH_REQUIRED', giveFailureMessage('AUTH_REQUIRED'));
+      return fail(
+        'AUTH_REQUIRED',
+        command.kind === 'time'
+          ? 'Чтобы управлять временем, войдите через Telegram.'
+          : giveFailureMessage('AUTH_REQUIRED'),
+      );
+    if (command.kind === 'time') return this.timeCommand(client, action, command.action);
     if (!this.itemCreationEnabled)
       return fail('COMMAND_DISABLED', 'Создание предметов отключено на сервере.');
     const types = this.items.store.definition.itemCatalog.types;
@@ -902,6 +915,44 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       session.pendingActions.delete(requestId);
       this.itemRequests--;
     }
+  }
+
+  /** Игровые часы общие для комнаты и не сохраняются: после перезапуска идут по настенным. */
+  private timeCommand(client: Client, action: ClientAction, change?: DayClockAction): void {
+    const { session, requestId } = action;
+    const now = Date.now();
+    let clock: DayClock = {
+      offsetMs: this.state.dayOffsetMs,
+      frozenHour: this.state.dayFrozenHour,
+    };
+    if (change) {
+      // Смена часа перестраивает тени у всех клиентов, поэтому её нельзя слать очередью.
+      if (now < this.timeChangeAvailableAt)
+        return this.finishAction(client, session, {
+          requestId,
+          ok: false,
+          code: 'RATE_LIMITED',
+          message: 'Время меняли только что. Повторите через секунду.',
+          retryAfterMs: this.timeChangeAvailableAt - now,
+        });
+      this.timeChangeAvailableAt = now + TIME_COMMAND_COOLDOWN_MS;
+      clock = applyDayClockAction(clock, change, now);
+      this.state.dayOffsetMs = clock.offsetMs;
+      this.state.dayFrozenHour = clock.frozenHour;
+    }
+    const hour = formatGameHour(dayClockHour(clock, now));
+    this.finishAction(client, session, {
+      requestId,
+      ok: true,
+      // Без этого поля клиент закрыл бы чат на самую длинную паузу.
+      retryAfterMs: change ? TIME_COMMAND_COOLDOWN_MS : 0,
+      message:
+        change?.kind === 'reset'
+          ? `Часы идут по общему времени: ${hour}.`
+          : clock.frozenHour >= 0
+            ? `Время остановлено: ${hour}.`
+            : `Время идёт: ${hour}.`,
+    });
   }
 
   onDrop(client: Client, code?: number): void {

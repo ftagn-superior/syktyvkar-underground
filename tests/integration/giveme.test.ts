@@ -202,6 +202,56 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     expect(guest.inventories).toEqual([]);
   });
 
+  it('lets a signed-in player set, stop and reset the shared day clock, privately', async () => {
+    const guest = await join();
+    const owner = await join(await login('timekeeper'));
+    guest.send('/time 12', 1);
+    await until(() => guest.results.length === 1);
+    expect(guest.results[0]).toMatchObject({
+      code: 'AUTH_REQUIRED',
+      message: expect.stringContaining('Telegram'),
+    });
+    expect(app.room.state.dayFrozenHour).toBe(-1);
+    expect(app.room.state.dayOffsetMs).toBe(0);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      owner.send('/time 18:30', 1);
+      await until(() => owner.results.length === 1);
+      expect(owner.results[0]).toMatchObject({ ok: true, message: 'Время идёт: 18:30.' });
+      await until(() => guest.room.state.dayOffsetMs === app.room.state.dayOffsetMs);
+      expect(guest.room.state.dayFrozenHour).toBe(-1);
+
+      owner.send('/time stop', 2);
+      await until(() => owner.results.length === 2);
+      expect(owner.results[1]).toMatchObject({ code: 'RATE_LIMITED' });
+      vi.setSystemTime(Date.now() + 1000);
+      owner.send('/time stop', 3);
+      await until(() => owner.results.length === 3);
+      expect(owner.results[2]).toMatchObject({ ok: true, message: 'Время остановлено: 18:31.' });
+      await until(() => guest.room.state.dayFrozenHour >= 0);
+      expect(guest.room.state.dayFrozenHour).toBeCloseTo(18.5 + 1 / 60, 3);
+
+      owner.send('/time', 4);
+      await until(() => owner.results.length === 4);
+      expect(owner.results[3]).toMatchObject({ ok: true, message: 'Время остановлено: 18:31.' });
+      owner.send('/time 25', 5);
+      await until(() => owner.results.length === 5);
+      expect(owner.results[4]).toMatchObject({ ok: false, code: 'INVALID_INPUT' });
+
+      vi.setSystemTime(Date.now() + 1000);
+      owner.send('/time reset', 6);
+      await until(() => owner.results.length === 6);
+      expect(owner.results[5].ok).toBe(true);
+      await until(() => guest.room.state.dayFrozenHour === -1);
+      expect(guest.room.state.dayOffsetMs).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(guest.results).toHaveLength(1);
+    expect(app.room.state.players.get(owner.room.sessionId)!.chatSequence).toBe(0);
+  });
+
   it('enforces the cooldown across new sessions of the same account while allowing another account', async () => {
     const cookie = await login('same-account');
     const first = await join(cookie);

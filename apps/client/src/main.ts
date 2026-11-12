@@ -422,6 +422,7 @@ chat = new ChatConsole(
     }
   },
 );
+session.onDayClock = (clock) => view?.setDayClock(clock);
 session.onChatResult = (result) => {
   chat?.complete(result.ok);
   renderChat();
@@ -545,6 +546,7 @@ async function start(): Promise<void> {
     view = undefined;
     await session.load();
     view = new WorldView(canvas, element('labels'), session.definition, quality);
+    view.setDayClock(session.dayClock);
     // ?time=14.5 holds the world at one game hour: for screenshots and visual tests.
     const fixedHour = Number.parseFloat(new URLSearchParams(location.search).get('time') ?? '');
     if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);

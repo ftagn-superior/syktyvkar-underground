@@ -31,7 +31,7 @@ import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldLighting } from './lighting';
 import { WorldClouds } from './clouds';
-import { hourAt } from './day-cycle';
+import { DEFAULT_DAY_CLOCK, dayClockHour, type DayClock } from '@su/contracts';
 import { BuildingViews } from './buildings';
 import { CameraOrbit, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
@@ -75,6 +75,7 @@ export class WorldView {
   private readonly cloudTint = new Color3();
   private readonly lightDirection = new Vector3();
   private fixedHour?: number;
+  private dayClock: DayClock = DEFAULT_DAY_CLOCK;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
@@ -215,7 +216,9 @@ export class WorldView {
       );
       this.lighting.follow(this.camera.target);
       const epochMs = Date.now();
-      const sky = this.lighting.setTimeOfDay(this.fixedHour ?? hourAt(epochMs));
+      const sky = this.lighting.setTimeOfDay(
+        this.fixedHour ?? dayClockHour(this.dayClock, epochMs),
+      );
       this.clouds.update({
         epochMs,
         lightDirection: this.lightDirection.set(
@@ -280,6 +283,10 @@ export class WorldView {
   /** Holds the world at one game hour (0..24); `undefined` returns to the running clock. */
   setTimeOfDay(hour?: number): void {
     this.fixedHour = hour === undefined ? undefined : ((hour % 24) + 24) % 24;
+  }
+  /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
+  setDayClock(clock: DayClock): void {
+    this.dayClock = clock;
   }
   get cameraAngle(): number {
     return this.cameraOrbit.angle;

@@ -18,7 +18,7 @@ import {
 } from '../../packages/contracts/src/index.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import { readWorldDirectory } from '../../apps/server/src/world-bundle.js';
-import { createGameServer } from '../../apps/server/src/index.js';
+import { createGameServer } from '../helpers/game-server.js';
 import { createAuthoritativeWorld } from '../../packages/simulation/src/server.js';
 
 let directory: string, release: string;
@@ -106,7 +106,7 @@ describe('L1 spatial world release', () => {
     );
     expect(
       new Set([...definition.entities, ...definition.buildings].map((item) => item.entityId)).size,
-    ).toBe(1857);
+    ).toBe(1856);
     const referenceCounts = new Map<string, number>();
     const f = fixture();
     for (const entry of manifest.cells) {
@@ -124,7 +124,7 @@ describe('L1 spatial world release', () => {
     const f = fixture();
     const header = await loadWorldHeader(f.manifest, f.read);
     expect(f.requests).toEqual([manifest.worldFile]);
-    expect(header.crate.entityId).toBe('crate-01');
+    expect(header.initialItems[0].typeId).toBe('wooden-crate');
     expect(header).not.toHaveProperty('entities');
     expect(header).not.toHaveProperty('buildings');
     f.requests.length = 0;
@@ -195,28 +195,33 @@ describe('L1 spatial world release', () => {
     expect(f.requests).toEqual([file]);
   });
 
-  it('uses the manifest world ID for HTTP routes, serves only listed files and starts one complete simulation', async () => {
-    await writeFile(join(release, 'private.txt'), 'not a published resource');
-    const app = await createGameServer({ port: 0, worldDirectory: release });
-    try {
-      const info = await fetch(`${app.url}/api/world`).then((response) => response.json());
-      expect(info.protocolVersion).toBe(PROTOCOL_VERSION);
-      expect(info.manifestUrl).toBe('/worlds/streaming-lab/manifest.json');
-      const received = await fetch(app.url + info.manifestUrl).then((response) => response.json());
-      expect(received).toEqual(manifest);
-      expect((await fetch(`${app.url}/worlds/streaming-lab/${manifest.worldFile}`)).status).toBe(
-        200,
-      );
-      expect((await fetch(`${app.url}/worlds/streaming-lab/private.txt`)).status).toBe(404);
-      expect((await fetch(`${app.url}/worlds/physics-lab/manifest.json`)).status).toBe(404);
-      expect((await fetch(`${app.url}/worlds/streaming-lab/../private.txt`)).status).toBe(404);
-      expect((await fetch(`${app.url}/health/ready`)).status).toBe(200);
-      expect(app.room.diagnostics().bodies).toBe(1857);
-      expect(app.room.diagnostics().players).toBe(0);
-    } finally {
-      await app.close();
-    }
-  });
+  it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
+    'uses the manifest world ID for HTTP routes, serves only listed files and starts one complete simulation',
+    async () => {
+      await writeFile(join(release, 'private.txt'), 'not a published resource');
+      const app = await createGameServer({ port: 0, worldDirectory: release });
+      try {
+        const info = await fetch(`${app.url}/api/world`).then((response) => response.json());
+        expect(info.protocolVersion).toBe(PROTOCOL_VERSION);
+        expect(info.manifestUrl).toBe('/worlds/streaming-lab/manifest.json');
+        const received = await fetch(app.url + info.manifestUrl).then((response) =>
+          response.json(),
+        );
+        expect(received).toEqual(manifest);
+        expect((await fetch(`${app.url}/worlds/streaming-lab/${manifest.worldFile}`)).status).toBe(
+          200,
+        );
+        expect((await fetch(`${app.url}/worlds/streaming-lab/private.txt`)).status).toBe(404);
+        expect((await fetch(`${app.url}/worlds/physics-lab/manifest.json`)).status).toBe(404);
+        expect((await fetch(`${app.url}/worlds/streaming-lab/../private.txt`)).status).toBe(404);
+        expect((await fetch(`${app.url}/health/ready`)).status).toBe(200);
+        expect(app.room.diagnostics().bodies).toBe(1857);
+        expect(app.room.diagnostics().players).toBe(0);
+      } finally {
+        await app.close();
+      }
+    },
+  );
 
   it('partitions primitive overlaps and merges identical source definitions while rejecting conflicts', async () => {
     const content = join(directory, 'primitive-source');
@@ -228,7 +233,7 @@ describe('L1 spatial world release', () => {
     const originalPath = join(content, 'worlds/physics-lab/cells/0_0.json');
     const original = JSON.parse(await readFile(originalPath, 'utf8'));
     original.statics.push({
-      ...original.statics[0],
+      ...source.entities[0],
       entityId: 'seam-box',
       position: { x: 105, y: 1, z: 0 },
       size: { x: 2, y: 2, z: 2 },

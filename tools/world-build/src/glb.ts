@@ -8,6 +8,11 @@ export interface StaticMeshPart {
   positions: number[];
   normals: number[];
   indices: number[];
+  /**
+   * Необязательные цвета вершин (линейный RGB, по три числа на вершину). Позволяют
+   * объединить разноцветные детали в один меш: тогда `color` должен быть белым.
+   */
+  colors?: number[];
 }
 const invariant = (condition: unknown, message: string): void => {
   if (!condition) throw new Error(`Invalid GLB: ${message}`);
@@ -88,6 +93,10 @@ export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
           attributes: {
             POSITION: accessor(part.positions, 'VEC3'),
             NORMAL: accessor(part.normals, 'VEC3'),
+            ...(part.colors
+              ? (invariant(part.colors.length === part.positions.length, 'vertex colors'),
+                { COLOR_0: accessor(part.colors, 'VEC3') })
+              : {}),
           },
           indices: accessor(part.indices, 'SCALAR', true),
           material,

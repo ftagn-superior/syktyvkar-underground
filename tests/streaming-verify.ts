@@ -1,6 +1,10 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { runCheck } from './helpers/run-check.js';
+if (!process.env.SU_TEST_DATABASE_URL)
+  throw new Error(
+    'SU_TEST_DATABASE_URL is required: acceptance must not skip persistent-world regressions.',
+  );
 const output = 'output/large-map/l5';
 await mkdir(output, { recursive: true });
 const selected = new Set(

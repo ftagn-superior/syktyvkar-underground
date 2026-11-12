@@ -38,7 +38,24 @@
     "test:streaming:netem": "pnpm build && bash tests/streaming-netem.sh",
     "test:streaming:matrix": "pnpm build && node --import tsx tests/streaming-matrix.ts",
     "test:streaming:verify": "pnpm build && node --import tsx tests/streaming-verify.ts",
-    "test:streaming:evidence": "node --import tsx tests/streaming-evidence.ts"
+    "test:streaming:evidence": "node --import tsx tests/streaming-evidence.ts",
+    "world:import": "node --import tsx tools/world-build/src/import-district.ts",
+    "world:fetch-osm": "node --import tsx tools/world-build/src/fetch-osm.ts",
+    "db:migrate": "node --import tsx apps/server/src/migrate.ts",
+    "db:migrate:built": "node dist/server/migrate.mjs",
+    "world:migrate": "node --import tsx apps/server/src/migrate-world.ts",
+    "world:migrate:built": "node dist/server/migrate-world.mjs",
+    "test:accounts": "node tools/test-database.mjs",
+    "test:accounts:browser": "node tools/test-database.mjs --browser",
+    "test:reactions:browser": "node --import tsx tests/browser-reactions.ts",
+    "test:animations:browser": "node --import tsx tests/browser-animations.ts",
+    "test:chat:browser": "node --import tsx tests/browser-chat.ts",
+    "test:items": "node tools/test-database.mjs --items",
+    "test:items:browser": "node tools/test-database.mjs --items --browser",
+    "test:giveme:browser": "node tools/test-database.mjs --giveme --browser",
+    "test:avatars:browser": "node tools/test-database.mjs --avatars --browser",
+    "test:avatars:profile": "node --import tsx tests/browser-avatar-profile.ts",
+    "test:dynamic-map:browser": "node --import tsx tests/dynamic-map-browser.ts"
   },
   "devDependencies": {
     "@babylonjs/core": "9.35.0",
@@ -54,6 +71,9 @@
     "playwright": "1.65.0",
     "@colyseus/sdk": "0.18.10",
     "@types/express": "5.0.6",
-    "prettier": "3.10.0"
+    "prettier": "3.10.0",
+    "@types/pg": "8.23.1",
+    "jose": "6.2.17",
+    "openid-client": "6.8.9"
   }
 }

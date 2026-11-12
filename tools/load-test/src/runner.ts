@@ -1,5 +1,5 @@
 import { Client, Protocol, type Room, type InputHandle } from '@colyseus/sdk';
-import { MoveInputSchema, WorldState, visibleCrate } from '@su/protocol';
+import { MoveInputSchema, WorldState } from '@su/protocol';
 import {
   loadWorldHeader,
   validateWorldManifest,
@@ -85,6 +85,7 @@ export async function startLoad(options: LoadOptions) {
       room.onMessage('actionResult', () => {});
       room.onMessage('resync', () => {});
       room.onMessage('areaResult', () => {});
+      room.onMessage('inventory', () => {});
       room.onMessage<PrepareArea>('prepareArea', (plan) =>
         room.send('areaReady', {
           prepareId: plan.prepareId,
@@ -144,13 +145,12 @@ export async function startLoad(options: LoadOptions) {
         if (own.y < 0.8) recordError(`${index}: fell through ground`);
         peer.visibleMin = Math.min(peer.visibleMin, room.state.players.size);
         peer.visibleMax = Math.max(peer.visibleMax, room.state.players.size);
-        const crate = visibleCrate(room.state);
         peer.snapshots.push({
           tick: room.state.serverTick,
           own: own.entityId,
           ids: [...room.state.players.values()]
             .map((entity) => entity.entityId)
-            .concat(crate ? [crate.entityId] : []),
+            .concat([...room.state.items.values()].map((item) => item.entityId)),
         });
         if (peer.snapshots.length > 200) {
           peer.snapshots.shift();
@@ -180,7 +180,9 @@ export async function startLoad(options: LoadOptions) {
           }
         } else
           target = crowdTarget(
-            visibleCrate(peer.room.state) ?? header.crate.position,
+            [...peer.room.state.items.values()].find((item) => item.typeId === 'wooden-crate') ??
+              header.initialItems[0]?.position ??
+              header.spawnPoints[0],
             index,
             (now - started) / 1000,
           );

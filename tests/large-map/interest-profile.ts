@@ -28,8 +28,9 @@ export function interestProfile(crowd: boolean) {
     interest.upsert(player);
   }
   const crate = new EntitySchema();
-  crate.entityId = 'crate-01';
-  state.crates.set(crate.entityId, crate);
+  crate.entityId = 'item-profile';
+  crate.typeId = 'wooden-crate';
+  state.items.set(crate.entityId, crate);
   interest.upsert(crate);
   for (const client of clients) interest.reset(client, client.sessionId);
   const first = { offset: 0 };

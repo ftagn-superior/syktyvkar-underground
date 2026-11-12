@@ -22,7 +22,7 @@ export function obstacleAccent(entity: EntityDefinition): string | undefined {
 /** Visual marks are owned by the scene and never create collision bodies. */
 export function decorateWorld(
   scene: Scene,
-  world: Pick<WorldDefinition, 'bounds' | 'spawnPoints' | 'entities'>,
+  world: Pick<WorldDefinition, 'bounds' | 'spawnPoints' | 'entities' | 'worldId' | 'initialItems'>,
 ): void {
   const point = (x: number, z: number) => new Vector3(x, floorY, z);
   const lineSystem = (name: string, lines: Vector3[][], color: string, alpha: number) => {
@@ -39,13 +39,16 @@ export function decorateWorld(
       return point(x + Math.cos(angle) * radius, z + Math.sin(angle) * radius);
     });
 
-  const grid: Vector3[][] = [];
-  const { min, max } = world.bounds;
-  for (let x = Math.ceil(min.x / 2) * 2; x <= max.x; x += 2)
-    grid.push([point(x, min.z), point(x, max.z)]);
-  for (let z = Math.ceil(min.z / 2) * 2; z <= max.z; z += 2)
-    grid.push([point(min.x, z), point(max.x, z)]);
-  lineSystem('floor-grid', grid, '#4c6573', 0.22);
+  // Метровая сетка нужна только тестовой площадке; в городе пол — это улицы и дворы.
+  if (world.worldId === 'physics-lab') {
+    const grid: Vector3[][] = [];
+    const { min, max } = world.bounds;
+    for (let x = Math.ceil(min.x / 2) * 2; x <= max.x; x += 2)
+      grid.push([point(x, min.z), point(x, max.z)]);
+    for (let z = Math.ceil(min.z / 2) * 2; z <= max.z; z += 2)
+      grid.push([point(min.x, z), point(max.x, z)]);
+    lineSystem('floor-grid', grid, '#4c6573', 0.22);
+  }
 
   const labels: FloorLabel[] = [];
   const spawnMinX = Math.min(...world.spawnPoints.map((p) => p.x));
@@ -62,7 +65,7 @@ export function decorateWorld(
   lineSystem('spawn-marks', spawnLines, palette.spawn, 0.5);
   labels.push({ text: '01  СТАРТ', x: spawnMidX, z: spawnMaxZ + 2.6, color: palette.spawn });
 
-  const crate = world.entities.find((entity) => entity.kind === 'crate');
+  const crate = world.initialItems[0];
   if (crate) {
     const { x, z } = crate.position;
     const lines = [circle(x, z, 2.5, 64)];

@@ -22,16 +22,15 @@ describe('orthographic camera controls', () => {
       expect(Math.hypot(diagonal.moveX, diagonal.moveZ)).toBeCloseTo(1);
     }
   });
-  it('keeps the visible dynamic ground footprint within 80m on landscape, portrait and ultrawide windows', () => {
-    for (const aspect of [1920 / 1080, 360 / 800, 2560 / 1080, 3840 / 720]) {
-      const { halfWidth, halfHeight } = orthographicFrame(aspect);
-      expect(halfWidth / halfHeight).toBeCloseTo(aspect);
-      const beta = Math.PI / 3.15;
-      const groundDepth = halfHeight / Math.cos(beta) + 2 * Math.tan(beta);
-      expect(Math.hypot(halfWidth, groundDepth)).toBeLessThan(80);
+  it('preserves full zoom and aspect without a network radius cap', () => {
+    for (const aspect of [1920 / 1080, 360 / 800, 3840 / 720]) {
+      for (const zoom of [0.6, 1, 30]) {
+        const { halfWidth, halfHeight } = orthographicFrame(aspect, zoom);
+        expect(halfWidth / halfHeight).toBeCloseTo(aspect);
+        expect(halfHeight).toBe((aspect < 1 ? 20 : 15) * zoom);
+      }
     }
-    expect(orthographicFrame(1920 / 1080).halfHeight).toBe(15);
-    expect(orthographicFrame(360 / 800).halfHeight).toBe(20);
+    expect(orthographicFrame(3840 / 720, 30).halfWidth).toBe(2400);
   });
   it('completes a smooth full circuit and bounds rapid repeated turns', () => {
     const camera = new CameraTurn();

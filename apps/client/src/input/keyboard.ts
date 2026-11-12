@@ -11,11 +11,17 @@ const movementKeys = new Set([
   'ArrowDown',
   'ArrowRight',
 ]);
+const sprintKeys = new Set(['ShiftLeft', 'ShiftRight']);
 export class KeyboardInput {
   private enabled = true;
   private readonly held = new Set<string>();
   private readonly controller = new AbortController();
-  constructor(onRelease: () => void, onRotate?: (direction: -1 | 1) => void) {
+  constructor(
+    onRelease: () => void,
+    onRotate?: (direction: -1 | 1) => void,
+    onReactions?: () => void,
+    onChat?: () => void,
+  ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
       'keydown',
@@ -29,12 +35,22 @@ export class KeyboardInput {
           (event.target instanceof HTMLElement && event.target.isContentEditable)
         )
           return;
+        if (event.code === 'KeyR') {
+          event.preventDefault();
+          onReactions?.();
+          return;
+        }
+        if (event.code === 'KeyT') {
+          event.preventDefault();
+          onChat?.();
+          return;
+        }
         if (event.code === 'KeyQ' || event.code === 'KeyE') {
           event.preventDefault();
           onRotate?.(event.code === 'KeyQ' ? -1 : 1);
           return;
         }
-        if (!movementKeys.has(event.code)) return;
+        if (!movementKeys.has(event.code) && !sprintKeys.has(event.code)) return;
         event.preventDefault();
         this.held.add(event.code);
       },
@@ -68,7 +84,10 @@ export class KeyboardInput {
     const forward =
       Number(this.held.has('KeyW') || this.held.has('ArrowUp')) -
       Number(this.held.has('KeyS') || this.held.has('ArrowDown'));
-    return screenMovement(right, forward, cameraAngle);
+    return {
+      ...screenMovement(right, forward, cameraAngle),
+      sprint: this.held.has('ShiftLeft') || this.held.has('ShiftRight'),
+    };
   }
   clear(): void {
     this.held.clear();

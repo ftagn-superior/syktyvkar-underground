@@ -51,6 +51,10 @@ try {
   );
   assert.deepEqual(errors, [], 'browser has no uncaught errors');
   for (const result of [nodeResult, browserResult]) {
+    for (const [index, expected] of [4, 14, 4, 0].entries()) {
+      assert.ok(Math.abs(result.movement[index].speed - expected) < 0.001);
+      assert.ok(Math.abs(result.movement[index].distance - expected / 2) < 0.01);
+    }
     assert.equal(result.cadence.length, 3);
     for (const cadence of result.cadence) {
       assert.equal(cadence.steps, 180);
@@ -93,13 +97,15 @@ try {
     } else assert.equal(a, b);
   };
   compare(nodeResult.cadence, browserResult.cadence);
+  compare(nodeResult.movement, browserResult.movement);
   compare(nodeResult.buildings, browserResult.buildings);
   assert.ok(
     maximumCrossRuntimeDifference < 0.001,
     `Node/browser discrepancy: ${maximumCrossRuntimeDifference}`,
   );
   const report = {
-    check: 'T01 browser/Node fixed step, T02 controller replay, static compound and mesh buildings',
+    check:
+      'T01 browser/Node fixed step, walk/sprint transitions, T02 sprint replay, static compound and mesh buildings',
     date: new Date().toISOString(),
     node: process.version,
     browser: browser.version(),
@@ -107,6 +113,7 @@ try {
     stepsPerCadence: 180,
     snapshotsPerCadence: 6,
     maximumCrossRuntimeDifference,
+    movement: { node: nodeResult.movement, browser: browserResult.movement },
     replayDrift: { node: nodeResult.maximumReplayDrift, browser: browserResult.maximumReplayDrift },
     buildingReplayDrift: {
       node: nodeResult.buildings.map(({ kind, maximumReplayDrift }) => ({

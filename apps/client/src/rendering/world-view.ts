@@ -1,3 +1,4 @@
+import '@babylonjs/core/Culling/ray';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
@@ -7,56 +8,101 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
-import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
-import type {
-  EntityState,
-  WorldDefinition,
-  WorldHeader,
-  WorldCell,
-  WorldManifest,
-  StaticEntityDefinition,
-  BuildingInstance,
+import {
+  findReaction,
+  REACTION_DURATION_MS,
+  type ItemPose,
+  type Vec3,
+  type WorldDefinition,
+  type WorldHeader,
+  type WorldCell,
+  type StaticEntityDefinition,
+  type BuildingInstance,
+  type WorldManifest,
 } from '@su/contracts';
-import { StaticViews } from './statics';
 import { decorateWorld } from './world-decoration';
+import { StaticViews } from './statics';
+import { applyRadialFog, radialOpacity, type RadialState } from './radial-fog';
+import { Frustum } from '@babylonjs/core/Maths/math.frustum';
+import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
+import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { BuildingViews } from './buildings';
-import { CameraTurn, INITIAL_CAMERA_ANGLE, orthographicFrame } from './camera-controller';
+import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
+import type { DisplayEntity } from '../presentation/display-state';
+import { AvatarView } from './avatars/avatar-view';
+import { createItemMesh } from './items';
 
-export interface DisplayEntity extends EntityState {
-  name?: string;
-  color?: string;
-  connected?: boolean;
-}
 type EntityView = {
   root: TransformNode;
   label?: HTMLElement;
-  material: StandardMaterial;
+  material?: StandardMaterial;
+  avatar?: AvatarView;
   labelText?: string;
   labelTransform?: string;
+  reaction?: HTMLElement;
+  reactionImage?: HTMLImageElement;
+  reactionSequence?: number;
+  expiredReactionSequence?: number;
+  chat?: HTMLElement;
+  chatSequence?: number;
+  expiredChatSequence?: number;
 };
+type LabelAnchor = {
+  label: HTMLElement;
+  labelTransform?: string;
+  reaction?: HTMLElement;
+  chat?: HTMLElement;
+};
+const vector = (p: Vec3) => new Vector3(p.x, p.y, p.z);
+/** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
+const SHADOW_EXTENT = 90;
+const SUN_DISTANCE = 150;
+/** Пределы масштаба колёсиком мыши относительно исходного кадра. */
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 30;
 
 export class WorldView {
   readonly engine: Engine;
   readonly scene: Scene;
   private readonly camera: ArcRotateCamera;
+  private readonly sun: DirectionalLight;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
+  private manifest?: WorldManifest;
+  private readonly cellPreparations = new Set<Promise<unknown>>();
+  private readonly radial: RadialState = {
+    center: { x: 0, y: 0, z: 0 },
+    radius: 0,
+    time: 0,
+    appearMs: 300,
+  };
+  private readonly dynamicRadial: RadialState = {
+    center: { x: 0, y: 0, z: 0 },
+    radius: 500,
+    dynamic: true,
+    time: 0,
+    appearMs: 300,
+  };
+  private streamingRadius = 0;
   private readonly cameraTurn = new CameraTurn();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
+  private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
   private readonly target = Vector3.Zero();
   private readonly projection = Matrix.Identity();
   private readonly labelPosition = Vector3.Zero();
   private readonly projectedLabel = Vector3.Zero();
+  private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private quality: RenderQuality;
+  private zoom = 1;
   private readonly resize = () => {
     this.applyQuality();
     this.sizeCamera();
@@ -66,12 +112,14 @@ export class WorldView {
   private readonly visibilityChanged = () => {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
     this.lastFrame = performance.now();
+    for (const view of this.entities.values()) view.avatar?.resetMotion();
   };
   private followed?: string;
   private ownPosition?: Vector3;
   private disposed = false;
   private preparation?: Promise<void>;
-  private readonly cellPreparations = new Set<Promise<unknown>>();
+  private ghost?: Mesh;
+  private ghostType?: string;
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly labels: HTMLElement,
@@ -95,13 +143,14 @@ export class WorldView {
       'isometric',
       INITIAL_CAMERA_ANGLE,
       Math.PI / 3.15,
-      48,
+      // Исходное удаление камеры: выше 10-этажных домов.
+      120,
       Vector3.Zero(),
       this.scene,
     );
     this.camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
     this.camera.minZ = 0.1;
-    this.camera.maxZ = 150;
+    this.camera.maxZ = 300;
     this.camera.inputs.clear();
     this.sizeCamera();
     const sky = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
@@ -112,6 +161,12 @@ export class WorldView {
     sun.position.set(20, 35, 15);
     sun.intensity = 1.25;
     sun.diffuse = Color3.FromHexString('#fff2da');
+    // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
+    sun.shadowFrustumSize = SHADOW_EXTENT;
+    sun.shadowMinZ = 0;
+    sun.shadowMaxZ = SUN_DISTANCE * 2;
+    this.sun = sun;
+    this.sizeCamera();
     this.shadow = new ShadowGenerator(1024, sun);
     this.shadow.useBlurExponentialShadowMap = true;
     this.shadow.blurKernel = 16;
@@ -123,8 +178,28 @@ export class WorldView {
         if (entity.kind === 'obstacle')
           this.statics.add(entity as StaticEntityDefinition, 'initial');
       decorateWorld(this.scene, definition);
+      this.streamingRadius = this.radial.radius = Infinity;
+    }
+    if (!(
+      definition.bounds.min.x <= 0 &&
+      definition.bounds.max.x >= 0 &&
+      definition.bounds.min.z <= 0 &&
+      definition.bounds.max.z >= 0
+    )) {
+      this.target.copyFrom(vector(definition.spawnPoints[0]));
+      this.target.y = 0;
+      this.camera.setTarget(this.target);
+    }
+    for (const landmark of definition.landmarks ?? []) {
+      const label = document.createElement('div');
+      label.className = 'landmark-label';
+      label.textContent = landmark.name;
+      label.hidden = true;
+      this.labels.append(label);
+      this.landmarks.push({ label, position: vector(landmark.position) });
     }
     window.addEventListener('resize', this.resize);
+    canvas.addEventListener('wheel', this.wheel, { passive: false });
     document.addEventListener('visibilitychange', this.visibilityChanged);
     this.engine.runRenderLoop(() => {
       const now = performance.now();
@@ -138,6 +213,12 @@ export class WorldView {
         false,
         true, // Following translates the rig; pitch, orbit angle and radius remain fixed.
       );
+      // Солнце движется вместе с целью камеры; направление лучей не меняется.
+      this.sun.position
+        .copyFrom(this.sun.direction)
+        .normalize()
+        .scaleInPlace(-SUN_DISTANCE)
+        .addInPlace(this.camera.target);
       // Update the orbit before casting parallel orthographic rays; alpha may be mid-turn.
       this.camera.getViewMatrix(true);
       this.buildings.update(
@@ -147,7 +228,22 @@ export class WorldView {
         this.camera.minZ,
         now,
         delta,
+        this.ownPosition ?? this.target,
+        this.radial.radius,
       );
+      this.statics.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
+      const center = this.ownPosition ?? this.target;
+      this.radial.center = this.dynamicRadial.center = center;
+      this.radial.time = this.dynamicRadial.time = now;
+      this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
+      // Closing is immediate; opening follows only the completely prepared circle.
+      this.radial.radius =
+        this.streamingRadius < this.radial.radius
+          ? this.streamingRadius
+          : Math.min(
+              this.streamingRadius,
+              this.radial.radius + (Math.max(1, this.streamingRadius) * delta) / 0.3,
+            );
       this.scene.render();
       this.positionLabels();
     });
@@ -190,6 +286,7 @@ export class WorldView {
     read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
     signal?: AbortSignal,
   ) {
+    this.manifest = manifest;
     const pending = this.buildings.prepareAssets(manifest, ids, read, signal);
     this.cellPreparations.add(pending);
     void pending.then(
@@ -210,14 +307,12 @@ export class WorldView {
       for (const texture of [...this.scene.textures]) if (!textures.has(texture)) texture.dispose();
     };
     try {
-      const crate =
-        'crate' in this.definition
-          ? this.definition.crate
-          : this.definition.entities.find((entity) => entity.kind === 'crate')!;
       decorateWorld(this.scene, {
         bounds: this.definition.bounds,
         spawnPoints: this.definition.spawnPoints,
-        entities: [...cell.statics, crate],
+        entities: cell.statics,
+        worldId: this.definition.worldId,
+        initialItems: this.definition.initialItems,
       });
       // Capture only decoration resources; later characters/buildings belong to other owners.
       const ownedMeshes = this.scene.meshes.filter((mesh) => !meshes.has(mesh));
@@ -236,6 +331,14 @@ export class WorldView {
   retainStatic(item: StaticEntityDefinition | BuildingInstance, version: string) {
     if ('assetId' in item) this.buildings.add(item, version);
     else this.statics.add(item, version);
+    const root =
+      this.scene.getTransformNodeByName(item.entityId) ?? this.scene.getMeshByName(item.entityId);
+    if (root) {
+      const meshes = root instanceof TransformNode ? root.getChildMeshes() : [];
+      if ('material' in root)
+        meshes.push(root as import('@babylonjs/core/Meshes/abstractMesh').AbstractMesh);
+      for (const mesh of meshes) applyRadialFog(mesh, this.radial, performance.now());
+    }
   }
   releaseStatic(entityId: string) {
     this.buildings.remove(entityId);
@@ -243,6 +346,11 @@ export class WorldView {
   }
   buildingDiagnostics() {
     return this.buildings.diagnostics();
+  }
+  avatarDiagnostics() {
+    return Array.from(this.entities.values()).flatMap((view) =>
+      view.avatar ? [view.avatar.diagnostics()] : [],
+    );
   }
   renderingDiagnostics() {
     return {
@@ -263,7 +371,13 @@ export class WorldView {
       nodes: this.scene.transformNodes.length,
       textures: this.scene.textures.length,
       shadowCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
+      streaming: {
+        drawRadius: this.graphicalArea().drawRadius,
+        readyRadius: this.streamingRadius,
+        shownRadius: this.radial.radius,
+      },
       meshes: this.scene.meshes.length,
+      transformNodes: this.scene.transformNodes.length,
       materials: this.scene.materials.length,
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),
@@ -273,36 +387,86 @@ export class WorldView {
         halfWidth: this.camera.orthoRight!,
         halfHeight: this.camera.orthoTop!,
         beta: this.camera.beta,
+        zoom: this.zoom,
       },
       buildings: this.buildings.aggregateDiagnostics(),
     };
   }
+  graphicalArea() {
+    this.camera.getViewMatrix(true);
+    const center = this.ownPosition ?? this.target;
+    let frameRadius = 0;
+    if (this.manifest) {
+      const planes = Frustum.GetPlanes(this.camera.getTransformationMatrix());
+      for (const cell of this.manifest.cells) {
+        const bounds = worldCellBounds(this.manifest.bounds, this.manifest.grid, cell.cellId);
+        if (!new BoundingInfo(vector(bounds.min), vector(bounds.max)).isInFrustum(planes)) continue;
+        for (const x of [bounds.min.x, bounds.max.x])
+          for (const z of [bounds.min.z, bounds.max.z])
+            frameRadius = Math.max(frameRadius, Math.hypot(x - center.x, z - center.z));
+      }
+    }
+    const drawRadius = Math.max(500, frameRadius + 125);
+    return {
+      center: { x: center.x, y: center.y, z: center.z },
+      drawRadius,
+      preloadRadius: drawRadius + 125,
+      retainRadius: Math.max(800, drawRadius + 300),
+    };
+  }
+  setStreamingRadius(radius: number) {
+    this.streamingRadius = Math.max(0, radius);
+  }
   private sizeCamera(): void {
     // Quality changes raster resolution, never the world visible through the camera.
-    const aspect = Math.max(1, this.canvas.clientWidth) / Math.max(1, this.canvas.clientHeight);
-    const { halfHeight, halfWidth } = orthographicFrame(aspect);
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+    const halfHeight = (aspect < 1 ? 20 : 15) * this.zoom;
     this.camera.orthoTop = halfHeight;
     this.camera.orthoBottom = -halfHeight;
-    this.camera.orthoLeft = -halfWidth;
-    this.camera.orthoRight = halfWidth;
+    this.camera.orthoLeft = -halfHeight * aspect;
+    this.camera.orthoRight = halfHeight * aspect;
+    // При отдалении расширяем глубину обзора: ближняя и дальняя плоскости не режут город.
+    const depthScale = Math.max(1, this.zoom);
+    this.camera.radius = 120 * depthScale;
+    this.camera.maxZ = 300 * depthScale;
+    if (this.sun) this.sun.shadowFrustumSize = SHADOW_EXTENT;
+  }
+  private readonly wheel = (event: WheelEvent) => {
+    event.preventDefault();
+    const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * Math.exp(event.deltaY * 0.001)));
+    if (zoom === this.zoom) return;
+    this.zoom = zoom;
+    this.sizeCamera();
+  };
+  /** Масштаб кадра: 1 — исходный ракурс, больше — дальше. */
+  get cameraZoom(): number {
+    return this.zoom;
   }
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
   }
   follow(id?: string): void {
     this.followed = id;
-    if (!id) this.target.setAll(0);
+    if (!id) {
+      const bounds = this.definition.bounds;
+      if (bounds.min.x <= 0 && bounds.max.x >= 0 && bounds.min.z <= 0 && bounds.max.z >= 0)
+        this.target.setAll(0);
+      else {
+        this.target.copyFrom(vector(this.definition.spawnPoints[0]));
+        this.target.y = 0;
+      }
+    }
   }
-  update(entities: DisplayEntity[], ownId?: string): void {
+  update(entities: DisplayEntity[], ownId: string | undefined, delta: number): void {
     this.ownPosition = undefined;
     const current = new Set(entities.map((entity) => entity.entityId));
     for (const [id, view] of this.entities)
       if (!current.has(id)) {
-        view.label?.remove();
-        for (const mesh of view.root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
-        view.root.dispose(false, true);
+        this.disposeEntity(view);
         this.entities.delete(id);
       }
+    const shadowCenter =
+      entities.find((entity) => entity.entityId === ownId)?.position ?? this.target;
     for (const entity of entities) {
       let view = this.entities.get(entity.entityId);
       if (!view) {
@@ -320,86 +484,177 @@ export class WorldView {
         )
         .normalize();
       if (view.label) {
+        view.label.classList.toggle('own', entity.entityId === ownId);
         const text = `${entity.name ?? 'Гость'}${entity.entityId === ownId ? ' · Вы' : ''}${entity.connected === false ? ' · нет связи' : ''}`;
         if (text !== view.labelText) {
           view.label.textContent = text;
           view.labelText = text;
         }
       }
-      view.material.alpha = entity.connected === false ? 0.45 : 1;
+      if (entity.kind === 'player')
+        view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
+      else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
+      const shadowCasters = new Set(this.shadow.getShadowMap()?.renderList ?? []);
+      const nearShadow =
+        Math.hypot(entity.position.x - shadowCenter.x, entity.position.z - shadowCenter.z) <= 80;
+      for (const mesh of view.root.getChildMeshes()) {
+        applyRadialFog(mesh, this.dynamicRadial, performance.now());
+        // Remember authored eligibility: returning into range must restore body shadows,
+        // while markers and other intentionally unshadowed avatar pieces remain excluded.
+        mesh.metadata.suStreamingShadow ??= shadowCasters.has(mesh);
+        if (nearShadow && mesh.metadata.suStreamingShadow && !shadowCasters.has(mesh))
+          this.shadow.addShadowCaster(mesh);
+        else if (!nearShadow && shadowCasters.has(mesh)) this.shadow.removeShadowCaster(mesh);
+      }
+      this.updateReaction(view, entity);
+      this.updateChat(view, entity);
       if (entity.entityId === this.followed)
         this.target.set(entity.position.x, 0, entity.position.z);
     }
   }
+  private disposeEntity(view: EntityView): void {
+    view.label?.remove();
+    view.reaction?.remove();
+    view.chat?.remove();
+    view.avatar?.dispose();
+    for (const mesh of view.root.getChildMeshes()) this.shadow.removeShadowCaster(mesh);
+    view.root.dispose(false, true);
+  }
+  private updateReaction(view: EntityView, entity: DisplayEntity): void {
+    const active = entity.reaction;
+    const definition = findReaction(active?.id);
+    if (!active || !definition || active.remainingMs <= 0) {
+      if (active && active.remainingMs <= 0) view.expiredReactionSequence = active.sequence;
+      view.reaction?.remove();
+      view.reaction = undefined;
+      view.reactionImage = undefined;
+      view.reactionSequence = undefined;
+      return;
+    }
+    // A late patch for the same show must not revive an already expired sticker.
+    if (view.expiredReactionSequence === active.sequence) return;
+    if (!view.reaction) {
+      view.reaction = document.createElement('div');
+      view.reaction.className = 'player-reaction';
+      view.reaction.dataset.entityId = entity.entityId;
+      view.reactionImage = document.createElement('img');
+      view.reactionImage.width = view.reactionImage.height = 44;
+      view.reaction.append(view.reactionImage);
+      this.labels.append(view.reaction);
+    }
+    if (view.reactionSequence !== active.sequence) {
+      view.reactionSequence = active.sequence;
+      view.reaction.dataset.reactionId = definition.id;
+      view.reactionImage!.src = `/reactions/${definition.asset}`;
+      view.reactionImage!.alt = definition.label;
+    }
+    const appear = Math.min(1, (REACTION_DURATION_MS - active.remainingMs) / 150);
+    const disappear = Math.min(1, active.remainingMs / 250);
+    const progress = Math.max(0, Math.min(appear, disappear));
+    view.reaction.style.opacity = this.reducedMotion.matches ? '1' : progress.toFixed(3);
+    view.reactionImage!.style.transform = this.reducedMotion.matches
+      ? ''
+      : `scale(${0.8 + 0.2 * progress})`;
+  }
+  private updateChat(view: EntityView, entity: DisplayEntity): void {
+    const active = entity.chat;
+    if (!active || active.remainingMs <= 0) {
+      if (active) view.expiredChatSequence = active.sequence;
+      view.chat?.remove();
+      view.chat = undefined;
+      view.chatSequence = undefined;
+      return;
+    }
+    if (view.expiredChatSequence === active.sequence) return;
+    if (!view.chat) {
+      view.chat = document.createElement('div');
+      view.chat.className = 'player-chat';
+      view.chat.dataset.entityId = entity.entityId;
+      this.labels.append(view.chat);
+    }
+    if (view.chatSequence !== active.sequence) {
+      view.chatSequence = active.sequence;
+      view.chat.textContent = active.text;
+    }
+    view.chat.style.opacity = this.reducedMotion.matches
+      ? '1'
+      : Math.min(1, active.remainingMs / 250).toFixed(3);
+  }
   private createEntity(entity: DisplayEntity, own: boolean): EntityView {
     const root = new TransformNode(entity.entityId, this.scene);
     root.rotationQuaternion = Quaternion.Identity();
-    const material = this.material(`material-${entity.entityId}`, entity.color ?? '#d6a15a');
-    let mesh: Mesh;
-    let label: HTMLElement | undefined;
     if (entity.kind === 'player') {
-      const { height, radius } = this.definition.simulation.character;
-      mesh = MeshBuilder.CreateCapsule(
-        `body-${entity.entityId}`,
-        { height, radius, tessellation: 16, subdivisions: 2 },
+      const avatar = new AvatarView(
+        root,
         this.scene,
+        this.shadow,
+        this.definition.simulation.character,
+        entity.skinId,
       );
-      const visor = MeshBuilder.CreateBox(
-        `visor-${entity.entityId}`,
-        { width: radius * 1.05, height: height * 0.072, depth: radius * 0.34 },
-        this.scene,
-      );
-      visor.parent = root;
-      visor.position.set(0, height * 0.26, radius * 0.86);
-      visor.material = this.material(`visor-material-${entity.entityId}`, '#20323a');
-      label = document.createElement('div');
+      const label = document.createElement('div');
       label.className = `player-label${own ? ' own' : ''}`;
       this.labels.append(label);
-      if (own) {
-        const marker = MeshBuilder.CreateTorus(
-          `marker-${entity.entityId}`,
-          { diameter: radius * 3, thickness: 0.028, tessellation: 40 },
-          this.scene,
-        );
-        marker.parent = root;
-        marker.position.y = -height / 2 + 0.04;
-        const markerMaterial = this.material(
-          `marker-material-${entity.entityId}`,
-          entity.color ?? '#65d6bc',
-        );
-        markerMaterial.emissiveColor = Color3.FromHexString(entity.color ?? '#65d6bc').scale(0.35);
-        marker.material = markerMaterial;
-      }
-    } else {
-      const size =
-        'crate' in this.definition
-          ? this.definition.crate.size
-          : this.definition.entities.find((item) => item.entityId === entity.entityId)!.size;
-      mesh = MeshBuilder.CreateBox(
-        'crate',
-        { width: size.x, height: size.y, depth: size.z },
-        this.scene,
-      );
+      return { root, label, avatar };
+    }
+    const type = this.definition.itemCatalog.types[entity.typeId];
+    const material = this.material(`material-${entity.entityId}`, '#ffffff');
+    const mesh = createItemMesh(`item-${entity.entityId}`, type, this.scene);
+    if (type.model === 'box') {
       mesh.enableEdgesRendering();
       mesh.edgesWidth = 1.5;
       mesh.edgesColor = new Color4(0.24, 0.17, 0.1, 0.6);
-      const strapMaterial = this.material('crate-straps', '#574b39');
-      for (const x of [-size.x * 0.3, size.x * 0.3]) {
-        const strap = MeshBuilder.CreateBox(
-          `strap-${x}`,
-          { width: size.x * 0.07, height: size.y + 0.008, depth: size.z + 0.008 },
-          this.scene,
-        );
-        strap.parent = root;
-        strap.position.x = x;
-        strap.material = strapMaterial;
-      }
     }
     mesh.parent = root;
     mesh.material = material;
     mesh.receiveShadows = true;
     this.shadow.addShadowCaster(mesh, true);
-    return { root, label, material };
+    return { root, material };
+  }
+  pointerRay() {
+    const ray = this.scene.createPickingRay(
+      this.scene.pointerX,
+      this.scene.pointerY,
+      Matrix.Identity(),
+      this.camera,
+    );
+    return {
+      from: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
+      to: {
+        x: ray.origin.x + ray.direction.x * 5000,
+        y: ray.origin.y + ray.direction.y * 5000,
+        z: ray.origin.z + ray.direction.z * 5000,
+      },
+    };
+  }
+  showPlacement(typeId?: string, pose?: ItemPose, valid = false) {
+    if (!typeId || !pose) {
+      this.ghost?.setEnabled(false);
+      return;
+    }
+    if (!this.ghost || this.ghostType !== typeId) {
+      this.ghost?.dispose(false, true);
+      this.ghost = createItemMesh(
+        'placement-preview',
+        this.definition.itemCatalog.types[typeId],
+        this.scene,
+      );
+      this.ghost.useVertexColors = false;
+      this.ghost.isPickable = false;
+      this.ghost.material = this.material('placement-preview', '#65d6bc');
+      this.ghostType = typeId;
+    }
+    this.ghost.setEnabled(true);
+    this.ghost.position.copyFrom(vector(pose.position));
+    this.ghost.rotationQuaternion = new Quaternion(
+      pose.rotation.x,
+      pose.rotation.y,
+      pose.rotation.z,
+      pose.rotation.w,
+    );
+    const material = this.ghost.material as StandardMaterial;
+    material.alpha = 0.45;
+    material.diffuseColor = Color3.FromHexString(valid ? '#65d6bc' : '#ed7272');
+    material.emissiveColor = material.diffuseColor.scale(0.3);
   }
   private positionLabels(): void {
     const width = this.engine.getRenderWidth(true);
@@ -408,10 +663,14 @@ export class WorldView {
     const cssWidth = this.canvas.clientWidth;
     const cssHeight = this.canvas.clientHeight;
     const labelHeight = this.definition.simulation.character.height / 2 + 0.5;
-    for (const view of this.entities.values()) {
-      if (!view.label) continue;
-      this.labelPosition.copyFrom(view.root.position);
-      this.labelPosition.y += labelHeight;
+    const anchors: [LabelAnchor, Vector3, number, number][] = [];
+    for (const view of this.entities.values())
+      if (view.label) anchors.push([view as LabelAnchor, view.root.position, labelHeight, 500]);
+    for (const landmark of this.landmarks)
+      anchors.push([landmark, landmark.position, 0, this.radial.radius]);
+    for (const [view, position, lift, radius] of anchors) {
+      this.labelPosition.copyFrom(position);
+      this.labelPosition.y += lift;
       Vector3.ProjectToRef(
         this.labelPosition,
         this.projection,
@@ -421,7 +680,10 @@ export class WorldView {
       );
       const x = (this.projectedLabel.x * cssWidth) / width;
       const y = (this.projectedLabel.y * cssHeight) / height;
+      const opacity = radialOpacity(this.radial.center, position, radius);
+      view.label.style.opacity = String(opacity);
       const hidden =
+        opacity <= 0.01 ||
         this.projectedLabel.z < 0 ||
         this.projectedLabel.z > 1 ||
         x < 0 ||
@@ -429,6 +691,21 @@ export class WorldView {
         y < 0 ||
         y > cssHeight;
       if (view.label.hidden !== hidden) view.label.hidden = hidden;
+      if (view.reaction) {
+        view.reaction.hidden = hidden;
+        view.reaction.style.filter = `opacity(${opacity})`;
+        view.reaction.style.transform = `translate(${(x + 38).toFixed(2)}px, ${(y - 30).toFixed(2)}px) translate(-50%, -100%)`;
+      }
+      if (view.chat) {
+        view.chat.hidden = hidden;
+        view.chat.style.filter = `opacity(${opacity})`;
+        // Keep text above the name and any simultaneous reaction. Clamp horizontally
+        // so a long line near the edge of the viewport remains readable.
+        const halfWidth = view.chat.offsetWidth / 2;
+        const chatX = Math.min(cssWidth - halfWidth - 8, Math.max(halfWidth + 8, x));
+        const chatY = Math.max(view.chat.offsetHeight + 8, y - (view.reaction ? 104 : 34));
+        view.chat.style.transform = `translate(${chatX.toFixed(2)}px, ${chatY.toFixed(2)}px) translate(-50%, -100%)`;
+      }
       if (hidden) continue;
       const transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) translate(-50%, -100%)`;
       if (transform !== view.labelTransform) {
@@ -441,8 +718,11 @@ export class WorldView {
     if (this.disposed) return;
     this.disposed = true;
     window.removeEventListener('resize', this.resize);
+    this.canvas.removeEventListener('wheel', this.wheel);
     document.removeEventListener('visibilitychange', this.visibilityChanged);
     this.engine.stopRenderLoop();
+    for (const view of this.entities.values()) this.disposeEntity(view);
+    this.entities.clear();
     this.labels.replaceChildren();
     this.buildings.dispose();
     this.statics.dispose();

@@ -94,10 +94,7 @@ export async function prepareScene(directory: string) {
 
 export function localDefinition(definition: WorldDefinition, cell: WorldCell) {
   const [x, z] = cell.cellId.split('_').map(Number);
-  const entities = [
-    ...cell.statics,
-    definition.entities.find((entity) => entity.kind === 'crate')!,
-  ];
+  const entities = [...cell.statics];
   return {
     ...definition,
     entities,

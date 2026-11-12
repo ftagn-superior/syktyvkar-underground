@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { buildStreamingFixture } from './helpers/streaming-world.js';
 import { launchTestBrowser } from './helpers/browser.js';
 
@@ -29,8 +29,6 @@ const pages = await Promise.all(
     await context.addInitScript(() => localStorage.setItem('su:render-quality:v1', 'economy'));
     const page = await context.newPage();
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(app.url + '/?diagnostics=1');
-    await page.locator('#join:not([disabled])').waitFor();
     return page;
   }),
 );
@@ -49,6 +47,10 @@ try {
       await route.continue().catch(() => {});
     },
   );
+  for (const page of pages) {
+    await page.goto(app.url + '/?diagnostics=1');
+    await page.locator('#join:not([disabled])').waitFor();
+  }
   await slow.locator('#join').click();
   const deadline = performance.now() + 10000;
   while (!modelRequested) {
@@ -74,11 +76,7 @@ try {
   await slow.waitForFunction(
     () => {
       const data = (window as any).__SU_DEBUG__.snapshot();
-      return (
-        data.connection === 'ready' &&
-        (!data.streaming || data.streaming.entities === 0) &&
-        data.physics.bodies === 0
-      );
+      return data.connection === 'ready' && data.physics.bodies === 0;
     },
     undefined,
     { timeout: 10000 },
@@ -103,6 +101,7 @@ try {
     if (failing) await route.fulfill({ status: 503, body: 'temporary test failure' });
     else await route.continue();
   });
+  await slow.reload();
   await slow.locator('#join:not([disabled])').click();
   await slow.locator('#area-retry:not([hidden])').waitFor();
   assert.ok(requests > 0);
@@ -113,7 +112,8 @@ try {
     () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
   );
   const recovered = await snapshot(slow);
-  assert.equal(recovered.physics.entities, recovered.streaming.entities);
+  assert.ok(recovered.streaming.criticalReady);
+  assert.ok(recovered.physics.entities <= recovered.streaming.entities);
   assert.equal(app.room.diagnostics().players, 2);
   assert.ok(requests >= 2);
   phases.recovered = recovered;

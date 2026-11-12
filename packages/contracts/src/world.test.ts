@@ -3,14 +3,21 @@ import { readFile } from 'node:fs/promises';
 import { validateWorld, canonicalJson, normalizeInput } from './index.js';
 const source = {
   ...JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')),
-  entities: [
-    ...JSON.parse(await readFile('content/worlds/physics-lab/cells/0_0.json', 'utf8')).statics,
-    JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')).crate,
-  ],
+  itemCatalog: JSON.parse(await readFile('content/items/catalog.json', 'utf8')),
   buildings: [],
   buildingAssets: {},
 };
 describe('world contract', () => {
+  it('accepts zero, one and several initial items without a mandatory crate identity', () => {
+    const world = structuredClone(source);
+    world.initialItems = [];
+    expect(validateWorld(world).initialItems).toEqual([]);
+    world.initialItems = Array.from({ length: 3 }, (_, index) => ({
+      ...source.initialItems[0],
+      seedId: `item-${index}`,
+    }));
+    expect(validateWorld(world).initialItems).toHaveLength(3);
+  });
   it('accepts the shipped scene and rejects identity collisions', () => {
     expect(validateWorld(source).spawnPoints).toHaveLength(8);
     const duplicate = structuredClone(source);
@@ -28,9 +35,21 @@ describe('world contract', () => {
     expect(() => validateWorld(bad)).toThrow('character.speed');
   });
   it('normalizes diagonal movement and rejects non-finite commands', () => {
-    expect(Math.hypot(...Object.values(normalizeInput({ moveX: 1, moveZ: 1 })!))).toBeCloseTo(1);
+    const diagonal = normalizeInput({ moveX: 1, moveZ: 1, sprint: true })!;
+    expect(Math.hypot(diagonal.moveX, diagonal.moveZ)).toBeCloseTo(1);
+    expect(diagonal.sprint).toBe(true);
+    expect(normalizeInput({ moveX: 1, moveZ: 0 })?.sprint).toBe(false);
     for (const moveX of [NaN, Infinity, '1', null, 1000])
       expect(normalizeInput({ moveX, moveZ: 0 })).toBeUndefined();
+    for (const sprint of [1, 'true', null, {}, []])
+      expect(normalizeInput({ moveX: 1, moveZ: 0, sprint })).toBeUndefined();
+  });
+  it('rejects invalid sprint speeds', () => {
+    for (const speed of [undefined, NaN, Infinity, 0, -1, 3, 1001, '14']) {
+      const invalid = structuredClone(source);
+      invalid.simulation.character.sprintSpeed = speed;
+      expect(() => validateWorld(invalid)).toThrow(/sprintSpeed/);
+    }
   });
   it('canonicalizes object keys without reordering geometry arrays', () => {
     expect(canonicalJson({ b: 2, a: [3, 1] })).toBe(canonicalJson({ a: [3, 1], b: 2 }));

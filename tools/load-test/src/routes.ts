@@ -41,7 +41,7 @@ export function expectedInterest(
         (entity) =>
           entity.entityId === ownId ||
           Math.hypot(entity.x - own.x, entity.z - own.z) <=
-            (previous.has(entity.entityId) ? 100 : 80),
+            (previous.has(entity.entityId) ? 800 : 500),
       )
       .map((entity) => entity.entityId),
   );

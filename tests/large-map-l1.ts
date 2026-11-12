@@ -1,6 +1,7 @@
 import { prepareSdk } from './helpers/prepare.js';
+import { createDatabasePool } from '../apps/server/src/database.js';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -16,6 +17,11 @@ import {
 import { WorldState } from '../packages/protocol/src/index.js';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { readWorldDirectory } from '../apps/server/src/world-bundle.js';
+
+if (!process.env.SU_TEST_DATABASE_URL)
+  throw new Error('SU_TEST_DATABASE_URL is required: artifacts must use disposable test schemas.');
+const admin = createDatabasePool(process.env.SU_TEST_DATABASE_URL);
+const schemas = new Set<string>();
 
 const output = process.env.SU_L1_OUTPUT ?? 'output/large-map/l1';
 await mkdir(output, { recursive: true });
@@ -54,14 +60,14 @@ async function until(
 
 try {
   await mkdir(join(temporary, 'dist/server'), { recursive: true });
-  for (const file of ['main.mjs', 'HavokPhysics.wasm'])
+  for (const file of ['main.mjs', 'migrate.mjs', 'migrate-world.mjs', 'HavokPhysics.wasm'])
     await cp(`dist/server/${file}`, join(temporary, 'dist/server', file));
   await cp('dist/client', join(temporary, 'dist/client'), { recursive: true });
   for (const missing of ['apps', 'packages', 'content', 'node_modules']) {
     await assert.rejects(stat(join(temporary, missing)), /ENOENT/);
   }
 
-  for (const worldId of ['physics-lab', 'streaming-lab']) {
+  for (const worldId of ['physics-lab', 'streaming-lab', 'ring-block']) {
     console.log(`L1: ${worldId}, deterministic release and isolated artifact`);
     const source = `content/worlds/${worldId}/world.json`;
     const first = await buildWorld(source, join(output, worldId, 'release'));
@@ -85,22 +91,78 @@ try {
     assert.equal(header.formatVersion, WORLD_FORMAT_VERSION);
     assert.equal(header.entities, undefined);
     assert.equal(header.buildings, undefined);
-    const expectedBuildings = worldId === 'streaming-lab' ? 1600 : 2;
-    assert.equal(definition.buildings.length, expectedBuildings);
-    assert.equal(first.cells.length, worldId === 'streaming-lab' ? 256 : 1);
+    if (worldId !== 'ring-block')
+      assert.equal(definition.buildings.length, worldId === 'streaming-lab' ? 1600 : 2);
+    else
+      assert.ok(
+        definition.buildings.length >= 289,
+        'city retains placements and adds ground tiles',
+      );
+    assert.equal(
+      first.cells.length,
+      worldId === 'streaming-lab' ? 256 : worldId === 'ring-block' ? 40 : 1,
+    );
     await writeFile(join(worldDirectory, 'not-listed.txt'), 'unpublished resource');
 
     const port = await portNumber();
     const url = `http://127.0.0.1:${port}`;
+    const schema = `su_artifact_${randomBytes(12).toString('hex')}`;
+    await admin.query(`CREATE SCHEMA ${schema}`);
+    schemas.add(schema);
+    const isolatedDatabase = new URL(process.env.SU_TEST_DATABASE_URL!);
+    isolatedDatabase.searchParams.set('options', `-c search_path=${schema}`);
+    const environment = {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: String(port),
+      SU_WORLD: worldId,
+      DATABASE_URL: isolatedDatabase.href,
+      PUBLIC_ORIGIN: '',
+      CLIENT_ID: '',
+      CLIENT_SECRET: '',
+    };
+    const command = (file: string) =>
+      new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+        const process = spawn(globalThis.process.execPath, [`dist/server/${file}`], {
+          cwd: temporary,
+          env: environment,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let output = '';
+        process.stdout.on('data', (data) => {
+          output += String(data);
+        });
+        process.stderr.on('data', (data) => {
+          output += String(data);
+        });
+        const timeout = setTimeout(() => {
+          process.kill('SIGKILL');
+          reject(new Error(`Artifact command timed out: ${file}`));
+        }, 20_000);
+        process.on('error', (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+        process.on('exit', (code) => {
+          clearTimeout(timeout);
+          resolve({ code, output });
+        });
+      });
+    const rejected = await command('main.mjs');
+    assert.equal(rejected.code, 1, 'startup refuses a fresh unmigrated schema');
+    for (const file of ['migrate.mjs', 'migrate-world.mjs', 'migrate.mjs', 'migrate-world.mjs']) {
+      const migrated = await command(file);
+      assert.equal(migrated.code, 0, `${file}: ${migrated.output}`);
+    }
+    assert.equal(
+      (await admin.query(`SELECT count(*)::int as n FROM ${schema}.persistent_worlds`)).rows[0].n,
+      0,
+      'migration does not seed',
+    );
     const started = performance.now();
     const child = spawn(process.execPath, ['dist/server/main.mjs'], {
       cwd: temporary,
-      env: {
-        ...process.env,
-        HOST: '127.0.0.1',
-        PORT: String(port),
-        SU_WORLD_DIRECTORY: `dist/worlds/${worldId}`,
-      },
+      env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '',
@@ -154,7 +216,10 @@ try {
       );
       await assert.rejects(sdk.create('world'));
       const before = await fetch(`${url}/api/diagnostics`).then((response) => response.json());
-      assert.equal(before.bodies, definition.entities.length + definition.buildings.length);
+      assert.equal(
+        before.bodies,
+        definition.entities.length + definition.buildings.length + definition.initialItems.length,
+      );
       assert.equal(before.players, 0);
       for (let i = 0; i < 8; i++) {
         const room = await sdk.joinById<WorldState>(info.roomId, info, WorldState);
@@ -168,7 +233,7 @@ try {
       await until(
         () =>
           [...rooms].every(
-            (room) => room.state?.occupancy === 8 && room.state.players.has(room.sessionId),
+            (room) => room.state?.occupancy === 8 && room.state.players?.has(room.sessionId),
           ),
         'eight occupied seats and each own player',
       );
@@ -197,6 +262,10 @@ try {
         before,
         occupied,
         sourceFreeArtifact: true,
+        isolatedDatabase: true,
+        unmigratedStartupRejected: true,
+        builtMigrationsIdempotent: true,
+        migrationsDoNotSeed: true,
         deterministic: true,
         oldProtocolRejected: true,
         ninthRejected: true,
@@ -222,6 +291,8 @@ try {
         }
       });
       await writeFile(join(output, `${worldId}-server.log`), stdout + '\n' + stderr);
+      await admin.query(`DROP SCHEMA ${schema} CASCADE`);
+      schemas.delete(schema);
     }
   }
   evidence.result = 'passed';
@@ -241,5 +312,7 @@ try {
   );
   throw error;
 } finally {
+  for (const schema of schemas) await admin.query(`DROP SCHEMA ${schema} CASCADE`);
+  await admin.end();
   await rm(temporary, { recursive: true, force: true });
 }

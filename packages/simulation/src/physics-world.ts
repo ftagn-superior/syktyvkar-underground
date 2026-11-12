@@ -19,16 +19,27 @@ import {
   CharacterSupportedState,
 } from '@babylonjs/core/Physics/v2/characterController.js';
 import { PhysicsEngine } from '@babylonjs/core/Physics/v2/physicsEngine.js';
+import { PhysicsRaycastResult } from '@babylonjs/core/Physics/physicsRaycastResult.js';
+import { ShapeCastResult } from '@babylonjs/core/Physics/shapeCastResult.js';
 import { ProximityCastResult } from '@babylonjs/core/Physics/proximityCastResult.js';
 import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
+import { createItemShape } from './item-shapes.js';
 import {
   canonicalJson,
   NEUTRAL_INPUT,
+  ITEM_REACH,
+  initialItemState,
+  itemShapeParts,
+  itemSupportDistance,
+  type ItemType,
+  type ItemState,
+  type ItemPose,
+  type ItemError,
   normalizeInput,
+  validPose,
   type EntityDefinition,
-  type EntityState,
   type MoveInput,
   type PlayerState,
   type Quat,
@@ -66,8 +77,10 @@ interface BodyRecord {
   node: TransformNode;
   body: PhysicsBody;
   shape: PhysicsShape;
-  definition: EntityDefinition;
+  definition: Omit<EntityDefinition, 'kind'> & { kind: 'obstacle' | 'item' };
   revision: number;
+  item?: ItemState;
+  recovering?: boolean;
 }
 interface CharacterRecord {
   controller: PhysicsCharacterController;
@@ -93,12 +106,10 @@ export class PhysicsWorld {
   readonly spawnShape: PhysicsShapeCapsule;
   readonly gravity: Vector3;
   private readonly buildings: BuildingColliders;
-  private crate?: BodyRecord;
   private readonly staticReferences = new Map<
     string,
     { version: string; signature: string; references: number; building: boolean }
   >();
-  private readonly crateDefinition: EntityDefinition;
   disposed = false;
   constructor(
     readonly definition: WorldDefinition | WorldHeader,
@@ -128,15 +139,9 @@ export class PhysicsWorld {
     this.buildings = new BuildingColliders(this.scene);
     try {
       if ('entities' in definition) {
-        const crate = definition.entities.find((item) => item.kind === 'crate');
-        if (!crate) throw new Error('World requires a crate');
-        this.crateDefinition = crate;
-        this.crate = this.createBox(crate);
-        this.objects.set(crate.entityId, this.crate);
-        for (const item of definition.entities) {
-          if (item.kind === 'obstacle')
-            this.retainStatic(item as StaticEntityDefinition, 'initial');
-        }
+        for (const item of definition.entities) this.retainStatic(item, 'initial');
+        if (!prediction)
+          for (const seed of definition.initialItems) this.addItem(initialItemState(seed));
         for (const instance of definition.buildings) {
           const asset = definition.buildingAssets[instance.assetId];
           if (!asset) throw new Error(`Unknown building asset: ${instance.assetId}`);
@@ -144,7 +149,6 @@ export class PhysicsWorld {
         }
       } else {
         if (!prediction) throw new Error('Authoritative physics requires the complete world');
-        this.crateDefinition = definition.crate;
       }
     } catch (error) {
       this.dispose();
@@ -167,7 +171,6 @@ export class PhysicsWorld {
       return;
     }
     if (
-      item.entityId === this.crateDefinition.entityId ||
       this.objects.has(item.entityId) ||
       this.characters.has(item.entityId) ||
       this.remotePlayers.has(item.entityId)
@@ -176,7 +179,7 @@ export class PhysicsWorld {
     if ('assetId' in item) {
       if (!asset) throw new Error(`Missing collider: ${item.assetId}`);
       this.buildings.add(item, asset);
-    } else this.objects.set(item.entityId, this.createBox(item));
+    } else this.objects.set(item.entityId, this.createBody(item));
     this.staticReferences.set(item.entityId, {
       version,
       signature,
@@ -206,15 +209,18 @@ export class PhysicsWorld {
       ),
       buildings: this.buildings.diagnostics(),
       bodies: this.physics.getBodies().length,
-      crate: !!this.crate,
+      items: [...this.objects.values()].filter((item) => item.item).length,
       remotePlayers: this.remotePlayers.size,
     };
   }
-  createBox(definition: EntityDefinition): BodyRecord {
+  private createBody(
+    definition: Omit<EntityDefinition, 'kind'> & { kind: 'obstacle' | 'item' },
+    itemType?: ItemType,
+  ): BodyRecord {
     const node = new TransformNode(definition.entityId, this.scene);
     node.position.copyFrom(vector(definition.position));
     node.rotationQuaternion = Quaternion.Identity();
-    const dynamic = definition.kind === 'crate';
+    const dynamic = definition.kind === 'item';
     const body = new PhysicsBody(
       node,
       dynamic
@@ -225,12 +231,14 @@ export class PhysicsWorld {
       false,
       this.scene,
     );
-    const shape = new PhysicsShapeBox(
-      Vector3.Zero(),
-      Quaternion.Identity(),
-      vector(definition.size),
-      this.scene,
-    );
+    const shape = itemType
+      ? createItemShape(itemType, this.scene)
+      : new PhysicsShapeBox(
+          Vector3.Zero(),
+          Quaternion.Identity(),
+          vector(definition.size),
+          this.scene,
+        );
     shape.material = { friction: definition.friction, restitution: definition.restitution };
     body.shape = shape;
     if (dynamic && !this.prediction) {
@@ -249,7 +257,7 @@ export class PhysicsWorld {
     );
     controller.characterMass = config.mass;
     controller.characterStrength = 500;
-    controller.maxCharacterSpeedForSolver = config.speed;
+    controller.maxCharacterSpeedForSolver = config.sprintSpeed;
     controller.keepDistance = 0.015;
     controller.keepContactTolerance = 0.05;
     controller.maxStepHeight = 0;
@@ -290,10 +298,11 @@ export class PhysicsWorld {
       grounded: player.grounded,
     };
   }
-  boxState(box: BodyRecord): EntityState {
+  boxState(box: BodyRecord): ItemState {
     return {
+      ...box.item!,
       entityId: box.definition.entityId,
-      kind: 'crate',
+      kind: 'item',
       revision: box.revision,
       position: plain(box.node.position),
       rotation: rotation(box.node.rotationQuaternion ?? Quaternion.Identity()),
@@ -302,10 +311,11 @@ export class PhysicsWorld {
     };
   }
   snapshot(): SimulationSnapshot {
-    if (!this.crate) throw new Error('Authoritative snapshot requires a crate');
+    if (this.prediction) throw new Error('Authoritative snapshot requires the full server world');
     return {
+      scope: 'authoritative',
       players: [...this.characters.keys()].map((id) => this.state(id)),
-      crate: this.boxState(this.crate),
+      items: [...this.objects.values()].filter((b) => b.item).map((b) => this.boxState(b)),
     };
   }
   /** Restoring through public controller construction drops stale contact manifolds. */
@@ -324,25 +334,19 @@ export class PhysicsWorld {
     body.setLinearVelocity(Vector3.Zero());
     body.setAngularVelocity(Vector3.Zero());
   }
-  setRemoteSnapshot(snapshot: LocalSimulationSnapshot, ownId: string) {
+  setRemoteSnapshot(snapshot: LocalSimulationSnapshot | SimulationSnapshot, ownId: string) {
     if (!this.prediction) throw new Error('Remote proxies belong to prediction');
-    if (snapshot.crate && snapshot.crate.entityId !== this.crateDefinition.entityId)
-      throw new Error('Unexpected crate ID');
-    if (!snapshot.crate && this.crate) {
-      this.crate.body.dispose();
-      this.crate.shape.dispose();
-      this.crate.node.dispose();
-      this.objects.delete(this.crateDefinition.entityId);
-      this.crate = undefined;
-    }
-    if (snapshot.crate && !this.crate) {
-      this.crate = this.createBox(this.crateDefinition);
-      this.objects.set(this.crateDefinition.entityId, this.crate);
-    }
-    const crate = this.crate;
-    if (crate && snapshot.crate) {
-      this.teleport(crate.body, crate.node, snapshot.crate.position, snapshot.crate.rotation);
-      crate.revision = snapshot.crate.revision;
+    const ids = new Set(snapshot.items.map((i) => i.entityId));
+    for (const [id, record] of this.objects) if (record.item && !ids.has(id)) this.removeItem(id);
+    for (const item of snapshot.items) {
+      let record = this.objects.get(item.entityId);
+      if (!record) {
+        this.addItem(item);
+        record = this.objects.get(item.entityId)!;
+      }
+      this.teleport(record.body, record.node, item.position, item.rotation);
+      record.revision = item.revision;
+      record.item = item;
     }
     const active = new Set(
       snapshot.players.filter((p) => p.entityId !== ownId).map((p) => p.entityId),
@@ -413,34 +417,237 @@ export class PhysicsWorld {
     if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) throw new Error('Invalid physics timestep');
     for (const record of this.characters.values()) {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
+      const config = this.definition.simulation.character;
+      const speed = input.sprint ? config.sprintSpeed : config.speed;
       const support = record.controller.checkSupport(dt, down);
       record.grounded = support.supportedState === CharacterSupportedState.SUPPORTED;
       const vertical = record.grounded
         ? Math.min(0, support.averageSurfaceVelocity.y)
         : record.controller.getVelocity().y + this.gravity.y * dt;
       record.controller.setVelocity(
-        new Vector3(
-          input.moveX * this.definition.simulation.character.speed,
-          vertical,
-          input.moveZ * this.definition.simulation.character.speed,
-        ),
+        new Vector3(input.moveX * speed, vertical, input.moveZ * speed),
       );
       if (Math.hypot(input.moveX, input.moveZ) > 0.001)
         record.yaw = Math.atan2(input.moveX, input.moveZ);
       record.controller.integrate(dt, support, this.gravity);
     }
     this.plugin.executeStep(dt, this.physics.getBodies());
-    if (!this.prediction) this.returnLostCrate();
+    if (!this.prediction) this.returnLostItems();
   }
-  returnLostCrate() {
+  addItem(state: ItemState) {
+    if (this.objects.has(state.entityId)) throw new Error('Duplicate physical item');
+    const type = this.definition.itemCatalog.types[state.typeId];
+    if (!type) throw new Error(`Unknown item type ${state.typeId}`);
+    const record = this.createBody(
+      {
+        ...type,
+        entityId: state.entityId,
+        kind: 'item',
+        position: state.position,
+      },
+      type,
+    );
+    record.item = structuredClone(state);
+    record.revision = state.revision;
+    this.teleport(record.body, record.node, state.position, state.rotation);
+    if (!this.prediction) {
+      record.body.setLinearVelocity(vector(state.velocity));
+      record.body.setAngularVelocity(vector(state.angularVelocity));
+    }
+    this.objects.set(state.entityId, record);
+  }
+  removeItem(id: string) {
+    const record = this.objects.get(id);
+    if (!record?.item) return;
+    record.body.dispose();
+    record.shape.dispose();
+    record.node.dispose();
+    this.objects.delete(id);
+  }
+  replaceItems(items: ItemState[]) {
+    for (const [id, record] of this.objects) if (record.item) this.removeItem(id);
+    for (const item of items) this.addItem(item);
+  }
+  surfaceRay(from: Vec3, to: Vec3, ignorePlayer?: string) {
+    const hit = new PhysicsRaycastResult();
+    this.plugin.raycast(vector(from), vector(to), hit, {
+      ignoreBody: this.characters.get(ignorePlayer ?? '')?.body,
+      shouldHitTriggers: false,
+    });
+    return hit.hasHit
+      ? { point: plain(hit.hitPointWorld), normal: plain(hit.hitNormalWorld) }
+      : undefined;
+  }
+  canReach(playerId: string, position: Vec3, targetId?: string): ItemError | undefined {
+    const player = this.characters.get(playerId);
+    if (!player) return 'WORLD_NOT_READY';
+    const from = player.controller.getPosition();
+    if (Vector3.Distance(from, vector(position)) > ITEM_REACH) return 'OUT_OF_REACH';
+    const hit = new PhysicsRaycastResult();
+    this.plugin.raycast(from, vector(position), hit, {
+      ignoreBody: player.body,
+      shouldHitTriggers: false,
+    });
+    if (
+      hit.hasHit &&
+      hit.body !== this.objects.get(targetId ?? '')?.body &&
+      hit.hitDistance < Vector3.Distance(from, vector(position)) - 0.02
+    )
+      return 'BLOCKED';
+  }
+  checkPlacement(
+    typeId: string,
+    pose: ItemPose,
+    playerId?: string,
+    ignoreId?: string,
+    requireSupport = true,
+  ): ItemError | undefined {
+    const type = this.definition.itemCatalog.types[typeId];
+    if (!type || !validPose(pose)) return 'INVALID_INPUT';
+    const p = vector(pose.position),
+      q = new Quaternion(
+        pose.rotation.x,
+        pose.rotation.y,
+        pose.rotation.z,
+        pose.rotation.w,
+      ).normalize();
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const direction = { x: 0, y: 0, z: 0 };
+      direction[axis] = 1;
+      if (
+        p[axis] + itemSupportDistance(type, rotation(q), direction) >
+        this.definition.bounds.max[axis]
+      )
+        return 'OUT_OF_BOUNDS';
+      direction[axis] = -1;
+      if (
+        p[axis] - itemSupportDistance(type, rotation(q), direction) <
+        this.definition.bounds.min[axis]
+      )
+        return 'OUT_OF_BOUNDS';
+    }
+    // Triangle queries do not detect a shape wholly enclosed by a solid mesh.
+    for (const part of itemShapeParts(type)) {
+      const center = vector(part.center).applyRotationQuaternion(q).add(p);
+      if (this.buildings.contains(center)) return 'BLOCKED';
+      if (part.kind === 'box')
+        for (const x of [-0.5, 0.5])
+          for (const y of [-0.5, 0.5])
+            for (const z of [-0.5, 0.5]) {
+              const corner = new Vector3(x * part.size.x, y * part.size.y, z * part.size.z)
+                .add(vector(part.center))
+                .applyRotationQuaternion(q)
+                .add(p);
+              if (this.buildings.contains(corner)) return 'BLOCKED';
+            }
+    }
+    if (this.buildings.contains(p)) return 'BLOCKED';
+    if (playerId) {
+      const error = this.canReach(playerId, pose.position, ignoreId);
+      if (error) return error;
+    }
+    const shape = createItemShape(type, this.scene);
+    try {
+      const input = new ProximityCastResult(),
+        hit = new ProximityCastResult();
+      const ignoreBody = this.objects.get(ignoreId ?? '')?.body;
+      this.plugin.shapeProximity(
+        { shape, position: p, rotation: q, maxDistance: 0, shouldHitTriggers: false, ignoreBody },
+        input,
+        hit,
+      );
+      if (hit.hasHit && hit.hitDistance < -0.01) return 'BLOCKED';
+      if (!requireSupport) return;
+      const support = new ShapeCastResult();
+      this.plugin.shapeCast(
+        {
+          shape,
+          rotation: q,
+          startPosition: p.add(new Vector3(0, 0.02, 0)),
+          endPosition: p.add(new Vector3(0, -0.06, 0)),
+          shouldHitTriggers: false,
+          ignoreBody,
+        },
+        new ShapeCastResult(),
+        support,
+      );
+      if (
+        !support.hasHit ||
+        support.hitNormal.y < 0.4 ||
+        [...this.characters.values()].some((c) => c.body === support.body) ||
+        [...this.remotePlayers.values()].some((c) => c.body === support.body)
+      )
+        return 'NO_SUPPORT';
+    } finally {
+      shape.dispose();
+    }
+  }
+  /** Stored dynamic poses can be airborne; new placement still requires support. */
+  checkSavedItem(item: ItemState): ItemError | undefined {
+    if (!validPose(item) || !validPose(item.safePose)) return 'INVALID_INPUT';
+    for (const vector of [item.velocity, item.angularVelocity]) {
+      if (!vector || ![vector.x, vector.y, vector.z].every(Number.isFinite)) return 'INVALID_INPUT';
+    }
+    return (
+      this.checkPlacement(item.typeId, item, undefined, item.entityId, false) ??
+      this.checkPlacement(item.typeId, item.safePose, undefined, item.entityId, false)
+    );
+  }
+  returnLostItems() {
     const { min, max } = this.definition.bounds;
-    const crate = this.crate;
-    if (!crate) throw new Error('Authoritative world requires a crate');
-    const p = crate.node.position;
-    if (p.y >= -5 && p.x >= min.x && p.x <= max.x && p.z >= min.z && p.z <= max.z) return;
-    if (this.overlaps(crate.shape, crate.definition.position, crate.body)) return;
-    this.teleport(crate.body, crate.node, crate.definition.position);
-    crate.revision++;
+    for (const item of this.objects.values()) {
+      if (!item.item) continue;
+      const p = item.node.position;
+      if (
+        p.y >= min.y &&
+        p.y <= max.y &&
+        p.x >= min.x &&
+        p.x <= max.x &&
+        p.z >= min.z &&
+        p.z <= max.z
+      )
+        continue;
+      const safe = item.item.safePose;
+      const candidates: ItemPose[] = [safe];
+      for (let radius = 1; radius <= 4; radius++)
+        for (const [x, z] of [
+          [radius, 0],
+          [-radius, 0],
+          [0, radius],
+          [0, -radius],
+        ])
+          candidates.push({
+            position: {
+              x: safe.position.x + x * (item.definition.size.x + 0.2),
+              y: safe.position.y,
+              z: safe.position.z + z * (item.definition.size.z + 0.2),
+            },
+            rotation: safe.rotation,
+          });
+      for (const spawn of this.definition.spawnPoints)
+        candidates.push({
+          position: { ...spawn, y: spawn.y + item.definition.size.y / 2 + 0.02 },
+          rotation: identity(),
+        });
+      const next = candidates.find(
+        (pose) =>
+          !this.checkPlacement(item.item!.typeId, pose, undefined, item.definition.entityId),
+      );
+      if (!next) {
+        item.body.setLinearVelocity(Vector3.Zero());
+        item.body.setAngularVelocity(Vector3.Zero());
+        item.body.setMotionType(PhysicsMotionType.ANIMATED);
+        item.recovering = true;
+        continue;
+      }
+      if (item.recovering) {
+        item.body.setMotionType(PhysicsMotionType.DYNAMIC);
+        item.recovering = false;
+      }
+      this.teleport(item.body, item.node, next.position, next.rotation);
+      item.item.safePose = structuredClone(next);
+      item.revision++;
+    }
   }
   dispose() {
     if (this.disposed) return;
@@ -454,7 +661,6 @@ export class PhysicsWorld {
     }
     this.objects.clear();
     this.staticReferences.clear();
-    this.crate = undefined;
     this.remotePlayers.clear();
     this.spawnShape.dispose();
     this.scene.dispose();

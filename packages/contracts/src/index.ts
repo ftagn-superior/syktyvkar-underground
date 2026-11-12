@@ -1,10 +1,18 @@
-export const PROTOCOL_VERSION = 3;
-export const WORLD_FORMAT_VERSION = 3;
+import { PROFILE_COLORS } from './accounts.js';
+export * from './accounts.js';
+export * from './items.js';
+export * from './item-shapes.js';
+export * from './avatars.js';
+export * from './animations.js';
+import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
+
+export const PROTOCOL_VERSION = 9;
+export const WORLD_FORMAT_VERSION = 4;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
-export const INTEREST_RADII = { enter: 80, leave: 100 } as const;
+export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
 export const RECONNECT_SECONDS = 30;
 export const PREPARE_TIMEOUT_MS = 15_000;
 export const INPUT_TIMEOUT_MS = 250;
@@ -72,16 +80,20 @@ export interface WorldCellManifest {
   bounds: Bounds;
   assetIds: string[];
 }
-export type MoveInput = { moveX: number; moveZ: number };
-export const NEUTRAL_INPUT: Readonly<MoveInput> = Object.freeze({ moveX: 0, moveZ: 0 });
+export type MoveInput = { moveX: number; moveZ: number; sprint?: boolean };
+export const NEUTRAL_INPUT: Readonly<MoveInput> = Object.freeze({
+  moveX: 0,
+  moveZ: 0,
+  sprint: false,
+});
 export interface SimulationConfig {
   tickRate: number;
   gravity: Vec3;
-  character: { height: number; radius: number; speed: number; mass: number };
+  character: { height: number; radius: number; speed: number; sprintSpeed: number; mass: number };
 }
 export interface EntityDefinition {
   entityId: string;
-  kind: 'obstacle' | 'crate';
+  kind: 'obstacle';
   position: Vec3;
   size: Vec3;
   mass: number;
@@ -90,7 +102,6 @@ export interface EntityDefinition {
   color: string;
 }
 export type StaticEntityDefinition = EntityDefinition & { kind: 'obstacle' };
-export type CrateDefinition = EntityDefinition & { kind: 'crate' };
 export type WorldRoutes = Record<string, { x: number; z: number }[]>;
 export interface WorldDefinition {
   formatVersion: number;
@@ -99,18 +110,23 @@ export interface WorldDefinition {
   simulation: SimulationConfig;
   spawnPoints: Vec3[];
   entities: EntityDefinition[];
+  itemCatalog: ItemCatalog;
+  initialItems: InitialItem[];
   buildings: BuildingInstance[];
   buildingAssets: Record<string, BuildingPhysicsAsset>;
   routes?: WorldRoutes;
+  landmarks?: Landmark[];
 }
+export interface Landmark {
+  id: string;
+  name: string;
+  position: Vec3;
+}
+export type WorldBase = Omit<WorldDefinition, 'buildings' | 'buildingAssets'>;
 /** Small immutable entry point; every static primitive belongs to cells. */
-export interface WorldHeader extends Omit<
-  WorldDefinition,
-  'entities' | 'buildings' | 'buildingAssets'
-> {
-  crate: CrateDefinition;
-}
-export interface WorldSource extends WorldHeader {
+export type WorldHeader = Omit<WorldDefinition, 'entities' | 'buildings' | 'buildingAssets'>;
+export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
+  itemCatalog: string;
   cellSize: number;
   cells: string[];
   assetCatalog: string;
@@ -134,7 +150,7 @@ export interface WorldManifest {
 }
 export interface EntityState {
   entityId: string;
-  kind: 'player' | 'crate';
+  kind: 'player' | 'item';
   revision: number;
   position: Vec3;
   rotation: Quat;
@@ -146,13 +162,15 @@ export interface PlayerState extends EntityState {
   grounded: boolean;
 }
 export interface SimulationSnapshot {
+  scope: 'authoritative';
   players: PlayerState[];
-  crate: EntityState;
+  items: ItemState[];
 }
 /** Partial replication must never be passed as the authoritative server snapshot. */
 export interface LocalSimulationSnapshot {
+  scope: 'local';
   players: PlayerState[];
-  crate?: EntityState;
+  items: ItemState[];
 }
 export interface WorldInfo {
   roomId: string;
@@ -165,12 +183,17 @@ export interface WorldInfo {
   available: boolean;
 }
 export type ErrorCode =
+  | 'AUTH_REQUIRED'
   | 'WORLD_FULL'
   | 'WORLD_NOT_READY'
   | 'VERSION_MISMATCH'
   | 'PREPARE_TIMEOUT'
   | 'SPAWN_UNAVAILABLE'
   | 'INVALID_INPUT'
+  | 'INVALID_SKIN'
+  | 'ANIMATION_NOT_ALLOWED'
+  | 'COMMAND_DISABLED'
+  | 'UNKNOWN_COMMAND'
   | 'RATE_LIMITED'
   | 'STALE_WORLD'
   | 'ALREADY_PROCESSED'
@@ -178,8 +201,10 @@ export type ErrorCode =
 export interface ActionResult {
   requestId: number;
   ok: boolean;
-  code?: ErrorCode;
-  /** Remaining server-enforced delay before another respawn can be accepted. */
+  code?: ErrorCode | ItemError;
+  /** Private feedback to the sender; never replicated as character speech. */
+  message?: string;
+  /** Remaining server-enforced delay before the same kind of action can be accepted. */
   retryAfterMs?: number;
 }
 export interface PrepareArea {
@@ -205,29 +230,21 @@ export interface RespawnRequest {
   requestId: number;
   worldEpoch: string;
 }
-export const PLAYER_COLORS = [
-  '#65d6bc',
-  '#f3b35a',
-  '#8c9eff',
-  '#ed88b7',
-  '#9bd06d',
-  '#68c8ed',
-  '#c7a0ed',
-  '#e98b69',
-];
+export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 export function normalizeInput(value: unknown): MoveInput | undefined {
   if (!value || typeof value !== 'object') return;
-  const { moveX, moveZ } = value as MoveInput;
+  const { moveX, moveZ, sprint = false } = value as MoveInput;
   if (
     typeof moveX !== 'number' ||
     typeof moveZ !== 'number' ||
     !Number.isFinite(moveX) ||
-    !Number.isFinite(moveZ)
+    !Number.isFinite(moveZ) ||
+    typeof sprint !== 'boolean'
   )
     return;
   if (Math.abs(moveX) > 100 || Math.abs(moveZ) > 100) return;
   const length = Math.max(1, Math.hypot(moveX, moveZ));
-  return { moveX: moveX / length, moveZ: moveZ / length };
+  return { moveX: moveX / length, moveZ: moveZ / length, sprint };
 }
 export { validateWorld, validateWorldHeader, validateEntities, canonicalJson } from './world.js';
 export {
@@ -236,10 +253,14 @@ export {
   worldCellAt,
   worldCellBounds,
   cellsIntersectingBounds,
+  cellsIntersectingCircle,
+  distanceToBoundsXZ,
   primitiveBounds,
   buildingBounds,
   mergeWorldCells,
 } from './world-grid.js';
+export * from './reactions.js';
+export * from './chat.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,

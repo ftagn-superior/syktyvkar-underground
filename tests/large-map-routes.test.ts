@@ -25,10 +25,10 @@ describe('large-map load contracts', () => {
   it('independently computes exact enter/leave thresholds and ignores Y/cell affiliation', () => {
     const entities = [
       { entityId: 'self', x: -125, z: 0 },
-      { entityId: 'enter', x: -45, z: 0 },
-      { entityId: 'band', x: -35, z: 0 },
-      { entityId: 'leave', x: -25, z: 0 },
-      { entityId: 'far', x: -24.999, z: 0 },
+      { entityId: 'enter', x: 375, z: 0 },
+      { entityId: 'band', x: 525, z: 0 },
+      { entityId: 'leave', x: 675, z: 0 },
+      { entityId: 'far', x: 675.001, z: 0 },
     ];
     expect([...expectedInterest(entities, 'self', new Set())]).toEqual(['self', 'enter']);
     expect([...expectedInterest(entities, 'self', new Set(['band', 'leave', 'far']))]).toEqual([

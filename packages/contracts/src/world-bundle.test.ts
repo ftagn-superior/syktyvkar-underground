@@ -21,7 +21,7 @@ const cell = {
   formatVersion: 2,
   cellId: '0_0',
   buildings: [instance],
-  statics: JSON.parse(await readFile('content/worlds/physics-lab/cells/0_0.json', 'utf8')).statics,
+  statics: JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')).entities,
 };
 const parts = {
   formatVersion: 1,
@@ -44,10 +44,14 @@ const asset: BuildingPhysicsAsset = {
     },
   ],
 };
-const base = JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8'));
+const base = {
+  ...JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')),
+  itemCatalog: JSON.parse(await readFile('content/items/catalog.json', 'utf8')),
+};
+delete base.entities;
 const hash = 'a'.repeat(64);
 const manifest: WorldManifest = {
-  formatVersion: 3,
+  formatVersion: 4,
   worldId: base.worldId,
   mapVersion: hash,
   simulationConfigHash: hash,

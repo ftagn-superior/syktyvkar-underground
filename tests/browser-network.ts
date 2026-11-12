@@ -13,14 +13,14 @@ type Diagnostic = {
   correctionMax: number;
   lastCorrection?: { sequence: number; magnitude: number };
   correctionSamples?: { sequence: number; magnitude: number }[];
-  renderedCratePosition?: Position;
+  renderedItemPosition?: Position;
   rttMs: number;
   pendingInputs: number;
   stalled: boolean;
   serverTick: number;
   authoritative: { entityId: string; position: Position; revision: number };
-  predicted: { position: Position } | null;
-  crate: { position: Position; velocity: Position; revision: number };
+  predicted: { position: Position };
+  items: { position: Position; velocity: Position; revision: number }[];
 };
 const externalTarget = process.env.SU_TEST_URL ? new URL(process.env.SU_TEST_URL) : undefined;
 const profiles: NetworkProfile[] = [
@@ -57,12 +57,7 @@ async function navigate(page: Page, target: { x: number; z: number }, tolerance 
   let closest = Infinity;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
-    assert.ok(['playing', 'waiting', 'preparing'].includes(state.connection));
-    if (!state.predicted || state.stalled || state.connection !== 'playing') {
-      await keys(page, []);
-      await sleep(35);
-      continue;
-    }
+    assert.equal(state.connection, 'playing');
     const position = state.predicted.position;
     const dx = target.x - position.x,
       dz = target.z - position.z;
@@ -93,7 +88,7 @@ async function measure(pages: Page[], durationMs: number, action: () => Promise<
   while (performance.now() - start < durationMs) {
     const states = await Promise.all(pages.map(snapshot));
     states.forEach((state, index) => {
-      assert.ok(['playing', 'waiting'].includes(state.connection));
+      assert.equal(state.connection, 'playing');
       maxPendingInputs = Math.max(maxPendingInputs, state.pendingInputs);
       stalledSamples += Number(state.stalled);
       observations++;
@@ -166,7 +161,7 @@ async function convergence(pages: Page[]) {
   while (Date.now() < deadline) {
     const states = await Promise.all(pages.map(snapshot));
     const resting = states.every(
-      (s) => Math.hypot(s.crate.velocity.x, s.crate.velocity.y, s.crate.velocity.z) < 0.04,
+      (s) => Math.hypot(s.items[0].velocity.x, s.items[0].velocity.y, s.items[0].velocity.z) < 0.04,
     );
     if (!resting) {
       stableSince = 0;
@@ -175,12 +170,12 @@ async function convergence(pages: Page[]) {
     if (stableSince) {
       const errors = states.map((s) => {
         assert.ok(
-          s.renderedCratePosition,
+          s.renderedItemPosition,
           'read-only rendered crate position diagnostics are required',
         );
-        return distance(s.renderedCratePosition, s.crate.position);
+        return distance(s.renderedItemPosition, s.items[0].position);
       });
-      const disagreement = distance(states[0].crate.position, states[1].crate.position);
+      const disagreement = distance(states[0].items[0].position, states[1].items[0].position);
       if (errors.every((e) => e < 0.1) && disagreement < 0.1)
         firstWithinBudgetMs ??= performance.now() - stableSince;
       if (performance.now() - stableSince < 500) {
@@ -216,7 +211,7 @@ try {
   for (const profile of selectedProfiles) {
     const ownedServer = externalTarget
       ? undefined
-      : await (await import('../apps/server/src/index.js')).createGameServer({ port: 0 });
+      : await (await import('./helpers/game-server.js')).createGameServer({ port: 0 });
     const target = externalTarget ?? new URL(ownedServer!.url);
     const relay = kernelNetem
       ? {
@@ -276,7 +271,7 @@ try {
       }
       await sleep(1000);
       if (ownedServer || profile === selectedProfiles[0]) {
-        const initialCrate = (await snapshot(pages[0])).crate.position;
+        const initialCrate = (await snapshot(pages[0])).items[0].position;
         assert.ok(
           Math.hypot(initialCrate.x, initialCrate.z) < 0.2,
           'Network acceptance requires a freshly started physics-lab server (crate at its initial position). Restart the test server before running.',
@@ -294,10 +289,8 @@ try {
       // Leave the corner through its southern opening, then approach the crate from one side.
       await navigate(pages[0], { x: -4, z: -4 });
       await navigate(pages[0], { x: -4, z: 2 });
-      const crateBefore = (await snapshot(pages[0])).crate.position;
-      // Push into the clear southern half of physics-lab. A long northward push
-      // can put the subsequent opposite-side waypoint inside house-b (z < -8).
-      const direction = 1;
+      const crateBefore = (await snapshot(pages[0])).items[0].position;
+      const direction = crateBefore.z < -4 ? 1 : -1;
       const behindZ = crateBefore.z - direction * 2;
       await Promise.all(
         pages.map((page, index) =>
@@ -312,7 +305,7 @@ try {
       const together = await measure(pages, 4500, async () => {
         await Promise.all(pages.map((page) => keys(page, axisKeys('z', direction))));
       });
-      const crateAfter = (await snapshot(pages[0])).crate.position;
+      const crateAfter = (await snapshot(pages[0])).items[0].position;
       const crateTravelM = horizontalDistance(crateBefore, crateAfter);
       // A half-box displacement proves physical interaction; v0.1 does not set
       // a minimum crate speed or travel distance for a fixed push duration.
@@ -320,21 +313,11 @@ try {
       const togetherConvergence = await convergence(pages);
       // Opposed contact: use the clear central north/south corridor. The second
       // player walks around the east side; neither route crosses through the box.
-      const center = (await snapshot(pages[0])).crate.position;
-      // A rotating box can deflect either actor past it. First back away on the
-      // actor's current side, then walk an explicit east corridor, not a diagonal through the box.
-      async function approach(page: Page, sign: number) {
-        const data = await snapshot(page);
-        const own = (data.predicted ?? data.authoritative).position;
-        const clearZ = center.z + (own.z >= center.z ? 3 : -3);
-        const clearX = center.x + 2.5;
-        await navigate(page, { x: own.x, z: clearZ });
-        await navigate(page, { x: clearX, z: clearZ });
-        await navigate(page, { x: clearX, z: center.z + sign * 2 });
-        await navigate(page, { x: center.x, z: center.z + sign * 2 });
-      }
-      await approach(pages[1], direction);
-      await approach(pages[0], -direction);
+      const center = (await snapshot(pages[0])).items[0].position;
+      await navigate(pages[1], { x: center.x + 1.8, z: center.z - direction * 1.5 });
+      await navigate(pages[1], { x: center.x + 1.8, z: center.z + direction * 2 });
+      await navigate(pages[1], { x: center.x, z: center.z + direction * 2 });
+      await navigate(pages[0], { x: center.x, z: center.z - direction * 2 });
       const opposed = await measure(pages, 4500, async () => {
         await Promise.all(
           pages.map((page, index) =>

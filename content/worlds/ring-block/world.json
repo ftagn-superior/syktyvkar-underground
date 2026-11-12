@@ -1,0 +1,226 @@
+{
+  "formatVersion": 4,
+  "worldId": "ring-block",
+  "bounds": {
+    "min": {
+      "x": -269,
+      "y": -5,
+      "z": -745
+    },
+    "max": {
+      "x": 331,
+      "y": 60,
+      "z": 131
+    }
+  },
+  "simulation": {
+    "tickRate": 60,
+    "gravity": {
+      "x": 0,
+      "y": -9.81,
+      "z": 0
+    },
+    "character": {
+      "height": 1.8,
+      "radius": 0.35,
+      "speed": 4,
+      "sprintSpeed": 14,
+      "mass": 70
+    }
+  },
+  "spawnPoints": [
+    {
+      "x": -3,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "x": 5,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "x": -7,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": 7,
+      "y": 0,
+      "z": 13
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 17
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 17
+    }
+  ],
+  "entities": [
+    {
+      "entityId": "boundary-north",
+      "kind": "obstacle",
+      "position": {
+        "x": 31,
+        "y": 0.75,
+        "z": -744.75
+      },
+      "size": {
+        "x": 600,
+        "y": 1.5,
+        "z": 0.5
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "boundary-south",
+      "kind": "obstacle",
+      "position": {
+        "x": 31,
+        "y": 0.75,
+        "z": 130.75
+      },
+      "size": {
+        "x": 600,
+        "y": 1.5,
+        "z": 0.5
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "boundary-west",
+      "kind": "obstacle",
+      "position": {
+        "x": -268.75,
+        "y": 0.75,
+        "z": -307
+      },
+      "size": {
+        "x": 0.5,
+        "y": 1.5,
+        "z": 876
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    },
+    {
+      "entityId": "boundary-east",
+      "kind": "obstacle",
+      "position": {
+        "x": 330.75,
+        "y": 0.75,
+        "z": -307
+      },
+      "size": {
+        "x": 0.5,
+        "y": 1.5,
+        "z": 876
+      },
+      "mass": 0,
+      "friction": 0.6,
+      "restitution": 0.05,
+      "color": "#414f60"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "ring",
+      "name": "Кольцо · «Трудовая слава»",
+      "position": {
+        "x": 0,
+        "y": 29,
+        "z": 0
+      }
+    },
+    {
+      "id": "school-1",
+      "name": "Школа №1",
+      "position": {
+        "x": 67.57,
+        "y": 17.14,
+        "z": -451.66
+      }
+    },
+    {
+      "id": "banya-4",
+      "name": "Баня №4",
+      "position": {
+        "x": -168.27,
+        "y": 13.1,
+        "z": -545.6
+      }
+    },
+    {
+      "id": "opera-theatre",
+      "name": "Театр оперы и балета",
+      "position": {
+        "x": 172.96,
+        "y": 17.14,
+        "z": -250.55
+      }
+    },
+    {
+      "id": "theatre-square",
+      "name": "Театральная площадь",
+      "position": {
+        "x": 226,
+        "y": 3,
+        "z": -150
+      }
+    },
+    {
+      "id": "syktsu",
+      "name": "СыктГУ им. Питирима Сорокина",
+      "position": {
+        "x": -148.88,
+        "y": 17.14,
+        "z": -157.92
+      }
+    }
+  ],
+  "cells": [
+    "cells/0_0.json"
+  ],
+  "assetCatalog": "../../buildings/ring-block/catalog.json",
+  "itemCatalog": "../../items/catalog.json",
+  "initialItems": [
+    {
+      "seedId": "crate-01",
+      "typeId": "wooden-crate",
+      "position": {
+        "x": 9.5,
+        "y": 0.52,
+        "z": 9
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    }
+  ],
+  "cellSize": 125
+}

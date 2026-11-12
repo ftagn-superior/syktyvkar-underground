@@ -2,6 +2,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import {
   loadWorldHeader,
+  initialItemState,
   type Vec3,
   type WorldManifest,
 } from '../../packages/contracts/src/index.js';
@@ -68,7 +69,12 @@ export async function runStreamingProbe() {
       longTasks.push({ start: entry.startTime, duration: entry.duration });
   });
   observer.observe({ type: 'longtask', buffered: true });
-  view.onFrame((_now, delta) => frames.push(delta * 1000));
+  view.onFrame((_now, delta) => {
+    frames.push(delta * 1000);
+    const area = view.graphicalArea();
+    stream.setVisualArea(area.center, area.drawRadius);
+    view.setStreamingRadius(stream.graphicsReadyRadius(area.center, area.drawRadius));
+  });
   const counts = () => ({
     meshes: view.scene.meshes.length,
     materials: view.scene.materials.length,
@@ -99,9 +105,14 @@ export async function runStreamingProbe() {
   }
   function display() {
     view.follow('self');
-    view.update([world.state('self')], 'self');
+    view.update(
+      [{ ...world.state('self'), skinId: 'standard', motionRevision: 0, motionEnabled: true }],
+      'self',
+      1 / 60,
+    );
   }
   async function relocate(position: Vec3) {
+    stream.setVisualArea(position, 500);
     stream.setArea(position);
     await waitReady();
     world.restoreCharacter({ ...world.state('self'), position, velocity: { x: 0, y: 0, z: 0 } });
@@ -160,7 +171,7 @@ export async function runStreamingProbe() {
           Object.values(manifest.assets[id]).includes(path),
         ),
       ),
-      'Remote dependencies downloaded on cold start',
+      'Outside-circle dependencies downloaded before critical preparation',
     );
     check(resources.diagnostics().integrityRetries === 1, 'Corrupt resource did not recover');
     const side = await walk({ x: 130, y: 0.92, z: 4 }, 2100);
@@ -184,14 +195,24 @@ export async function runStreamingProbe() {
     const cornerHouse = await walk({ x: -240, y: 0.92, z: -240 }, 500, true);
     // Keep history colliders after moving to a distant area, then release the final reference.
     const held = { x: -125, y: 0.92, z: -312.5 };
-    stream.setArea({ x: 500, y: 0, z: 500 }, undefined, ['6_5']);
+    stream.setArea({ x: 950, y: 0, z: 950 });
+    for (let i = 0; i < 600 && !stream.problem; i++) {
+      stream.pump();
+      await frame();
+    }
+    check(!!stream.problem, 'Critical HTTP failure was not surfaced');
+    failRemote = false;
+    stream.retry();
+    await relocate({ x: 950, y: 0.92, z: 950 });
+    stream.setVisualArea({ x: 950, y: 0, z: 950 }, 500);
+    stream.setArea({ x: 950, y: 0, z: 950 }, undefined, ['6_5']);
     await waitReady();
     await drain();
     check(
       view.buildingDiagnostics().buildings.some((item) => item.entityId === 'house-6-5-0'),
       'History collider was released',
     );
-    stream.setArea({ x: 500, y: 0, z: 500 });
+    stream.setArea({ x: 950, y: 0, z: 950 });
     await drain();
     check(
       !view.buildingDiagnostics().buildings.some((item) => item.entityId === 'house-6-5-0'),
@@ -204,6 +225,12 @@ export async function runStreamingProbe() {
       await relocate({ x: 500, y: 0.92, z: 500 });
       await drain();
       await relocate(held);
+      const deadline = performance.now() + 30000;
+      while (!stream.backgroundReady && performance.now() < deadline) {
+        stream.pump();
+        await frame();
+      }
+      check(stream.backgroundReady, 'Background did not settle before resource comparison');
       await drain();
       for (let turn = 0; turn < 4; turn++) {
         view.rotateCamera(1);
@@ -215,22 +242,8 @@ export async function runStreamingProbe() {
       cycles.every((value) => JSON.stringify(value) === JSON.stringify(cycles[0])),
       'Repeated route accumulated native/GPU resources',
     );
-    // An explicit retry follows a failed unique remote model request.
+    // Background HTTP errors are diagnostic; a completed local neighborhood stays playable.
     stream.setArea({ x: 950, y: 0, z: 950 });
-    for (
-      let i = 0;
-      i < 300 && !stream.diagnostics().cells.some((cell) => cell.state === 'error');
-      i++
-    ) {
-      stream.pump();
-      await frame();
-    }
-    check(
-      stream.diagnostics().cells.some((cell) => cell.state === 'error'),
-      'HTTP error was not surfaced',
-    );
-    failRemote = false;
-    stream.retry();
     await waitReady();
     await drain();
     // A response that ignores abort must not activate an obsolete target or a disposed session.
@@ -242,23 +255,61 @@ export async function runStreamingProbe() {
     await delay(500);
     await drain();
     check(
-      stream.diagnostics().cells.every((cell) => stream.diagnostics().required.includes(cell.id)),
+      stream
+        .diagnostics()
+        .cells.every((cell) =>
+          [
+            ...stream.diagnostics().physicsRequired,
+            ...stream.diagnostics().graphicsRequired,
+          ].includes(cell.id),
+        ),
       'Late response activated an old target',
     );
     const self = world.state('self');
+    const ownDisplay = {
+      ...self,
+      skinId: 'standard' as const,
+      motionRevision: 0,
+      motionEnabled: true,
+    };
+    const shadowProbe = {
+      ...ownDisplay,
+      entityId: 'shadow-probe',
+      position: { ...self.position, x: self.position.x + 600 },
+    };
+    view.update([ownDisplay, shadowProbe], 'self', 1 / 60);
+    const remoteMeshes = view.scene.getTransformNodeByName('shadow-probe')!.getChildMeshes();
+    const shadowList = () =>
+      view.scene.getLightByName('sun')!.getShadowGenerator()!.getShadowMap()!.renderList!;
+    check(
+      remoteMeshes.every((mesh) => !shadowList().includes(mesh)),
+      'Far dynamic shadows remain after the entity fades',
+    );
+    view.update(
+      [ownDisplay, { ...shadowProbe, position: { ...self.position, x: self.position.x + 20 } }],
+      'self',
+      1 / 60,
+    );
+    check(
+      remoteMeshes.some((mesh) => shadowList().includes(mesh)),
+      'Near dynamic shadows did not return',
+    );
+    view.update([ownDisplay], 'self', 1 / 60);
+
     for (let cycle = 0; cycle < 3; cycle++) {
       world.setRemoteSnapshot(
         {
+          scope: 'local',
           players: [self, { ...self, entityId: 'remote' }],
-          crate: { ...self, kind: 'crate', entityId: header.crate.entityId },
+          items: header.initialItems.map((seed) => initialItemState(seed)),
         },
         'self',
       );
-      world.setRemoteSnapshot({ players: [self] }, 'self');
+      world.setRemoteSnapshot({ scope: 'local', players: [self], items: [] }, 'self');
       world.advance(1 / 60);
     }
     check(
-      !world.staticDiagnostics().crate && world.staticDiagnostics().remotePlayers === 0,
+      world.staticDiagnostics().items === 0 && world.staticDiagnostics().remotePlayers === 0,
       'Proxy lifecycle leaked',
     );
     const diagnostics = stream.diagnostics();

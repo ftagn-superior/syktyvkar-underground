@@ -72,18 +72,20 @@ export async function runStaticLifecycleProbe(
     for (let cycle = 0; cycle < 100; cycle++) {
       const start = performance.now();
       buildings.add(far, asset);
-      const tile = world.createBox({
-        ...definition.entities[0],
-        entityId: `tile-${cycle}`,
-        position: { x: 10, y: -0.5, z: 0 },
-        size: { x: 10, y: 1, z: 10 },
-      });
+      const tileId = `tile-${cycle}`;
+      world.retainStatic(
+        {
+          ...definition.entities[0],
+          entityId: tileId,
+          position: { x: 10, y: -0.5, z: 0 },
+          size: { x: 10, y: 1, z: 10 },
+        },
+        'fixture',
+      );
       world.characters.get('own')!.input = { moveX: 1, moveZ: 0 };
       world.advance(1 / 60);
       buildings.remove(far.entityId);
-      tile.body.dispose();
-      tile.shape.dispose();
-      tile.node.dispose();
+      world.releaseStatic(tileId);
       timingsMs.push(performance.now() - start);
       check(
         world.characters.get('own')!.controller === controller,

@@ -7,7 +7,7 @@ import { createServer } from 'vite';
 import { canonicalJson, type WorldDefinition } from '../packages/contracts/src/index.js';
 import { createAuthoritativeWorld, loadServerWasm } from '../packages/simulation/src/server.js';
 import { readWorldDirectory } from '../apps/server/src/world-bundle.js';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { runStateViewProbe } from './large-map/state-view.js';
@@ -228,9 +228,7 @@ try {
       definition: {
         ...scene.definition,
         buildings: initialCells.flatMap((cell) => cell.buildings),
-        entities: scene.definition.entities.filter(
-          (entity) => initialIds.has(entity.entityId) || entity.kind === 'crate',
-        ),
+        entities: scene.definition.entities.filter((entity) => initialIds.has(entity.entityId)),
         spawnPoints: [scene.definition.spawnPoints[0]],
       },
     },

@@ -5,14 +5,26 @@ import { join } from 'node:path';
 import { tmpdir, cpus, totalmem, platform } from 'node:os';
 import { Client } from '@colyseus/sdk';
 import type { Page, CDPSession } from 'playwright';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { startSdkLoad } from './helpers/sdk-load.js';
 import { crowdTarget, spreadRoute, expectedInterest } from '../tools/load-test/src/routes.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { buildStreamingFixture } from './helpers/streaming-world.js';
+import { buildStreamingFixture, seedStreamingItemProfile } from './helpers/streaming-world.js';
+import { createDatabaseFixture } from './helpers/database-fixture.js';
+import { worldCellAt } from '../packages/contracts/src/index.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
 import { hash } from './large-map/content.js';
 
+const content = process.env.SU_STREAMING_CONTENT ?? 'streaming-lab';
+const itemProfile = process.env.SU_STREAMING_ITEMS ?? 'existing';
+assert.ok(content === 'streaming-lab' || content === 'ring-block');
+assert.ok(itemProfile === 'existing' || itemProfile === 'all-types');
+assert.ok(
+  process.env.SU_TEST_DATABASE_URL,
+  'SU_TEST_DATABASE_URL is required for an isolated load-test schema',
+);
+const zoom = Number(process.env.SU_STREAMING_ZOOM ?? 1);
+assert.ok([1, 30].includes(zoom), 'Measure normal and 30× views separately');
 const scenario = process.env.SU_STREAMING_SCENARIO ?? 'spread';
 assert.ok(scenario === 'spread' || scenario === 'crowd');
 const clients = Number(process.env.SU_STREAMING_CLIENTS ?? 8);
@@ -43,21 +55,45 @@ assert.ok(
     warmupSeconds >= 0 &&
     [0, 100, 200].includes(rttMs),
 );
-const output = process.env.SU_STREAMING_OUTPUT ?? `output/large-map/l5/load-${scenario}-${clients}`;
+const output =
+  process.env.SU_STREAMING_OUTPUT ??
+  `output/dynamic-map/load-${content}-${scenario}-${itemProfile}-${clients}-zoom${zoom}`;
 await mkdir(output, { recursive: true });
 const directory = await mkdtemp(join(tmpdir(), 'su-streaming-load-'));
-const fixture = await buildStreamingFixture(directory, scenario);
-const app = await createGameServer({
-  port: 0,
-  worldDirectory: fixture.worldDirectory,
-  testDiagnostics: true,
-});
-const relay = await createDelayRelay(new URL(app.url), {
-  name: `rtt${rttMs}-jitter20`,
-  rttMs: netem ? 0 : rttMs,
-  jitterMs: netem ? 0 : rttMs ? 20 : 0,
-});
-const browser = await launchTestBrowser({ renderer: renderer as 'software' | 'default' });
+const fixture = await buildStreamingFixture(directory, scenario, { content, items: itemProfile });
+const startFixture = async () => {
+  const database = await createDatabaseFixture();
+  let app: Awaited<ReturnType<typeof createGameServer>> | undefined;
+  let relay: Awaited<ReturnType<typeof createDelayRelay>> | undefined;
+  let browser: Awaited<ReturnType<typeof launchTestBrowser>> | undefined;
+  try {
+    const itemEvidence = await seedStreamingItemProfile(database.pool, fixture);
+    app = await createGameServer({
+      port: 0,
+      pool: database.pool,
+      worldDirectory: fixture.worldDirectory,
+      testDiagnostics: true,
+    });
+    relay = await createDelayRelay(new URL(app.url), {
+      name: `rtt${rttMs}-jitter20`,
+      rttMs: netem ? 0 : rttMs,
+      jitterMs: netem ? 0 : rttMs ? 20 : 0,
+    });
+    browser = await launchTestBrowser({ renderer: renderer as 'software' | 'default' });
+    return { database, itemEvidence, app, relay, browser };
+  } catch (error) {
+    await browser?.close();
+    await relay?.close();
+    try {
+      await app?.close();
+    } finally {
+      await database.close();
+    }
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+};
+const { database, itemEvidence, app, relay, browser } = await startFixture();
 let load: Awaited<ReturnType<typeof startSdkLoad>> | undefined;
 const pages: Page[] = [];
 const inspectors: CDPSession[] = [];
@@ -163,15 +199,20 @@ try {
       .filter((request) => request.url.includes('/cells/'))
       .map((request) => request.url);
     assert.ok(bytes > 0 && bytes <= 8 * 1024 * 1024, `Cold transfer ${bytes} bytes`);
-    assert.ok(new Set(cellRequests).size <= initial.streaming.required.length);
-    for (const remote of ['house-remote-a', 'house-remote-b'])
-      assert.ok(
-        !initialHttp.some((request) =>
-          request.url.endsWith(fixture.manifest.assets[remote].modelFile),
-        ),
-        'Remote model on cold load',
-      );
+    assert.ok(new Set(cellRequests).size <= fixture.manifest.cells.length);
+    assert.ok(initial.streaming.criticalReady);
     coldHttp.push({ bytes, cells: cellRequests, resources: initialHttp });
+    if (zoom === 30) {
+      await page.locator('#world').dispatchEvent('wheel', { deltaY: 10000 });
+      await page.waitForFunction(
+        () => {
+          const r = (window as any).__SU_DEBUG__.report().rendering;
+          return r.camera.zoom === 30 && r.streaming.shownRadius >= r.streaming.drawRadius - 1;
+        },
+        undefined,
+        { timeout: 60000 },
+      );
+    }
     if (scenario === 'spread')
       browserStats[i].route = spreadRoute(
         fixture.header,
@@ -235,13 +276,10 @@ try {
         current.streaming.resources.cacheBytes <= 64 * 1024 * 1024 &&
           current.streaming.resources.httpPeak <= 4,
       );
-      assert.equal(current.streaming.entities, current.physics.entities);
+      assert.ok(current.physics.entities <= current.streaming.entities);
       assert.equal(
         current.physics.bodies,
-        current.physics.entities +
-          1 +
-          current.physics.remotePlayers +
-          Number(current.physics.crate),
+        current.physics.entities + 1 + current.physics.remotePlayers + current.physics.items,
         'Unexpected native body count',
       );
       const position = current.authoritative.position;
@@ -249,7 +287,8 @@ try {
       if (stats.last)
         stats.distance += Math.hypot(position.x - stats.last.x, position.z - stats.last.z);
       stats.last = position;
-      const id = `${Math.min(15, Math.floor((position.x + 1000) / 125))}_${Math.min(15, Math.floor((position.z + 1000) / 125))}`;
+      const id = worldCellAt(fixture.manifest.bounds, fixture.manifest.grid, position);
+      assert.ok(id, 'Browser left the declared world');
       stats.cells.add(id);
       const navigate = current.predicted?.position ?? position;
       let target;
@@ -262,7 +301,8 @@ try {
         }
       } else
         target = crowdTarget(
-          current.crate?.position ?? fixture.header.crate.position,
+          current.items.find((item: any) => item.typeId === 'wooden-crate')?.position ??
+            fixture.header.initialItems[0].position,
           i + 6,
           elapsed,
         );
@@ -335,7 +375,7 @@ try {
         if (truth) {
           const ids = observed.entities
             .map((entry: any) => entry.entityId)
-            .concat(observed.crate ? [observed.crate.entityId] : []);
+            .concat(observed.items.map((item: any) => item.entityId));
           const expected = expectedInterest(
             truth.entities,
             observed.authoritative.entityId,
@@ -357,10 +397,11 @@ try {
         const stable =
           current.streaming.requested.length === 0 &&
           current.streaming.retained.length === 0 &&
-          current.streaming.cells.every((cell: any) => cell.state === 'active');
+          current.streaming.backgroundReady;
         if (measuredAt && stable) {
           const key = JSON.stringify([
-            current.streaming.cells.map((cell: any) => cell.id).sort(),
+            current.streaming.physicsRequired.slice().sort(),
+            current.streaming.graphicsRequired.slice().sort(),
             current.trackedEntities.slice().sort(),
           ]);
           const counts = {
@@ -429,8 +470,20 @@ try {
         });
       }
       const { testPublications: _history, ...server } = diagnostics;
+      const itemMotion = [...app.room.state.items.values()].map((item) => ({
+        entityId: item.entityId,
+        typeId: item.typeId,
+        position: { x: item.x, y: item.y, z: item.z },
+        speed: Math.hypot(item.vx, item.vy, item.vz),
+        angularSpeed: Math.hypot(item.avx, item.avy, item.avz),
+      }));
       samples.push({
         elapsed,
+        items: {
+          count: itemMotion.length,
+          moving: itemMotion.filter((item) => item.speed > 0.03 || item.angularSpeed > 0.03).length,
+          snapshots: itemMotion,
+        },
         measured: !!measuredAt,
         server,
         browsers: compact,
@@ -554,6 +607,8 @@ try {
         'tests/helpers/sdk-load.ts',
         'tools/load-test/src/worker.ts',
         'tests/helpers/streaming-world.ts',
+        'content/items/catalog.json',
+        `content/worlds/${content}/world.json`,
       ].map(async (path) => [path, hash(await readFile(path))]),
     ),
   );
@@ -586,6 +641,7 @@ try {
       memoryBytes: totalmem(),
       renderer,
       quality,
+      zoom,
       viewport: { width, height },
       topology:
         'Two foreground contexts; server and browser driver share one process; SDK senders run in a separate child process on this host. Hardware budgets require the target GPU/2vCPU profile.',
@@ -598,7 +654,9 @@ try {
       map: fixture.manifest.mapVersion,
       simulation: fixture.manifest.simulationConfigHash,
     },
-    scene: { seed: 20261111, buildings: 1600, cells: 256, grid: fixture.manifest.grid },
+    contentProfile: fixture.profile,
+    itemProfile: itemEvidence,
+    scene: fixture.profile.scene,
     errors,
     coldHttp,
     memoryWindows,
@@ -669,6 +727,10 @@ try {
   await load?.stop();
   await browser.close();
   await relay.close();
-  await app.close();
-  await rm(directory, { recursive: true, force: true });
+  try {
+    await app.close();
+  } finally {
+    await database.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 }

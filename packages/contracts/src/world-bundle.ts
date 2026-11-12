@@ -25,6 +25,7 @@ import {
 } from './world-grid.js';
 import { canonicalJson } from './world.js';
 import { validateClosedMeshTopology } from './mesh-volume.js';
+import { itemPhysicsDefinition } from './item-shapes.js';
 
 const idPattern = /^[a-zA-Z0-9_-]{1,80}$/;
 const assetPattern = /^[a-z0-9][a-z0-9-]{0,79}$/;
@@ -350,11 +351,16 @@ export function simulationProjection(world: WorldDefinition) {
         height: character.height,
         radius: character.radius,
         speed: character.speed,
+        sprintSpeed: character.sprintSpeed,
         mass: character.mass,
       },
     },
     bounds: { min: vector(world.bounds.min), max: vector(world.bounds.max) },
     spawnPoints: world.spawnPoints.map(vector),
+    itemCatalog: Object.fromEntries(
+      Object.entries(world.itemCatalog.types).map(([id, t]) => [id, itemPhysicsDefinition(t)]),
+    ),
+    initialItems: world.initialItems,
     entities: [...world.entities]
       .sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0))
       .map((e) => ({
@@ -551,10 +557,9 @@ export async function loadWorldBundle(
     ),
   ]);
   const merged = mergeWorldCells(cells);
-  const { crate, ...parameters } = header;
   const world = validateWorld({
-    ...parameters,
-    entities: [...merged.statics, crate],
+    ...header,
+    entities: merged.statics,
     buildings: merged.buildings,
     buildingAssets: Object.fromEntries(assets),
   });

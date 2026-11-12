@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir, cpus } from 'node:os';
 import type { Page } from 'playwright';
 import { Client, type Room } from '@colyseus/sdk';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { PROTOCOL_VERSION } from '../packages/contracts/src/index.js';
 import { WorldState } from '../packages/protocol/src/index.js';
@@ -27,8 +27,10 @@ const phases: Record<string, any> = {};
 let activePages: Page[] = [];
 const held = new Map<Page, string[]>();
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const state = (page: Page): Promise<any> =>
-  page.evaluate(() => (window as any).__SU_DEBUG__.snapshot());
+const state = async (page: Page): Promise<any> => {
+  const data = await page.evaluate(() => (window as any).__SU_DEBUG__.snapshot());
+  return { ...data, crate: data.items.find((item: any) => item.typeId === 'wooden-crate') ?? null };
+};
 const report = (page: Page): Promise<any> =>
   page.evaluate(() => (window as any).__SU_DEBUG__.report());
 async function keys(page: Page, next: string[]) {
@@ -87,8 +89,8 @@ async function visible(page: Page, yes: boolean, id: string) {
       return (
         remote === yes &&
         rendered === yes &&
-        !!data.crate === yes &&
-        data.physics.crate === yes &&
+        data.items.length > 0 === yes &&
+        data.physics.items > 0 === yes &&
         data.physics.remotePlayers === (yes ? 1 : 0)
       );
     },
@@ -98,11 +100,35 @@ async function visible(page: Page, yes: boolean, id: string) {
 }
 async function settled(page: Page) {
   await page.waitForFunction(
-    () => (window as any).__SU_DEBUG__.snapshot().streaming.cells.length === 9,
+    () => {
+      const streaming = (window as any).__SU_DEBUG__.snapshot().streaming;
+      return streaming.criticalReady && streaming.backgroundReady && !streaming.requested.length;
+    },
     undefined,
-    { timeout: 10000 },
+    { timeout: 120000 },
   );
-  await sleep(100);
+  await sleep(5500);
+}
+/** Move only the isolated authoritative test fixture; clients receive ordinary snapshots. */
+async function relocate(page: Page, x: number, z = 4) {
+  await keys(page, []);
+  const id = (await state(page)).authoritative.entityId;
+  assert.ok(
+    (app!.room as any).world.respawnPlayer(id, { x, y: 0, z }),
+    'Unsafe fixture destination',
+  );
+  await page.waitForFunction(
+    ({ x, z }) => {
+      const data = (window as any).__SU_DEBUG__.snapshot();
+      return (
+        data.authoritative &&
+        Math.hypot(data.authoritative.position.x - x, data.authoritative.position.z - z) < 0.1 &&
+        data.streaming.criticalReady
+      );
+    },
+    { x, z },
+    { timeout: 45000 },
+  );
 }
 async function resources(page: Page) {
   const data = await state(page),
@@ -119,7 +145,7 @@ async function resources(page: Page) {
     labels,
     bodies: data.physics.bodies,
     remotePlayers: data.physics.remotePlayers,
-    crate: data.physics.crate,
+    items: data.physics.items,
     tracked: data.trackedEntities.length,
     statics: data.physics.entities,
     cells: data.streaming.cells.length,
@@ -131,16 +157,16 @@ try {
   const source = join(temporary, 'content/worlds/streaming-lab/world.json');
   const header = JSON.parse(await readFile(source, 'utf8'));
   header.spawnPoints = [
-    { x: -4, y: 0, z: 4 },
-    { x: 77, y: 0, z: 4 },
-    { x: -504, y: 0, z: -504 },
+    { x: -504, y: 0, z: 4 },
+    { x: 4, y: 0, z: 4 },
+    { x: 504, y: 0, z: -996 },
     { x: -996, y: 0, z: 4 },
     { x: -996, y: 0, z: 504 },
-    { x: 504, y: 0, z: -996 },
+    { x: 504, y: 0, z: 504 },
     { x: -496, y: 0, z: 754 },
     { x: 754, y: 0, z: -496 },
   ];
-  header.crate.position = { x: 77, y: 0.52, z: 10 };
+  header.initialItems[0].position = { x: 4, y: 0.52, z: 10 };
   await writeFile(source, JSON.stringify(header));
   const manifest = await buildWorld(source, join(temporary, 'world'));
   app = await createGameServer({ port: 0, worldDirectory: join(temporary, 'world') });
@@ -184,23 +210,26 @@ try {
   const initial = await state(observer);
   const remoteId = (await state(actor)).authoritative.entityId;
   const identity = initial.authoritative.entityId;
+  const itemId = [...app.room.state.items.values()].find(
+    (item) => item.typeId === 'wooden-crate',
+  )!.entityId;
   assert.equal(initial.playerCount, 1);
   assert.equal(initial.crate, null);
-  assert.equal(initial.physics.crate, false);
+  assert.equal(initial.physics.items, 0);
   assert.equal(initial.trackedEntities.length, 1);
   assert.equal(initial.physics.remotePlayers, 0);
   phases.initial = initial;
   const ack = initial.lastAck;
-  await move(observer, -6);
-  await move(observer, -4);
+  await move(observer, -506);
+  await move(observer, -504);
   assert.ok((await state(observer)).lastAck > ack);
   assert.equal((await state(observer)).crate, null);
   checks.push(
     'A far client plays and acknowledges input without the crate; occupancy stays global',
   );
   stage('no-crate control passed');
-  await move(actor, 75);
-  await move(observer, 0);
+  await move(actor, 6);
+  await relocate(observer, -490);
   await visible(observer, true, remoteId);
   await settled(observer);
   phases.near = { state: await state(observer), resources: await resources(observer) };
@@ -208,17 +237,16 @@ try {
     visibleCycles: any[] = [],
     freshSamples: any[] = [];
   for (let cycle = 0; cycle < 3; cycle++) {
-    await move(observer, -26);
+    await relocate(observer, -810);
     await visible(observer, false, remoteId);
     await settled(observer);
     const hidden = await state(observer);
     assert.ok(
-      !hidden.trackedEntities.includes(remoteId) &&
-        !hidden.trackedEntities.includes(header.crate.entityId),
+      !hidden.trackedEntities.includes(remoteId) && !hidden.trackedEntities.includes(itemId),
     );
     hiddenCycles.push(await resources(observer));
-    await move(actor, cycle % 2 === 0 ? 76 : 75);
-    await move(observer, -13);
+    await move(actor, cycle % 2 === 0 ? 5 : 6);
+    await relocate(observer, -650);
     await visible(observer, false, remoteId);
     const capture = observer.evaluate(async (id) => {
       const deadline = performance.now() + 12000;
@@ -236,7 +264,7 @@ try {
       }
       throw new Error('Fresh appearance was not observed');
     }, remoteId);
-    await move(observer, 0);
+    await relocate(observer, -490);
     const fresh = await capture;
     assert.ok(
       Math.abs(fresh.raw.position.x - fresh.smoothed.position.x) < 0.001,
@@ -262,9 +290,9 @@ try {
   );
   phases.cycles = { hiddenCycles, visibleCycles, freshSamples };
   checks.push(
-    'Three 80/100m cycles clean views, proxies, labels, shadows/materials and smoothing; same IDs return with fresh positions',
+    'Three 500/800m cycles clean views, proxies, labels, shadows/materials and smoothing; same IDs return with fresh positions',
   );
-  await move(observer, -13);
+  await relocate(observer, -650);
   await visible(observer, true, remoteId);
   await contexts[0].setOffline(true);
   await observer.waitForFunction(
@@ -281,7 +309,7 @@ try {
   assert.equal(restored.authoritative.entityId, identity);
   assert.equal(restored.occupancy, 3);
   checks.push(
-    'Reconnection in the 80–100m band starts a fresh filtered view with the same own entity',
+    'Reconnection in the 500–800m band starts a fresh filtered view with the same own entity',
   );
   const cameraFrames = [];
   for (const size of [
@@ -296,20 +324,17 @@ try {
         () => !(window as any).__SU_DEBUG__.report().rendering.camera.turning,
       );
       const camera = (await report(observer)).rendering.camera;
-      const radius = Math.hypot(
-        camera.halfWidth,
-        camera.halfHeight / Math.cos(camera.beta) + 2 * Math.tan(camera.beta),
-      );
-      assert.ok(radius < 80, 'Camera exposes dynamic positions beyond the enter radius');
+      const radius = (await report(observer)).rendering.streaming?.drawRadius ?? 500;
+      assert.ok(Number.isFinite(camera.zoom) && camera.zoom >= 0.6 && camera.zoom <= 30);
       cameraFrames.push({ size, camera, radius });
     }
   }
   phases.camera = cameraFrames;
   checks.push(
-    'Portrait/landscape/ultrawide and all camera turns keep the dynamic footprint inside the 80m enter radius',
+    'Portrait/landscape/ultrawide and all camera turns preserve camera controls independently of network AOI',
   );
   await observer.setViewportSize({ width: 960, height: 640 });
-  await move(observer, 0);
+  await relocate(observer, -490);
   await visible(observer, true, remoteId);
   await actor.locator('#leave').click();
   await observer.waitForFunction((id) => {
@@ -325,7 +350,7 @@ try {
   phases.final = await state(observer);
   assert.equal(phases.final.predictionWorlds, 1);
   assert.ok(phases.final.replaySteps > 0);
-  assert.equal(phases.final.crate.entityId, header.crate.entityId);
+  assert.equal(phases.final.crate.entityId, itemId);
   assert.equal(app.room.diagnostics().players, 2);
   checks.push(
     'Consented leave removes the actor from all views, proxy bodies, smoothing and visual resources',

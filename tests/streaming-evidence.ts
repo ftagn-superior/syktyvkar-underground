@@ -1,3 +1,4 @@
+import { PROTOCOL_VERSION, WORLD_FORMAT_VERSION } from '../packages/contracts/src/index.js';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -24,7 +25,7 @@ assert.ok(browser.results.every((row: any) => row.code === 0));
 for (const stage of ['l2', 'l3', 'l4']) await read(base + '/' + stage + '/browser.json');
 await read(base + '/failures/result.json');
 const regression = await read(base + '/regression/suite.json');
-assert.equal(regression.results.length, 9);
+assert.equal(regression.results.length, 17);
 assert.ok(regression.results.every((row: any) => row.code === 0 && !row.timedOut));
 const artifact = await read(base + '/artifact/artifact.json');
 await read(base + '/regression/supplementary.json');
@@ -41,8 +42,8 @@ assert.ok(
     )?.[1],
   ) > 0,
 );
-assert.equal(artifact.worlds.length, 2);
-assert.ok(artifact.worlds.every((world: any) => world.protocolVersion === 3));
+assert.equal(artifact.worlds.length, 3);
+assert.ok(artifact.worlds.every((world: any) => world.protocolVersion === PROTOCOL_VERSION));
 const matrix = await read(base + '/matrix/suite.json');
 assert.equal(matrix.results.length, 6);
 const profiles: any[] = [];
@@ -87,7 +88,8 @@ assert.match(
 execFileSync('git', ['diff', '--check']);
 execFileSync('bash', ['-n', 'tests/browser-network-netem.sh', 'tests/streaming-netem.sh']);
 const unitTests = Number(/Tests\s+(\d+) passed/.exec(unitLog)?.[1]);
-assert.ok(unitTests >= 104 && !/Tests\s+\d+ failed/.test(unitLog));
+assert.ok(unitTests >= 276 && !/Tests\s+\d+ failed/.test(unitLog));
+assert.ok(!/\d+ skipped/.test(unitLog), 'Persistent-world evidence must include database tests');
 const all = [...profiles, ...soaks];
 for (const profile of [...all, netem]) {
   if (profile.clients > 2)
@@ -142,8 +144,8 @@ const report = {
     diffWhitespace: 'passed',
     shellSyntax: 'passed',
   },
-  protocolVersion: 3,
-  worldFormatVersion: 3,
+  protocolVersion: PROTOCOL_VERSION,
+  worldFormatVersion: WORLD_FORMAT_VERSION,
   lockHash: digest(await readFile('pnpm-lock.yaml')),
   sourceHashesVerified: true,
   runtimeHelpers: {
@@ -193,8 +195,8 @@ const report = {
   },
   hardwareAcceptance: false,
   remaining: [
-    'L6: target GPU 1920x1080 and server 2vCPU/4GB budgets',
-    'L6: final human acceptance and handoff',
+    'User acceptance: target GPU 1920x1080 and server 2vCPU/4GB budgets',
+    'User acceptance: integrated city visuals and content profiles',
   ],
   note: 'Software rendering and a shared host/process verify functionality, cleanup and sustained operation. They do not certify target hardware or separately measured native Havok memory.',
 };

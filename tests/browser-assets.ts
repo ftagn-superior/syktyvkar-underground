@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer, request } from 'node:http';
 import { connect, type Socket } from 'node:net';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 
 // This proxy can corrupt a real immutable response while preserving its cache headers.
 // Browser routing disables HTTP caching, so route.fulfill cannot cover this regression.
@@ -97,7 +97,14 @@ try {
   corrupt = false;
   await page.goto(url + '/?diagnostics=1');
   await page.waitForFunction(() => (window as any).__SU_DEBUG__?.snapshot().connection === 'ready');
-  assert.equal(assetRequests, 1, 'models wait for the server preparation plan');
+  await page.waitForFunction(
+    () => (window as any).__SU_DEBUG__?.snapshot().streaming?.backgroundReady,
+  );
+  assert.equal(
+    assetRequests,
+    2,
+    'static preview replaces corrupt cached bytes with one verified network reload',
+  );
   assert.equal(matchmakingRequests, 0, 'the header alone cannot reserve a guest seat');
   assert.equal(await page.locator('#join-label').textContent(), 'Войти');
   await page.locator('#join').click();
@@ -109,7 +116,7 @@ try {
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().connection === 'ready');
   await context.close();
 
-  // Models are verified after the server reserves a preparation seat; no character exists until ready.
+  // Static preview verifies models without a reserved seat; persistent damage never creates a character.
   corrupt = true;
   const beforeRequests = assetRequests;
   const beforeMatchmaking = matchmakingRequests;
@@ -123,10 +130,10 @@ try {
     () => (window as any).__SU_DEBUG__?.snapshot().connection === 'ready',
   );
   assert.equal(matchmakingRequests, beforeMatchmaking);
-  await broken.locator('#join').click();
   await broken.waitForFunction(() => !!(window as any).__SU_DEBUG__?.snapshot().areaProblem);
   assert.equal(assetRequests - beforeRequests, 2, 'permanent damage receives only one retry');
-  assert.ok(matchmakingRequests > beforeMatchmaking);
+  assert.equal(matchmakingRequests, beforeMatchmaking);
+  assert.equal(app.room.diagnostics().sessions, 0);
   assert.equal(app.room.state.players.size, 0);
   await broken.locator('#area-retry').waitFor();
   await broken.waitForFunction(
@@ -136,7 +143,6 @@ try {
   await broken.waitForFunction(
     () => (window as any).__SU_DEBUG__?.snapshot().connection === 'ready',
   );
-  await broken.locator('#join').click();
   await broken.waitForFunction(() => !!(window as any).__SU_DEBUG__?.snapshot().areaProblem);
   assert.equal(
     app.room.state.players.size,
@@ -151,7 +157,7 @@ try {
     checks: [
       'A corrupt immutable HTTP cache entry is replaced by one verified network retry.',
       'The recovered world can enter and leave a real multiplayer session.',
-      'Persistent GLB corruption keeps the reserved seat in preparation without spawning, including after reload.',
+      'Persistent GLB corruption leaves static preview without reserving a seat or spawning, including after reload.',
     ],
     browserErrors: errors,
   };

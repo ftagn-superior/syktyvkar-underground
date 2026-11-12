@@ -4,6 +4,8 @@ import {
   worldCellAt,
   worldCellBounds,
   cellsIntersectingBounds,
+  cellsIntersectingCircle,
+  distanceToBoundsXZ,
   buildingBounds,
   mergeWorldCells,
   validateWorldCell,
@@ -68,6 +70,20 @@ describe('world grid and seam identity', () => {
         max: { x: 1001, y: 1, z: 1 },
       }),
     ).toEqual([]);
+  });
+
+  it('selects circle intersections using AABBs, including edges, corners and the full 256-cell world', () => {
+    const center = { x: 0, z: 0 };
+    const circle = cellsIntersectingCircle(bounds, grid, center, 500);
+    expect(circle).toContain('12_8'); // nearest point is exactly 500, center is farther
+    expect(circle).not.toContain('12_12'); // square corners are outside the circle
+    expect(cellsIntersectingCircle(bounds, grid, center, 0)).toEqual(['7_7', '8_7', '7_8', '8_8']);
+    expect(cellsIntersectingCircle(bounds, grid, center, 2000)).toHaveLength(256);
+    expect(distanceToBoundsXZ({ x: -2, z: -3 }, worldCellBounds(bounds, grid, '8_8'))).toBeCloseTo(
+      Math.sqrt(13),
+    );
+    expect(cellsIntersectingCircle(bounds, grid, { x: 1000, z: 1000 }, 0)).toEqual(['15_15']);
+    expect(() => cellsIntersectingCircle(bounds, grid, center, Infinity)).toThrow();
   });
 
   it('includes the full rotation when finding the world bounding box', () => {

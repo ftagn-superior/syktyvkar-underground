@@ -121,7 +121,10 @@ export class BuildingViews {
       for (const dispose of releases) dispose();
     };
     try {
-      const promises = [...new Set(ids)].map((id) => {
+      signal?.addEventListener('abort', release, { once: true });
+      for (const id of new Set(ids)) {
+        if (released || signal?.aborted)
+          throw new DOMException('Preparation cancelled', 'AbortError');
         const descriptor = manifest.assets[id];
         if (!descriptor) throw new Error(`Unknown building model: ${id}`);
         let record = this.cache.get(descriptor.version);
@@ -158,13 +161,9 @@ export class BuildingViews {
               this.assets.delete(descriptor.version);
           }
         });
-        return entry.promise;
-      });
-      signal?.addEventListener('abort', release, { once: true });
-      const results = await Promise.allSettled(promises);
+        await entry.promise;
+      }
       if (this.disposed || released) throw new DOMException('Preparation cancelled', 'AbortError');
-      const failed = results.find((result) => result.status === 'rejected');
-      if (failed?.status === 'rejected') throw failed.reason;
       // Once prepared, the caller owns this pin until its last instance has been removed.
       signal?.removeEventListener('abort', release);
       return release;
@@ -360,6 +359,8 @@ export class BuildingViews {
     cameraNear: number,
     now: number,
     seconds: number,
+    shadowCenter = ownPosition,
+    visibleRadius = Infinity,
   ): void {
     const rays: Ray[] = [];
     if (ownPosition) {
@@ -386,12 +387,19 @@ export class BuildingViews {
       }))
         selected.add(id);
     }
-    const shadowCandidates = ownPosition
-      ? this.index.query({
-          min: ownPosition.subtract(new Vector3(80, 0, 80)),
-          max: ownPosition.add(new Vector3(80, 0, 80)),
-        })
-      : new Set(this.references.keys());
+    const shadowCandidates =
+      shadowCenter && visibleRadius > 0
+        ? this.index.query({
+            min: shadowCenter.subtract(
+              new Vector3(Math.min(80, visibleRadius), 0, Math.min(80, visibleRadius)),
+            ),
+            max: shadowCenter.add(
+              new Vector3(Math.min(80, visibleRadius), 0, Math.min(80, visibleRadius)),
+            ),
+          })
+        : visibleRadius > 0
+          ? new Set(this.references.keys())
+          : new Set<string>();
     for (const id of new Set([...this.shadowed, ...shadowCandidates])) {
       const entry = this.references.get(id);
       if (!entry) continue;

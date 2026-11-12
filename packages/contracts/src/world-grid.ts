@@ -184,3 +184,30 @@ export function worldNeighborhood(
     }
   return ids;
 }
+
+/** Minimum X/Z distance to a closed cell rectangle, including boundary contact. */
+export function distanceToBoundsXZ(position: { x: number; z: number }, bounds: Bounds): number {
+  return Math.hypot(
+    Math.max(bounds.min.x - position.x, 0, position.x - bounds.max.x),
+    Math.max(bounds.min.z - position.z, 0, position.z - bounds.max.z),
+  );
+}
+
+/** Circular resource selection; cell centers are deliberately not used. */
+export function cellsIntersectingCircle(
+  bounds: Bounds,
+  grid: WorldGrid,
+  position: { x: number; z: number },
+  radius: number,
+): string[] {
+  requireGrid(Number.isFinite(radius) && radius >= 0, 'finite nonnegative radius');
+  requireGrid(Number.isFinite(position.x) && Number.isFinite(position.z), 'finite circle center');
+  const result: string[] = [];
+  for (let z = 0; z < grid.rows; z++)
+    for (let x = 0; x < grid.columns; x++) {
+      const id = `${x}_${z}`;
+      if (distanceToBoundsXZ(position, worldCellBounds(bounds, grid, id)) <= radius)
+        result.push(id);
+    }
+  return result;
+}

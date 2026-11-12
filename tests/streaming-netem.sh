@@ -8,6 +8,7 @@ if [[ "${1-}" != "--inside" ]]; then
   export SU_TEST_HOST_NETNS="$(readlink /proc/self/ns/net)"
   exec unshare --user --map-root-user --net bash "$0" --inside
 fi
+: "${SU_TEST_DATABASE_URL:?Set a test PostgreSQL URL using an accessible Unix-domain socket}"
 ip link set lo up
 export SU_STREAMING_NETEM=1
 export SU_STREAMING_RTT=200

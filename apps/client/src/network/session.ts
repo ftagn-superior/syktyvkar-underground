@@ -10,24 +10,43 @@ import {
   MoveInputSchema,
   WorldState,
   toPlayerState,
-  toEntityState,
+  toItemState,
   toLocalSimulationSnapshot,
-  visibleCrate,
   type EntitySchema,
 } from '@su/protocol';
 import { createLocalPredictionWorld, type PredictionWorld } from '@su/simulation/prediction';
 import {
   MAX_INPUT_QUEUE,
+  type InventoryView,
+  type ItemAction,
+  type ItemCommand,
+  type ItemResult,
+  type ItemPose,
+  type ItemError,
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
+  REACTION_DURATION_MS,
+  CHAT_MAX_DURATION_MS,
+  normalizeChatText,
+  TICK_RATE,
+  findReaction,
+  findAnimation,
+  type AnimationId,
+  type AnimationRequest,
+  DEFAULT_AVATAR_SKIN,
+  resolveAvatarSkinId,
+  type AvatarSkinId,
   NEUTRAL_INPUT,
   WORLD_FORMAT_VERSION,
   canonicalJson,
   loadWorldHeader,
+  itemSupportDistance,
   validateWorldManifest,
   worldManifestIdentity,
   type ActionResult,
+  type ReactionRequest,
+  type ChatRequest,
   type MoveInput,
   type WorldHeader,
   type PrepareArea,
@@ -40,7 +59,9 @@ import { predictionCells } from '../streaming/prediction-area';
 import { VerifiedResources } from '../streaming/resources';
 import { CellStreamer, cellNeighborhood, type CellGraphics } from '../streaming/cells';
 import wasmUrl from '@babylonjs/havok/lib/esm/HavokPhysics.wasm?url';
-import type { DisplayEntity } from '../rendering/world-view';
+import type { DisplayEntity } from '../presentation/display-state';
+import { AnimationBuffer, REMOTE_INTERPOLATION_MS } from '../presentation/animation-buffer';
+import { AnimationRequestState } from '../presentation/animation-request';
 
 export type ConnectionState =
   | 'loading'
@@ -52,10 +73,19 @@ export type ConnectionState =
   | 'reconnecting'
   | 'error';
 type Pose = { x: number; y: number; z: number };
-type StoredSession = { token: string; epoch: string; actionId: number };
+type StoredSession = { token: string; epoch: string; actionId: number; accountId?: string };
 const storageKey = 'su:session:v1';
 const fields = ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'] as const;
 const messages: Record<string, string> = {
+  STORAGE_UNAVAILABLE:
+    'Сохранение временно недоступно. Мир приостановлен до восстановления связи с БД.',
+  ITEM_UNAVAILABLE: 'Предмет уже перемещён. Инвентарь обновлён.',
+  OUT_OF_REACH: 'Подойдите ближе: дальность взаимодействия — 3 метра.',
+  BLOCKED: 'Здесь есть препятствие или место уже занято.',
+  NO_SUPPORT: 'Для предмета нужна опора.',
+  OUT_OF_BOUNDS: 'Предмет должен целиком находиться в границах мира.',
+  INCOMPATIBLE_STACK: 'Эти стопки нельзя объединить или ячейка уже заполнена.',
+  OPERATION_CONFLICT: 'Идентификатор операции уже использован.',
   WORLD_FULL: 'На полигоне уже 8 игроков. Попробуйте войти чуть позже.',
   WORLD_NOT_READY: 'Сервер ещё готовит мир. Попробуйте снова через несколько секунд.',
   VERSION_MISMATCH: 'Версия мира изменилась. Перезагрузите страницу.',
@@ -64,8 +94,15 @@ const messages: Record<string, string> = {
   RATE_LIMITED: 'Возврат на старт доступен раз в 3 секунды.',
   STALE_WORLD: 'Мир был перезапущен. Войдите снова.',
   INVALID_INPUT: 'Сервер отклонил команду. Состояние восстановлено.',
+  INVALID_SKIN: 'Эта внешность недоступна. Выберите вариант из каталога.',
+  ANIMATION_NOT_ALLOWED: 'Дождитесь опоры; для танца остановитесь.',
   ALREADY_PROCESSED: 'Этот запрос уже обработан.',
   PLAN_REPLACED: 'Готовим другую безопасную точку.',
+  AUTH_REQUIRED: 'Авторизация истекла. Обновите страницу и войдите через Telegram снова.',
+  ACCOUNT_CHANGED: 'Аккаунт изменился в другой вкладке. Обновите страницу перед входом.',
+  ACCOUNT_IN_USE:
+    'Этот аккаунт уже находится в игре. Покиньте мир в другой вкладке или дождитесь завершения переподключения.',
+  ACCOUNTS_UNAVAILABLE: 'Хранилище аккаунтов временно недоступно. Повторите вход позже.',
 };
 export function readableError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
@@ -105,6 +142,15 @@ function percentile(values: number[], percentile: number): number {
 }
 
 export class GameSession {
+  accountId?: string;
+  guestSkinId: AvatarSkinId = DEFAULT_AVATAR_SKIN;
+  inventory: InventoryView = { slots: [] };
+  private pendingItem?: ItemCommand;
+  private itemRetryAt = 0;
+  private persistencePaused = false;
+  onInventoryChange?: () => void;
+  onItemResult?: (result: ItemResult) => void;
+  onChatResult?: (result: ActionResult) => void;
   state: ConnectionState = 'loading';
   definition!: WorldHeader;
   manifest!: WorldManifest;
@@ -116,6 +162,8 @@ export class GameSession {
   private resources?: VerifiedResources;
   private graphics?: CellGraphics;
   private streamer?: CellStreamer;
+  private visualArea?: { center: Vec3; drawRadius: number };
+  private preparationConfirmed = false;
   private plan?: PrepareArea;
   private planAcknowledged?: string;
   private resumeRevision?: number;
@@ -146,6 +194,15 @@ export class GameSession {
   private pendingRespawn?: number;
   private respawnTimeout?: ReturnType<typeof setTimeout>;
   private respawnAvailableAt = 0;
+  private pendingReaction?: number;
+  private reactionTimeout?: ReturnType<typeof setTimeout>;
+  private reactionAvailableAt = 0;
+  private readonly animationBuffer = new AnimationBuffer();
+  private readonly animationRequest = new AnimationRequestState();
+  private animationMoving = false;
+  private pendingChat?: number;
+  private chatTimeout?: ReturnType<typeof setTimeout>;
+  private chatAvailableAt = 0;
   private inputEnabled = true;
   private discardNextInputFrame = false;
   private lastAck = 0;
@@ -154,6 +211,7 @@ export class GameSession {
   private stalled = false;
   private waitingResync = false;
   private generation = 0;
+  private motionRevision = 0;
   private frames: number[] = [];
   private frameWarmupMs = 0;
   private corrections: number[] = [];
@@ -166,7 +224,14 @@ export class GameSession {
     private readonly onNotice: (message: string) => void,
   ) {}
   private setState(state: ConnectionState, message?: string): void {
-    if (['loading', 'ready', 'error', 'reconnecting'].includes(state)) this.clearPendingRespawn();
+    if (state !== this.state) this.motionRevision++;
+    if (['loading', 'ready', 'error', 'reconnecting'].includes(state)) {
+      this.clearPendingRespawn();
+      this.clearPendingReaction();
+      this.animationRequest.clear();
+      this.animationBuffer.clear();
+      this.clearPendingChat();
+    }
     this.state = state;
     this.onState(state, message);
   }
@@ -217,6 +282,12 @@ export class GameSession {
     if (!this.streamer && this.graphics && this.physics)
       this.streamer = new CellStreamer(this.manifest, this.resources, this.physics, this.graphics);
   }
+  updateVisualArea(center: Vec3, drawRadius: number): number {
+    this.visualArea = { center, drawRadius };
+    if (!this.room) this.streamer?.setPreview(center, drawRadius);
+    else this.streamer?.setVisualArea(center, drawRadius);
+    return this.streamer?.graphicsReadyRadius(center, drawRadius) ?? 0;
+  }
   get areaProblem(): string | undefined {
     return this.streamer?.problem;
   }
@@ -239,9 +310,13 @@ export class GameSession {
   async restore(): Promise<void> {
     const stored = readStored();
     if (!stored) return;
+    if (stored.accountId !== this.accountId) {
+      writeStored();
+      return;
+    }
     if (stored.epoch !== this.info.worldEpoch) {
       writeStored();
-      this.onNotice('Мир был перезапущен. Войдите, чтобы начать заново.');
+      this.onNotice('Мир был перезапущен. Войдите снова; предметы сохранены.');
       return;
     }
     await this.join(stored);
@@ -274,6 +349,9 @@ export class GameSession {
               protocolVersion: PROTOCOL_VERSION,
               mapVersion: info.mapVersion,
               simulationConfigHash: info.simulationConfigHash,
+              accountMode: this.accountId ? 'account' : 'guest',
+              expectedAccountId: this.accountId,
+              skinId: this.accountId ? undefined : this.guestSkinId,
             },
             WorldState,
           );
@@ -282,6 +360,7 @@ export class GameSession {
         return;
       }
       this.room = room;
+      this.preparationConfirmed = false;
       this.terminalNotice = undefined;
       this.ensureStreamer();
       room.reconnection.minUptime = 0;
@@ -300,6 +379,7 @@ export class GameSession {
         this.clearEntityTracking();
         this.plan = undefined;
         this.planAcknowledged = undefined;
+        this.preparationConfirmed = false;
         this.setState('reconnecting');
         this.beginRecoveryCheck();
       });
@@ -327,6 +407,7 @@ export class GameSession {
         this.cleanup(recovering);
         writeStored();
         if (recovering) {
+          this.preparationConfirmed = false;
           this.setState('reconnecting');
           this.beginRecoveryCheck();
         } else {
@@ -338,8 +419,71 @@ export class GameSession {
         if (this.room === room && this.state !== 'reconnecting')
           this.onNotice(readableError(message));
       });
+      room.onMessage<InventoryView>('inventory', (inventory) => {
+        if (this.room !== room) return;
+        this.inventory = inventory;
+        this.onInventoryChange?.();
+      });
+      room.onMessage<ItemResult>('itemResult', (result) => {
+        if (this.room !== room || result.operationId !== this.pendingItem?.operationId) return;
+        if (
+          result.code === 'STORAGE_UNAVAILABLE' ||
+          result.code === 'WORLD_NOT_READY' ||
+          result.code === 'RATE_LIMITED'
+        ) {
+          this.itemRetryAt = performance.now() + 3000;
+          return;
+        }
+        this.pendingItem = undefined;
+        try {
+          sessionStorage.removeItem(`su:item-operation:${this.accountId}`);
+        } catch {
+          /* optional storage */
+        }
+        if (!result.ok && result.code) this.onNotice(messages[result.code] ?? result.code);
+        this.onItemResult?.(result);
+        this.onInventoryChange?.();
+      });
       room.onMessage<ActionResult>('actionResult', (result) => {
-        if (this.room !== room || result.requestId !== this.pendingRespawn) return;
+        if (this.room !== room) return;
+        if (this.animationRequest.result(result)) return;
+        if (result.requestId === this.pendingChat) {
+          this.clearPendingChat();
+          if (result.ok || result.code === 'RATE_LIMITED') {
+            const delay =
+              typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
+                ? Math.min(CHAT_MAX_DURATION_MS, Math.max(0, result.retryAfterMs))
+                : CHAT_MAX_DURATION_MS;
+            this.chatAvailableAt = performance.now() + delay;
+          }
+          if (result.message) this.onNotice(result.message);
+          else if (!result.ok && result.code)
+            this.onNotice(
+              result.code === 'RATE_LIMITED'
+                ? 'Дождитесь окончания показа текущего сообщения.'
+                : (messages[result.code] ?? result.code),
+            );
+          this.onChatResult?.(result);
+          return;
+        }
+        if (result.requestId === this.pendingReaction) {
+          this.clearPendingReaction();
+          if (result.ok || result.code === 'RATE_LIMITED') {
+            const delay =
+              typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
+                ? Math.min(REACTION_DURATION_MS, Math.max(0, result.retryAfterMs))
+                : REACTION_DURATION_MS;
+            this.reactionAvailableAt = performance.now() + delay;
+          }
+          if (!result.ok && result.code)
+            this.onNotice(
+              result.code === 'RATE_LIMITED'
+                ? 'Дождитесь окончания текущей реакции.'
+                : (messages[result.code] ?? result.code),
+            );
+          return;
+        }
+        if (result.requestId !== this.pendingRespawn) return;
         this.clearPendingRespawn();
         if (result.ok || result.code === 'RATE_LIMITED') {
           const delay =
@@ -376,6 +520,7 @@ export class GameSession {
         if (this.plan?.prepareId === plan.prepareId) return;
         this.pausePrediction();
         this.waitingTarget = undefined;
+        this.preparationConfirmed = false;
         this.plan = plan;
         this.prepareStartedAt = performance.now();
         this.planAcknowledged = undefined;
@@ -398,6 +543,7 @@ export class GameSession {
           this.plan = undefined;
           return;
         }
+        this.preparationConfirmed = result.ok || !!room.state.players?.get(room.sessionId);
         this.plan = undefined;
         this.planAcknowledged = undefined;
         if (!result.ok) {
@@ -453,7 +599,7 @@ export class GameSession {
             await this.leave(
               this.reloadRequired
                 ? 'Мир был перезапущен с новой версией. Перезагрузите страницу.'
-                : 'Мир был перезапущен. Войдите, чтобы начать заново.',
+                : 'Мир был перезапущен. Войдите снова; предметы сохранены.',
             );
             return;
           }
@@ -487,7 +633,24 @@ export class GameSession {
       void this.leave('Мир был перезапущен. Войдите снова.');
       return;
     }
-    const self = room.state.players?.get(room.sessionId);
+    this.animationBuffer.capture(
+      room.state.worldEpoch,
+      room.state.serverTick,
+      room.clock.lastServerTime(),
+      room.state.players.values(),
+      room.state.paused,
+    );
+    const animationSelf = room.state.players.get(room.sessionId);
+    const observed =
+      animationSelf && this.animationBuffer.sample(animationSelf.entityId, room.clock.serverNow());
+    if (observed) this.animationRequest.observe(observed.animation);
+    if (this.persistencePaused !== room.state.paused) {
+      this.persistencePaused = room.state.paused;
+      this.simulation?.reset();
+      if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
+        this.onNotice(messages.STORAGE_UNAVAILABLE);
+    }
+    const self = room.state.players.get(room.sessionId);
     this.physics?.syncRemote(toLocalSimulationSnapshot(room.state), self?.entityId ?? '');
     const previousRevision = self && this.revisions.get(self.entityId);
     if (
@@ -497,10 +660,9 @@ export class GameSession {
       previousRevision !== self.revision
     )
       this.pausePrediction();
-    const crate = visibleCrate(room.state);
     const liveIds = new Set([
-      ...(crate ? [crate.entityId] : []),
-      ...Array.from(room.state.players?.values() ?? [], (player) => player.entityId),
+      ...Array.from(room.state.items.values(), (item) => item.entityId),
+      ...Array.from(room.state.players.values(), (player) => player.entityId),
     ]);
     for (const [id, entity] of this.trackedEntities)
       if (!liveIds.has(id)) {
@@ -510,18 +672,19 @@ export class GameSession {
       }
     if (!this.predictor) return;
     for (const player of room.state.players?.values() ?? []) this.attach(player);
-    if (crate) this.attach(crate);
+    for (const item of room.state.items.values()) this.attach(item);
   }
   private clearEntityTracking(): void {
     for (const entity of this.trackedEntities.values()) this.predictor?.detach(entity);
     this.trackedEntities.clear();
     this.revisions.clear();
     this.physics?.syncRemote(
-      { players: [] },
+      { scope: 'local', players: [], items: [] },
       this.room?.state?.players?.get(this.room.sessionId)?.entityId ?? '',
     );
   }
   private pausePrediction(): void {
+    this.motionRevision++;
     // These inputs will not replay after the next authoritative restore.
     this.history.clear();
     this.simulation?.dispose();
@@ -556,7 +719,9 @@ export class GameSession {
     if (previous !== undefined) this.predictor!.detach(this.trackedEntities.get(entity.entityId)!);
     this.predictor!.attach(
       entity,
-      Object.fromEntries(fields.map((field) => [field, { mode: 'lerp', delay: 100, snap: 2 }])),
+      Object.fromEntries(
+        fields.map((field) => [field, { mode: 'lerp', delay: REMOTE_INTERPOLATION_MS, snap: 2 }]),
+      ),
     );
     this.revisions.set(entity.entityId, entity.revision);
     this.trackedEntities.set(entity.entityId, entity);
@@ -649,12 +814,12 @@ export class GameSession {
       }
     }
     const room = this.room;
-    if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     this.planArea();
-    this.streamer.pump();
+    this.streamer?.pump();
+    if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     if (/SHA-256|version/i.test(this.areaProblem ?? '')) this.reloadRequired = true;
     const selfNow = room.state.players?.get(room.sessionId);
-    if (this.plan && this.streamer.ready && this.planAcknowledged !== this.plan.prepareId) {
+    if (this.plan && this.streamer.criticalReady && this.planAcknowledged !== this.plan.prepareId) {
       this.planAcknowledged = this.plan.prepareId;
       room.send('areaReady', {
         prepareId: this.plan.prepareId,
@@ -664,11 +829,12 @@ export class GameSession {
     }
     const ready =
       selfNow &&
+      this.preparationConfirmed &&
       !this.plan &&
-      this.streamer.ready &&
+      this.streamer.criticalReady &&
       (this.resumeRevision === undefined || selfNow.revision >= this.resumeRevision) &&
       (!this.waitingResync ||
-        (this.resyncTick !== undefined && room.state.serverTick > this.resyncTick));
+        (this.resyncTick !== undefined && room.state.serverTick >= this.resyncTick));
     if (!ready || this.state === 'reconnecting') {
       if (this.simulation) {
         this.waitingTarget = { ...this.physics!.getState().position };
@@ -705,6 +871,16 @@ export class GameSession {
       this.setState('playing');
       this.areaWaiting = false;
       this.save();
+      if (this.accountId) {
+        try {
+          this.pendingItem =
+            JSON.parse(sessionStorage.getItem(`su:item-operation:${this.accountId}`) ?? 'null') ??
+            undefined;
+        } catch {
+          /* Optional storage. */
+        }
+        this.itemRetryAt = 0;
+      }
     }
     if (!this.input || !this.predictor || !this.simulation) return this.authoritativeDisplay();
     if (this.input.lastProcessed !== this.lastAck || this.input.pendingCount === 0) {
@@ -729,12 +905,14 @@ export class GameSession {
       return this.authoritativeDisplay();
     }
     if (!stalled && !this.waitingResync && this.state === 'playing') this.stalled = false;
-    const steps = this.inputEnabled ? Math.min(this.predictor.tick(now), 5) : 0;
+    const steps =
+      this.inputEnabled && !this.persistencePaused ? Math.min(this.predictor.tick(now), 5) : 0;
     if (
       this.state === 'playing' &&
       this.inputEnabled &&
       !this.discardNextInputFrame &&
       !this.stalled &&
+      !this.persistencePaused &&
       !document.hidden
     ) {
       for (
@@ -749,30 +927,76 @@ export class GameSession {
       ) {
         this.input.data.moveX = command.moveX;
         this.input.data.moveZ = command.moveZ;
+        this.input.data.sprint = command.sprint ?? false;
         this.input.send();
       }
     }
     this.discardNextInputFrame = false;
-    const self = room.state.players?.get(room.sessionId);
+    if (
+      this.pendingItem &&
+      this.state === 'playing' &&
+      !this.persistencePaused &&
+      now >= this.itemRetryAt
+    ) {
+      room.send('itemCommand', this.pendingItem);
+      this.itemRetryAt = now + 3000;
+    }
+    const self = room.state.players.get(room.sessionId);
+    this.animationMoving =
+      this.inputEnabled &&
+      !this.persistencePaused &&
+      !document.hidden &&
+      (command.moveX !== 0 || command.moveZ !== 0);
+    const remoteTime = this.animationDisplayTime(false);
     const entities: DisplayEntity[] = [];
     for (const player of room.state.players?.values() ?? []) {
       const pose = player === self ? this.simulation.pose() : this.remotePose(player);
+      const state = player === self ? this.physics!.getState() : toPlayerState(player);
+      const remainingMs = this.displayRemainingMs(player.reactionExpiresAtTick, now);
+      const presentation = this.animationBuffer.sample(
+        player.entityId,
+        player === self ? this.animationDisplayTime(true) : remoteTime,
+      );
       entities.push({
-        ...toPlayerState(player),
+        ...state,
+        grounded: player === self ? state.grounded : (presentation?.grounded ?? state.grounded),
+        animation: presentation?.animation,
+        animationMoving: player === self && this.animationMoving,
         position: { x: pose.x, y: pose.y, z: pose.z },
-        rotation: player === self ? this.physics!.getState().rotation : this.remoteRotation(player),
+        rotation: player === self ? state.rotation : this.remoteRotation(player),
+        motionRevision: this.motionRevision,
+        motionEnabled:
+          this.state === 'playing' &&
+          !this.persistencePaused &&
+          !this.stalled &&
+          !this.waitingResync &&
+          !document.hidden &&
+          (player !== self || this.inputEnabled),
         name: player.name,
         color: player.color,
+        skinId: resolveAvatarSkinId(player.skinId),
         connected: player.connected,
+        reaction:
+          this.state === 'playing' && player.reactionId
+            ? { id: player.reactionId, sequence: player.reactionSequence, remainingMs }
+            : undefined,
+        chat:
+          this.state === 'playing' && player.chatText
+            ? {
+                text: player.chatText,
+                sequence: player.chatSequence,
+                remainingMs: this.displayRemainingMs(player.chatExpiresAtTick, now),
+              }
+            : undefined,
       });
     }
-    const crate = visibleCrate(room.state);
-    if (crate)
+    for (const item of room.state.items.values())
       entities.push({
-        ...toEntityState(crate),
-        position: this.remotePose(crate),
-        rotation: this.remoteRotation(crate),
-        color: this.definition.crate.color,
+        ...toItemState(item),
+        typeId: item.typeId,
+        position: this.remotePose(item),
+        rotation: this.remoteRotation(item),
+        color: this.definition.itemCatalog.types[item.typeId].color,
       });
     return { entities, ownId: self?.entityId };
   }
@@ -788,10 +1012,17 @@ export class GameSession {
       ...toPlayerState(player),
       name: player.name,
       color: player.color,
+      skinId: resolveAvatarSkinId(player.skinId),
+      motionRevision: this.motionRevision,
+      motionEnabled: false,
       connected: player.connected,
     }));
-    const crate = visibleCrate(room.state);
-    if (crate) entities.push({ ...toEntityState(crate), color: this.definition.crate.color });
+    for (const item of room.state.items.values())
+      entities.push({
+        ...toItemState(item),
+        typeId: item.typeId,
+        color: this.definition.itemCatalog.types[item.typeId].color,
+      });
     return { entities, ownId: room.state.players?.get(room.sessionId)?.entityId };
   }
   private remotePose(entity: EntitySchema): Pose {
@@ -800,6 +1031,13 @@ export class GameSession {
       y: this.predictor!.value(entity, 'y'),
       z: this.predictor!.value(entity, 'z'),
     };
+  }
+  private animationDisplayTime(own: boolean): number {
+    // Match this SDK version's lerp target, including its one-way latency estimate.
+    return (
+      this.room!.clock.serverNow() -
+      (own ? 0 : REMOTE_INTERPOLATION_MS + this.room!.clock.smoothedRtt() / 2)
+    );
   }
   private remoteRotation(entity: EntitySchema) {
     return {
@@ -810,22 +1048,79 @@ export class GameSession {
     };
   }
   preview(): DisplayEntity[] {
-    const crate = this.definition?.crate;
-    return crate
-      ? [
-          {
-            entityId: crate.entityId,
-            kind: 'crate',
-            revision: 0,
-            position: crate.position,
-            rotation: { x: 0, y: 0, z: 0, w: 1 },
-            velocity: { x: 0, y: 0, z: 0 },
-            angularVelocity: { x: 0, y: 0, z: 0 },
-            color: crate.color,
-          },
-        ]
-      : [];
+    return [];
   }
+  get itemPending() {
+    return !!this.pendingItem;
+  }
+  get worldPaused() {
+    return this.persistencePaused;
+  }
+  get storageUnavailable() {
+    return this.room?.state.pauseReason === 'STORAGE_UNAVAILABLE';
+  }
+  itemAction(action: ItemAction) {
+    if (
+      !this.accountId ||
+      !this.room ||
+      this.state !== 'playing' ||
+      this.pendingItem ||
+      this.persistencePaused
+    )
+      return;
+    this.pendingItem = {
+      operationId: crypto.randomUUID(),
+      worldEpoch: this.info.worldEpoch,
+      action,
+    };
+    try {
+      sessionStorage.setItem(
+        `su:item-operation:${this.accountId}`,
+        JSON.stringify(this.pendingItem),
+      );
+    } catch {
+      /* retry survives reconnect in memory */
+    }
+    this.itemRetryAt = 0;
+    this.onInventoryChange?.();
+  }
+  nearestItem(): string | undefined {
+    const room = this.room,
+      self = room?.state.players.get(room.sessionId);
+    if (!self) return;
+    return Array.from(room!.state.items.values())
+      .map((i) => ({
+        id: i.entityId,
+        distance: Math.hypot(i.x - self.x, i.y - self.y, i.z - self.z),
+      }))
+      .filter((i) => i.distance <= 3)
+      .sort((a, b) => a.distance - b.distance)[0]?.id;
+  }
+  placement(
+    typeId: string,
+    from: Vec3,
+    to: Vec3,
+    rotation: ItemPose['rotation'],
+  ): { pose?: ItemPose; error?: ItemError } {
+    const hit = this.physics?.surfaceRay(from, to);
+    if (!hit) return { error: 'NO_SUPPORT' };
+    const n = hit.normal;
+    const radius = itemSupportDistance(this.definition.itemCatalog.types[typeId], rotation, {
+      x: -n.x,
+      y: -n.y,
+      z: -n.z,
+    });
+    const pose = {
+      position: {
+        x: hit.point.x + n.x * (radius + 0.015),
+        y: hit.point.y + n.y * (radius + 0.015),
+        z: hit.point.z + n.z * (radius + 0.015),
+      },
+      rotation,
+    };
+    return { pose, error: this.physics?.checkPlacement(typeId, pose) };
+  }
+
   neutral(): void {
     if (
       !this.input ||
@@ -842,6 +1137,7 @@ export class GameSession {
     if (this.inputEnabled === enabled) return;
     if (!enabled) this.neutral();
     this.inputEnabled = enabled;
+    this.motionRevision++;
     this.simulation?.reset();
     this.discardNextInputFrame = true;
     if (!enabled && this.room && this.state === 'playing') {
@@ -855,6 +1151,139 @@ export class GameSession {
       pending: this.pendingRespawn !== undefined,
       remainingMs: Math.max(0, this.respawnAvailableAt - performance.now()),
     };
+  }
+  private displayRemainingMs(expiresAtTick: number, now = performance.now()): number {
+    const serverTick = this.room?.state?.serverTick ?? 0;
+    return Math.max(
+      0,
+      ((expiresAtTick - serverTick) * 1000) / TICK_RATE - (now - this.lastPatchAt),
+    );
+  }
+  reactionStatus(): { pending: boolean; remainingMs: number; available: boolean } {
+    const self = this.room?.state?.players?.get(this.room.sessionId);
+    return {
+      pending: this.pendingReaction !== undefined,
+      remainingMs: Math.max(
+        0,
+        this.reactionAvailableAt - performance.now(),
+        this.displayRemainingMs(self?.reactionExpiresAtTick ?? 0),
+      ),
+      available: this.state === 'playing' && this.inputEnabled && !this.stalled,
+    };
+  }
+  private clearPendingReaction(): void {
+    clearTimeout(this.reactionTimeout);
+    this.reactionTimeout = undefined;
+    this.pendingReaction = undefined;
+  }
+  animationStatus() {
+    this.animationRequest.expire(performance.now());
+    const player = this.room?.state?.players?.get(this.room.sessionId);
+    const presentation =
+      player && this.animationBuffer.sample(player.entityId, this.room!.clock.serverNow());
+    const playback = presentation?.animation;
+    const busy = !!playback?.animationId && playback.displayTick < playback.endsAtTick;
+    const state = player && this.simulation ? this.physics?.getState() : undefined;
+    return {
+      available: this.state === 'playing' && this.inputEnabled && !this.stalled,
+      pending: !!this.animationRequest.pending,
+      accepted: this.animationRequest.accepted,
+      busy,
+      grounded: state?.grounded ?? false,
+      moving:
+        this.animationMoving || (!!state && Math.hypot(state.velocity.x, state.velocity.z) > 0.08),
+      paused: this.persistencePaused,
+      message: this.animationRequest.message,
+    };
+  }
+  animate(animationId: AnimationId): void {
+    const status = this.animationStatus();
+    const definition = findAnimation(animationId);
+    if (
+      !definition ||
+      !status.available ||
+      status.pending ||
+      status.busy ||
+      status.paused ||
+      !status.grounded ||
+      (definition.mode === 'fullBody' && status.moving) ||
+      document.hidden
+    )
+      return;
+    const player = this.room!.state.players.get(this.room!.sessionId)!;
+    this.actionId++;
+    this.animationRequest.begin(
+      this.actionId,
+      animationId,
+      player.animationSequence,
+      performance.now(),
+    );
+    this.save();
+    this.room!.send('requestAnimation', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      animationId,
+    } satisfies AnimationRequest);
+  }
+  react(reactionId: string): void {
+    const status = this.reactionStatus();
+    if (
+      !status.available ||
+      status.pending ||
+      status.remainingMs > 0 ||
+      !findReaction(reactionId) ||
+      document.hidden
+    )
+      return;
+    this.actionId++;
+    this.pendingReaction = this.actionId;
+    this.reactionTimeout = setTimeout(() => {
+      this.clearPendingReaction();
+      this.onNotice('Ответ на реакцию не получен. Проверьте связь и попробуйте снова.');
+    }, 5000);
+    this.save();
+    this.room!.send('requestReaction', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      reactionId,
+    } satisfies ReactionRequest);
+  }
+  chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
+    const self = this.room?.state?.players?.get(this.room.sessionId);
+    return {
+      pending: this.pendingChat !== undefined,
+      remainingMs: Math.max(
+        0,
+        this.chatAvailableAt - performance.now(),
+        this.displayRemainingMs(self?.chatExpiresAtTick ?? 0),
+      ),
+      available:
+        this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused,
+    };
+  }
+  private clearPendingChat(): void {
+    clearTimeout(this.chatTimeout);
+    this.chatTimeout = undefined;
+    this.pendingChat = undefined;
+  }
+  sendChat(value: string): boolean {
+    const status = this.chatStatus();
+    const text = normalizeChatText(value);
+    if (!status.available || status.pending || status.remainingMs > 0 || !text || document.hidden)
+      return false;
+    this.actionId++;
+    this.pendingChat = this.actionId;
+    this.chatTimeout = setTimeout(() => {
+      this.clearPendingChat();
+      this.onNotice('Ответ на сообщение не получен. Проверьте связь и попробуйте снова.');
+    }, 5000);
+    this.save();
+    this.room!.send('requestChat', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      text,
+    } satisfies ChatRequest);
+    return true;
   }
   private clearPendingRespawn(): void {
     clearTimeout(this.respawnTimeout);
@@ -898,22 +1327,33 @@ export class GameSession {
         token: this.room.reconnectionToken,
         epoch: this.info.worldEpoch,
         actionId: this.actionId,
+        accountId: this.accountId,
       });
   }
   private cleanup(preserveRecovery = false): void {
     this.clearPendingRespawn();
+    this.clearPendingReaction();
+    this.animationRequest.clear();
+    this.animationBuffer.clear();
+    this.animationMoving = false;
+    this.clearPendingChat();
+    this.inventory = { slots: [] };
+    this.pendingItem = undefined;
+    this.persistencePaused = false;
+    this.onInventoryChange?.();
     this.respawnAvailableAt = 0;
+    this.reactionAvailableAt = 0;
+    this.chatAvailableAt = 0;
     if (!preserveRecovery) this.stopRecoveryCheck();
     this.predictor?.dispose();
     this.predictor = undefined;
     this.simulation = undefined;
     this.input = undefined;
     this.room = undefined;
-    this.streamer?.dispose();
-    this.streamer = undefined;
-    this.resources?.dispose();
-    this.resources = undefined;
+    this.preparationConfirmed = false;
     this.physics?.clear();
+    if (this.visualArea)
+      this.streamer?.setPreview(this.visualArea.center, this.visualArea.drawRadius);
     this.plan = undefined;
     this.planAcknowledged = undefined;
     this.resumeRevision = undefined;
@@ -947,7 +1387,6 @@ export class GameSession {
   diagnostics() {
     const room = this.room;
     const self = room?.state?.players?.get(room.sessionId);
-    const crate = room?.state?.crates && visibleCrate(room.state);
     return {
       connection: this.state,
       worldEpoch: room?.state?.worldEpoch ?? this.info?.worldEpoch,
@@ -962,7 +1401,10 @@ export class GameSession {
       warmingUp:
         this.state === 'playing' && (this.frameWarmupMs < 60_000 || this.frames.length === 0),
       lastCorrection: { sequence: this.correctionCount, magnitude: this.corrections.at(-1) ?? 0 },
-      renderedCratePosition: crate && this.predictor ? this.remotePose(crate) : null,
+      renderedItemPosition:
+        room?.state?.items?.size && this.predictor
+          ? this.remotePose(room.state.items.values().next().value!)
+          : null,
       correctionP95: percentile(this.corrections, 0.95),
       correctionMax: Math.max(0, ...this.corrections),
       correctionCount: this.correctionCount,
@@ -989,25 +1431,39 @@ export class GameSession {
       replaySteps: this.replaySteps,
       inputEnabled: this.inputEnabled,
       respawn: this.respawnStatus(),
+      reaction: this.reactionStatus(),
+      animation: this.animationStatus(),
+      animationBuffers: this.animationBuffer.size,
+      displayAnimations: room?.state?.players
+        ? Array.from(room.state.players.values(), (player) => ({
+            entityId: player.entityId,
+            ...this.animationBuffer.sample(
+              player.entityId,
+              this.animationDisplayTime(player === self),
+            )?.animation,
+          }))
+        : [],
+      chat: this.chatStatus(),
       mapVersion: this.info?.mapVersion,
       simulationConfigHash: this.info?.simulationConfigHash,
       authoritative: self ? toPlayerState(self) : null,
       predicted: self && this.simulation ? this.physics?.getState() : null,
-      crate: crate ? toEntityState(crate) : null,
       trackedEntities: [...this.trackedEntities.keys()],
       remotePoses: this.predictor
         ? [...this.trackedEntities.values()]
             .filter((entity) => entity.entityId !== self?.entityId)
             .map((entity) => ({ entityId: entity.entityId, position: this.remotePose(entity) }))
         : [],
-      entities: room?.state?.players
-        ? Array.from(room.state.players?.values() ?? [], toPlayerState)
-        : [],
+      items: room?.state?.items ? Array.from(room.state.items.values(), toItemState) : [],
+      inventory: this.inventory,
+      storagePaused: this.persistencePaused,
+      entities: room?.state?.players ? Array.from(room.state.players.values(), toPlayerState) : [],
     };
   }
   dispose(): void {
     this.generation++;
     this.cleanup();
+    this.streamer?.dispose();
     this.physics?.dispose();
     this.resources?.dispose();
   }

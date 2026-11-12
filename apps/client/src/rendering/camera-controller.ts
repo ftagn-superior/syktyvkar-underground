@@ -1,4 +1,4 @@
-import { normalizeInput, INTEREST_RADII, type MoveInput } from '@su/contracts';
+import { normalizeInput, type MoveInput } from '@su/contracts';
 
 export const INITIAL_CAMERA_ANGLE = Math.PI / 4;
 const TURN_SECONDS = 0.28;
@@ -38,8 +38,11 @@ export function screenMovement(right: number, forward: number, angle: number): M
   })!;
 }
 
-/** Keep very wide windows within network interest; preserve the projection's aspect ratio. */
-export function orthographicFrame(aspect: number): { halfWidth: number; halfHeight: number } {
-  const halfHeight = Math.min(aspect < 1 ? 20 : 15, (INTEREST_RADII.enter * 0.75) / aspect);
+/** Projection keeps the chosen scale on every aspect ratio; graphics streaming covers the frame. */
+export function orthographicFrame(
+  aspect: number,
+  zoom = 1,
+): { halfWidth: number; halfHeight: number } {
+  const halfHeight = (aspect < 1 ? 20 : 15) * zoom;
   return { halfHeight, halfWidth: halfHeight * aspect };
 }

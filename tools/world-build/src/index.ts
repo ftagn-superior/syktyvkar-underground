@@ -32,6 +32,25 @@ import {
 import { encodeStaticGlb, inspectStaticGlb } from './glb.js';
 import { generateHouse, type HouseRecipe } from './house.js';
 import { generateStreamingCells } from './streaming-lab.js';
+import {
+  generateFootprint,
+  generateGround,
+  generateTree,
+  type FootprintRecipe,
+  type GroundRecipe,
+  type TreeRecipe,
+} from './city.js';
+import { generateKit, type KitRecipe } from './kit.js';
+
+/** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
+export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab'] as const;
+const generators = {
+  house: (id: string, recipe: unknown) => generateHouse(id, recipe as HouseRecipe),
+  footprint: (id: string, recipe: unknown) => generateFootprint(id, recipe as FootprintRecipe),
+  ground: (id: string, recipe: unknown) => generateGround(id, recipe as GroundRecipe),
+  tree: (id: string, recipe: unknown) => generateTree(id, recipe as TreeRecipe),
+  kit: (id: string, recipe: unknown) => generateKit(id, recipe as KitRecipe),
+};
 
 const hash = (input: string | Uint8Array) => createHash('sha256').update(input).digest('hex');
 const jsonBytes = (value: unknown) => new TextEncoder().encode(canonicalJson(value) + '\n');
@@ -50,15 +69,19 @@ function sourceFile(directory: string, path: unknown): string {
   return absolute;
 }
 
-async function compileAsset(assetId: string, descriptorPath: string) {
+async function compileAsset(assetId: string, descriptorPath: string, groundRecipe?: GroundRecipe) {
   const descriptor = await readJson(descriptorPath);
-  if (descriptor.formatVersion !== 1 || descriptor.assetId !== assetId)
+  if (descriptor.formatVersion !== 1 || (!groundRecipe && descriptor.assetId !== assetId))
     throw new Error(`Invalid asset descriptor: ${assetId}`);
   const directory = dirname(descriptorPath);
   let model: Uint8Array, physics: BuildingPhysicsAsset;
-  if (descriptor.source?.kind === 'house') {
-    const recipe = (await readJson(sourceFile(directory, descriptor.source.file))) as HouseRecipe;
-    const generated = generateHouse(assetId, recipe);
+  const kind = descriptor.source?.kind;
+  const generator = Object.hasOwn(generators, kind)
+    ? generators[kind as keyof typeof generators]
+    : undefined;
+  if (generator) {
+    const recipe = groundRecipe ?? (await readJson(sourceFile(directory, descriptor.source.file)));
+    const generated = generator(assetId, recipe);
     model = encodeStaticGlb(generated.parts);
     physics = generated.physics;
   } else if (descriptor.source?.kind === 'glb') {
@@ -104,7 +127,7 @@ async function compileAsset(assetId: string, descriptorPath: string) {
 }
 
 export async function buildWorld(
-  source = 'content/worlds/physics-lab/world.json',
+  source = 'content/worlds/ring-block/world.json',
   output?: string,
 ): Promise<WorldManifest> {
   const authored = (await readJson(source)) as WorldSource;
@@ -112,20 +135,24 @@ export async function buildWorld(
     authored.formatVersion !== WORLD_FORMAT_VERSION ||
     !Array.isArray(authored.cells) ||
     authored.cells.length > 10_000 ||
-    typeof authored.assetCatalog !== 'string'
+    typeof authored.assetCatalog !== 'string' ||
+    typeof authored.itemCatalog !== 'string'
   )
-    throw new Error('World source must use formatVersion 3, cells and assetCatalog');
-  validateWorldHeader(authored);
+    throw new Error('World source must use formatVersion 4, cells, itemCatalog and assetCatalog');
   const base: WorldHeader = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: authored.worldId,
     bounds: authored.bounds,
     simulation: authored.simulation,
     spawnPoints: authored.spawnPoints,
-    crate: authored.crate,
+    itemCatalog: await readJson(resolve(dirname(resolve(source)), authored.itemCatalog)),
+    initialItems: authored.initialItems,
+    // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
+    ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
     ...(authored.routes ? { routes: authored.routes } : {}),
   };
-  const grid = createWorldGrid(base.bounds, authored.cellSize);
+  validateWorldHeader(base);
+  const grid = createWorldGrid(base.bounds, authored.cellSize ?? 125);
   const outputDirectory = output ?? `dist/worlds/${base.worldId}`;
   const sourceDirectory = dirname(resolve(source));
   const catalogPath = resolve(sourceDirectory, authored.assetCatalog);
@@ -147,22 +174,67 @@ export async function buildWorld(
   }
   if (new Set(authoredCells.map((cell) => cell.cellId)).size !== authoredCells.length)
     throw new Error('Duplicate world cell ID');
+  if (authored.entities?.length)
+    authoredCells.push({
+      formatVersion: 2,
+      cellId: 'source-statics',
+      statics: authored.entities,
+      buildings: [],
+    });
   const merged = mergeWorldCells(authoredCells);
-  const buildings = merged.buildings;
-  const assetIds = [...new Set(buildings.map((instance) => instance.assetId))].sort();
+  const buildings: WorldDefinition['buildings'] = [];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
-  for (const assetId of assetIds) {
-    if (!Object.hasOwn(catalog.assets, assetId))
-      throw new Error(`Unknown building asset ${assetId}`);
-    compiled.set(
-      assetId,
-      await compileAsset(assetId, sourceFile(dirname(catalogPath), catalog.assets[assetId])),
-    );
+  for (const instance of merged.buildings) {
+    if (!Object.hasOwn(catalog.assets, instance.assetId))
+      throw new Error(`Unknown building asset ${instance.assetId}`);
+    const descriptorPath = sourceFile(dirname(catalogPath), catalog.assets[instance.assetId]);
+    const descriptor = await readJson(descriptorPath);
+    if (descriptor.source?.kind !== 'ground') {
+      buildings.push(instance);
+      if (!compiled.has(instance.assetId))
+        compiled.set(instance.assetId, await compileAsset(instance.assetId, descriptorPath));
+      continue;
+    }
+    // Ground alone is partitioned; all city building identities and source refs stay intact.
+    const q = instance.rotation;
+    if (Math.abs(q.x) + Math.abs(q.y) + Math.abs(q.z) > 1e-8 || Math.abs(q.w - 1) > 1e-8)
+      throw new Error('Ground tiling requires axis-aligned source placement');
+    const recipe = (await readJson(
+      sourceFile(dirname(descriptorPath), descriptor.source.file),
+    )) as GroundRecipe;
+    const extent = {
+      min: {
+        x: recipe.min[0] + instance.position.x,
+        y: -recipe.depth + instance.position.y,
+        z: recipe.min[1] + instance.position.z,
+      },
+      max: {
+        x: recipe.max[0] + instance.position.x,
+        y: 0.05 + instance.position.y,
+        z: recipe.max[1] + instance.position.z,
+      },
+    };
+    for (const cellId of cellsIntersectingBounds(base.bounds, grid, extent)) {
+      const cell = worldCellBounds(base.bounds, grid, cellId);
+      const assetId = `${instance.assetId}-${cellId.replace('_', '-')}`;
+      const tile: GroundRecipe = {
+        ...recipe,
+        min: [
+          Math.max(extent.min.x, cell.min.x) - instance.position.x,
+          Math.max(extent.min.z, cell.min.z) - instance.position.z,
+        ],
+        max: [
+          Math.min(extent.max.x, cell.max.x) - instance.position.x,
+          Math.min(extent.max.z, cell.max.z) - instance.position.z,
+        ],
+      };
+      buildings.push({ ...instance, entityId: `${instance.entityId}-${cellId}`, assetId });
+      compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
+    }
   }
-  const { crate, ...parameters } = base;
   const world: WorldDefinition = validateWorld({
-    ...parameters,
-    entities: [...merged.statics, crate],
+    ...base,
+    entities: merged.statics,
     buildings,
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });
@@ -251,8 +323,13 @@ export async function buildWorld(
   return manifest;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const manifest = await buildWorld(process.env.SU_WORLD_SOURCE);
-  console.log(
-    `World ${manifest.worldId}: ${manifest.mapVersion.slice(0, 12)} (${Object.keys(manifest.assets).length} building assets)`,
-  );
+  for (const worldId of WORLDS) {
+    const manifest = await buildWorld(
+      `content/worlds/${worldId}/world.json`,
+      `dist/worlds/${worldId}`,
+    );
+    console.log(
+      `World ${manifest.worldId}: ${manifest.mapVersion.slice(0, 12)} (${Object.keys(manifest.assets).length} building assets)`,
+    );
+  }
 }

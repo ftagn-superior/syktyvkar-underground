@@ -1,5 +1,5 @@
 {
-  "formatVersion": 3,
+  "formatVersion": 4,
   "worldId": "streaming-lab",
   "bounds": {
     "min": {
@@ -24,7 +24,8 @@
       "height": 1.8,
       "radius": 0.35,
       "speed": 4,
-      "mass": 70
+      "mass": 70,
+      "sprintSpeed": 14
     }
   },
   "spawnPoints": [
@@ -72,24 +73,6 @@
   "cells": [],
   "assetCatalog": "../../buildings/catalog.json",
   "cellSize": 125,
-  "crate": {
-    "entityId": "crate-01",
-    "kind": "crate",
-    "position": {
-      "x": 0,
-      "y": 0.52,
-      "z": 10
-    },
-    "size": {
-      "x": 1,
-      "y": 1,
-      "z": 1
-    },
-    "mass": 10,
-    "friction": 0.6,
-    "restitution": 0.05,
-    "color": "#e8ae64"
-  },
   "generator": {
     "kind": "streaming-lab",
     "seed": 20261111
@@ -343,5 +326,24 @@
         "z": 630
       }
     ]
-  }
+  },
+  "entities": [],
+  "itemCatalog": "../../items/catalog.json",
+  "initialItems": [
+    {
+      "seedId": "crate-01",
+      "typeId": "wooden-crate",
+      "position": {
+        "x": 0,
+        "y": 0.52,
+        "z": 10
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    }
+  ]
 }

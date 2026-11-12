@@ -1,11 +1,19 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { runCheck } from './helpers/run-check.js';
 const output = 'output/large-map/l5/regression';
 await mkdir(output, { recursive: true });
 const results: unknown[] = [];
 for (const [name, file] of [
   ['physics', 'tests/browser-physics.ts'],
+  ['accounts', 'tests/browser-accounts.ts'],
+  ['avatars', 'tests/browser-avatars.ts'],
+  ['avatar-profile', 'tests/browser-avatar-profile.ts'],
+  ['reactions', 'tests/browser-reactions.ts'],
+  ['animations', 'tests/browser-animations.ts'],
+  ['chat', 'tests/browser-chat.ts'],
+  ['items', 'tests/browser-items.ts'],
+  ['giveme', 'tests/browser-giveme.ts'],
   ['assets', 'tests/browser-assets.ts'],
   ['buildings', 'tests/browser-buildings.ts'],
   ['restart', 'tests/browser-restart.ts'],

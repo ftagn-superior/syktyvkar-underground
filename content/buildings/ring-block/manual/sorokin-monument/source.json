@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "plinth",
+      "role": "detail",
+      "fade": false,
+      "color": "#8f8a84",
+      "shapes": [{ "box": { "center": [0, 0.15, 0], "size": [3.4, 0.3, 2.8] } }]
+    },
+    {
+      "id": "pedestal",
+      "role": "detail",
+      "fade": false,
+      "color": "#5e5a57",
+      "shapes": [{ "box": { "center": [0, 0.95, -0.1], "size": [1.7, 1.3, 1.4] } }]
+    },
+    {
+      "id": "statue",
+      "role": "detail",
+      "fade": true,
+      "color": "#4a3f36",
+      "shapes": [
+        { "box": { "center": [0, 1.95, -0.25], "size": [1.1, 0.7, 0.9] } },
+        { "box": { "center": [0, 2.05, 0.3], "size": [0.8, 0.3, 0.6] } },
+        { "box": { "center": [0, 1.85, 0.55], "size": [0.7, 0.5, 0.25] } },
+        { "box": { "center": [0, 2.75, -0.3], "size": [0.85, 1, 0.5] } },
+        { "box": { "center": [0, 3.45, -0.25], "size": [0.38, 0.42, 0.42] } }
+      ]
+    }
+  ],
+  "colliders": [
+    { "id": "plinth", "center": [0, 0.15, 0], "size": [3.4, 0.3, 2.8] },
+    { "id": "statue", "center": [0, 1.98, -0.1], "size": [1.7, 3.36, 1.4] }
+  ]
+}

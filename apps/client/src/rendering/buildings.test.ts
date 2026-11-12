@@ -20,7 +20,7 @@ let definition: WorldDefinition;
 const readBytes = (path: string) => readFile(join(directory, path));
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'su-render-buildings-'));
-  manifest = await buildWorld(undefined, directory);
+  manifest = await buildWorld('content/worlds/physics-lab/world.json', directory);
   definition = await loadWorldBundle(manifest, readBytes);
 });
 afterAll(async () => {
@@ -188,37 +188,21 @@ describe('building rendering from the real world bundle', () => {
     }
   });
 
-  it('waits for every started loader before reporting a failed asset and allowing scene teardown', async () => {
+  it('does not start distant models after an earlier model fails', async () => {
     const view = fixture();
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let settled = false;
-    const pending = view.buildings.prepare(manifest, async (path) => {
-      if (path === manifest.assets['house-a'].modelFile) throw new Error('model hash mismatch');
-      if (path.startsWith(`assets/${manifest.assets['house-b'].version}/`)) await gate;
-      return readBytes(path);
-    });
-    void pending.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
+    const reads: string[] = [];
     try {
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(settled).toBe(false);
-      release();
-      await expect(pending).rejects.toThrow('model hash mismatch');
+      await expect(
+        view.buildings.prepare(manifest, async (path) => {
+          reads.push(path);
+          if (path === manifest.assets['house-a'].modelFile) throw new Error('model hash mismatch');
+          return readBytes(path);
+        }),
+      ).rejects.toThrow('model hash mismatch');
+      expect(reads).not.toContain(manifest.assets['house-b'].modelFile);
       expect(view.scene.meshes).toHaveLength(0);
-      expect(view.scene.materials).toHaveLength(0);
       expect(view.buildings.aggregateDiagnostics().assets).toBe(0);
     } finally {
-      release();
-      await pending.catch(() => {});
       view.dispose();
     }
   });

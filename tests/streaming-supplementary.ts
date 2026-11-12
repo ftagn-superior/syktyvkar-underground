@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 import { runCheck } from './helpers/run-check.js';
 const output = 'output/large-map/l5/regression';
 const kernel = await runCheck(

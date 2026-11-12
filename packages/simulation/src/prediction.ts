@@ -1,7 +1,10 @@
 import {
   type MoveInput,
+  type ItemPose,
+  type Vec3,
   type PlayerState,
   type LocalSimulationSnapshot,
+  type SimulationSnapshot,
   type WorldHeader,
   type StaticEntityDefinition,
   type BuildingInstance,
@@ -12,19 +15,23 @@ import { createPhysicsWorld, type PhysicsWorld, type WasmBinary } from './physic
 export class PredictionWorld {
   private ownId: string | undefined;
   constructor(private readonly world: PhysicsWorld) {}
-  reconcile(player: PlayerState, snapshot: LocalSimulationSnapshot): void {
+  reconcile(player: PlayerState, snapshot: LocalSimulationSnapshot | SimulationSnapshot): void {
     if (this.ownId && this.ownId !== player.entityId) this.world.removeCharacter(this.ownId);
     this.ownId = player.entityId;
     this.world.setRemoteSnapshot(snapshot, player.entityId);
     this.world.restoreCharacter(player);
   }
   /** Refresh visibility/proxies without restoring or advancing the own controller. */
-  syncRemote(snapshot: LocalSimulationSnapshot, ownId: string): void {
+  syncRemote(snapshot: LocalSimulationSnapshot | SimulationSnapshot, ownId: string): void {
     this.world.setRemoteSnapshot(snapshot, ownId);
   }
   step(input: MoveInput, dt = 1 / this.world.definition.simulation.tickRate): PlayerState {
     if (!this.ownId) throw new Error('Prediction needs an authoritative state before stepping');
-    this.world.characters.get(this.ownId)!.input = { moveX: input.moveX, moveZ: input.moveZ };
+    this.world.characters.get(this.ownId)!.input = {
+      moveX: input.moveX,
+      moveZ: input.moveZ,
+      sprint: input.sprint ?? false,
+    };
     this.world.advance(dt);
     return this.getState();
   }
@@ -47,8 +54,14 @@ export class PredictionWorld {
   }
   clear() {
     if (this.ownId) this.world.removeCharacter(this.ownId);
-    this.world.setRemoteSnapshot({ players: [] }, this.ownId ?? '');
+    this.world.setRemoteSnapshot({ scope: 'local', players: [], items: [] }, this.ownId ?? '');
     this.ownId = undefined;
+  }
+  surfaceRay(from: Vec3, to: Vec3) {
+    return this.world.surfaceRay(from, to, this.ownId);
+  }
+  checkPlacement(typeId: string, pose: ItemPose) {
+    return this.world.checkPlacement(typeId, pose, this.ownId);
   }
   dispose() {
     this.world.dispose();

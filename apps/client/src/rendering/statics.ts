@@ -4,7 +4,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import type { Scene } from '@babylonjs/core/scene';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
-import { canonicalJson, type StaticEntityDefinition } from '@su/contracts';
+import { canonicalJson, type Vec3, type StaticEntityDefinition } from '@su/contracts';
 import { obstacleAccent } from './world-decoration';
 
 export class StaticViews {
@@ -66,6 +66,21 @@ export class StaticViews {
     if (!--material.users) {
       material.value.dispose();
       this.materials.delete(entry.color);
+    }
+  }
+  updateShadows(center: Vec3, radius: number) {
+    const limit = Math.min(80, radius);
+    const casters = new Set(this.shadow.getShadowMap()?.renderList ?? []);
+    for (const { mesh } of this.instances.values()) {
+      if (mesh.name.startsWith('ground-')) continue;
+      const bounds = mesh.getBoundingInfo().boundingBox;
+      const distance = Math.hypot(
+        Math.max(bounds.minimumWorld.x - center.x, 0, center.x - bounds.maximumWorld.x),
+        Math.max(bounds.minimumWorld.z - center.z, 0, center.z - bounds.maximumWorld.z),
+      );
+      const visible = limit > 0 && distance < limit;
+      if (visible && !casters.has(mesh)) this.shadow.addShadowCaster(mesh);
+      else if (!visible && casters.has(mesh)) this.shadow.removeShadowCaster(mesh);
     }
   }
   dispose() {

@@ -5,15 +5,13 @@
       "id": "bush",
       "role": "detail",
       "fade": false,
-      "color": "#4b7a3e",
+      "color": "#73943e",
       "shapes": [
         {
-          "cone": {
+          "foliage": {
             "center": [0, 0, 0],
-            "radiusBottom": 0.974,
-            "radiusTop": 0.584,
-            "height": 1.504,
-            "sides": 7
+            "radius": 0.974,
+            "height": 1.504
           }
         }
       ]

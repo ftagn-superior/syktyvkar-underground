@@ -1,7 +1,14 @@
-import type { BuildingPhysicsAsset, StaticCollider } from '@su/contracts';
+import {
+  foliageGeometry,
+  foliageOcclusion,
+  type BuildingPhysicsAsset,
+  type StaticCollider,
+} from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
 import { meshPart } from './house.js';
 import { mergeParts } from './merge.js';
+import { bakeLocalAo } from './ambient-occlusion.js';
+import { treeRenderRecipe } from './tree-instances.js';
 import { addOrientedBox, addOutwardFace } from './facade.js';
 
 /**
@@ -31,6 +38,8 @@ export type KitShape =
     }
   /** Вертикальный усечённый конус: холм, куст, постамент. */
   | { cone: Cone }
+  /** Compact faceted planting; it has no implicit collider. */
+  | { foliage: { center: Triple; radius: number; height: number } }
   /**
    * Клин: коробка `size` с основанием в `center`, верх которой понижается
    * от полной высоты на −X до `low` на +X. Подходит для пандусов.
@@ -40,6 +49,8 @@ export type KitCollider =
   { id: string; center: Triple; size: Triple; yaw?: number } | { id: string; cone: Cone };
 export interface KitRecipe {
   formatVersion: 1;
+  /** Preserve the two authored crown envelopes while rendering a clustered broadleaf crown. */
+  foliage?: 'broadleaf';
   parts: {
     id: string;
     role: 'wall' | 'roof' | 'detail';
@@ -164,6 +175,8 @@ export function generateKit(
   recipe: KitRecipe,
 ): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
   if (recipe.formatVersion !== 1) throw new Error('Unsupported kit recipe version');
+  if (recipe.foliage !== undefined && recipe.foliage !== 'broadleaf')
+    throw new Error('Unsupported kit foliage profile');
   if (!Array.isArray(recipe.parts) || recipe.parts.length === 0) throw new Error('Kit needs parts');
   if (!Array.isArray(recipe.colliders) || recipe.colliders.length === 0)
     throw new Error('Kit needs at least one collider');
@@ -174,6 +187,38 @@ export function generateKit(
     if (!/^#[a-f0-9]{6}$/i.test(spec.color)) throw new Error(`Invalid kit color ${spec.id}`);
     const part = meshPart(spec.id, spec.role, spec.color);
     part.occlusionGroup = spec.fade ? 'shell' : null;
+    if (recipe.foliage === 'broadleaf' && spec.id.startsWith('crown-')) {
+      const cones = spec.shapes.map((shape) => ('cone' in shape ? shape.cone : undefined));
+      if (cones.length !== 2 || cones.some((cone) => !cone))
+        throw new Error('Broadleaf crown needs two authored cones');
+      const [lower, upper] = cones as [Cone, Cone];
+      for (const cone of [lower, upper])
+        if (
+          !finite(cone.center, 3) ||
+          cone.center[0] !== 0 ||
+          cone.center[2] !== 0 ||
+          !Number.isFinite(cone.radiusBottom) ||
+          !Number.isFinite(cone.radiusTop) ||
+          !Number.isFinite(cone.height) ||
+          !(cone.radiusBottom > 0) ||
+          !(cone.radiusTop >= 0) ||
+          !(cone.height > 0)
+        )
+          throw new Error('Invalid broadleaf crown envelope');
+      if (!(upper.center[1] + upper.height > lower.center[1]))
+        throw new Error('Invalid broadleaf crown height');
+      const data = foliageGeometry(
+        'broadleaf',
+        Math.max(lower.radiusBottom, lower.radiusTop, upper.radiusBottom, upper.radiusTop),
+        upper.center[1] + upper.height - lower.center[1],
+        lower.center[1],
+      );
+      part.positions.push(...data.positions);
+      part.normals.push(...data.normals);
+      part.indices.push(...data.indices);
+      part.colors = foliageOcclusion('broadleaf').flatMap((factor) => [factor, factor, factor]);
+      return part;
+    }
     for (const shape of spec.shapes) {
       if ('box' in shape) {
         if (!finite(shape.box.center, 3) || !finite(shape.box.size, 3))
@@ -189,9 +234,35 @@ export function generateKit(
         )
           throw new Error(`Invalid kit cylinder in ${spec.id}`);
         addCylinder(part, c);
+      } else if ('foliage' in shape) {
+        const f = shape.foliage;
+        if (
+          !finite(f.center, 3) ||
+          !Number.isFinite(f.radius) ||
+          !Number.isFinite(f.height) ||
+          !(f.radius > 0) ||
+          !(f.height > 0)
+        )
+          throw new Error(`Invalid kit foliage in ${spec.id}`);
+        const data = foliageGeometry(
+          'shrub',
+          f.radius,
+          f.height,
+          f.center[1],
+          f.center[0],
+          f.center[2],
+        );
+        const offset = part.positions.length / 3;
+        part.colors ??= [];
+        while (part.colors.length < part.positions.length) part.colors.push(1);
+        part.positions.push(...data.positions);
+        part.normals.push(...data.normals);
+        part.indices.push(...data.indices.map((index) => index + offset));
+        for (const factor of foliageOcclusion('shrub')) part.colors.push(factor, factor, factor);
       } else if ('cone' in shape) addCone(part, shape.cone);
       else if ('wedge' in shape) addWedge(part, shape.wedge);
       else throw new Error(`Unknown kit shape in ${spec.id}`);
+      if (part.colors) while (part.colors.length < part.positions.length) part.colors.push(1);
     }
     return part;
   });
@@ -228,6 +299,13 @@ export function generateKit(
         min[axis] = Math.min(min[axis], part.positions[i + j]);
         max[axis] = Math.max(max[axis], part.positions[i + j]);
       }
+  // Trees share a versioned AO profile with the instanced runtime template.
+  // Planting parts already carry their profile; bake only the remaining solid
+  // parts of mixed assets (e.g. the monument) and preserve independent fade groups.
+  if (!recipe.foliage && !treeRenderRecipe(assetId, recipe))
+    bakeLocalAo(
+      parts.filter((_, i) => !recipe.parts[i].shapes.some((shape) => 'foliage' in shape)),
+    );
   return {
     parts: recipe.merge ? mergeParts(parts) : parts,
     physics: { assetId, bounds: { min, max }, colliders },

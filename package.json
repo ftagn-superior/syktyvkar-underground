@@ -33,6 +33,7 @@
     "test:render:browser": "node --import tsx tests/browser-render-profile.ts",
     "test:loading:browser": "node --import tsx tests/browser-loading-profile.ts",
     "test:trees:browser": "node --import tsx tests/browser-tree-instancing.ts",
+    "test:art:browser": "node --import tsx tests/art-style-preview.ts",
     "test:buildings:browser": "node --import tsx tests/browser-buildings.ts",
     "test:large-map:l2": "node --import tsx tests/large-map-l2.ts",
     "test:large-map:l3": "pnpm build && node --import tsx tests/large-map-l3.ts",

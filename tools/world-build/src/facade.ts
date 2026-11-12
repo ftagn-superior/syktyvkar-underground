@@ -33,8 +33,8 @@ export interface FacadeDetails {
     glazing?: string;
     fromFloor?: number;
   }[];
-  /** Парапет над плоской крышей. */
-  parapet?: { height: number };
+  /** Парапет над плоской крышей; необязательная матовая накрывка внутри контура. */
+  parapet?: { height: number; copingColor?: string };
   /** Вальмовая крыша над описанным прямоугольником контура. */
   hippedRoof?: { height: number; color: string; chimneys?: number; chimneyColor?: string };
   /** Щит на крыше у фасада; `text` рисуется объёмными буквами. */
@@ -582,6 +582,23 @@ export function buildFacade(
     if (glass.indices.length && group.glazing) parts.push(glass);
   });
   const parapet = details.parapet?.height ?? 0;
+  if (details.parapet?.copingColor) {
+    if (!/^#[a-f0-9]{6}$/i.test(details.parapet.copingColor) || parapet < 0.07)
+      throw new Error('Invalid parapet coping');
+    const coping = meshPart('parapet-coping', 'roof', details.parapet.copingColor);
+    for (const edge of edges) {
+      // Накрывка лежит ниже существующего верха и внутри контура: размеры
+      // здания и коллизия не меняются. Отступы на концах избегают стыков углов.
+      if (edge.length < 0.4) continue;
+      addOrientedBox(
+        coping,
+        along(edge, edge.length / 2, height + parapet - 0.035, -0.083),
+        [edge.length - 0.32, 0.07, 0.16],
+        edge.d,
+      );
+    }
+    if (coping.indices.length) parts.push(coping);
+  }
   let roofCollider: FacadeResult['roofCollider'];
   if (details.hippedRoof) {
     const roof = hippedRoof(ring, height, details.hippedRoof);

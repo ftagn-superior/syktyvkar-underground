@@ -1,17 +1,23 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Ray } from '@babylonjs/core/Culling/ray';
-import type { TreeRenderRecipe } from '@su/contracts';
+import { foliageGeometry, foliageOcclusion, type TreeRenderRecipe } from '@su/contracts';
 
 const SIDES = 7;
 const APOTHEM = Math.cos(Math.PI / SIDES);
+const BROADLEAF_HULLS = foliageGeometry('broadleaf').hulls;
 const linear = (hex: string) =>
   [1, 3, 5].map((i) => {
     const value = parseInt(hex.slice(i, i + 2), 16) / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
 
-/** Two unit cylinders and a unit trunk. The vertex shader restores exact authored dimensions. */
-export function treeTemplate(crownColor: string, trunkColor: string) {
+/** One shared crown profile and unit trunk; the shader restores each authored envelope. */
+export function treeTemplate(
+  crownColor: string,
+  trunkColor: string,
+  foliage?: 'broadleaf',
+  ambientOcclusion?: TreeRenderRecipe['ambientOcclusion'],
+) {
   const positions: number[] = [],
     normals: number[] = [],
     indices: number[] = [];
@@ -38,7 +44,19 @@ export function treeTemplate(crownColor: string, trunkColor: string) {
     }
     for (let i = 1; i < vectors.length - 1; i++) indices.push(start, start + i, start + i + 1);
   };
-  for (let part = 0; part < 2; part++) {
+  if (foliage) {
+    const data = foliageGeometry(foliage);
+    positions.push(...data.positions);
+    normals.push(...data.normals);
+    indices.push(...data.indices);
+    const color = linear(crownColor);
+    const occlusion = ambientOcclusion ? foliageOcclusion(foliage) : undefined;
+    for (let i = 0; i < data.positions.length / 3; i++) {
+      colors.push(...color.map((channel) => channel * (occlusion?.[i] ?? 1)), 1);
+      parts.push(0);
+    }
+  }
+  for (let part = 0; !foliage && part < 2; part++) {
     const ring = (y: number) =>
       Array.from({ length: SIDES }, (_, k) => [
         Math.cos((k * Math.PI * 2) / SIDES),
@@ -100,7 +118,7 @@ export function treeTemplate(crownColor: string, trunkColor: string) {
   return { positions, normals, indices, colors, parts };
 }
 
-/** Convex clipping against the actual seven-sided crowns and rotated trunk, not their AABB. */
+/** Convex clipping against the same crown lobes/cones and trunk used in both render paths. */
 export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
   const clip = (planes: number[][], origin = ray.origin, direction = ray.direction) => {
     let near = 0,
@@ -116,7 +134,23 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
     }
     return far >= 0 && near < ray.length;
   };
-  for (const [bottom, top, base, height] of recipe.crowns) {
+  if (recipe.foliage) {
+    const [lower, upper] = recipe.crowns;
+    const radius = Math.max(lower[0], lower[1], upper[0], upper[1]);
+    const height = upper[2] + upper[3] - lower[2];
+    const origin = new Vector3(
+      ray.origin.x / radius,
+      (ray.origin.y - lower[2]) / height,
+      ray.origin.z / radius,
+    );
+    const direction = new Vector3(
+      ray.direction.x / radius,
+      ray.direction.y / height,
+      ray.direction.z / radius,
+    );
+    for (const planes of BROADLEAF_HULLS) if (clip(planes, origin, direction)) return true;
+  }
+  for (const [bottom, top, base, height] of recipe.foliage ? [] : recipe.crowns) {
     const slope = ((top - bottom) * APOTHEM) / height;
     const planes = [
       [0, -1, 0, -base],

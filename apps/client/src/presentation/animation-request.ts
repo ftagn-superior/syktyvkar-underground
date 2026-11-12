@@ -22,7 +22,7 @@ export class AnimationRequestState {
     else {
       this.message =
         result.code === 'RATE_LIMITED'
-          ? 'Дождитесь окончания текущей анимации.'
+          ? 'Дождитесь, прежде чем выбрать другую анимацию.'
           : result.code === 'ANIMATION_NOT_ALLOWED'
             ? 'Дождитесь опоры; для танца остановитесь.'
             : result.code === 'WORLD_NOT_READY'

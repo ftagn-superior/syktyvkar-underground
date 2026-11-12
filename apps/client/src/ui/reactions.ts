@@ -1,4 +1,4 @@
-import { REACTIONS, REACTION_DURATION_MS } from '@su/contracts';
+import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '@su/contracts';
 import { bindCatalogShortcuts } from './catalog-shortcuts';
 
 export interface ReactionMenuStatus {
@@ -25,7 +25,7 @@ export class ReactionMenu {
     const options = { signal: this.controller.signal };
     panel.querySelector('[data-catalog-count]')!.textContent = String(REACTIONS.length);
     this.cooldown = panel.querySelector<HTMLProgressElement>('.reaction-cooldown')!;
-    this.cooldown.max = REACTION_DURATION_MS;
+    this.cooldown.max = WORLD_ACTIVITY_MOVE_DURATION_MS;
     const grid = panel.querySelector('.reaction-choices')!;
     for (const reaction of REACTIONS) {
       const button = document.createElement('button');

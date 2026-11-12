@@ -19,7 +19,7 @@ export type AvatarMotion = Pick<
   | 'motionEnabled'
   | 'connected'
 > &
-  Pick<DisplayPlayer, 'animation' | 'animationMoving'> &
+  Pick<DisplayPlayer, 'animation'> &
   Partial<Pick<DisplayPlayer, 'entityId'>>;
 const TAU = Math.PI * 2;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -38,7 +38,6 @@ export class CharacterAnimator {
   private mode: 'idle' | 'walk' | 'run' | 'airborne' = 'idle';
   private readonly clipPose = restingPose();
   private animationKey = '';
-  private suppressedKey = '';
   private animationMask: readonly (keyof AvatarPose)[] = [];
   private transition?: { pose: AvatarPose; mask: readonly (keyof AvatarPose)[]; time: number };
   private animationDiagnostic = { id: '', elapsedMs: 0, weight: 0, reason: 'inactive' };
@@ -141,7 +140,6 @@ export class CharacterAnimator {
     const clip = definition && ANIMATION_CLIPS[definition.id];
     const elapsedMs = ((playback.displayTick - playback.startedAtTick) * 1000) / TICK_RATE;
     const time = playback.displayTimeMs ?? (playback.displayTick * 1000) / TICK_RATE;
-    if (definition?.mode === 'fullBody' && frame.animationMoving) this.suppressedKey = key;
     const reason = !definition
       ? 'inactive'
       : !clip
@@ -150,11 +148,9 @@ export class CharacterAnimator {
           ? 'incompatible-rig'
           : !frame.grounded
             ? 'airborne'
-            : this.suppressedKey === key
-              ? 'local-movement'
-              : playback.displayTick >= playback.endsAtTick
-                ? 'expired'
-                : 'playing';
+            : playback.endsAtTick && playback.displayTick >= playback.endsAtTick
+              ? 'expired'
+              : 'playing';
     const mask = reason === 'playing' ? clip!.mask : [];
     if (key !== this.animationKey) {
       // Entity/revision changes must discard decorative history as well as locomotion.
@@ -164,13 +160,15 @@ export class CharacterAnimator {
           : undefined;
       this.animationKey = key;
     }
-    // Falling always wins. Movement cancellation can blend only while grounded.
+    // Falling always wins over the decorative pose.
     if (!frame.grounded) this.transition = undefined;
     const weight =
       reason === 'playing'
         ? animationWeight(
             elapsedMs,
-            ((playback.endsAtTick - playback.startedAtTick) * 1000) / TICK_RATE,
+            playback.endsAtTick
+              ? ((playback.endsAtTick - playback.startedAtTick) * 1000) / TICK_RATE
+              : Infinity,
           )
         : 0;
     if (weight > 0) {
@@ -178,7 +176,6 @@ export class CharacterAnimator {
       for (const joint of mask)
         this.pose[joint] += (this.clipPose[joint] - this.pose[joint]) * weight;
     }
-    if (this.suppressedKey === key) this.transition = undefined;
     if (this.transition) {
       const t = smoothWeight((time - this.transition.time) / ANIMATION_BLEND_MS);
       for (const joint of this.transition.mask)

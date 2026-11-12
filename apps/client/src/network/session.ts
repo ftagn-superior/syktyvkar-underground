@@ -26,8 +26,8 @@ import {
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
-  REACTION_DURATION_MS,
-  CHAT_MAX_DURATION_MS,
+  REACTION_COOLDOWN_MS,
+  CHAT_MAX_COOLDOWN_MS,
   normalizeChatText,
   TICK_RATE,
   findReaction,
@@ -452,8 +452,8 @@ export class GameSession {
           if (result.ok || result.code === 'RATE_LIMITED') {
             const delay =
               typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
-                ? Math.min(CHAT_MAX_DURATION_MS, Math.max(0, result.retryAfterMs))
-                : CHAT_MAX_DURATION_MS;
+                ? Math.min(CHAT_MAX_COOLDOWN_MS, Math.max(0, result.retryAfterMs))
+                : CHAT_MAX_COOLDOWN_MS;
             this.chatAvailableAt = performance.now() + delay;
           }
           if (result.message) this.onNotice(result.message);
@@ -471,8 +471,8 @@ export class GameSession {
           if (result.ok || result.code === 'RATE_LIMITED') {
             const delay =
               typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
-                ? Math.min(REACTION_DURATION_MS, Math.max(0, result.retryAfterMs))
-                : REACTION_DURATION_MS;
+                ? Math.min(REACTION_COOLDOWN_MS, Math.max(0, result.retryAfterMs))
+                : REACTION_COOLDOWN_MS;
             this.reactionAvailableAt = performance.now() + delay;
           }
           if (!result.ok && result.code)
@@ -952,7 +952,9 @@ export class GameSession {
     for (const player of room.state.players?.values() ?? []) {
       const pose = player === self ? this.simulation.pose() : this.remotePose(player);
       const state = player === self ? this.physics!.getState() : toPlayerState(player);
-      const remainingMs = this.displayRemainingMs(player.reactionExpiresAtTick, now);
+      const remainingMs = player.reactionExpiresAtTick
+        ? this.displayRemainingMs(player.reactionExpiresAtTick, now)
+        : Infinity;
       const presentation = this.animationBuffer.sample(
         player.entityId,
         player === self ? this.animationDisplayTime(true) : remoteTime,
@@ -961,7 +963,6 @@ export class GameSession {
         ...state,
         grounded: player === self ? state.grounded : (presentation?.grounded ?? state.grounded),
         animation: presentation?.animation,
-        animationMoving: player === self && this.animationMoving,
         position: { x: pose.x, y: pose.y, z: pose.z },
         rotation: player === self ? state.rotation : this.remoteRotation(player),
         motionRevision: this.motionRevision,
@@ -985,7 +986,9 @@ export class GameSession {
             ? {
                 text: player.chatText,
                 sequence: player.chatSequence,
-                remainingMs: this.displayRemainingMs(player.chatExpiresAtTick, now),
+                remainingMs: player.chatExpiresAtTick
+                  ? this.displayRemainingMs(player.chatExpiresAtTick, now)
+                  : Infinity,
               }
             : undefined,
       });
@@ -1182,7 +1185,15 @@ export class GameSession {
     const presentation =
       player && this.animationBuffer.sample(player.entityId, this.room!.clock.serverNow());
     const playback = presentation?.animation;
-    const busy = !!playback?.animationId && playback.displayTick < playback.endsAtTick;
+    const definition = findAnimation(playback?.animationId);
+    const busy =
+      !!definition &&
+      !!playback &&
+      playback.displayTick <
+        Math.max(
+          playback.startedAtTick + (definition.cooldownMs * TICK_RATE) / 1000,
+          playback.endsAtTick,
+        );
     const state = player && this.simulation ? this.physics?.getState() : undefined;
     return {
       available: this.state === 'playing' && this.inputEnabled && !this.stalled,

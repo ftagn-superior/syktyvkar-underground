@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
-import { REACTIONS } from '../packages/contracts/src/index.js';
+import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
 
@@ -79,12 +79,16 @@ try {
   const senderId = (await snapshot(sender)).authoritative.entityId;
   const sticker = `.player-reaction[data-entity-id="${senderId}"]`;
   for (const reaction of REACTIONS) {
+    await sender.waitForFunction(() => {
+      const state = (window as any).__SU_DEBUG__.snapshot();
+      const velocity = state.authoritative.velocity;
+      return Math.hypot(velocity.x, velocity.z) <= 0.08 && !state.animation.moving;
+    });
     await sender.keyboard.press('r');
     const choice = sender.locator(
       `.reaction-choice[data-reaction-id="${reaction.id}"]:not([disabled])`,
     );
     await choice.waitFor({ timeout: 6000 });
-    const started = Date.now();
     if (reaction.id === 'hello') await sender.keyboard.press('1');
     else await choice.click();
     await Promise.all([
@@ -93,6 +97,29 @@ try {
     ]);
     await sender.locator('#reactions-panel').waitFor({ state: 'hidden' });
     assert.equal(await observer.locator(sticker).count(), 1);
+    if (reaction.id === 'hello') {
+      await sender.keyboard.press('r');
+      assert.equal(await sender.locator('.reaction-choice:not([disabled])').count(), 0);
+      await sender.keyboard.press('Escape');
+      await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 300);
+      assert.equal(await sender.locator(sticker).isVisible(), true);
+      assert.equal(await observer.locator(sticker).isVisible(), true);
+      assert.equal(
+        await observer.locator(sticker).evaluate((node) => getComputedStyle(node).opacity),
+        '1',
+      );
+      await sender.keyboard.press('r');
+      await choice.waitFor();
+      await choice.click();
+      await sender.locator('#reactions-panel').waitFor({ state: 'hidden' });
+      await observer.reload();
+      await playing(observer);
+      await observer.locator(sticker).waitFor();
+      checks.push(
+        'idle stickers remain visible beyond five seconds, can be reselected after the cooldown, and survive an observer reload',
+      );
+    }
+    const movingStarted = Date.now();
     if (reaction.id === 'hello') {
       const before = await observer
         .locator(sticker)
@@ -118,18 +145,35 @@ try {
       // A software-rendered screenshot may take longer than the sticker's lifetime.
       // Finish the live interaction assertions before capturing the visual artifact.
       await observer.screenshot({ path: `${output}/in-world.png`, animations: 'disabled' });
+    } else {
+      await sender.locator('#world').focus();
+      const origin = (await snapshot(sender)).authoritative.position;
+      const key = REACTIONS.indexOf(reaction) % 2 ? 's' : 'w';
+      await sender.keyboard.down(key);
+      try {
+        await sender.waitForFunction(
+          (origin) => {
+            const position = (window as any).__SU_DEBUG__.snapshot().authoritative.position;
+            return Math.hypot(position.x - origin.x, position.z - origin.z) > 0.15;
+          },
+          origin,
+          { timeout: 3000 },
+        );
+      } finally {
+        await sender.keyboard.up(key);
+      }
     }
     await Promise.all([
-      sender.locator(sticker).waitFor({ state: 'detached', timeout: 4500 }),
-      observer.locator(sticker).waitFor({ state: 'detached', timeout: 4500 }),
+      sender.locator(sticker).waitFor({ state: 'detached', timeout: 7000 }),
+      observer.locator(sticker).waitFor({ state: 'detached', timeout: 7000 }),
     ]);
     assert.ok(
-      Date.now() - started >= 2500,
-      'the reaction remains visible for approximately three seconds',
+      Date.now() - movingStarted >= WORLD_ACTIVITY_MOVE_DURATION_MS - 500,
+      'the reaction remains visible for five seconds after movement starts',
     );
   }
   checks.push(
-    'all five reactions reach both browsers, follow the character and camera, expire, and block a second selection during the show',
+    'all five reactions reach both browsers, follow the character and camera, and expire five seconds after movement even after stopping',
   );
   console.log(checks.at(-1));
 

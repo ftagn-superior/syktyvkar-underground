@@ -84,7 +84,8 @@ try {
     );
     await choice.waitFor({ timeout: 6000 });
     const started = Date.now();
-    await choice.click();
+    if (reaction.id === 'hello') await sender.keyboard.press('1');
+    else await choice.click();
     await Promise.all([
       sender.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
       observer.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),

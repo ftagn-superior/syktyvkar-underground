@@ -102,10 +102,10 @@ try {
     await owner.locator('#chat-console').waitFor({ state: 'hidden' });
     await owner.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
     await owner.getByRole('button', { name: `${label} × 1`, exact: true }).click();
+    await owner.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
     // A rotated sphere must still sit on the ground, rather than hover on box half extents.
     if (typeId === 'watermelon-ball')
-      for (let turn = 0; turn < 3; turn++)
-        await owner.getByRole('button', { name: 'X +15°', exact: true }).click();
+      for (let turn = 0; turn < 3; turn++) await owner.keyboard.press('s');
     const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
     let found = false;
     for (const y of [420, 400, 440, 460, 480, 500, 380]) {
@@ -144,6 +144,7 @@ try {
   await owner
     .getByRole('button', { name: '🗿 Памятник уверенности · 4 м × 1', exact: true })
     .click();
+  await owner.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
   const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
   let found = false;
   for (const y of [420, 400, 440, 460, 480]) {

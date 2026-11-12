@@ -12,8 +12,17 @@ const movementKeys = new Set([
   'ArrowRight',
 ]);
 const sprintKeys = new Set(['ShiftLeft', 'ShiftRight']);
+const placementRotations: Readonly<Record<string, { axis: 'x' | 'y' | 'z'; direction: -1 | 1 }>> = {
+  KeyW: { axis: 'x', direction: -1 },
+  KeyS: { axis: 'x', direction: 1 },
+  KeyA: { axis: 'y', direction: -1 },
+  KeyD: { axis: 'y', direction: 1 },
+  KeyQ: { axis: 'z', direction: -1 },
+  KeyE: { axis: 'z', direction: 1 },
+};
 export class KeyboardInput {
   private enabled = true;
+  private placementMode = false;
   private readonly held = new Set<string>();
   private readonly controller = new AbortController();
   constructor(
@@ -22,6 +31,7 @@ export class KeyboardInput {
     onReactions?: () => void,
     onChat?: (initialText: string) => void,
     onAnimations?: () => void,
+    onPlacementRotate?: (axis: 'x' | 'y' | 'z', direction: -1 | 1) => void,
   ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
@@ -36,6 +46,18 @@ export class KeyboardInput {
           (event.target instanceof HTMLElement && event.target.isContentEditable)
         )
           return;
+        if (this.placementMode) {
+          const rotation = placementRotations[event.code];
+          if (rotation) {
+            event.preventDefault();
+            onPlacementRotate?.(rotation.axis, rotation.direction);
+            return;
+          }
+          if (movementKeys.has(event.code) || sprintKeys.has(event.code)) {
+            event.preventDefault();
+            return;
+          }
+        }
         if (event.code === 'KeyR') {
           event.preventDefault();
           onReactions?.();
@@ -83,7 +105,7 @@ export class KeyboardInput {
     );
   }
   read(cameraAngle = INITIAL_CAMERA_ANGLE): MoveInput {
-    if (!this.enabled || document.hidden) return { ...NEUTRAL_INPUT };
+    if (!this.enabled || this.placementMode || document.hidden) return { ...NEUTRAL_INPUT };
     const right =
       Number(this.held.has('KeyD') || this.held.has('ArrowRight')) -
       Number(this.held.has('KeyA') || this.held.has('ArrowLeft'));
@@ -100,6 +122,10 @@ export class KeyboardInput {
   }
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
+    this.clear();
+  }
+  setPlacementMode(active: boolean): void {
+    this.placementMode = active;
     this.clear();
   }
   dispose(): void {

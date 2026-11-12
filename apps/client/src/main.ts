@@ -34,7 +34,10 @@ const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
 const actions = document.querySelector<HTMLElement>('.actions')!;
 const actionsResize = new ResizeObserver(() => {
-  actions.style.setProperty('--game-actions-height', `${actions.getBoundingClientRect().height}px`);
+  document.documentElement.style.setProperty(
+    '--game-actions-height',
+    `${actions.getBoundingClientRect().height}px`,
+  );
 });
 actionsResize.observe(actions);
 const qualityStorageKey = 'su:render-quality:v1';
@@ -131,13 +134,25 @@ const accounts = new AccountPanel(
   },
   () => session.leave(),
 );
-inventory = new InventoryPanel(session, canvas, () => {
-  chat?.close(false);
-  reactions?.close(false);
-  animations?.close(false);
-  diagnostics.hidden = true;
-  diagnosticsToggle.setAttribute('aria-expanded', 'false');
-});
+inventory = new InventoryPanel(
+  session,
+  canvas,
+  () => {
+    chat?.close(false);
+    reactions?.close(false);
+    animations?.close(false);
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+  (placing) => {
+    keyboard?.setPlacementMode(placing);
+    session.neutral();
+    element('controls-title').textContent = placing ? 'Поворот предмета' : 'Свободное движение';
+    element('controls-description').textContent = placing
+      ? 'W / S — наклон · A / D — поворот · Q / E — крен'
+      : 'WASD / стрелки · Shift — быстрый бег · Q / E — камера';
+  },
+);
 const accountPreparation = accounts.load();
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
@@ -215,6 +230,7 @@ keyboard = new KeyboardInput(
   () => reactions!.toggleOpen(),
   (initialText) => chat!.open(initialText),
   () => animations!.toggleOpen(),
+  (axis, direction) => inventory?.rotatePlacement(axis, direction),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();

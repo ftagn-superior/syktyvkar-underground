@@ -103,8 +103,10 @@
           <div><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
         </div>
         <div>
-          <strong>Свободное движение</strong>
-          <span>WASD / стрелки · Shift — быстрый бег · Q / E — камера</span>
+          <strong id="controls-title">Свободное движение</strong>
+          <span id="controls-description"
+            >WASD / стрелки · Shift — быстрый бег · Q / E — камера</span
+          >
         </div>
       </div>
       <div class="actions">
@@ -131,14 +133,19 @@
           </button>
           <section
             id="reactions-panel"
-            class="reactions-panel"
+            class="reactions-panel hud-panel"
             aria-labelledby="reactions-title"
             hidden
           >
-            <div class="reactions-heading">
-              <h2 id="reactions-title">Реакции</h2>
+            <div class="catalog-heading">
+              <div>
+                <span class="catalog-eyebrow">Быстрый выбор</span>
+                <h2 id="reactions-title">
+                  Реакции <span class="catalog-count" data-catalog-count></span>
+                </h2>
+              </div>
               <button
-                class="reaction-close"
+                class="reaction-close catalog-close"
                 data-close
                 aria-label="Закрыть реакции (Escape)"
                 title="Закрыть (Esc)"
@@ -146,8 +153,21 @@
                 ×
               </button>
             </div>
-            <p id="reactions-status" role="status">Выберите реакцию · в мире на 3 секунды</p>
+            <p class="catalog-description">
+              Стикер над персонажем, который увидят все. На 3 секунды.
+            </p>
             <div class="reaction-choices" role="group" aria-label="Выбор реакции"></div>
+            <div class="catalog-feedback">
+              <p id="reactions-status" class="catalog-status" role="status"></p>
+              <progress
+                class="reaction-cooldown"
+                aria-label="Ожидание следующей реакции"
+                hidden
+              ></progress>
+            </div>
+            <div class="catalog-footer">
+              <span>Цифры — выбрать</span><span><kbd>Esc</kbd> закрыть</span>
+            </div>
           </section>
         </div>
         <div class="reactions-control">
@@ -163,14 +183,19 @@
           </button>
           <section
             id="animations-panel"
-            class="reactions-panel animation-panel"
+            class="reactions-panel animation-panel hud-panel"
             aria-labelledby="animations-title"
             hidden
           >
-            <div class="reactions-heading">
-              <h2 id="animations-title">Анимации</h2>
+            <div class="catalog-heading">
+              <div>
+                <span class="catalog-eyebrow">В движении</span>
+                <h2 id="animations-title">
+                  Анимации <span class="catalog-count" data-catalog-count></span>
+                </h2>
+              </div>
               <button
-                class="reaction-close"
+                class="reaction-close catalog-close"
                 data-close
                 aria-label="Закрыть анимации (Escape)"
                 title="Закрыть (Esc)"
@@ -178,8 +203,14 @@
                 ×
               </button>
             </div>
-            <p id="animations-status" role="status" aria-live="polite"></p>
+            <p class="catalog-description">Поздоровайтесь, поддержите или станцуйте.</p>
             <div class="animation-choices" role="group" aria-label="Выбор анимации"></div>
+            <div class="catalog-feedback">
+              <p id="animations-status" class="catalog-status" role="status"></p>
+            </div>
+            <div class="catalog-footer">
+              <span>Цифры — выбрать</span><span><kbd>Esc</kbd> закрыть</span>
+            </div>
           </section>
         </div>
         <button id="respawn" class="button quiet" hidden>

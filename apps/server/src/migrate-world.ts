@@ -16,9 +16,11 @@ try {
   store = new ItemStore(pool, definition, randomUUID());
   const result = await store.migrateGeometry();
   console.log(
-    result.changed
-      ? `World ${worldId} migrated: ${result.from} -> ${result.to}. Items and inventories preserved.`
-      : `World ${worldId} already matches the built map.`,
+    result.from === null
+      ? `World ${worldId} has no saved state. It will be initialized when the server starts.`
+      : result.changed
+        ? `World ${worldId} migrated: ${result.from} -> ${result.to}. Items and inventories preserved.`
+        : `World ${worldId} already matches the built map.`,
   );
 } catch (error) {
   console.error(

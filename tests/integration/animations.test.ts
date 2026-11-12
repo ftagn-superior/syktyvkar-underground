@@ -116,6 +116,33 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     expect(app.room.diagnostics().bodies).toBe(bodies + 1); // late observer only
   });
 
+  it('keeps chat, reactions and animations independent while sharing the action sequence', async () => {
+    const { room, results, player } = await join();
+    request(room, 1);
+    room.send('requestChat', { requestId: 2, worldEpoch: info.worldEpoch, text: 'Привет!' });
+    room.send('requestReaction', {
+      requestId: 3,
+      worldEpoch: info.worldEpoch,
+      reactionId: 'hello',
+    });
+    await until(() => results.length === 3);
+    expect(results.every((result) => result.ok)).toBe(true);
+    expect(player().animationId).toBe('wave');
+    expect(player().chatText).toBe('Привет!');
+    expect(player().reactionId).toBe('hello');
+    const original = [...results];
+    request(room, 2, 'clap');
+    room.send('requestChat', { requestId: 1, worldEpoch: info.worldEpoch, text: 'Дубль' });
+    request(room, 4, 'clap');
+    await until(() => results.length === 6);
+    expect(results[3]).toEqual(original[1]);
+    expect(results[4]).toEqual(original[0]);
+    expect(results[5]).toMatchObject({ ok: false, code: 'RATE_LIMITED' });
+    expect(player().animationSequence).toBe(1);
+    expect(player().chatSequence).toBe(1);
+    expect(player().reactionSequence).toBe(1);
+  });
+
   it('validates unknown input, epoch, readiness, support and rig', async () => {
     const { room, results, player } = await join(false);
     const problems: string[] = [];

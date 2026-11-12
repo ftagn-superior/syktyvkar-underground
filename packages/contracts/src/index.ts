@@ -3,9 +3,9 @@ export * from './accounts.js';
 export * from './items.js';
 export * from './avatars.js';
 export * from './animations.js';
-import type { ItemCatalog, InitialItem, ItemState } from './items.js';
+import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 8;
 export const WORLD_FORMAT_VERSION = 3;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -164,13 +164,17 @@ export type ErrorCode =
   | 'INVALID_INPUT'
   | 'INVALID_SKIN'
   | 'ANIMATION_NOT_ALLOWED'
+  | 'COMMAND_DISABLED'
+  | 'UNKNOWN_COMMAND'
   | 'RATE_LIMITED'
   | 'STALE_WORLD'
   | 'ALREADY_PROCESSED';
 export interface ActionResult {
   requestId: number;
   ok: boolean;
-  code?: ErrorCode;
+  code?: ErrorCode | ItemError;
+  /** Private feedback to the sender; never replicated as character speech. */
+  message?: string;
   /** Remaining server-enforced delay before the same kind of action can be accepted. */
   retryAfterMs?: number;
 }
@@ -196,6 +200,7 @@ export function normalizeInput(value: unknown): MoveInput | undefined {
 }
 export { validateWorld, canonicalJson } from './world.js';
 export * from './reactions.js';
+export * from './chat.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,

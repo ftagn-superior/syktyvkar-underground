@@ -15,6 +15,7 @@ import {
   parseItemCommand,
   type ItemResult,
   type ItemState,
+  ITEM_GIVE_COOLDOWN_MS,
   MAX_INPUT_QUEUE,
   PATCH_RATE,
   PLAYER_COLORS,
@@ -29,6 +30,8 @@ import {
   normalizeInput,
   findReaction,
   findAnimation,
+  normalizeChatText,
+  chatDurationMs,
   findAvatarSkin,
   DEFAULT_AVATAR_SKIN,
   type AvatarSkinId,
@@ -48,6 +51,7 @@ import {
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
+import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
 
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 interface Session {
@@ -62,8 +66,14 @@ interface Session {
   lastRespawn: number;
   lastInput: MoveInput;
   results: Map<number, ActionResult>;
+  pendingActions: Set<number>;
   auth?: AuthenticatedAccount;
   cancelReconnect?: () => void;
+}
+interface ClientAction {
+  session: Session;
+  requestId: number;
+  code?: ErrorCode;
 }
 export interface WorldRoomOptions {
   definition: WorldDefinition;
@@ -72,6 +82,7 @@ export interface WorldRoomOptions {
   prepareTimeoutMs?: number;
   accounts?: AccountHttp;
   pool: Pool;
+  itemCreationEnabled?: boolean;
 }
 
 /** Connection lifecycle and replication only; simulation owns all physical state. */
@@ -101,6 +112,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private disposed = false;
   private readonly stepHistogram = new Uint32Array(1001);
   private accounts?: AccountHttp;
+  private itemCreationEnabled = true;
   private accountPlayers = new Map<string, string>();
   private measuredSteps = 0;
   private maxStepMs = 0;
@@ -110,6 +122,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.reconnectSeconds = options.reconnectSeconds ?? RECONNECT_SECONDS;
     this.prepareTimeoutMs = options.prepareTimeoutMs ?? PREPARE_TIMEOUT_MS;
     this.accounts = options.accounts;
+    this.itemCreationEnabled = options.itemCreationEnabled ?? true;
     this.state.worldEpoch = randomUUID();
     this.state.protocolVersion = PROTOCOL_VERSION;
     this.state.mapVersion = options.manifest.mapVersion;
@@ -141,6 +154,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
+    this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
     this.onMessage('resync', (client) => {
       this.inputs.get(client.sessionId).clear();
       const session = this.sessions.get(client.sessionId);
@@ -212,6 +226,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       entityId: `player-${randomUUID()}`,
       joinedAt: performance.now(),
       connected: true,
+      pendingActions: new Set(),
       auth,
       name: auth?.profile.displayName ?? `Гость ${ordinal}`,
       skinId: auth?.profile.skinId ?? findAvatarSkin(options.skinId)?.id ?? DEFAULT_AVATAR_SKIN,
@@ -310,6 +325,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         player.reactionId = '';
         player.reactionExpiresAtTick = 0;
       }
+      if (player.chatText && this.state.serverTick >= player.chatExpiresAtTick) {
+        player.chatText = '';
+        player.chatExpiresAtTick = 0;
+      }
     }
     this.projectItems(snapshot.items);
     this.state.serverTick++;
@@ -327,10 +346,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   /** All discrete actions share one request sequence and bounded result cache. */
-  private beginAction(
-    client: Client,
-    request: unknown,
-  ): { session: Session; requestId: number; code?: ErrorCode } | undefined {
+  private beginAction(client: Client, request: unknown): ClientAction | undefined {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     const data = request as { requestId?: unknown; worldEpoch?: unknown } | null;
@@ -344,6 +360,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       return;
     }
     const requestId = data.requestId;
+    // An asynchronous command will acknowledge all duplicate deliveries once committed.
+    if (session.pendingActions.has(requestId)) return;
     const previous = session.results.get(requestId);
     if (previous) {
       client.send('actionResult', previous);
@@ -368,7 +386,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private finishAction(client: Client, session: Session, result: ActionResult): void {
     session.results.set(result.requestId, result);
     if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
-    client.send('actionResult', result);
+    if (session.connected) this.clients.getById(client.sessionId)?.send('actionResult', result);
   }
 
   private respawn(client: Client, request: unknown): void {
@@ -492,6 +510,105 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         ? { retryAfterMs: Math.ceil((remainingTicks * 1000) / TICK_RATE) }
         : {}),
     });
+  }
+
+  private chat(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const text = normalizeChatText((request as { text?: unknown }).text);
+    const command = text && parseChatCommand(text);
+    if (command) {
+      void this.chatCommand(client, action, command);
+      return;
+    }
+    const player = this.state.players.get(client.sessionId);
+    const remainingTicks = Math.max(0, (player?.chatExpiresAtTick ?? 0) - this.state.serverTick);
+    if (!code) {
+      if (!text) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else {
+        player!.chatText = text;
+        player!.chatSequence++;
+        player!.chatExpiresAtTick =
+          this.state.serverTick + Math.ceil((chatDurationMs(text) * TICK_RATE) / 1000);
+      }
+    }
+    // Cache only the acknowledgement, never the message body or a history.
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === undefined || code === 'RATE_LIMITED'
+        ? {
+            retryAfterMs: code
+              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
+              : chatDurationMs(text!),
+          }
+        : {}),
+    });
+  }
+
+  private async chatCommand(client: Client, action: ClientAction, command: ChatCommand) {
+    const { session, requestId, code } = action;
+    const fail = (code: ActionResult['code'], message: string) =>
+      this.finishAction(client, session, { requestId, ok: false, code, message });
+    if (code) return fail(code, 'Команда сейчас недоступна. Проверьте состояние мира.');
+    if (command.kind === 'invalid') return fail(command.code, command.message);
+    if (
+      !session.auth ||
+      session.auth.expiresAt <= Date.now() ||
+      this.accounts?.wasRevoked(session.auth.authSessionId)
+    )
+      return fail('AUTH_REQUIRED', giveFailureMessage('AUTH_REQUIRED'));
+    if (!this.itemCreationEnabled)
+      return fail('COMMAND_DISABLED', 'Создание предметов отключено на сервере.');
+    const types = this.items.store.definition.itemCatalog.types;
+    if (!Object.hasOwn(types, command.typeId))
+      return fail('INVALID_INPUT', `Неизвестный тип предмета: ${command.typeId}.`);
+    if (this.itemRequests >= 32) return fail('RATE_LIMITED', giveFailureMessage('RATE_LIMITED'));
+
+    session.pendingActions.add(requestId);
+    this.itemRequests++;
+    try {
+      const result = await this.items.give(
+        session.auth.accountId,
+        `chat-${this.state.worldEpoch}-${client.sessionId}-${requestId}`,
+        command.typeId,
+        () => {
+          if (
+            session.auth!.expiresAt <= Date.now() ||
+            this.accounts?.wasRevoked(session.auth!.authSessionId)
+          )
+            return 'AUTH_REQUIRED';
+          if (
+            this.sessions.get(client.sessionId) !== session ||
+            !session.connected ||
+            !this.state.players.has(client.sessionId)
+          )
+            return 'WORLD_NOT_READY';
+        },
+      );
+      if (result.ok) await this.sendInventory(client);
+      this.finishAction(client, session, {
+        requestId,
+        ok: result.ok,
+        ...(result.code ? { code: result.code } : {}),
+        message: result.ok
+          ? `Получен предмет: ${types[command.typeId].name} ×1.`
+          : giveFailureMessage(result.code),
+        ...(result.ok || result.code === 'RATE_LIMITED'
+          ? { retryAfterMs: ITEM_GIVE_COOLDOWN_MS }
+          : {}),
+      });
+    } catch {
+      // Storage uncertainty remains queued in ItemRuntime; rejection means shutdown.
+      fail('WORLD_NOT_READY', giveFailureMessage('WORLD_NOT_READY'));
+    } finally {
+      session.pendingActions.delete(requestId);
+      this.itemRequests--;
+    }
   }
 
   onDrop(client: Client, code?: number): void {

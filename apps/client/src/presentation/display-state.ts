@@ -1,6 +1,7 @@
 import type {
   AnimationPlayback,
   AvatarSkinId,
+  DisplayChat,
   DisplayReaction,
   ItemState,
   PlayerState,
@@ -18,6 +19,7 @@ interface Appearance {
   color?: string;
   connected?: boolean;
   reaction?: DisplayReaction;
+  chat?: DisplayChat;
 }
 
 export interface DisplayPlayer extends PlayerState, Appearance {

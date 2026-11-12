@@ -36,8 +36,10 @@
     "test:buildings:browser": "node --import tsx tests/browser-buildings.ts",
     "test:reactions:browser": "node --import tsx tests/browser-reactions.ts",
     "test:animations:browser": "node --import tsx tests/browser-animations.ts",
+    "test:chat:browser": "node --import tsx tests/browser-chat.ts",
     "test:items": "node tools/test-database.mjs --items",
     "test:items:browser": "node tools/test-database.mjs --items --browser",
+    "test:giveme:browser": "node tools/test-database.mjs --giveme --browser",
     "test:avatars:browser": "node tools/test-database.mjs --avatars --browser",
     "test:avatars:profile": "node --import tsx tests/browser-avatar-profile.ts"
   },

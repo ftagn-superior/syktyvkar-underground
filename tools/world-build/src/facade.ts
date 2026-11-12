@@ -41,6 +41,19 @@ export interface FacadeDetails {
   roofSign?: RoofSign;
   /** Несколько крышных вывесок у одного здания. */
   roofSigns?: RoofSign[];
+  /**
+   * Надписи прямо на стене: объёмные буквы на фасаде `facing`. `fromTop` — расстояние
+   * от верха стены до верха строки в метрах, поэтому растяжение высоты их не искажает.
+   */
+  wallText?: {
+    facing: Facing;
+    text: string;
+    at?: number;
+    fromTop: number;
+    height: number;
+    width: number;
+    color: string;
+  }[];
   /** Пилястры: вертикальные выступы на всю высоту стены с шагом `every` метров. */
   pilasters?: { facing: Facing[]; every: number; width?: number; depth?: number; color: string };
   /** Толстая плита-карниз над стенами, выступающая на `overhang` за описанный прямоугольник. */
@@ -342,6 +355,11 @@ const GLYPHS: Record<string, string[]> = {
   Р: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
   Ч: ['#...#', '#...#', '#...#', '.####', '....#', '....#', '....#'],
   Я: ['.####', '#...#', '#...#', '.####', '..#.#', '.#..#', '#...#'],
+  В: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+  Д: ['.###.', '.#.#.', '.#.#.', '.#.#.', '.#.#.', '#####', '#...#'],
+  С: ['.####', '#....', '#....', '#....', '#....', '#....', '.####'],
+  У: ['#...#', '#...#', '#...#', '.####', '....#', '#...#', '.###.'],
+  Ы: ['#...#', '#...#', '#...#', '###.#', '#.#.#', '#.#.#', '###.#'],
   '5': ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
   ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
 };
@@ -416,6 +434,49 @@ function roofSign(edges: Edge[], top: number, recipe: RoofSign, index = 0) {
     });
   });
   return [face, back, ...(recipe.board ? [board] : [])];
+}
+
+/** Строка объёмных букв на стене; верх стены — на высоте `top`. */
+function wallText(
+  edges: Edge[],
+  top: number,
+  spec: NonNullable<FacadeDetails['wallText']>[number],
+  index: number,
+) {
+  const candidates = edges.filter((edge) => faces(edge, [spec.facing]));
+  if (!candidates.length) throw new Error(`No facade faces ${spec.facing} for the wall text`);
+  const edge = candidates.reduce((a, b) => (b.length > a.length ? b : a));
+  const glyphs = [...spec.text.toUpperCase()].map((c) => {
+    const glyph = GLYPHS[c];
+    if (!glyph) throw new Error(`Sign glyph is not supported: ${c}`);
+    return glyph;
+  });
+  const columns = glyphs.length * 6 - 1;
+  const width = Math.min(spec.width, edge.length - 0.6);
+  const pixel = Math.min(spec.height / 7, width / columns);
+  const s = Math.min(
+    edge.length - width / 2,
+    Math.max(width / 2, edge.length * (1 - (spec.at ?? 0.5))),
+  );
+  const left = -(columns * pixel) / 2;
+  const part = meshPart(`wall-text-${index}`, 'detail', spec.color);
+  glyphs.forEach((glyph, k) =>
+    glyph.forEach((row, line) => {
+      for (const match of row.matchAll(/#+/g)) {
+        const start = k * 6 + match.index!;
+        // Для зрителя снаружи «вправо» — это −d, как у крышных вывесок.
+        const centerS = s - (left + (start + match[0].length / 2) * pixel);
+        const y = top - spec.fromTop - (line + 0.5) * pixel;
+        addOrientedBox(
+          part,
+          along(edge, centerS, y, 0.06),
+          [match[0].length * pixel, pixel, 0.08],
+          edge.d,
+        );
+      }
+    }),
+  );
+  return part;
 }
 
 export interface FacadeResult {
@@ -527,6 +588,9 @@ export function buildFacade(
     parts.push(...roof.parts);
     roofCollider = roof.collider;
   }
+  details.wallText?.forEach((spec, index) =>
+    parts.push(wallText(edges, height + parapet, spec, index)),
+  );
   [...(details.roofSign ? [details.roofSign] : []), ...(details.roofSigns ?? [])].forEach(
     (sign, index) => parts.push(...roofSign(edges, height + parapet, sign, index)),
   );

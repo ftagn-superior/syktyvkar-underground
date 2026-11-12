@@ -2,6 +2,7 @@ import type { EntityState, Quat, Vec3 } from './index.js';
 
 export const ITEM_REACH = 3;
 export const ITEM_SAVE_INTERVAL_MS = 1000;
+export const ITEM_GIVE_COOLDOWN_MS = 2000;
 export interface ItemType {
   typeId: string;
   name: string;

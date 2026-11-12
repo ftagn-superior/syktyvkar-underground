@@ -12,6 +12,13 @@ export function loadEnvironment(): void {
   if (existsSync('.env')) loadEnvFile('.env');
 }
 
+export function readItemCreationEnabled(env = process.env): boolean {
+  const value = env.SU_ITEM_CREATION_ENABLED;
+  if (value === undefined || value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error('SU_ITEM_CREATION_ENABLED must be true or false.');
+}
+
 export function readAccountConfig(env = process.env): AccountConfig | undefined {
   const keys = ['PUBLIC_ORIGIN', 'CLIENT_ID', 'CLIENT_SECRET'] as const;
   if (keys.every((key) => !env[key])) return;

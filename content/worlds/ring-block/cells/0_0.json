@@ -18,26 +18,6 @@
       }
     },
     {
-      "entityId": "osm-relation-13601216",
-      "assetId": "osm-relation-13601216",
-      "position": {
-        "x": -148.88,
-        "y": 0,
-        "z": -157.92
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0,
-        "w": 1
-      },
-      "sourceRef": {
-        "provider": "osm",
-        "type": "relation",
-        "id": "13601216"
-      }
-    },
-    {
       "entityId": "osm-way-109234380",
       "assetId": "osm-way-109234380",
       "position": {
@@ -3010,6 +2990,21 @@
         "y": -0.5301412600000001,
         "z": 0,
         "w": 0.8479093299999999
+      }
+    },
+    {
+      "entityId": "monument-sorokin",
+      "assetId": "sorokin-monument",
+      "position": {
+        "x": -126.16,
+        "y": 0,
+        "z": -188.54
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0.84381318,
+        "z": 0,
+        "w": 0.53663704
       }
     },
     {

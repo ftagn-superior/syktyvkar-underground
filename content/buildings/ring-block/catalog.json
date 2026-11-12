@@ -1,7 +1,6 @@
 {
   "formatVersion": 1,
   "assets": {
-    "osm-relation-13601216": "osm-relation-13601216/asset.json",
     "osm-way-109234380": "osm-way-109234380/asset.json",
     "osm-way-109234381": "osm-way-109234381/asset.json",
     "osm-way-109234382": "osm-way-109234382/asset.json",
@@ -143,6 +142,7 @@
     "kuratov-monument": "manual/kuratov-monument/asset.json",
     "lamp-five-globe": "manual/lamp-five-globe/asset.json",
     "water-kiosk": "manual/water-kiosk/asset.json",
+    "sorokin-monument": "manual/sorokin-monument/asset.json",
     "details-0-0": "details-0-0/asset.json",
     "details-0-1": "details-0-1/asset.json",
     "details-0-m1": "details-0-m1/asset.json",

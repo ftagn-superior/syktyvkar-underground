@@ -7,6 +7,7 @@ import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
 import { ReactionMenu } from './ui/reactions';
 import { AnimationMenu } from './ui/animations';
+import { ChatConsole } from './ui/chat';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 
@@ -54,6 +55,7 @@ let keyboard: KeyboardInput;
 let graphicsLost = false;
 let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
+let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
 
 function showNotice(message: string): void {
@@ -112,6 +114,7 @@ function updateState(state: ConnectionState, message?: string): void {
   renderRespawn();
   reactions?.update(session.reactionStatus());
   animations?.update(session.animationStatus());
+  renderChat();
   inventory?.update();
 }
 const session = new GameSession(updateState, showNotice);
@@ -131,6 +134,7 @@ const accounts = new AccountPanel(
   () => session.leave(),
 );
 inventory = new InventoryPanel(session, canvas, () => {
+  chat?.close(false);
   reactions?.close(false);
   animations?.close(false);
   diagnostics.hidden = true;
@@ -153,6 +157,7 @@ reactions = new ReactionMenu(
   () => {
     animations?.close(false);
     inventory?.close();
+    chat?.close(false);
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
@@ -169,14 +174,48 @@ animations = new AnimationMenu(
   () => {
     reactions?.close(false);
     inventory?.close();
+    chat?.close(false);
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
 );
+chat = new ChatConsole(
+  element<HTMLButtonElement>('chat-toggle'),
+  element<HTMLFormElement>('chat-console'),
+  element<HTMLInputElement>('chat-input'),
+  element('chat-status'),
+  element('chat-counter'),
+  element<HTMLButtonElement>('chat-send'),
+  canvas,
+  (text) => {
+    session.sendChat(text);
+    renderChat();
+  },
+  (open) => {
+    keyboard?.setEnabled(!open && !graphicsLost);
+    session.neutral();
+    if (open) {
+      reactions?.close(false);
+      animations?.close(false);
+      inventory?.close();
+      diagnostics.hidden = true;
+      diagnosticsToggle.setAttribute('aria-expanded', 'false');
+    }
+  },
+);
+session.onChatResult = (result) => {
+  chat?.complete(result.ok);
+  renderChat();
+};
+function renderChat(): void {
+  const state = session.chatStatus();
+  chat?.update({ ...state, available: state.available && !graphicsLost });
+}
 keyboard = new KeyboardInput(
   () => session.neutral(),
   rotateCamera,
   () => reactions!.toggleOpen(),
+  () => chat!.open(),
 );
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
@@ -330,6 +369,7 @@ leave.addEventListener('click', () => {
   void session.leave();
 });
 diagnosticsToggle.addEventListener('click', () => {
+  chat?.close(false);
   reactions?.close(false);
   animations?.close(false);
   inventory?.close();
@@ -370,6 +410,7 @@ const uiTimer = setInterval(() => {
   renderMetrics();
   reactions?.update(session.reactionStatus());
   animations?.update(session.animationStatus());
+  renderChat();
   inventory?.update();
 }, 250);
 window.addEventListener('pageshow', (event) => {
@@ -387,6 +428,7 @@ window.addEventListener(
     keyboard.dispose();
     reactions?.dispose();
     animations?.dispose();
+    chat?.dispose();
     inventory?.dispose();
   },
   { once: true },

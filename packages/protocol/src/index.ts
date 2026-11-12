@@ -57,6 +57,9 @@ export class PlayerSchema extends EntitySchema.extend(
     animationStartedAtTick: t.uint32().default(0),
     animationEndsAtTick: t.uint32().default(0),
     animationChangedAtTick: t.uint32().default(0),
+    chatText: t.string().default(''),
+    chatSequence: t.uint32().default(0),
+    chatExpiresAtTick: t.uint32().default(0),
   },
   'Player',
 ) {}

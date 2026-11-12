@@ -76,8 +76,22 @@ try {
     assert.equal(await sender.locator('.animation-choice:focus').count(), 1);
     await sender.keyboard.press('Escape');
     assert.equal(await sender.locator('#world:focus').count(), 1);
+    await sender.locator('#animations-toggle').click();
+    await sender.keyboard.press('t');
+    await sender.locator('#chat-input:focus').waitFor();
+    assert.equal(await sender.locator('#animations-panel').isVisible(), false);
+    await sender.locator('#animations-toggle').click();
+    assert.equal(await sender.locator('#chat-console').isVisible(), false);
+    assert.equal(await sender.locator('#animations-panel').isVisible(), true);
+    await sender.keyboard.press('Escape');
     for (const definition of ANIMATIONS) {
       await idle(sender);
+      if (definition.id === 'wave') {
+        await sender.locator('#chat-toggle').click();
+        await sender.locator('#chat-input').fill('Привет из меню анимаций!');
+        await sender.locator('#chat-input').press('Enter');
+        await sender.locator('#chat-console').waitFor({ state: 'hidden' });
+      }
       await sender.locator('#animations-toggle').click();
       await sender.locator(`[data-animation-id="${definition.id}"]`).click();
       await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
@@ -99,6 +113,11 @@ try {
         await sender.locator('#reactions-toggle').click();
         await sender.locator('[data-reaction-id="hello"]').click();
         await observer.locator(`.player-reaction[data-entity-id="${id}"]`).waitFor();
+        assert.equal(
+          await observer.locator(`.player-chat[data-entity-id="${id}"]`).isVisible(),
+          true,
+        );
+        assert.equal((await avatar(sender, id)).animation.reason, 'playing');
         await sender.locator('#world').focus();
         await sender.keyboard.down('s');
         await sender.waitForFunction((id) => {
@@ -110,6 +129,10 @@ try {
         await sender.keyboard.up('s');
       }
       if (definition.id === 'dance') {
+        await sender.locator('#chat-toggle').click();
+        await sender.locator('#chat-input').fill('wasd qer');
+        await sender.keyboard.press('Escape');
+        assert.equal((await snapshot(sender)).animation.busy, true);
         const initial = (await snapshot(sender)).authoritative.position;
         await sender.locator('#world').focus();
         await sender.keyboard.down('Shift');
@@ -139,6 +162,9 @@ try {
     'wave preserves walking legs and shares the independent reaction sticker; movement cancels dance, sprint alone does not',
   );
   checks.push('catalog, keyboard focus, Escape, successful close and pending/busy recovery');
+  checks.push(
+    'chat and animation panels close each other; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
+  );
   const sender = pages[0];
   await sender.locator('#animations-toggle').click();
   await sender.locator('#reactions-toggle').click();

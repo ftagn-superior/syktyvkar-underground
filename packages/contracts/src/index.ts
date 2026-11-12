@@ -296,6 +296,7 @@ export { GRAPHICS_PACK_LIMITS, encodeGraphicsPack, decodeGraphicsPack } from './
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,
+  trustWorldManifest,
   validateBuildingPhysicsAsset,
   validateBuildingParts,
   validateWorldCell,

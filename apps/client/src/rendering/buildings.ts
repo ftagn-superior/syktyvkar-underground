@@ -27,7 +27,7 @@ import {
 import { SpatialIndex } from './spatial-index';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
-import type { RadialState } from './radial-fog';
+import { applyRadialFog, type RadialState } from './radial-fog';
 
 type Asset = {
   descriptor: BuildingAssetManifest;
@@ -38,6 +38,10 @@ type FadingMaterial = { material: Material; alpha: number; mode: number | null }
 type Group = {
   id: string;
   meshes: Mesh[];
+  /** Общие материалы шаблона, по одному на меш; ими группа рисуется, пока непрозрачна. */
+  shared: (Material | null)[];
+  /** Собственные копии, по одной на меш; создаются при первом затухании группы. */
+  owned?: (Material | null)[];
   materials: FadingMaterial[];
   fade: OcclusionFade;
   castsShadow: boolean;
@@ -51,7 +55,13 @@ type BuildingView = {
   groups: Group[];
   minimum: Vector3;
   maximum: Vector3;
+  /** Наибольший габарит в метрах: мелкие объекты скрываются на дальнем масштабе. */
+  size: number;
 };
+/** Геометрическая проверка заслонения дороже затухания и не нужна чаще 20 раз в секунду. */
+const OCCLUSION_TEST_INTERVAL_MS = 50;
+/** Объект меньше этого числа пикселей на экране не рисуется. */
+const MIN_VISIBLE_PIXELS = 5;
 const plain = ({ x, y, z }: Vector3) => ({ x, y, z });
 // Bound parsing as well as I/O: cells share the global VerifiedResources queue.
 const MODEL_PREPARATION_CONCURRENCY = 4;
@@ -83,12 +93,14 @@ export class BuildingViews {
   private disposed = false;
   private prepared = false;
   private readonly trees: TreeViews;
+  private lastOcclusionTest = -Infinity;
+  private minimumVisibleSize = 0;
 
   constructor(
     private readonly scene: Scene,
     private readonly shadow: ShadowGenerator,
     private readonly definition: WorldDefinition | WorldHeader,
-    radial?: RadialState,
+    private readonly radial?: RadialState,
   ) {
     this.trees = new TreeViews(scene, shadow, radial);
   }
@@ -229,6 +241,7 @@ export class BuildingViews {
     if (this.trees.has(definition.entityId))
       throw new Error(`Conflicting building/version: ${definition.entityId}`);
     const view = this.instantiate(definition, asset);
+    if (view.size < this.minimumVisibleSize) view.root.setEnabled(false);
     this.instances.push(view);
     this.references.set(definition.entityId, { count: 1, signature, view });
     this.index.add(definition.entityId, { min: plain(view.minimum), max: plain(view.maximum) });
@@ -252,6 +265,54 @@ export class BuildingViews {
     instance.entries.dispose();
     instance.root.dispose();
     for (const material of instance.materials) material.dispose(false, false);
+  }
+  /** Сообщает масштаб кадра; объекты мельче нескольких пикселей перестают рисоваться. */
+  setDetailScale(metresPerPixel: number): void {
+    const minimum = metresPerPixel * MIN_VISIBLE_PIXELS;
+    if (minimum === this.minimumVisibleSize) return;
+    this.minimumVisibleSize = minimum;
+    for (const view of this.instances) {
+      const enabled = view.size >= minimum;
+      if (view.root.isEnabled(false) !== enabled) view.root.setEnabled(enabled);
+    }
+  }
+  /**
+   * Копии материалов нужны только для затухания. Пока здание непрозрачно, оно рисуется
+   * общими материалами шаблона: без клонирования при появлении и без лишних привязок.
+   */
+  private ownMaterials(view: BuildingView, group: Group): void {
+    if (group.owned) return;
+    const copies = new Map<number, Material>();
+    const copy = (source: Material): Material => {
+      let result = copies.get(source.uniqueId);
+      if (result) return result;
+      result = source.clone(`${view.definition.entityId}:${group.id}:${source.name}`) ?? undefined;
+      if (!result) throw new Error(`Building material cannot be cloned: ${source.name}`);
+      copies.set(source.uniqueId, result);
+      view.materials.add(result);
+      if (result instanceof MultiMaterial && source instanceof MultiMaterial) {
+        result.subMaterials = source.subMaterials.map((child) => (child ? copy(child) : null));
+      } else {
+        group.materials.push({
+          material: result,
+          alpha: result.alpha,
+          mode: result.transparencyMode,
+        });
+      }
+      return result;
+    };
+    group.owned = group.shared.map((material) => (material ? copy(material) : null));
+  }
+  private useMaterials(group: Group, owned: boolean): void {
+    const materials = owned ? group.owned! : group.shared;
+    for (let i = 0; i < group.meshes.length; i++) {
+      const mesh = group.meshes[i];
+      if (mesh.material === materials[i]) continue;
+      mesh.material = materials[i];
+      // Потоковый туман подключается к материалу; копии получают его при первом показе.
+      if (owned && this.radial && mesh.metadata?.suStreamingBorn !== undefined)
+        applyRadialFog(mesh, this.radial, mesh.metadata.suStreamingBorn);
+    }
   }
   private async loadAsset(
     descriptor: BuildingAssetManifest,
@@ -326,25 +387,6 @@ export class BuildingViews {
       const partMap = new Map(asset.parts.parts.map((part) => [part.partId, part]));
       const seenParts = new Set<string>();
       const groups = new Map<string, Group>();
-      const groupMaterials = new Map<string, Map<number, Material>>();
-      const copyMaterial = (source: Material, group: Group): Material => {
-        let materials = groupMaterials.get(group.id);
-        if (!materials) groupMaterials.set(group.id, (materials = new Map()));
-        let copy = materials.get(source.uniqueId);
-        if (copy) return copy;
-        copy = source.clone(`${definition.entityId}:${group.id}:${source.name}`) ?? undefined;
-        if (!copy) throw new Error(`Building material cannot be cloned: ${source.name}`);
-        materials.set(source.uniqueId, copy);
-        ownedMaterials.add(copy);
-        if (copy instanceof MultiMaterial && source instanceof MultiMaterial) {
-          copy.subMaterials = source.subMaterials.map((child) =>
-            child ? copyMaterial(child, group) : null,
-          );
-        } else {
-          group.materials.push({ material: copy, alpha: copy.alpha, mode: copy.transparencyMode });
-        }
-        return copy;
-      };
       const minimum = new Vector3(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
       const maximum = minimum.negate();
       for (const mesh of meshes) {
@@ -371,6 +413,7 @@ export class BuildingViews {
             group = {
               id: part.occlusionGroup,
               meshes: [],
+              shared: [],
               materials: [],
               fade: new OcclusionFade(),
               castsShadow: true,
@@ -378,7 +421,7 @@ export class BuildingViews {
             groups.set(group.id, group);
           }
           group.meshes.push(mesh);
-          if (mesh.material) mesh.material = copyMaterial(mesh.material, group);
+          group.shared.push(mesh.material);
         }
       }
       if (seenParts.size !== partMap.size)
@@ -392,6 +435,7 @@ export class BuildingViews {
         groups: [...groups.values()],
         minimum,
         maximum,
+        size: Math.max(maximum.x - minimum.x, maximum.y - minimum.y, maximum.z - minimum.z),
       };
     } catch (error) {
       // Capture the appended nodes before any dispose can reorder the scene arrays.
@@ -458,36 +502,37 @@ export class BuildingViews {
         : visibleRadius > 0
           ? new Set(this.references.keys())
           : new Set<string>();
-    for (const id of new Set([...this.shadowed, ...shadowCandidates])) {
-      const entry = this.references.get(id);
-      if (!entry) continue;
-      const enabled = shadowCandidates.has(id);
-      if (enabled === this.shadowed.has(id)) continue;
-      if (enabled) this.shadowed.add(id);
-      else this.shadowed.delete(id);
-      for (const mesh of entry.view.meshes) this.shadow.removeShadowCaster(mesh);
-      if (enabled) {
-        for (const mesh of entry.view.meshes) this.shadow.addShadowCaster(mesh);
-        for (const group of entry.view.groups)
-          if (!group.castsShadow)
-            for (const mesh of group.meshes) this.shadow.removeShadowCaster(mesh);
-      }
-    }
+    // Обычно множества совпадают: обходим только расхождения, без временных копий.
+    for (const id of this.shadowed)
+      if (!shadowCandidates.has(id) && this.references.has(id)) this.setShadowed(id, false);
+    for (const id of shadowCandidates)
+      if (!this.shadowed.has(id) && this.references.has(id)) this.setShadowed(id, true);
+    const test = now - this.lastOcclusionTest >= OCCLUSION_TEST_INTERVAL_MS;
+    if (test) this.lastOcclusionTest = now;
     for (const id of selected) {
       const instance = this.references.get(id)?.view;
       if (!instance) continue;
-      const candidates = rays.filter(
-        (ray) => ray.length > 0 && ray.intersectsBoxMinMax(instance.minimum, instance.maximum),
-      );
+      const candidates = test
+        ? rays.filter(
+            (ray) => ray.length > 0 && ray.intersectsBoxMinMax(instance.minimum, instance.maximum),
+          )
+        : rays;
       for (const group of instance.groups) {
         // Each group and each building is tested: the nearest hit must not hide a second blocker.
-        const blocked = candidates.some((ray) =>
-          group.meshes.some((mesh) => {
-            const hit = ray.intersectsMesh(mesh, true);
-            return hit.hit && hit.distance < ray.length;
-          }),
-        );
+        // Между геометрическими проверками действует прежний результат; затухание идёт каждый кадр.
+        const blocked = test
+          ? candidates.some((ray) =>
+              group.meshes.some((mesh) => {
+                const hit = ray.intersectsMesh(mesh, true);
+                return hit.hit && hit.distance < ray.length;
+              }),
+            )
+          : group.fade.blocked;
         const opacity = group.fade.update(blocked, now, seconds);
+        if (opacity < 1) {
+          this.ownMaterials(instance, group);
+          this.useMaterials(group, true);
+        } else if (group.owned) this.useMaterials(group, false);
         for (const { material, alpha, mode } of group.materials) {
           material.alpha = alpha * opacity;
           material.transparencyMode = opacity < 1 ? Material.MATERIAL_ALPHABLEND : mode;
@@ -504,6 +549,19 @@ export class BuildingViews {
       if (instance.groups.some((group) => group.fade.opacity < 1 || group.fade.blocked))
         this.fading.add(id);
       else this.fading.delete(id);
+    }
+  }
+
+  private setShadowed(id: string, enabled: boolean): void {
+    const view = this.references.get(id)!.view;
+    if (enabled) this.shadowed.add(id);
+    else this.shadowed.delete(id);
+    for (const mesh of view.meshes) this.shadow.removeShadowCaster(mesh);
+    if (enabled) {
+      for (const mesh of view.meshes) this.shadow.addShadowCaster(mesh);
+      for (const group of view.groups)
+        if (!group.castsShadow)
+          for (const mesh of group.meshes) this.shadow.removeShadowCaster(mesh);
     }
   }
 

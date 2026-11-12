@@ -10,7 +10,7 @@ import { obstacleAccent } from './world-decoration';
 export class StaticViews {
   private readonly instances = new Map<
     string,
-    { mesh: Mesh; signature: string; references: number; color: string }
+    { mesh: Mesh; signature: string; references: number; color: string; casts: boolean }
   >();
   private readonly materials = new Map<string, { value: StandardMaterial; users: number }>();
   constructor(
@@ -45,7 +45,8 @@ export class StaticViews {
     mesh.receiveShadows = true;
     mesh.isPickable = false;
     mesh.freezeWorldMatrix();
-    if (!entity.entityId.startsWith('ground-')) {
+    const casts = !entity.entityId.startsWith('ground-');
+    if (casts) {
       this.shadow.addShadowCaster(mesh);
       mesh.enableEdgesRendering();
       mesh.edgesWidth = 0.6;
@@ -54,7 +55,13 @@ export class StaticViews {
         ? Color4.FromHexString(`${accent}66`)
         : new Color4(0.65, 0.77, 0.79, 0.18);
     }
-    this.instances.set(entity.entityId, { mesh, signature, references: 1, color: entity.color });
+    this.instances.set(entity.entityId, {
+      mesh,
+      signature,
+      references: 1,
+      color: entity.color,
+      casts,
+    });
   }
   remove(id: string) {
     const entry = this.instances.get(id);
@@ -70,8 +77,9 @@ export class StaticViews {
   }
   updateShadows(center: Vec3, radius: number) {
     const limit = Math.min(80, radius);
-    const casters = new Set(this.shadow.getShadowMap()?.renderList ?? []);
-    for (const { mesh } of this.instances.values()) {
+    // Состояние хранится в записи: список источников тени не копируется каждый кадр.
+    for (const entry of this.instances.values()) {
+      const { mesh } = entry;
       if (mesh.name.startsWith('ground-')) continue;
       const bounds = mesh.getBoundingInfo().boundingBox;
       const distance = Math.hypot(
@@ -79,8 +87,10 @@ export class StaticViews {
         Math.max(bounds.minimumWorld.z - center.z, 0, center.z - bounds.maximumWorld.z),
       );
       const visible = limit > 0 && distance < limit;
-      if (visible && !casters.has(mesh)) this.shadow.addShadowCaster(mesh);
-      else if (!visible && casters.has(mesh)) this.shadow.removeShadowCaster(mesh);
+      if (visible === entry.casts) continue;
+      entry.casts = visible;
+      if (visible) this.shadow.addShadowCaster(mesh);
+      else this.shadow.removeShadowCaster(mesh);
     }
   }
   dispose() {

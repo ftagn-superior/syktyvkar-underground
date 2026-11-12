@@ -11,6 +11,9 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
@@ -75,6 +78,7 @@ export class WorldView {
   private readonly camera: ArcRotateCamera;
   private readonly sun: DirectionalLight;
   private readonly shadow: ShadowGenerator;
+  private pipeline?: DefaultRenderingPipeline;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
   private manifest?: WorldManifest;
@@ -158,24 +162,31 @@ export class WorldView {
     this.camera.maxZ = 300;
     this.camera.inputs.clear();
     this.sizeCamera();
+    // Вечернее освещение: низкое тёплое солнце, холодное небо в тенях, отражённый тёплый свет от земли.
     const sky = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
-    sky.intensity = 0.86;
-    sky.diffuse = Color3.FromHexString('#c7e0e9');
-    sky.groundColor = Color3.FromHexString('#27333f');
-    const sun = new DirectionalLight('sun', new Vector3(-0.6, -1, -0.35), this.scene);
+    sky.intensity = 0.85;
+    sky.diffuse = Color3.FromHexString('#bcd4f0');
+    sky.groundColor = Color3.FromHexString('#8a7058');
+    sky.specular = Color3.Black();
+    // Высота солнца около 32°: длинные мягкие тени, фасады с разной освещённостью сторон.
+    const sun = new DirectionalLight('sun', new Vector3(-1.1, -0.8, -0.65), this.scene);
     sun.position.set(20, 35, 15);
-    sun.intensity = 1.25;
-    sun.diffuse = Color3.FromHexString('#fff2da');
+    sun.intensity = 2.4;
+    sun.diffuse = Color3.FromHexString('#ffd9a0');
     // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
     sun.shadowFrustumSize = SHADOW_EXTENT;
     sun.shadowMinZ = 0;
     sun.shadowMaxZ = SUN_DISTANCE * 2;
     this.sun = sun;
     this.sizeCamera();
-    this.shadow = new ShadowGenerator(1024, sun);
-    this.shadow.useBlurExponentialShadowMap = true;
-    this.shadow.blurKernel = 16;
-    this.shadow.setDarkness(0.25);
+    this.shadow = new ShadowGenerator(2048, sun);
+    // PCF даёт чёткий край у основания и мягкий на расстоянии, в отличие от размытой ESM.
+    this.shadow.usePercentageCloserFiltering = true;
+    this.shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+    this.shadow.bias = 0.0012;
+    this.shadow.normalBias = 0.08;
+    this.shadow.setDarkness(0.3);
+    this.applyQuality();
     this.buildings = new BuildingViews(this.scene, this.shadow, definition);
     this.statics = new StaticViews(this.scene, this.shadow);
     if ('entities' in definition) {
@@ -265,6 +276,38 @@ export class WorldView {
     this.scene.shadowsEnabled = settings.shadows;
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
+    this.updatePipeline(settings.postProcessing);
+  }
+  /** Тональная компрессия, лёгкое свечение и MSAA; в режиме экономии отключены целиком. */
+  private updatePipeline(enabled: boolean): void {
+    if (!this.camera) return;
+    if (!enabled) {
+      this.pipeline?.dispose();
+      this.pipeline = undefined;
+      return;
+    }
+    if (this.pipeline) return;
+    const pipeline = new DefaultRenderingPipeline('lighting', true, this.scene, [this.camera]);
+    pipeline.samples = 4;
+    pipeline.fxaaEnabled = false;
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.95;
+    pipeline.bloomWeight = 0.15;
+    pipeline.bloomKernel = 48;
+    pipeline.bloomScale = 0.5;
+    const ip = pipeline.imageProcessing;
+    ip.toneMappingEnabled = true;
+    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    ip.exposure = 1.55;
+    ip.contrast = 1.12;
+    ip.colorCurvesEnabled = true;
+    ip.colorCurves = new ColorCurves();
+    ip.colorCurves.globalSaturation = 25;
+    ip.vignetteEnabled = true;
+    ip.vignetteWeight = 0.9;
+    ip.vignetteStretch = 0.2;
+    ip.vignetteColor = new Color4(0.12, 0.08, 0.05, 0);
+    this.pipeline = pipeline;
   }
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;

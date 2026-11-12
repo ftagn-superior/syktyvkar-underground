@@ -31,6 +31,7 @@
     "test:restart:browser": "node --import tsx tests/browser-restart.ts",
     "test:polish:browser": "node --import tsx tests/browser-polish.ts",
     "test:render:browser": "node --import tsx tests/browser-render-profile.ts",
+    "test:loading:browser": "node --import tsx tests/browser-loading-profile.ts",
     "test:buildings:browser": "node --import tsx tests/browser-buildings.ts",
     "test:large-map:l2": "node --import tsx tests/large-map-l2.ts",
     "test:large-map:l3": "pnpm build && node --import tsx tests/large-map-l3.ts",

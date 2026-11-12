@@ -35,14 +35,20 @@ const pages = await Promise.all(
 const [slow, good] = pages;
 let release: () => void = () => {};
 try {
-  let modelRequested = false;
+  let assetRequested = false;
+  const blockedPaths = new Set(
+    fixture.manifest.cells
+      .filter((cell) => cell.assetIds.includes('house-a'))
+      .flatMap((cell) => cell.graphicsPacks ?? [fixture.manifest.assets['house-a'].modelFile])
+      .map((path) => `/worlds/streaming-lab/${path}`),
+  );
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
   await slow.route(
-    `**/worlds/streaming-lab/${fixture.manifest.assets['house-a'].modelFile}`,
+    (url) => blockedPaths.has(url.pathname),
     async (route) => {
-      modelRequested = true;
+      assetRequested = true;
       await gate;
       await route.continue().catch(() => {});
     },
@@ -53,8 +59,8 @@ try {
   }
   await slow.locator('#join').click();
   const deadline = performance.now() + 10000;
-  while (!modelRequested) {
-    assert.ok(performance.now() < deadline, 'GLB never requested');
+  while (!assetRequested) {
+    assert.ok(performance.now() < deadline, 'Graphics pack/model never requested');
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   await good.locator('#join').click();
@@ -90,9 +96,9 @@ try {
   assert.equal(app.room.diagnostics().interest.views, 1);
   phases.afterLeave = afterLeave;
   checks.push(
-    'Leaving during a real GLB request releases the seat and all local physics; late completion cannot activate the old session while a second browser keeps moving.',
+    'Leaving during a real graphics pack/model request releases the seat and all local physics; late completion cannot activate the old session while a second browser keeps moving.',
   );
-  console.log('Streaming failure: leave during GLB passed');
+  console.log('Streaming failure: leave during graphics preparation passed');
   await slow.unrouteAll({ behavior: 'wait' });
   let failing = true,
     requests = 0;

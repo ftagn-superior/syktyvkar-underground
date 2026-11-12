@@ -77,6 +77,8 @@ export class WorldView {
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
   private manifest?: WorldManifest;
+  private cellBounds: BoundingInfo[] = [];
+  private graphicalFrame?: { matrix: Matrix; x: number; z: number; radius: number };
   private readonly cellPreparations = new Set<Promise<unknown>>();
   private readonly radial: RadialState = {
     center: { x: 0, y: 0, z: 0 },
@@ -293,7 +295,14 @@ export class WorldView {
     read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
     signal?: AbortSignal,
   ) {
-    this.manifest = manifest;
+    if (this.manifest !== manifest) {
+      this.manifest = manifest;
+      this.cellBounds = manifest.cells.map((cell) => {
+        const bounds = worldCellBounds(manifest.bounds, manifest.grid, cell.cellId);
+        return new BoundingInfo(vector(bounds.min), vector(bounds.max));
+      });
+      this.graphicalFrame = undefined;
+    }
     const pending = this.buildings.prepareAssets(manifest, ids, read, signal);
     this.cellPreparations.add(pending);
     void pending.then(
@@ -402,23 +411,28 @@ export class WorldView {
   graphicalArea() {
     this.camera.getViewMatrix(true);
     const center = this.ownPosition ?? this.target;
-    let frameRadius = 0;
-    if (this.manifest) {
-      const planes = Frustum.GetPlanes(this.camera.getTransformationMatrix());
-      for (const cell of this.manifest.cells) {
-        const bounds = worldCellBounds(this.manifest.bounds, this.manifest.grid, cell.cellId);
-        if (!new BoundingInfo(vector(bounds.min), vector(bounds.max)).isInFrustum(planes)) continue;
-        for (const x of [bounds.min.x, bounds.max.x])
-          for (const z of [bounds.min.z, bounds.max.z])
-            frameRadius = Math.max(frameRadius, Math.hypot(x - center.x, z - center.z));
+    const matrix = this.camera.getTransformationMatrix();
+    let frame = this.graphicalFrame;
+    if (!frame || frame.x !== center.x || frame.z !== center.z || !frame.matrix.equals(matrix)) {
+      let radius = 0;
+      const planes = Frustum.GetPlanes(matrix);
+      for (const bounds of this.cellBounds) {
+        if (!bounds.isInFrustum(planes)) continue;
+        const { minimum: min, maximum: max } = bounds.boundingBox;
+        for (const x of [min.x, max.x])
+          for (const z of [min.z, max.z])
+            radius = Math.max(radius, Math.hypot(x - center.x, z - center.z));
       }
+      frame = this.graphicalFrame = { matrix: matrix.clone(), x: center.x, z: center.z, radius };
     }
-    const drawRadius = Math.max(500, frameRadius + 125);
+    // Keep the 75 m fog transition outside every visible cell, including tall buildings.
+    // Physics and network AOI keep their independent 500/800 m safety margins.
+    const drawRadius = Math.max(125, frame.radius + 75);
     return {
       center: { x: center.x, y: center.y, z: center.z },
       drawRadius,
       preloadRadius: drawRadius + 125,
-      retainRadius: Math.max(800, drawRadius + 300),
+      retainRadius: drawRadius + 300,
     };
   }
   setStreamingRadius(radius: number) {

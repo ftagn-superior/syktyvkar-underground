@@ -10,7 +10,7 @@ import { launchTestBrowser } from './helpers/browser.js';
 const directory = resolve(process.env.SU_STATIC_WORLD_DIRECTORY ?? 'dist/worlds/ring-block');
 const label = process.env.SU_STATIC_LABEL ?? 'after';
 const wideOnly = process.env.SU_STATIC_WIDE_ONLY === '1';
-const cancelOnly = process.env.SU_STATIC_CANCEL_ONLY as 'glb' | 'collision' | undefined;
+const cancelOnly = process.env.SU_STATIC_CANCEL_ONLY as 'glb' | 'pack' | 'collision' | undefined;
 const output = resolve('output/static-extraction', label);
 await mkdir(output, { recursive: true });
 const manifest: WorldManifest = JSON.parse(

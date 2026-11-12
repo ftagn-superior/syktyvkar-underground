@@ -14,7 +14,7 @@ import {
   toLocalSimulationSnapshot,
   type EntitySchema,
 } from '@su/protocol';
-import { createLocalPredictionWorld, type PredictionWorld } from '@su/simulation/prediction';
+import type { PredictionWorld } from '@su/simulation/prediction';
 import {
   MAX_INPUT_QUEUE,
   type InventoryView,
@@ -57,7 +57,12 @@ import {
 } from '@su/contracts';
 import { predictionCells } from '../streaming/prediction-area';
 import { VerifiedResources } from '../streaming/resources';
-import { CellStreamer, cellNeighborhood, type CellGraphics } from '../streaming/cells';
+import {
+  CellStreamer,
+  cellNeighborhood,
+  type CellGraphics,
+  type CellPhysics,
+} from '../streaming/cells';
 import wasmUrl from '@babylonjs/havok/lib/esm/HavokPhysics.wasm?url';
 import type { DisplayEntity } from '../presentation/display-state';
 import { AnimationBuffer, REMOTE_INTERPOLATION_MS } from '../presentation/animation-buffer';
@@ -113,8 +118,17 @@ export function readableError(error: unknown): string {
     return 'Не удалось связаться с сервером. Проверьте, что локальный сервер запущен, и повторите вход.';
   return 'Не удалось подготовить полигон. Перезагрузите страницу или проверьте консоль сервера.';
 }
-async function getResponse(url: string, cache: RequestCache = 'no-cache'): Promise<Response> {
-  const response = await fetch(url, { cache, signal: AbortSignal.timeout(12_000) });
+async function getResponse(
+  url: string,
+  cache: RequestCache = 'no-cache',
+  signal?: AbortSignal,
+): Promise<Response> {
+  const response = await fetch(url, {
+    cache,
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(12_000)])
+      : AbortSignal.timeout(12_000),
+  });
   if (!response.ok) throw new Error(`WORLD_NOT_READY: ${response.status}`);
   return response;
 }
@@ -158,6 +172,16 @@ export class GameSession {
   room?: Room<WorldState>;
   reloadRequired = false;
   private physics?: PredictionWorld;
+  private physicsPreparation?: { controller: AbortController; promise: Promise<void> };
+  // Preview streaming is graphical only. Joining installs the physics target before a room
+  // can deliver an area plan, so promoting existing cells does not rebuild their graphics.
+  private readonly streamingPhysics: CellPhysics = {
+    retainStatic: (...args) => {
+      if (!this.physics) throw new Error('Local physics is not prepared');
+      this.physics.retainStatic(...args);
+    },
+    releaseStatic: (id) => this.physics?.releaseStatic(id),
+  };
   private manifestUrl?: URL;
   private resources?: VerifiedResources;
   private graphics?: CellGraphics;
@@ -240,6 +264,8 @@ export class GameSession {
     throw new Error('VERSION_MISMATCH');
   }
   async load(): Promise<void> {
+    this.generation++;
+    this.cancelPhysicsPreparation();
     this.setState('loading');
     const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
     if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
@@ -263,10 +289,44 @@ export class GameSession {
     this.resources = new VerifiedResources(manifest, new URL('.', manifestUrl).href);
     this.definition = await loadWorldHeader(manifest, (path) => this.resources!.read(path));
     this.info = info;
-    this.wasm ??= await (await getResponse(wasmUrl)).arrayBuffer();
     this.physics?.dispose();
-    this.physics = await createLocalPredictionWorld(this.definition, this.wasm);
-    this.predictionWorlds++;
+    this.physics = undefined;
+  }
+  private async preparePhysics(generation: number): Promise<void> {
+    if (this.physics) return;
+    this.cancelPhysicsPreparation();
+    const controller = new AbortController();
+    const definition = this.definition;
+    const valid = () => !controller.signal.aborted && generation === this.generation;
+    const promise = (async () => {
+      const [{ createLocalPredictionWorld }, wasm] = await Promise.all([
+        import('@su/simulation/prediction'),
+        this.wasm ??
+          getResponse(wasmUrl, 'default', controller.signal).then((response) =>
+            response.arrayBuffer(),
+          ),
+      ]);
+      if (!valid()) return;
+      this.wasm = wasm;
+      const physics = await createLocalPredictionWorld(definition, wasm);
+      if (!valid()) {
+        physics.dispose();
+        return;
+      }
+      this.physics = physics;
+      this.predictionWorlds++;
+    })();
+    const preparation = { controller, promise };
+    this.physicsPreparation = preparation;
+    try {
+      await promise;
+    } finally {
+      if (this.physicsPreparation === preparation) this.physicsPreparation = undefined;
+    }
+  }
+  private cancelPhysicsPreparation(): void {
+    this.physicsPreparation?.controller.abort();
+    this.physicsPreparation = undefined;
   }
   private async hash(bytes: Uint8Array): Promise<string> {
     return [...new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes).buffer))]
@@ -279,8 +339,13 @@ export class GameSession {
   }
   private ensureStreamer(): void {
     this.resources ??= new VerifiedResources(this.manifest, new URL('.', this.manifestUrl!).href);
-    if (!this.streamer && this.graphics && this.physics)
-      this.streamer = new CellStreamer(this.manifest, this.resources, this.physics, this.graphics);
+    if (!this.streamer && this.graphics)
+      this.streamer = new CellStreamer(
+        this.manifest,
+        this.resources,
+        this.streamingPhysics,
+        this.graphics,
+      );
   }
   updateVisualArea(center: Vec3, drawRadius: number): number {
     this.visualArea = { center, drawRadius };
@@ -294,11 +359,13 @@ export class GameSession {
   retryArea(): void {
     this.streamer?.retry();
   }
-  /** Graphics and physics must both be prepared before a guest can reserve a seat. */
+  /** The graphical preview is available before the first gameplay physics initialization. */
   markPrepared(): void {
     if (this.state === 'loading') this.setState('ready');
   }
   markPreparationFailed(message: string): void {
+    this.generation++;
+    this.cancelPhysicsPreparation();
     this.streamer?.dispose();
     this.streamer = undefined;
     this.resources?.dispose();
@@ -327,6 +394,7 @@ export class GameSession {
     this.setState(restore ? 'reconnecting' : 'connecting');
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+      if (generation !== this.generation) return;
       if (
         info.mapVersion !== this.info.mapVersion ||
         info.simulationConfigHash !== this.info.simulationConfigHash ||
@@ -336,6 +404,8 @@ export class GameSession {
       this.info = info;
       // Advisory preflight improves feedback; the server still reserves atomically.
       if (!restore && !info.available) throw new Error('WORLD_FULL');
+      await this.preparePhysics(generation);
+      if (generation !== this.generation) return;
       if (!restore) {
         this.actionId = 0;
         writeStored();
@@ -815,7 +885,7 @@ export class GameSession {
     }
     const room = this.room;
     this.planArea();
-    this.streamer?.pump();
+    this.streamer?.pumpFrame(delta);
     if (/SHA-256|version/i.test(this.areaProblem ?? '')) this.reloadRequired = true;
     if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     const selfNow = room.state.players?.get(room.sessionId);
@@ -1347,6 +1417,7 @@ export class GameSession {
       });
   }
   private cleanup(preserveRecovery = false): void {
+    this.cancelPhysicsPreparation();
     this.clearPendingRespawn();
     this.clearPendingReaction();
     this.animationRequest.clear();
@@ -1433,7 +1504,14 @@ export class GameSession {
       plan: this.plan,
       areaResults: this.planResults.slice(),
       streaming: this.streamer?.diagnostics(),
-      physics: this.physics?.staticDiagnostics(),
+      physics: this.physics?.staticDiagnostics() ?? {
+        entities: 0,
+        references: 0,
+        buildings: { instances: 0, assets: 0, shapes: 0, references: 0 },
+        bodies: 0,
+        items: 0,
+        remotePlayers: 0,
+      },
       predictionWorlds: this.predictionWorlds,
       historyInputs: this.history.size,
       historyMaxAgeMs: Math.max(

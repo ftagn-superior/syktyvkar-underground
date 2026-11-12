@@ -40,7 +40,9 @@ import {
   yawFromOrbit,
   orbitFromYaw,
 } from './camera-controller';
-import type { DisplayEntity } from '../presentation/display-state';
+import type { DisplayEntity, DisplayPlayer } from '../presentation/display-state';
+import { ReactionSoundGate } from '../presentation/reaction-sounds';
+import type { GameAudio } from '../audio/game-audio';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -108,6 +110,8 @@ export class WorldView {
   private readonly cameraOrbit = new CameraOrbit();
   private readonly instrumentation: SceneInstrumentation;
   private readonly entities = new Map<string, EntityView>();
+  private audio?: GameAudio;
+  private readonly reactionSounds = new ReactionSoundGate();
   private ring?: { mesh: Mesh; material: StandardMaterial; target?: string };
   private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
   private readonly target = Vector3.Zero();
@@ -129,6 +133,11 @@ export class WorldView {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
     this.lastFrame = performance.now();
     for (const view of this.entities.values()) view.avatar?.resetMotion();
+    this.reactionSounds.suspend();
+    if (document.hidden) {
+      this.audio?.setListener(undefined);
+      this.audio?.stopWorld();
+    }
   };
   private followed?: string;
   private ownPosition?: Vector3;
@@ -334,6 +343,14 @@ export class WorldView {
   }
   setOverlayTest(test: (from: Vec3, to: Vec3, targetId?: string) => boolean): void {
     this.overlayTest = test;
+  }
+  setAudio(audio: GameAudio): void {
+    if (this.audio === audio) return;
+    this.audio?.setListener(undefined);
+    this.audio?.stopWorld();
+    this.audio = audio;
+    this.reactionSounds.suspend();
+    for (const view of this.entities.values()) view.avatar?.resetMotion();
   }
   setCameraRotation(direction: -1 | 0 | 1): void {
     if (!this.firstPerson) this.cameraOrbit.setDirection(direction);
@@ -575,6 +592,9 @@ export class WorldView {
   follow(id?: string): void {
     this.followed = id;
     if (!id) {
+      this.audio?.setListener(undefined);
+      this.audio?.stopWorld();
+      this.reactionSounds.suspend();
       const bounds = this.definition.bounds;
       if (bounds.min.x <= 0 && bounds.max.x >= 0 && bounds.min.z <= 0 && bounds.max.z >= 0)
         this.target.setAll(0);
@@ -592,6 +612,24 @@ export class WorldView {
   ): void {
     this.ownPosition = undefined;
     this.eyePosition = physicalPosition;
+    const ownPlayer = entities.find(
+      (entity): entity is DisplayPlayer => entity.entityId === ownId && entity.kind === 'player',
+    );
+    const audible = !!ownPlayer && ownPlayer.connected !== false && !document.hidden;
+    // The orthographic orbit can be kilometres away: distance belongs to the avatar.
+    // Set this before any entity emits, regardless of entity ordering in the snapshot.
+    this.audio?.setListener(
+      audible
+        ? this.firstPerson && physicalPosition
+          ? physicalPosition
+          : ownPlayer.position
+        : undefined,
+      this.cameraAngle,
+    );
+    const reactions = this.reactionSounds.update(
+      entities.filter((entity): entity is DisplayPlayer => entity.kind === 'player'),
+      audible && Number.isFinite(delta) && delta > 0 && delta <= 0.25,
+    );
     this.updateRing();
     const current = new Set(entities.map((entity) => entity.entityId));
     for (const [id, view] of this.entities)
@@ -648,9 +686,18 @@ export class WorldView {
           view.labelText = key;
         }
       }
-      if (entity.kind === 'player')
-        view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
-      else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
+      if (entity.kind === 'player') {
+        const own = entity.entityId === ownId;
+        const contacts = view.avatar!.update(entity, delta, own, this.reducedMotion.matches);
+        // A slow rendered frame can cross two contacts; never play an audible catch-up burst.
+        if (audible && contacts.count > 0)
+          this.audio?.playWorld(contacts.running ? 'run' : 'step', entity.position, {
+            sourceId: entity.entityId,
+            own,
+          });
+        if (reactions.has(entity.entityId))
+          this.audio?.playWorld('reaction', entity.position, { sourceId: entity.entityId, own });
+      } else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
       const nearShadow =
         Math.hypot(entity.position.x - shadowCenter.x, entity.position.z - shadowCenter.z) <= 80;
       for (const mesh of view.root.getChildMeshes()) {
@@ -979,6 +1026,9 @@ export class WorldView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.audio?.setListener(undefined);
+    this.audio?.stopWorld();
+    this.reactionSounds.clear();
     window.removeEventListener('resize', this.resize);
     this.canvas.removeEventListener('wheel', this.wheel);
     document.removeEventListener('visibilitychange', this.visibilityChanged);

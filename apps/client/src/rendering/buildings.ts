@@ -323,7 +323,14 @@ export class BuildingViews {
     const parts = validateBuildingParts(JSON.parse(new TextDecoder().decode(partsBytes)));
     if (parts.assetId !== descriptor.assetId) throw new Error('Building part asset mismatch');
     if (this.disposed) throw new Error('Building preparation was cancelled');
-    if (parts.tree && this.trees.supported) return { descriptor, parts };
+    if (parts.tree) {
+      if (descriptor.modelFile !== undefined)
+        throw new Error('Instanced tree must not include a GLB');
+      if (!this.trees.supported)
+        throw new Error('Для отображения деревьев требуется поддержка GPU instancing');
+      return { descriptor, parts };
+    }
+    if (!descriptor.modelFile) throw new Error('GLB asset is missing its model');
     const model = await readBytes(descriptor.modelFile);
     // A failed glTF parse does not return its partially populated AssetContainer.
     // Keep loader-owned resources until success so that errors can release them as well.

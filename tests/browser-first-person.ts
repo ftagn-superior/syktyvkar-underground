@@ -60,6 +60,36 @@ async function neutral(page: Page) {
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) < 0.06, 'neutral server input');
   assert.equal((await controls(page)).input.facingYaw, undefined, 'neutral has no facing');
 }
+async function settleStreaming(page: Page) {
+  // A view switch releases Pointer Lock before the render loop updates its streaming area.
+  // Observe the new camera's frames before accepting readiness from that area.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await page.waitForFunction(
+    () => {
+      const streaming = (window as any).__SU_DEBUG__.snapshot().streaming;
+      return (
+        streaming.backgroundReady &&
+        streaming.requested.length === 0 &&
+        streaming.retained.length === 0 &&
+        streaming.cells.every(
+          (cell: { state: string }) => cell.state !== 'releasing' && cell.state !== 'prepared',
+        ) &&
+        streaming.graphicsActive.length === streaming.graphicsRequired.length &&
+        streaming.physicsActive.length === streaming.physicsRequired.length
+      );
+    },
+    undefined,
+    { timeout: 60_000 },
+  );
+  // Expired cells and their tree batches must be released before comparing equal workloads.
+  // Let overview occlusion finish fading after returning from the opaque perspective.
+  await page.waitForTimeout(800);
+}
 try {
   await mkdir(output, { recursive: true });
   const contexts = await Promise.all(
@@ -124,6 +154,17 @@ try {
   console.log('Starting first-person entry', JSON.stringify(await controls(first)));
   await enter(first);
   const initial = await rendering(first);
+  const listener = await first.evaluate(() => (window as any).__SU_DEBUG__.audio().listener);
+  const initialPhysical = (await snapshot(first)).predicted.position;
+  assert.ok(
+    listener &&
+      Math.hypot(
+        listener.x - initialPhysical.x,
+        listener.y - initialPhysical.y,
+        listener.z - initialPhysical.z,
+      ) < 0.05,
+    'first-person audio follows the physical character',
+  );
   const ownId = before.authoritative.entityId;
   assert.equal(initial.camera.cameras, 2);
   assert.equal(initial.camera.mode, 'first-person');
@@ -489,16 +530,12 @@ try {
   );
 
   const cycles: unknown[] = [];
-  await first.waitForFunction(
-    () => (window as any).__SU_DEBUG__.snapshot().streaming.backgroundReady,
-    undefined,
-    { timeout: 60_000 },
-  );
+  await settleStreaming(first);
   for (let cycle = 0; cycle < 6; cycle++) {
     await enter(first);
     await first.keyboard.press('v');
     await locked(first, false);
-    await first.waitForTimeout(150);
+    await settleStreaming(first);
     const data = await rendering(first);
     cycles.push({
       cameras: data.camera.cameras,
@@ -511,10 +548,11 @@ try {
   }
   const firstCycle = cycles[0] as Record<string, number>;
   const lastCycle = cycles.at(-1) as Record<string, number>;
+  measurements.push({ cycles });
+  console.log('Repeated switch resources', JSON.stringify(cycles));
   for (const key of Object.keys(firstCycle))
     assert.ok(lastCycle[key] <= firstCycle[key], `${key} does not accumulate across view switches`);
   assert.equal(lastCycle.cameras, 2);
-  measurements.push({ cycles });
   await hudClick(first, '#leave');
   await first.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().connection === 'ready');
   assert.equal((await controls(first)).view, 'overview');
@@ -549,7 +587,7 @@ try {
     .catch(() => undefined);
   await writeFile(
     `${output}/failure.json`,
-    JSON.stringify({ checks, errors, error: String(error), state }, null, 2),
+    JSON.stringify({ checks, measurements, errors, error: String(error), state }, null, 2),
   );
   throw error;
 } finally {

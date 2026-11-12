@@ -6,6 +6,7 @@ import {
   type ItemError,
   type ItemResult,
   type ItemState,
+  type WorldSoundEvent,
 } from '@su/contracts';
 import type { AuthoritativeWorld } from '@su/simulation/server';
 import { ItemStore, type ItemMutationResult } from './store.js';
@@ -14,6 +15,10 @@ interface Job {
   run: () => Promise<void>;
   reject: (error: Error) => void;
 }
+export type ItemSound = Pick<
+  WorldSoundEvent,
+  'kind' | 'position' | 'typeId' | 'entityId' | 'actorId' | 'operationId' | 'strength'
+>;
 /** One ordered writer. A failed/uncertain commit stays at the head until it can be resolved. */
 export class ItemRuntime {
   unavailable = false;
@@ -32,6 +37,7 @@ export class ItemRuntime {
     readonly store: ItemStore,
     private readonly world: AuthoritativeWorld,
     private readonly statusChanged: () => void,
+    private readonly onItemSound?: (event: ItemSound) => void,
   ) {}
   get paused() {
     return this.unavailable || this.closing || this.reservations > 0;
@@ -132,20 +138,49 @@ export class ItemRuntime {
     this.reservations++;
     this.statusChanged();
     return this.enqueue(async () => {
+      let fresh = false;
+      let typeId: string | undefined;
+      const action = command.action;
+      const previous =
+        action.kind === 'pickup'
+          ? this.world.getSnapshot().items.find((item) => item.entityId === action.itemId)
+          : undefined;
       const result = await this.store.operation(
         accountId,
         command.operationId,
         command.action,
-        (action, typeId) => {
+        (action, validatedTypeId) => {
+          typeId = validatedTypeId ?? typeId;
           const error = validate();
           if (error) return error;
           if (action.kind === 'pickup') return this.world.checkPickup(playerId, action.itemId);
-          if (action.kind === 'place' && typeId)
-            return this.world.checkPlacement(typeId, action.pose, playerId);
+          if (action.kind === 'place' && validatedTypeId)
+            return this.world.checkPlacement(validatedTypeId, action.pose, playerId);
+        },
+        () => {
+          fresh = true;
         },
       );
       // Reconcile even a replay: COMMIT may have succeeded before an earlier connection failed.
       this.world.reconcileItems(await this.store.worldItems());
+      if (fresh && result.ok && typeId && (action.kind === 'place' || action.kind === 'pickup')) {
+        const position = action.kind === 'place' ? action.pose.position : previous?.position;
+        if (position) {
+          try {
+            this.onItemSound?.({
+              kind: action.kind,
+              position: { ...position },
+              typeId,
+              entityId: action.itemId,
+              actorId: playerId,
+              operationId: command.operationId,
+              strength: 1,
+            });
+          } catch {
+            /* Cosmetic delivery must never retry a committed operation. */
+          }
+        }
+      }
       return result;
     }).finally(() => {
       this.reservations--;

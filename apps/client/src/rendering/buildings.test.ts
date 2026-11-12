@@ -50,7 +50,7 @@ function fixture(world = definition) {
 
 async function modelBatch(count = 10) {
   const source = manifest.assets['house-a'];
-  const model = await readBytes(source.modelFile);
+  const model = await readBytes(source.modelFile!);
   const parts = JSON.parse((await readBytes(source.partsFile)).toString());
   const ids = Array.from({ length: count }, (_, index) => `batch-${index}`);
   const assets = Object.fromEntries(

@@ -15,8 +15,7 @@ const linear = (hex: string) =>
 export function treeTemplate(
   crownColor: string,
   trunkColor: string,
-  foliage?: 'broadleaf',
-  ambientOcclusion?: TreeRenderRecipe['ambientOcclusion'],
+  foliage: TreeRenderRecipe['foliage'],
 ) {
   const positions: number[] = [],
     normals: number[] = [],
@@ -44,19 +43,19 @@ export function treeTemplate(
     }
     for (let i = 1; i < vectors.length - 1; i++) indices.push(start, start + i, start + i + 1);
   };
-  if (foliage) {
+  if (foliage === 'broadleaf') {
     const data = foliageGeometry(foliage);
     positions.push(...data.positions);
     normals.push(...data.normals);
     indices.push(...data.indices);
     const color = linear(crownColor);
-    const occlusion = ambientOcclusion ? foliageOcclusion(foliage) : undefined;
+    const occlusion = foliageOcclusion(foliage);
     for (let i = 0; i < data.positions.length / 3; i++) {
-      colors.push(...color.map((channel) => channel * (occlusion?.[i] ?? 1)), 1);
+      colors.push(...color.map((channel) => channel * occlusion[i]), 1);
       parts.push(0);
     }
   }
-  for (let part = 0; !foliage && part < 2; part++) {
+  for (let part = 0; foliage === 'spruce' && part < 2; part++) {
     const ring = (y: number) =>
       Array.from({ length: SIDES }, (_, k) => [
         Math.cos((k * Math.PI * 2) / SIDES),
@@ -134,7 +133,7 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
     }
     return far >= 0 && near < ray.length;
   };
-  if (recipe.foliage) {
+  if (recipe.foliage === 'broadleaf') {
     const [lower, upper] = recipe.crowns;
     const radius = Math.max(lower[0], lower[1], upper[0], upper[1]);
     const height = upper[2] + upper[3] - lower[2];
@@ -150,7 +149,7 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
     );
     for (const planes of BROADLEAF_HULLS) if (clip(planes, origin, direction)) return true;
   }
-  for (const [bottom, top, base, height] of recipe.foliage ? [] : recipe.crowns) {
+  for (const [bottom, top, base, height] of recipe.foliage === 'spruce' ? recipe.crowns : []) {
     const slope = ((top - bottom) * APOTHEM) / height;
     const planes = [
       [0, -1, 0, -base],

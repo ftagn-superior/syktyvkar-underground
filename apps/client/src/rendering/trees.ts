@@ -123,7 +123,7 @@ export class TreeViews {
     shadow: boolean,
     transparent: boolean,
   ): Batch {
-    const palette = `${recipe.crownColor}:${recipe.trunkColor}:${recipe.foliage ?? 'conical'}:${recipe.ambientOcclusion ?? 'none'}`;
+    const palette = `${recipe.crownColor}:${recipe.trunkColor}:${recipe.foliage}`;
     // Give the few translucent occluders individual sorting bounds, preserving alpha blending.
     const key = `${Math.floor(definition.position.x / 125)},${Math.floor(definition.position.z / 125)}:${palette}:${shadow}:${transparent ? definition.entityId : ''}`;
     let batch = this.batches.get(key);
@@ -132,12 +132,7 @@ export class TreeViews {
     if (!template) {
       template = new Mesh(`tree-template:${palette}`, this.scene);
       template.sideOrientation = Material.CounterClockWiseSideOrientation;
-      const data = treeTemplate(
-        recipe.crownColor,
-        recipe.trunkColor,
-        recipe.foliage,
-        recipe.ambientOcclusion,
-      );
+      const data = treeTemplate(recipe.crownColor, recipe.trunkColor, recipe.foliage);
       const vertices = new VertexData();
       Object.assign(vertices, {
         positions: data.positions,

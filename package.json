@@ -64,6 +64,7 @@
     "test:reactions:browser": "node --import tsx tests/browser-reactions.ts",
     "test:animations:browser": "node --import tsx tests/browser-animations.ts",
     "test:chat:browser": "node --import tsx tests/browser-chat.ts",
+    "test:audio:browser": "node --import tsx tests/browser-audio.ts",
     "test:items": "node tools/test-database.mjs --items",
     "test:items:browser": "node tools/test-database.mjs --items --browser",
     "test:giveme:browser": "node tools/test-database.mjs --giveme --browser",

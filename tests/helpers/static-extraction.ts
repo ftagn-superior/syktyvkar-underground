@@ -94,7 +94,10 @@ export async function releaseTriangles(
   for (const instance of instances) {
     let bytes = models.get(instance.assetId);
     if (!bytes) {
-      bytes = await readFile(resolve(directory, manifest.assets[instance.assetId].modelFile));
+      const modelFile = manifest.assets[instance.assetId].modelFile;
+      if (!modelFile)
+        throw new Error(`Triangle comparison requires a GLB asset: ${instance.assetId}`);
+      bytes = await readFile(resolve(directory, modelFile));
       models.set(instance.assetId, bytes);
     }
     result.push(...glbTriangles(bytes, instance));

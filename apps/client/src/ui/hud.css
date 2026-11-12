@@ -76,6 +76,36 @@ body[data-scene='lobby'] .su-coach {
   justify-content: space-between;
   align-items: center;
 }
+.audio-settings {
+  margin: 10px 0;
+  padding: 10px 0;
+  border-block: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+}
+.audio-settings summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.audio-settings label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.audio-settings output {
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.audio-settings input {
+  width: 100%;
+  min-height: 30px;
+  accent-color: var(--accent);
+  touch-action: pan-y;
+}
+.audio-lobby-toggle {
+  align-self: flex-start;
+  margin-top: 12px;
+  min-height: 32px;
+}
 .su-h {
   display: flex;
   align-items: center;

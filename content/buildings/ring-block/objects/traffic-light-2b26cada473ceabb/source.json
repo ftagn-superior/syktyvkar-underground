@@ -1,0 +1,89 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "metal",
+      "role": "detail",
+      "fade": false,
+      "color": "#3a3d40",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 1.5, 0],
+            "size": [0.14, 3, 0.14],
+            "yaw": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "signal-body",
+      "role": "detail",
+      "fade": false,
+      "color": "#1e2124",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 3.4, 0],
+            "size": [0.28, 1, 0.34],
+            "yaw": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "signal-green",
+      "role": "detail",
+      "fade": false,
+      "color": "#4cc26a",
+      "shapes": [
+        {
+          "box": {
+            "center": [0.1501, 3.08, 5e-5],
+            "size": [0.04, 0.2, 0.2],
+            "yaw": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "signal-red",
+      "role": "detail",
+      "fade": false,
+      "color": "#e0453a",
+      "shapes": [
+        {
+          "box": {
+            "center": [0.1501, 3.72, 5e-5],
+            "size": [0.04, 0.2, 0.2],
+            "yaw": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "signal-yellow",
+      "role": "detail",
+      "fade": false,
+      "color": "#e8b94a",
+      "shapes": [
+        {
+          "box": {
+            "center": [0.1501, 3.4, 5e-5],
+            "size": [0.04, 0.2, 0.2],
+            "yaw": 0
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 1.5, 0],
+      "size": [0.14, 3, 0.14],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

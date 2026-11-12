@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "crown-birch",
+      "role": "detail",
+      "fade": true,
+      "color": "#7aa457",
+      "shapes": [
+        {
+          "cone": {
+            "center": [0, 4.061, 0],
+            "radiusBottom": 1.521,
+            "radiusTop": 2.766,
+            "height": 3.405,
+            "sides": 7
+          }
+        },
+        {
+          "cone": {
+            "center": [0, 7.466, 0],
+            "radiusBottom": 2.766,
+            "radiusTop": 0.968,
+            "height": 5.107,
+            "sides": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "trunk-birch",
+      "role": "detail",
+      "fade": true,
+      "color": "#e2ddd2",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 2.389, 0],
+            "size": [0.3, 4.778, 0.3],
+            "yaw": 0.242
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 2.389, 0],
+      "size": [0.4, 4.778, 0.4],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

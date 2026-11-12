@@ -1,0 +1,51 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "light",
+      "role": "detail",
+      "fade": false,
+      "color": "#f4f1e6",
+      "shapes": [
+        {
+          "box": {
+            "center": [1.200161553318, 6.28, 0.000495920459],
+            "size": [0.55, 0.16, 0.3],
+            "yaw": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "metal",
+      "role": "detail",
+      "fade": false,
+      "color": "#3a3d40",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 3.25, 0],
+            "size": [0.16, 6.5, 0.16],
+            "yaw": 169.996
+          }
+        },
+        {
+          "box": {
+            "center": [0.600080776659, 6.4, 0.00024796023],
+            "size": [1.3, 0.1, 0.1],
+            "yaw": 0
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 3.25, 0],
+      "size": [0.16, 6.5, 0.16],
+      "yaw": 169.996
+    }
+  ],
+  "merge": true
+}

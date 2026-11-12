@@ -40,8 +40,6 @@
     "test:streaming:matrix": "pnpm build && node --import tsx tests/streaming-matrix.ts",
     "test:streaming:verify": "pnpm build && node --import tsx tests/streaming-verify.ts",
     "test:streaming:evidence": "node --import tsx tests/streaming-evidence.ts",
-    "world:import": "node --import tsx tools/world-build/src/import-district.ts",
-    "world:fetch-osm": "node --import tsx tools/world-build/src/fetch-osm.ts",
     "db:migrate": "node --import tsx apps/server/src/migrate.ts",
     "db:migrate:built": "node dist/server/migrate.mjs",
     "world:migrate": "node --import tsx apps/server/src/migrate-world.ts",

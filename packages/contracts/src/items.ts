@@ -7,7 +7,7 @@ export interface ItemType {
   typeId: string;
   name: string;
   icon: string;
-  model: 'box';
+  model: 'box' | 'soap' | 'domino' | 'watermelon' | 'monument';
   size: Vec3;
   mass: number;
   friction: number;
@@ -134,9 +134,11 @@ export function validateItemCatalog(value: ItemCatalog): void {
       t.name.length > 80 ||
       typeof t.icon !== 'string' ||
       t.icon.length > 32 ||
-      t.model !== 'box' ||
+      !['box', 'soap', 'domino', 'watermelon', 'monument'].includes(t.model) ||
       !validVector(t.size) ||
       Object.values(t.size).some((n) => n <= 0 || n > 100) ||
+      (t.model === 'watermelon' && (t.size.x !== t.size.y || t.size.x !== t.size.z)) ||
+      (t.model === 'monument' && (t.size.x < t.size.z || t.size.y < t.size.z)) ||
       !Number.isFinite(t.mass) ||
       t.mass <= 0 ||
       t.mass > 10000 ||

@@ -29,6 +29,7 @@ import { BuildingViews } from './buildings';
 import { CameraTurn, INITIAL_CAMERA_ANGLE } from './camera-controller';
 import type { DisplayEntity } from '../presentation/display-state';
 import { AvatarView } from './avatars/avatar-view';
+import { createItemMesh } from './items';
 
 type EntityView = {
   root: TransformNode;
@@ -439,26 +440,13 @@ export class WorldView {
       this.labels.append(label);
       return { root, label, avatar };
     }
-    const material = this.material(`material-${entity.entityId}`, entity.color ?? '#d6a15a');
-    const size = this.definition.itemCatalog.types[entity.typeId].size;
-    const mesh = MeshBuilder.CreateBox(
-      'crate',
-      { width: size.x, height: size.y, depth: size.z },
-      this.scene,
-    );
-    mesh.enableEdgesRendering();
-    mesh.edgesWidth = 1.5;
-    mesh.edgesColor = new Color4(0.24, 0.17, 0.1, 0.6);
-    const strapMaterial = this.material('crate-straps', '#574b39');
-    for (const x of [-size.x * 0.3, size.x * 0.3]) {
-      const strap = MeshBuilder.CreateBox(
-        `strap-${x}`,
-        { width: size.x * 0.07, height: size.y + 0.008, depth: size.z + 0.008 },
-        this.scene,
-      );
-      strap.parent = root;
-      strap.position.x = x;
-      strap.material = strapMaterial;
+    const type = this.definition.itemCatalog.types[entity.typeId];
+    const material = this.material(`material-${entity.entityId}`, '#ffffff');
+    const mesh = createItemMesh(`item-${entity.entityId}`, type, this.scene);
+    if (type.model === 'box') {
+      mesh.enableEdgesRendering();
+      mesh.edgesWidth = 1.5;
+      mesh.edgesColor = new Color4(0.24, 0.17, 0.1, 0.6);
     }
     mesh.parent = root;
     mesh.material = material;
@@ -489,12 +477,12 @@ export class WorldView {
     }
     if (!this.ghost || this.ghostType !== typeId) {
       this.ghost?.dispose(false, true);
-      const size = this.definition.itemCatalog.types[typeId].size;
-      this.ghost = MeshBuilder.CreateBox(
+      this.ghost = createItemMesh(
         'placement-preview',
-        { width: size.x, height: size.y, depth: size.z },
+        this.definition.itemCatalog.types[typeId],
         this.scene,
       );
+      this.ghost.useVertexColors = false;
       this.ghost.isPickable = false;
       this.ghost.material = this.material('placement-preview', '#65d6bc');
       this.ghostType = typeId;

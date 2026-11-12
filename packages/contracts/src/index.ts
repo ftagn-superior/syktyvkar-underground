@@ -1,6 +1,7 @@
 import { PROFILE_COLORS } from './accounts.js';
 export * from './accounts.js';
 export * from './items.js';
+export * from './item-shapes.js';
 export * from './avatars.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 

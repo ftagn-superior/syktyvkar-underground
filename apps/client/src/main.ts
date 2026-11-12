@@ -336,7 +336,7 @@ inventory = new InventoryPanel(
     resetGameInput();
     renderControls(placing);
   },
-  (name) => showNotice(`${name} добавлена в инвентарь`, { toast: { hint: 'X' } }),
+  (name) => showNotice(`В инвентарь: ${name}`, { toast: { hint: 'X' } }),
 );
 help = new HelpMenu(() => canvas.focus({ preventScroll: true }));
 const pickups = new PickupSource(

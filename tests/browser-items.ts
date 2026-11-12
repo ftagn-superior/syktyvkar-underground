@@ -52,7 +52,9 @@ try {
   for (let count = 1; count <= 3; count++) {
     await page.waitForFunction(
       () =>
-        document.querySelector<HTMLButtonElement>('[aria-keyshortcuts="Z"]')?.disabled === false,
+        document.querySelector<HTMLButtonElement>(
+          '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
+        ) !== null,
     );
     await page.keyboard.press('z');
     await page.waitForFunction((expected) => {

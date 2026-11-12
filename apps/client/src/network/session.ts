@@ -1059,6 +1059,11 @@ export class GameSession {
   get worldPaused() {
     return this.persistencePaused;
   }
+  get gameplayInputEnabled(): boolean {
+    return (
+      this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused
+    );
+  }
   get storageUnavailable() {
     return this.room?.state.pauseReason === 'STORAGE_UNAVAILABLE';
   }

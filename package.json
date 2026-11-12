@@ -21,6 +21,7 @@
     "test:large-map:l1": "pnpm build && node --import tsx tests/large-map-l1.ts",
     "test:physics:browser": "node --import tsx tests/browser-physics.ts",
     "test:assets:browser": "node --import tsx tests/browser-assets.ts",
+    "test:touch:browser": "node --import tsx tests/browser-touch.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",
     "format": "prettier --write apps packages tools tests content package.json tsconfig.json vitest.config.ts pnpm-workspace.yaml",
     "test:soak": "node --import tsx tests/browser-soak.ts",

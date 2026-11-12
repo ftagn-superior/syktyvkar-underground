@@ -10,6 +10,7 @@ const poses: Record<AnimationId, string> = {
 };
 
 export class AnimationMenu {
+  private available = false;
   private readonly controller = new AbortController();
   private readonly choices: { button: HTMLButtonElement; hint: HTMLElement; fullBody: boolean }[] =
     [];
@@ -56,7 +57,13 @@ export class AnimationMenu {
       button.setAttribute('aria-describedby', hint.id);
       copy.append(title, detail, hint);
       button.append(icon, copy, duration);
-      button.addEventListener('click', () => choose(animation.id), options);
+      button.addEventListener(
+        'click',
+        () => {
+          if (this.available && !button.disabled) choose(animation.id);
+        },
+        options,
+      );
       panel.querySelector('.animation-choices')!.append(button);
       this.choices.push({ button, hint, fullBody: animation.mode === 'fullBody' });
     }
@@ -109,6 +116,7 @@ export class AnimationMenu {
     if (open && restoreFocus) this.canvas.focus({ preventScroll: true });
   }
   update(state: Status): void {
+    this.available = state.available;
     this.toggle.hidden = !state.available;
     if (!state.available) this.close(false);
     if (state.accepted !== this.accepted) {

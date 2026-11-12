@@ -9,6 +9,7 @@ export interface ReactionMenuStatus {
 
 /** A catalog-driven picker; gameplay movement remains enabled while it is open. */
 export class ReactionMenu {
+  private available = false;
   private readonly choices: HTMLButtonElement[] = [];
   private readonly controller = new AbortController();
   private sent = false;
@@ -42,6 +43,7 @@ export class ReactionMenu {
       button.addEventListener(
         'click',
         () => {
+          if (!this.available || button.disabled) return;
           this.sent = true;
           choose(reaction.id);
         },
@@ -97,6 +99,7 @@ export class ReactionMenu {
     if (wasOpen && restoreFocus) this.canvas.focus({ preventScroll: true });
   }
   update(state: ReactionMenuStatus): void {
+    this.available = state.available;
     this.toggle.hidden = !state.available;
     if (!state.available) this.close(false);
     // Confirmation is reflected by the server cooldown. A rejected request leaves the picker open.

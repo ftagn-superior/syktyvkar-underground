@@ -143,6 +143,9 @@ export class WorldView {
       powerPreference: 'high-performance',
     });
     this.scene = new Scene(this.engine);
+    // Игра не использует события указателя Babylon над мешами: без этого каждое движение
+    // мыши запускало бы поиск по всем мешам города.
+    this.scene.skipPointerMovePicking = true;
     this.instrumentation = new SceneInstrumentation(this.scene);
     this.applyQuality();
     this.scene.useRightHandedSystem = true;
@@ -187,8 +190,9 @@ export class WorldView {
     this.shadow.normalBias = 0.08;
     this.shadow.setDarkness(0.3);
     this.applyQuality();
-    this.buildings = new BuildingViews(this.scene, this.shadow, definition);
+    this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
     this.statics = new StaticViews(this.scene, this.shadow);
+    this.sizeCamera();
     if ('entities' in definition) {
       for (const entity of definition.entities)
         if (entity.kind === 'obstacle')
@@ -390,10 +394,13 @@ export class WorldView {
     }
   }
   retainStatic(item: StaticEntityDefinition | BuildingInstance, version: string) {
-    if ('assetId' in item) this.buildings.add(item, version);
-    else this.statics.add(item, version);
-    const root =
-      this.scene.getTransformNodeByName(item.entityId) ?? this.scene.getMeshByName(item.entityId);
+    let root;
+    if ('assetId' in item) root = this.buildings.add(item, version);
+    else {
+      this.statics.add(item, version);
+      root =
+        this.scene.getTransformNodeByName(item.entityId) ?? this.scene.getMeshByName(item.entityId);
+    }
     if (root) {
       const meshes = root instanceof TransformNode ? root.getChildMeshes() : [];
       if ('material' in root)
@@ -496,6 +503,7 @@ export class WorldView {
     this.camera.radius = 120 * depthScale;
     this.camera.maxZ = 300 * depthScale;
     if (this.sun) this.sun.shadowFrustumSize = SHADOW_EXTENT;
+    this.buildings?.setDetailScale((2 * halfHeight) / Math.max(1, this.canvas.clientHeight));
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();
@@ -542,11 +550,16 @@ export class WorldView {
       }
     const shadowCenter =
       entities.find((entity) => entity.entityId === ownId)?.position ?? this.target;
+    // Одна копия списка на кадр, а не на каждую сущность; ниже она ведётся синхронно.
+    const shadowCasters = new Set(this.shadow.getShadowMap()?.renderList ?? []);
+    const fogNow = performance.now();
     for (const entity of entities) {
       let view = this.entities.get(entity.entityId);
       if (!view) {
         view = this.createEntity(entity, entity.entityId === ownId);
         this.entities.set(entity.entityId, view);
+        // Новая сущность только что зарегистрировала свои меши как источники тени.
+        for (const mesh of this.shadow.getShadowMap()?.renderList ?? []) shadowCasters.add(mesh);
       }
       view.root.position.set(entity.position.x, entity.position.y, entity.position.z);
       if (entity.entityId === ownId) this.ownPosition = view.root.position;
@@ -586,17 +599,20 @@ export class WorldView {
       if (entity.kind === 'player')
         view.avatar!.update(entity, delta, entity.entityId === ownId, this.reducedMotion.matches);
       else if (view.material) view.material.alpha = entity.connected === false ? 0.45 : 1;
-      const shadowCasters = new Set(this.shadow.getShadowMap()?.renderList ?? []);
       const nearShadow =
         Math.hypot(entity.position.x - shadowCenter.x, entity.position.z - shadowCenter.z) <= 80;
       for (const mesh of view.root.getChildMeshes()) {
-        applyRadialFog(mesh, this.dynamicRadial, performance.now());
+        applyRadialFog(mesh, this.dynamicRadial, fogNow);
         // Remember authored eligibility: returning into range must restore body shadows,
         // while markers and other intentionally unshadowed avatar pieces remain excluded.
         mesh.metadata.suStreamingShadow ??= shadowCasters.has(mesh);
-        if (nearShadow && mesh.metadata.suStreamingShadow && !shadowCasters.has(mesh))
+        if (nearShadow && mesh.metadata.suStreamingShadow && !shadowCasters.has(mesh)) {
           this.shadow.addShadowCaster(mesh);
-        else if (!nearShadow && shadowCasters.has(mesh)) this.shadow.removeShadowCaster(mesh);
+          shadowCasters.add(mesh);
+        } else if (!nearShadow && shadowCasters.has(mesh)) {
+          this.shadow.removeShadowCaster(mesh);
+          shadowCasters.delete(mesh);
+        }
       }
       this.updateReaction(view, entity);
       this.updateChat(view, entity);

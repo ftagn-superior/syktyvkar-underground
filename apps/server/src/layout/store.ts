@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { canonicalJson, type StaticObjectInstance, type WorldLayoutSnapshot } from '@su/contracts';
+import {
+  applyWorldLayoutPatch,
+  canonicalJson,
+  type StaticObjectInstance,
+  type WorldLayoutSnapshot,
+  type WorldLayoutPatch,
+} from '@su/contracts';
 import type { WorldOwnership } from '../world-ownership.js';
-import type { AuthoringRelease } from './release.js';
+import { editableStaticAssetIds, type AuthoringRelease } from './release.js';
 
 interface LayoutRow {
   asset_release_version: string;
@@ -91,14 +97,7 @@ export class StaticLayoutStore {
       ...this.release.metadata.fixedInstanceIds,
       ...this.release.definition.entities.map((i) => i.entityId),
     ].sort();
-    const fixedAssets = new Set(
-      this.release.definition.buildings
-        .filter((i) => this.release.metadata.fixedInstanceIds.includes(i.entityId))
-        .map((i) => i.assetId),
-    );
-    const assets = Object.keys(this.release.manifest.assets)
-      .filter((id) => !fixedAssets.has(id))
-      .sort();
+    const assets = editableStaticAssetIds(this.release);
     if (!candidate.initialized) {
       if (found.rowCount) throw new Error('Static placement was initialized concurrently');
       await this.db.query(
@@ -147,5 +146,70 @@ export class StaticLayoutStore {
     snapshot.revision = result.rows[0].revision;
     candidate.initialized = true;
     candidate.previousRelease = snapshot.assetReleaseVersion;
+  }
+
+  /** Only called inside ItemStore.migrateGeometry's transaction on the owning session. */
+  async applyPatch(patch: WorldLayoutPatch, validatedHash: string, operationId: string) {
+    await this.db.query('SELECT world_id FROM world_layouts WHERE world_id=$1 FOR UPDATE', [
+      patch.worldId,
+    ]);
+    const before = await this.readCandidate();
+    if (!before.initialized) throw new Error('World layout is not initialized');
+    const expected = applyWorldLayoutPatch(before.snapshot, patch);
+    await this.db.query(
+      "SELECT set_config('su.layout_operation',$1,true),set_config('su.layout_source','sql',true)",
+      [operationId],
+    );
+    for (const operation of patch.operations) {
+      let changed;
+      if (operation.op === 'delete') {
+        changed = await this.db.query(
+          'DELETE FROM world_static_instances WHERE world_id=$1 AND entity_id=$2 AND instance_revision=$3',
+          [patch.worldId, operation.entityId, operation.expectedRevision],
+        );
+      } else {
+        const i = operation.instance;
+        const values = [
+          patch.worldId,
+          i.entityId,
+          i.assetId,
+          i.position.x,
+          i.position.y,
+          i.position.z,
+          i.rotation.x,
+          i.rotation.y,
+          i.rotation.z,
+          i.rotation.w,
+          i.enabled,
+          i.sourceRef ?? null,
+        ];
+        changed =
+          operation.op === 'add'
+            ? await this.db.query(
+                `INSERT INTO world_static_instances(world_id,entity_id,asset_id,position_x,position_y,position_z,rotation_x,rotation_y,rotation_z,rotation_w,enabled,source_ref)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                values,
+              )
+            : await this.db.query(
+                `UPDATE world_static_instances SET asset_id=$3,position_x=$4,position_y=$5,position_z=$6,
+             rotation_x=$7,rotation_y=$8,rotation_z=$9,rotation_w=$10,enabled=$11,source_ref=$12
+             WHERE world_id=$1 AND entity_id=$2 AND instance_revision=$13`,
+                [...values, operation.expectedRevision],
+              );
+      }
+      if (changed.rowCount !== 1)
+        throw new Error('Static placement changed during patch application');
+    }
+    const after = await this.readCandidate();
+    const sorted = {
+      ...after.snapshot,
+      instances: [...after.snapshot.instances].sort((a, b) =>
+        a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0,
+      ),
+    };
+    if (canonicalJson(sorted) !== canonicalJson(expected))
+      throw new Error('Stored patch differs from the validated candidate');
+    await this.commit(after, validatedHash);
+    return after.snapshot;
   }
 }

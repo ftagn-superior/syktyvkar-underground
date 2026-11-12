@@ -4,6 +4,7 @@ export * from './items.js';
 export * from './item-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
+export * from './world-layout-patch.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
 export const PROTOCOL_VERSION = 10;
@@ -68,6 +69,19 @@ export interface BuildingParts {
   formatVersion: 1;
   assetId: string;
   parts: BuildingPart[];
+  /** Optional render-only representation. The original GLB and colliders remain authoritative. */
+  tree?: TreeRenderRecipe;
+}
+/** Exact profile of the generated seven-sided, two-crown kit trees. */
+export interface TreeRenderRecipe {
+  formatVersion: 1;
+  /** bottom radius, top radius (including the kit's minimum tip), base Y, height */
+  crowns: [[number, number, number, number], [number, number, number, number]];
+  /** X/Y/Z dimensions and yaw in radians; centered on X/Z = 0. */
+  trunk: [number, number, number, number];
+  trunkBase: number;
+  crownColor: string;
+  trunkColor: string;
 }
 export interface BuildingAssetManifest {
   assetId: string;
@@ -282,6 +296,7 @@ export { GRAPHICS_PACK_LIMITS, encodeGraphicsPack, decodeGraphicsPack } from './
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';
 export {
   validateWorldManifest,
+  trustWorldManifest,
   validateBuildingPhysicsAsset,
   validateBuildingParts,
   validateWorldCell,

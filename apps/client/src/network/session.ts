@@ -42,7 +42,7 @@ import {
   canonicalJson,
   loadWorldHeader,
   itemSupportDistance,
-  validateWorldManifest,
+  trustWorldManifest,
   worldManifestIdentity,
   type ActionResult,
   type ReactionRequest,
@@ -272,7 +272,8 @@ export class GameSession {
     const manifestUrl = new URL(info.manifestUrl, location.href);
     const rawManifest = await (await getResponse(manifestUrl.href)).json();
     if (rawManifest.formatVersion !== WORLD_FORMAT_VERSION) this.versionMismatch();
-    const manifest = validateWorldManifest(rawManifest);
+    // Проверяется один раз; загрузчики ячеек не повторяют полную проверку на каждую ячейку.
+    const manifest = trustWorldManifest(rawManifest);
     if (
       manifest.mapVersion !== info.mapVersion ||
       manifest.simulationConfigHash !== info.simulationConfigHash ||

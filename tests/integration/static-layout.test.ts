@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +9,8 @@ import {
   buildingBounds,
   cellsIntersectingBounds,
   loadWorldCell,
+  createWorldLayoutPatch,
+  type WorldLayoutPatch,
 } from '../../packages/contracts/src/index.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import { createDatabaseFixture } from '../helpers/database-fixture.js';
@@ -17,6 +21,7 @@ import { createLayoutPublication } from '../../apps/server/src/layout/release.js
 import { StaticLayoutStore } from '../../apps/server/src/layout/store.js';
 import { migrateDatabase } from '../../apps/server/src/migrations.js';
 import { ItemStore } from '../../apps/server/src/items/store.js';
+import { applyStaticLayoutPatch } from '../../apps/server/src/layout/patch.js';
 
 describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('database static placement', () => {
   let temporary: string, directory: string;
@@ -79,6 +84,205 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('database static placement', 
     await p.items.close();
     return p;
   }
+
+  async function applyPatch(patch: unknown, dryRun = false) {
+    const owner = new WorldOwnership(fixture.pool, 'physics-lab', randomUUID());
+    owners.push(owner);
+    try {
+      return await applyStaticLayoutPatch(directory, owner, patch, dryRun);
+    } finally {
+      await owner.close();
+    }
+  }
+
+  it('previews and atomically applies file additions, updates and deletions with auditing and unchanged saved items', async () => {
+    const initial = await initialize(),
+      base = initial.snapshot,
+      edited = structuredClone(base);
+    edited.instances[0].position.x++;
+    edited.instances.pop();
+    edited.instances.push({
+      ...structuredClone(edited.instances[0]),
+      entityId: 'spare-instance',
+      assetId: 'spare-house',
+      instanceRevision: 1,
+      position: { x: 12, y: 0, z: 12 },
+    });
+    const patch = createWorldLayoutPatch(base, edited),
+      before = await rows();
+    const preview = await applyPatch(patch, true);
+    expect(preview.snapshot.revision).toBe(base.revision + 3);
+    expect(preview.operationId).toBeUndefined();
+    expect(await rows()).toEqual(before);
+    const applied = await applyPatch(patch);
+    const after = await rows();
+    expect(applied.hash).toBe(preview.hash);
+    expect(after.items).toEqual(before.items);
+    expect(after.slots).toEqual(before.slots);
+    expect(after.layouts[0].revision).toBe(base.revision + 3);
+    expect(after.layouts[0].validated_revision).toBe(after.layouts[0].revision);
+    expect(after.instances.map((i) => [i.entity_id, i.instance_revision])).toEqual([
+      ['building-a', 2],
+      ['spare-instance', 1],
+    ]);
+    const audit = after.operations.filter((o) => o.operation_id === applied.operationId);
+    expect(audit).toHaveLength(3);
+    expect(audit.every((o) => o.source === 'sql')).toBe(true);
+    expect(audit.find((o) => o.entity_id === 'building-b').after_state).toBeNull();
+    const next = await prepared();
+    expect(next.layoutHash).toBe(applied.hash);
+    expect(next.definition.buildings.some((i) => i.entityId === 'spare-instance')).toBe(true);
+    await next.items.close();
+    await expect(applyPatch(patch)).rejects.toThrow('stale patch');
+    expect(await rows()).toEqual(after);
+  });
+
+  it('rejects stale versions, malformed placements, unknown assets, blocked spawns and saved item conflicts without writes', async () => {
+    const initial = await initialize(),
+      base = initial.snapshot;
+    const edit = () => {
+      const edited = structuredClone(base);
+      edited.instances[0].position.x++;
+      return createWorldLayoutPatch(base, edited);
+    };
+    const bad: [WorldLayoutPatch, string][] = [];
+    const stale = edit();
+    stale.baseRevision--;
+    bad.push([stale, 'stale patch']);
+    const release = edit();
+    release.assetReleaseVersion = 'a'.repeat(64);
+    bad.push([release, 'assetReleaseVersion']);
+    const seed = edit();
+    seed.seedVersion = 'a'.repeat(64);
+    bad.push([seed, 'seedVersion']);
+    const object = edit();
+    if (object.operations[0].op !== 'update') throw new Error('Expected update');
+    object.operations[0].expectedRevision++;
+    bad.push([object, 'stale instance']);
+    for (const [change, message] of [
+      [{ assetId: 'missing-model' }, 'Unknown static asset'],
+      [{ position: { x: 1000, y: 0, z: 0 } }, 'bounds'],
+      [{ position: { x: -3, y: 0, z: 4 } }, 'spawn point'],
+      [{ position: { x: 0, y: 0, z: 0 } }, 'Saved item'],
+    ] as const) {
+      const edited = structuredClone(base);
+      Object.assign(edited.instances[0], change);
+      bad.push([createWorldLayoutPatch(base, edited), message]);
+    }
+    const fixed = structuredClone(base);
+    fixed.instances.push({
+      ...structuredClone(base.instances[0]),
+      entityId: 'ground-01',
+      instanceRevision: 1,
+    });
+    bad.push([createWorldLayoutPatch(base, fixed), 'Reserved/duplicate']);
+    const before = await rows();
+    for (const [patch, message] of bad)
+      for (const dryRun of [true, false]) {
+        await expect(applyPatch(patch, dryRun)).rejects.toThrow(message);
+        expect(await rows()).toEqual(before);
+      }
+  });
+
+  it('applies and clears placement metadata even when the physical compatibility hash stays unchanged', async () => {
+    const initial = await initialize(),
+      before = await rows();
+    let base = initial.snapshot;
+    for (const sourceRef of [{ provider: 'manual', type: 'house', id: 'first' }, undefined]) {
+      const edited = structuredClone(base);
+      if (sourceRef) edited.instances[0].sourceRef = sourceRef;
+      else delete edited.instances[0].sourceRef;
+      const result = await applyPatch(createWorldLayoutPatch(base, edited));
+      const after = await rows();
+      expect(after.worlds).toEqual(before.worlds);
+      expect(after.items).toEqual(before.items);
+      expect(after.instances[0].source_ref).toEqual(sourceRef ?? null);
+      expect(after.instances[0].instance_revision).toBe(base.instances[0].instanceRevision + 1);
+      expect(after.layouts[0].validated_revision).toBe(result.snapshot.revision);
+      base = result.snapshot;
+    }
+  });
+
+  it('rolls back already written placements, revisions, audit and compatibility if a later SQL operation fails', async () => {
+    const initial = await initialize(),
+      edited = structuredClone(initial.snapshot);
+    edited.instances[0].position.x++;
+    edited.instances.push({
+      ...structuredClone(edited.instances[0]),
+      entityId: 'zz-fail',
+      instanceRevision: 1,
+      position: { x: 12, y: 0, z: 12 },
+    });
+    const patch = createWorldLayoutPatch(initial.snapshot, edited);
+    await fixture.pool
+      .query(`CREATE FUNCTION reject_patch_test() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.entity_id='zz-fail' THEN RAISE EXCEPTION 'Injected patch write failure'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER reject_patch_test BEFORE INSERT ON world_static_instances FOR EACH ROW EXECUTE FUNCTION reject_patch_test()`);
+    const before = await rows();
+    await expect(applyPatch(patch)).rejects.toThrow('Injected patch write failure');
+    expect(await rows()).toEqual(before);
+  });
+
+  it('refuses patch application while the world is running', async () => {
+    const initial = await initialize();
+    const running = await prepared();
+    await running.items.initialize();
+    const before = await rows();
+    await expect(
+      applyPatch(createWorldLayoutPatch(initial.snapshot, initial.snapshot)),
+    ).rejects.toThrow('already has an owner');
+    expect(await rows()).toEqual(before);
+    await running.items.close();
+  });
+
+  it('runs export, offline diff, dry-run and apply through the real CLI with no database credentials on the developer step', async () => {
+    await initialize();
+    const cwd = await mkdtemp(join(temporary, 'cli-'));
+    await mkdir(join(cwd, 'dist/worlds'), { recursive: true });
+    await symlink(directory, join(cwd, 'dist/worlds/physics-lab'));
+    const database = new URL(process.env.SU_TEST_DATABASE_URL!);
+    database.searchParams.set('options', `-c search_path=${fixture.schema}`);
+    const command = resolve('apps/server/src/layout-command.ts');
+    const cli = (args: string[], databaseUrl = database.toString()) =>
+      promisify(execFile)(
+        process.execPath,
+        ['--import', import.meta.resolve('tsx'), command, ...args],
+        {
+          cwd,
+          env: { ...process.env, DATABASE_URL: databaseUrl, SU_WORLD: 'physics-lab' },
+          timeout: 15000,
+        },
+      );
+    await cli(['export', '--file', 'base layout.json']);
+    const base = JSON.parse(await readFile(join(cwd, 'base layout.json'), 'utf8'));
+    const edited = structuredClone(base);
+    edited.instances[0].position.x++;
+    await writeFile(join(cwd, 'edited layout.json'), JSON.stringify(edited));
+    const generated = await cli(
+      [
+        'patch',
+        '--base',
+        'base layout.json',
+        '--edited',
+        'edited layout.json',
+        '--file',
+        'change patch.json',
+      ],
+      '',
+    );
+    expect(generated.stdout).toContain('1 update');
+    const before = await rows();
+    expect((await cli(['apply', '--file', 'change patch.json', '--dry-run'])).stdout).toContain(
+      'Database unchanged',
+    );
+    expect(await rows()).toEqual(before);
+    expect((await cli(['apply', '--file', 'change patch.json'])).stdout).toContain('Applied patch');
+    await cli(['export', '--file', 'after.json']);
+    const after = JSON.parse(await readFile(join(cwd, 'after.json'), 'utf8'));
+    expect(after.instances[0].position.x).toBe(edited.instances[0].position.x);
+    expect(after.revision).toBe(base.revision + 1);
+    await expect(cli(['apply', '--file', 'change patch.json'])).rejects.toThrow('stale patch');
+  });
 
   it('initializes placement and items once; SQL revisions, auditing and intentionally empty worlds survive restart', async () => {
     const first = await initialize();

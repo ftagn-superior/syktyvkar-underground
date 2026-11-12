@@ -9,6 +9,7 @@ import {
   canonicalJson,
   validateWorld,
   validateWorldManifest,
+  validateBuildingParts,
   worldManifestIdentity,
   simulationProjection,
   worldCellBounds,
@@ -86,6 +87,7 @@ export function createWorldPublication(
     WORLD_RESOURCE_LIMITS.headerBytes,
   );
   const assets: Record<string, BuildingAssetManifest> = {};
+  const proceduralTrees = new Set<string>();
   for (const [assetId, asset] of Object.entries(compiled).sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
   )) {
@@ -102,6 +104,8 @@ export function createWorldPublication(
       ),
       partsFile: put(`${prefix}/parts.json`, asset.parts, WORLD_RESOURCE_LIMITS.partsBytes),
     };
+    const parts = JSON.parse(new TextDecoder().decode(asset.parts));
+    if (parts.tree && validateBuildingParts(parts).tree) proceduralTrees.add(assetId);
   }
   const cellEntries: WorldCellManifest[] = [...cells.values()].map((cell) => {
     cell.statics.sort(byId);
@@ -132,7 +136,17 @@ export function createWorldPublication(
   }
   for (const { owners, assetIds } of groups.values()) {
     const paths = [
-      ...new Set(assetIds.sort().flatMap((id) => [assets[id].modelFile, assets[id].partsFile])),
+      // Modern clients reconstruct these trees from parts. Legacy clients can still fetch
+      // the original, hash-verified GLB separately, including after layout republication.
+      ...new Set(
+        assetIds
+          .sort()
+          .flatMap((id) =>
+            proceduralTrees.has(id)
+              ? [assets[id].partsFile]
+              : [assets[id].modelFile, assets[id].partsFile],
+          ),
+      ),
     ];
     let pending: [string, Uint8Array][] = [];
     let pendingBytes = 10; // magic, header length, JSON brackets

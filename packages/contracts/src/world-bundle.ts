@@ -243,6 +243,40 @@ export function validateBuildingParts(value: unknown): BuildingParts {
     );
     requireValue(Number.isSafeInteger(part.nodeIndex) && part.nodeIndex >= 0, 'part nodeIndex');
   }
+  if (value.tree !== undefined) {
+    const tree = value.tree;
+    const tuple = (v: unknown): v is number[] =>
+      Array.isArray(v) &&
+      v.length === 4 &&
+      v.every((n: unknown) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1000);
+    requireValue(object(tree) && tree.formatVersion === 1, 'tree render version');
+    requireValue(
+      value.parts.length === 1 && value.parts[0].occlusionGroup === 'shell',
+      'tree render semantic group',
+    );
+    requireValue(
+      Array.isArray(tree.crowns) &&
+        tree.crowns.length === 2 &&
+        tree.crowns.every((c: unknown) => tuple(c) && c[0] > 0 && c[1] >= 0.001 && c[3] > 0),
+      'tree render crowns',
+    );
+    requireValue(
+      tuple(tree.trunk) && tree.trunk.slice(0, 3).every((n: number) => n > 0),
+      'tree render trunk',
+    );
+    requireValue(
+      typeof tree.trunkBase === 'number' &&
+        Number.isFinite(tree.trunkBase) &&
+        Math.abs(tree.trunkBase) <= 1000,
+      'tree render trunk base',
+    );
+    requireValue(
+      [tree.crownColor, tree.trunkColor].every(
+        (c) => typeof c === 'string' && /^#[a-f0-9]{6}$/i.test(c),
+      ),
+      'tree render colors',
+    );
+  }
   return value as BuildingParts;
 }
 export function validateWorldManifest(value: unknown): WorldManifest {
@@ -421,6 +455,21 @@ export const WORLD_RESOURCE_LIMITS = Object.freeze({
   collisionBytes: 8 * 1024 * 1024,
   partsBytes: 512 * 1024,
 });
+const trustedManifests = new WeakSet<WorldManifest>();
+/**
+ * Полная проверка манифеста на тысячах файлов занимает миллисекунды, а загрузчики ячеек
+ * повторяют её при каждом вызове. Владелец, который уже проверил манифест и больше его
+ * не изменяет (клиент в пределах одной версии мира), может объявить объект проверенным.
+ * Без этого вызова поведение прежнее: проверка при каждой загрузке.
+ */
+export function trustWorldManifest(manifest: WorldManifest): WorldManifest {
+  validateWorldManifest(manifest);
+  trustedManifests.add(manifest);
+  return manifest;
+}
+function validateManifestOnce(manifest: WorldManifest): void {
+  if (!trustedManifests.has(manifest)) validateWorldManifest(manifest);
+}
 export type ReadVerifiedBytes = (path: string, expectedHash: string) => Promise<Uint8Array>;
 
 async function readJson(
@@ -439,7 +488,7 @@ export async function loadWorldHeader(
   manifest: WorldManifest,
   read: ReadVerifiedBytes,
 ): Promise<WorldHeader> {
-  validateWorldManifest(manifest);
+  validateManifestOnce(manifest);
   const header = validateWorldHeader(
     await readJson(manifest, read, manifest.worldFile, WORLD_RESOURCE_LIMITS.headerBytes),
   );
@@ -491,7 +540,7 @@ export async function loadWorldCell(
   cellId: string,
   read: ReadVerifiedBytes,
 ): Promise<WorldCell> {
-  validateWorldManifest(manifest);
+  validateManifestOnce(manifest);
   const entry = manifest.cells.find((item) => item.cellId === cellId);
   requireValue(entry, `unknown cell ${cellId}`);
   const cell = validateWorldCell(
@@ -509,7 +558,7 @@ export async function loadCellPhysics(
   read: ReadVerifiedBytes,
   loadedCell?: WorldCell,
 ): Promise<LocalStaticSet> {
-  validateWorldManifest(manifest);
+  validateManifestOnce(manifest);
   const cell = loadedCell
     ? validateWorldCell(loadedCell)
     : await loadWorldCell(manifest, cellId, read);

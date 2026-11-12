@@ -71,7 +71,11 @@ describe('avatar visual ownership', () => {
         expect(first.root.position.equals(stablePosition)).toBe(true);
         player.connected = false;
         first.avatar.update(player, 1 / 60, true, false);
-        for (const mesh of first.root.getChildMeshes()) expect(mesh.material!.alpha).toBe(0.45);
+        for (const mesh of first.root.getChildMeshes()) {
+          // The ground marker is deliberately fainter than the body (MARKER_ALPHA = 0.55).
+          if (mesh.name.startsWith('marker-')) expect(mesh.material!.alpha).toBeCloseTo(0.45 * 0.55);
+          else expect(mesh.material!.alpha).toBe(0.45);
+        }
         expect(shadow.getShadowMap()!.renderList).toHaveLength(14);
         first.avatar.dispose();
         first.root.dispose();

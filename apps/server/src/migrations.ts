@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import { staticLayoutSchema } from './layout/schema.js';
 
-export const DATABASE_SCHEMA_VERSION = 4;
+export const DATABASE_SCHEMA_VERSION = 5;
 
 /** Kept in the server bundle so source and built migration commands use identical SQL. */
 const migrations = [
@@ -130,6 +130,13 @@ const migrations = [
       CHECK (skin_id ~ '^[a-z][a-z0-9-]{0,47}$');`,
   },
   { version: 4, sql: staticLayoutSchema },
+  {
+    // Profile colours are preset ids or a custom #RRGGBB value; the server validates the id.
+    version: 5,
+    sql: `ALTER TABLE player_profiles DROP CONSTRAINT IF EXISTS player_profiles_color_id_check;
+    ALTER TABLE player_profiles ADD CONSTRAINT player_profiles_color_id_check
+      CHECK (color_id ~ '^([a-z]{3,16}|#[0-9A-Fa-f]{6})$');`,
+  },
 ];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

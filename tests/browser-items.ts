@@ -7,6 +7,7 @@ import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { rotateCamera } from './helpers/camera.js';
+import { hudClick } from './helpers/hud.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('Use pnpm test:items:browser.');
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
@@ -51,7 +52,9 @@ try {
   for (let count = 1; count <= 3; count++) {
     await page.waitForFunction(
       () =>
-        document.querySelector<HTMLButtonElement>('[aria-keyshortcuts="Z"]')?.disabled === false,
+        document.querySelector<HTMLButtonElement>(
+          '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
+        ) !== null,
     );
     await page.keyboard.press('z');
     await page.waitForFunction((expected) => {
@@ -80,6 +83,7 @@ try {
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
   );
   // Keyboard activation avoids the HUD's intentional outside-pointer dismissal.
+  await page.locator('#help-toggle').click();
   await page.locator('#respawn').focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction((revision) => {
@@ -201,7 +205,7 @@ try {
       (window as any).__SU_DEBUG__.snapshot().items.length === 0 &&
       (window as any).__SU_DEBUG__.snapshot().inventory.slots[0].items.length === 3,
   );
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   await app.close();
   app = await createGameServer({ port, accounts: fixture, worldDirectory: release });
   fixture.config.publicOrigin = app.url;

@@ -295,7 +295,7 @@ describe.skipIf(!databaseUrl)(
       await until(() => !!first.state?.players?.get(first.sessionId));
       const player = first.state.players.get(first.sessionId)!;
       expect(player.name).toBe('Постоянный');
-      expect(player.color).toBe('#e98b69');
+      expect(player.color).toBe('#F59A7A');
       expect(player.skinId).toBe('standard'); // The client requested minifigure; saved profile wins.
       const entityId = player.entityId;
       const reconnectToken = first.reconnectionToken;
@@ -430,7 +430,7 @@ describe.skipIf(!databaseUrl)(
         expect(room.state.protocolVersion).toBe(PROTOCOL_VERSION);
         expect(room.state.players.get(room.sessionId)).toMatchObject({
           name: 'Горожанин',
-          color: '#8c9eff',
+          color: '#7D86F0',
           skinId: 'standard',
         });
         expect((await fetch(app.url + '/health/ready')).status).toBe(200);

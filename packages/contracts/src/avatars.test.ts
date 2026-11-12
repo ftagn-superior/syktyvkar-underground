@@ -29,3 +29,18 @@ describe('avatar catalog and saved profile', () => {
     expect(resolveAvatarSkinId(value)).toBe(DEFAULT_AVATAR_SKIN);
   });
 });
+
+describe('profile colours', () => {
+  const base = { displayName: 'Игрок', skinId: 'minifigure', version: 1 };
+  it('accepts presets, legacy ids and custom hex, normalising hex', async () => {
+    const { parseProfileUpdate, resolveProfileColor } = await import('./accounts.js');
+    expect(parseProfileUpdate({ ...base, colorId: 'cyan' })?.colorId).toBe('cyan');
+    expect(parseProfileUpdate({ ...base, colorId: 'sky' })?.colorId).toBe('sky');
+    expect(parseProfileUpdate({ ...base, colorId: '#1b2a6b' })?.colorId).toBe('#1B2A6B');
+    expect(parseProfileUpdate({ ...base, colorId: '#6ee0c4' })?.colorId).toBe('mint');
+    expect(parseProfileUpdate({ ...base, colorId: 'nope' })).toBeUndefined();
+    expect(parseProfileUpdate({ ...base, colorId: '#12345' })).toBeUndefined();
+    expect(resolveProfileColor('sky')?.hex).toBe('#68C8ED');
+    expect(resolveProfileColor('#1B2A6B')).toMatchObject({ custom: true, label: 'Свой цвет' });
+  });
+});

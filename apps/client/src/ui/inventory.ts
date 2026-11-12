@@ -8,7 +8,6 @@ export class InventoryPanel {
   private enabled = true;
   private readonly controller = new AbortController();
   private readonly toggle = document.createElement('button');
-  private readonly pickup = document.createElement('button');
   private readonly panel = document.createElement('section');
   private readonly grid = document.createElement('div');
   private readonly message = document.createElement('p');
@@ -21,6 +20,7 @@ export class InventoryPanel {
   private selected?: InventoryItem;
   private activeSlot?: string;
   private pendingFocusKey?: string;
+  private pendingPickup?: string;
   private targetSlot?: string;
   private rotation = Quaternion.Identity();
   private pose?: ItemPose;
@@ -31,26 +31,21 @@ export class InventoryPanel {
     private readonly canvas: HTMLCanvasElement,
     private readonly onOpen?: () => void,
     private readonly onPlacementChange?: (active: boolean) => void,
+    private readonly onPickedUp?: (name: string) => void,
   ) {
-    this.toggle.className = this.pickup.className = 'button quiet';
+    this.toggle.type = 'button';
+    this.toggle.className = 'su-row su-row-btn';
     this.toggle.id = 'inventory-toggle';
     this.toggle.append(
-      'Инвентарь ',
-      Object.assign(document.createElement('kbd'), { textContent: 'X' }),
+      Object.assign(document.createElement('span'), { textContent: 'Инвентарь' }),
+      Object.assign(document.createElement('kbd'), { className: 'su-kbd', textContent: 'X' }),
     );
     this.toggle.setAttribute('aria-label', 'Инвентарь · X');
     this.toggle.hidden = true;
     this.toggle.setAttribute('aria-controls', 'inventory-panel');
     this.toggle.setAttribute('aria-expanded', 'false');
     this.toggle.setAttribute('aria-keyshortcuts', 'X');
-    this.pickup.append(
-      'Подобрать ',
-      Object.assign(document.createElement('kbd'), { textContent: 'Z' }),
-    );
-    this.pickup.setAttribute('aria-label', 'Подобрать · Z');
-    this.pickup.setAttribute('aria-keyshortcuts', 'Z');
-    this.pickup.hidden = true;
-    document.querySelector('.actions')!.prepend(this.pickup, this.toggle);
+    document.getElementById('help-menu-rows')!.append(this.toggle);
     this.panel.id = 'inventory-panel';
     this.panel.className = 'inventory-panel hud-panel';
     this.panel.hidden = true;
@@ -84,7 +79,7 @@ export class InventoryPanel {
     this.details.setAttribute('aria-label', 'Действия с выбранной стопкой');
     const footer = document.createElement('div');
     footer.className = 'catalog-footer';
-    for (const text of ['Подобрать рядом — Z', 'Закрыть — Esc']) {
+    for (const text of ['Подобрать — по подсказке (Z)', 'Закрыть — Esc']) {
       const hint = document.createElement('span');
       hint.textContent = text;
       footer.append(hint);
@@ -133,7 +128,6 @@ export class InventoryPanel {
     document.body.append(this.panel, this.toolbar);
     const options = { signal: this.controller.signal };
     this.toggle.addEventListener('click', () => this.open(this.panel.hidden), options);
-    this.pickup.addEventListener('click', () => this.collect(), options);
     canvas.addEventListener(
       'click',
       () => {
@@ -157,10 +151,6 @@ export class InventoryPanel {
         if (event.code === 'KeyX') {
           event.preventDefault();
           this.open(this.panel.hidden);
-        }
-        if (event.code === 'KeyZ') {
-          event.preventDefault();
-          this.collect();
         }
         if (event.code === 'Escape' && (!this.panel.hidden || this.selected)) {
           event.preventDefault();
@@ -186,6 +176,9 @@ export class InventoryPanel {
     );
     session.onInventoryChange = () => this.update();
     session.onItemResult = (result) => {
+      const picked = this.pendingPickup;
+      this.pendingPickup = undefined;
+      if (result.ok && picked) this.onPickedUp?.(picked);
       if (result.ok) this.cancel();
       this.update();
     };
@@ -240,10 +233,22 @@ export class InventoryPanel {
     if (!enabled) this.close();
     this.update();
   }
-  private collect() {
-    if (!this.enabled) return;
-    const id = this.session.nearestItem();
-    if (id && !this.selected) this.session.itemAction({ kind: 'pickup', itemId: id });
+  /** True when a contextual pickup prompt may be shown and activated. */
+  get canCollect(): boolean {
+    return (
+      this.enabled &&
+      !this.selected &&
+      this.session.state === 'playing' &&
+      !!this.session.accountId &&
+      !this.session.itemPending &&
+      !this.session.worldPaused
+    );
+  }
+  /** Picks up a specific item; called by the interaction prompt. */
+  pickup(itemId: string, name = 'Предмет'): void {
+    if (!this.canCollect) return;
+    this.pendingPickup = name;
+    this.session.itemAction({ kind: 'pickup', itemId });
   }
   private place() {
     if (this.enabled && this.selected && this.pose && this.valid)
@@ -273,14 +278,13 @@ export class InventoryPanel {
       (this.session.state === 'playing' || preparing) &&
       !!this.session.accountId &&
       !!this.session.room;
-    this.toggle.hidden = this.pickup.hidden = !available;
+    this.toggle.hidden = !available;
     if (!available) {
       this.panel.hidden = true;
       this.cancel();
       this.toggle.setAttribute('aria-expanded', 'false');
     }
     const busy = preparing || this.session.itemPending || this.session.worldPaused;
-    this.pickup.disabled = busy || !this.session.nearestItem() || !!this.selected;
     this.toggle.disabled = false;
     const slots = this.session.inventory.slots;
     if (!slots.some((slot) => slot.slotId === this.activeSlot)) this.activeSlot = slots[0]?.slotId;
@@ -515,6 +519,5 @@ export class InventoryPanel {
     this.panel.remove();
     this.toolbar.remove();
     this.toggle.remove();
-    this.pickup.remove();
   }
 }

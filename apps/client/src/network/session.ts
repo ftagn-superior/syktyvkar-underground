@@ -1162,18 +1162,6 @@ export class GameSession {
     this.itemRetryAt = 0;
     this.onInventoryChange?.();
   }
-  nearestItem(): string | undefined {
-    const room = this.room,
-      self = room?.state.players.get(room.sessionId);
-    if (!self) return;
-    return Array.from(room!.state.items.values())
-      .map((i) => ({
-        id: i.entityId,
-        distance: Math.hypot(i.x - self.x, i.y - self.y, i.z - self.z),
-      }))
-      .filter((i) => i.distance <= 3)
-      .sort((a, b) => a.distance - b.distance)[0]?.id;
-  }
   placement(
     typeId: string,
     from: Vec3,

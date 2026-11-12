@@ -7,6 +7,8 @@ import {
   type PlayerProfile,
 } from '@su/contracts';
 import { AvatarPicker } from './avatar-picker';
+import { ColorPicker } from './color-picker';
+import { applyAccent } from './theme';
 
 const guestSkinKey = 'su:guest-skin:v1';
 function guestSkin() {
@@ -38,8 +40,7 @@ export class AccountPanel {
   private readonly panel = document.getElementById('account-panel')!;
   private readonly form = document.getElementById('profile-form') as HTMLFormElement;
   private readonly name = document.getElementById('profile-name') as HTMLInputElement;
-  private readonly color = document.getElementById('profile-color') as HTMLSelectElement;
-  private readonly save = document.getElementById('profile-save') as HTMLButtonElement;
+  private readonly colors: ColorPicker;
   private readonly logout = document.getElementById('account-logout') as HTMLButtonElement;
   private readonly retry = document.getElementById('account-retry') as HTMLButtonElement;
   private readonly message = document.getElementById('account-message')!;
@@ -61,12 +62,15 @@ export class AccountPanel {
       this.onChange();
     });
     this.skins.value = guestSkin();
-    for (const color of PROFILE_COLORS) {
-      const option = document.createElement('option');
-      option.value = color.id;
-      option.textContent = color.label;
-      this.color.append(option);
-    }
+    this.colors = new ColorPicker(
+      document.getElementById('profile-swatches')!,
+      document.getElementById('profile-color-label')!,
+      () => {
+        this.preview();
+        this.onChange();
+      },
+    );
+    this.name.addEventListener('input', () => this.preview());
     this.form.addEventListener('submit', (event) => {
       event.preventDefault();
       void this.submit();
@@ -77,11 +81,11 @@ export class AccountPanel {
     this.retry.addEventListener('click', () => {
       void this.load();
     });
-    this.color.addEventListener('change', () => this.preview());
+    this.preview();
   }
   async load(): Promise<void> {
     this.loading = true;
-    this.skins.disabled = true;
+    this.skins.disabled = this.colors.disabled = true;
     this.retry.hidden = true;
     this.onChange();
     try {
@@ -119,7 +123,8 @@ export class AccountPanel {
         'Не удалось загрузить аккаунт. Повторите загрузку или войдите гостем.';
     } finally {
       this.loading = false;
-      this.skins.disabled = false;
+      this.skins.disabled = this.colors.disabled = false;
+      this.preview();
       this.onChange();
     }
   }
@@ -130,28 +135,39 @@ export class AccountPanel {
     this.logout.hidden = !this.account;
     this.message.textContent = '';
     if (this.account) this.fill(this.account.profile);
-    else this.skins.value = guestSkin();
+    else {
+      this.skins.value = guestSkin();
+      this.preview();
+    }
     this.note.textContent = this.account
-      ? 'Имя, цвет и внешность сохраняются перед входом в мир. На аккаунт доступен один персонаж одновременно.'
+      ? 'Имя, цвет и персонаж сохранятся при входе. Один персонаж на аккаунт.'
       : this.enabled
         ? 'Гостю доступны движение и толкание. Для инвентаря войдите через Telegram.'
         : 'Без регистрации. Для второго игрока откройте ещё одну вкладку.';
   }
   private fill(profile: PlayerProfile): void {
     this.name.value = profile.displayName;
-    this.color.value = profile.colorId;
+    this.colors.value = profile.colorId;
     this.skins.value = profile.skinId;
     this.preview();
   }
+  /** Colour, plate and accent follow the form live; nothing is saved until the player enters. */
   private preview(): void {
-    this.color.style.borderColor =
-      PROFILE_COLORS.find((color) => color.id === this.color.value)?.hex ?? '';
+    applyAccent(this.previewColor);
+    this.skins.setIdentity(this.account ? this.name.value.trim() : '', this.colorLabel);
+  }
+  private get colorLabel(): string {
+    return this.account ? this.colors.colorLabel : '';
+  }
+  /** Guests are coloured by the server, so their preview keeps the default mint. */
+  get previewColor(): string {
+    return this.account ? this.colors.hex : PROFILE_COLORS[0].hex;
   }
   private async submit(): Promise<boolean> {
     if (!this.account || this.saving) return false;
     const update = parseProfileUpdate({
       displayName: this.name.value,
-      colorId: this.color.value,
+      colorId: this.colors.value,
       skinId: this.skins.value,
       version: this.account.profile.version,
     });
@@ -160,9 +176,8 @@ export class AccountPanel {
       return false;
     }
     this.saving = true;
-    this.skins.disabled = true;
-    this.save.disabled = this.logout.disabled = true;
-    this.save.textContent = 'Сохраняем…';
+    this.skins.disabled = this.colors.disabled = true;
+    this.logout.disabled = true;
     this.onChange();
     try {
       const response = await fetch('/api/me/profile', {
@@ -188,9 +203,8 @@ export class AccountPanel {
       return false;
     } finally {
       this.saving = false;
-      this.skins.disabled = false;
-      this.save.disabled = this.logout.disabled = false;
-      this.save.textContent = 'Сохранить профиль';
+      this.skins.disabled = this.colors.disabled = false;
+      this.logout.disabled = false;
       this.onChange();
     }
   }
@@ -203,14 +217,14 @@ export class AccountPanel {
     if (!profile) return true;
     const changed =
       this.name.value !== profile.displayName ||
-      this.color.value !== profile.colorId ||
+      this.colors.value !== profile.colorId ||
       this.skins.value !== profile.skinId;
     return changed ? this.submit() : true;
   }
   private async signOut(): Promise<void> {
     if (!this.account || this.saving) return;
     this.saving = true;
-    this.save.disabled = this.logout.disabled = true;
+    this.logout.disabled = true;
     this.onChange();
     try {
       await this.beforeLogout();
@@ -226,7 +240,7 @@ export class AccountPanel {
       this.message.textContent = 'Не удалось подтвердить выход из аккаунта. Повторите попытку.';
     } finally {
       this.saving = false;
-      this.save.disabled = this.logout.disabled = false;
+      this.logout.disabled = false;
       this.onChange();
     }
   }

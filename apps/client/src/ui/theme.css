@@ -1,0 +1,177 @@
+/* Design tokens and low-poly primitives. The accent variables are set live by applyAccent(). */
+:root {
+  --accent: #6ee0c4;
+  --accent-soft: rgba(110, 224, 196, 0.16);
+  --accent-line: rgba(110, 224, 196, 0.55);
+  --accent-ink: #0c1412;
+  --accent-text: #6ee0c4;
+  --panel: rgba(13, 18, 21, 0.94);
+  --card: #141b1f;
+  --ink: #e9efed;
+  --ink-muted: #a3b2af;
+  --ink-dim: #93a29f;
+  --divider: rgba(255, 255, 255, 0.07);
+  --font-display: 'Unbounded', 'Manrope', system-ui, sans-serif;
+  --font-body: 'Manrope', Inter, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --mint: var(--accent);
+  --facet: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.4) 0 34%,
+    transparent 34% 62%,
+    rgba(0, 0, 0, 0.22) 62%
+  );
+}
+:root {
+  font-family: var(--font-body);
+}
+
+/* ---------- cut-corner surface ---------- */
+.su-facet {
+  position: relative;
+  isolation: isolate;
+}
+.su-facet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--fbg, var(--panel));
+  clip-path: polygon(
+    var(--cut, 20px) 0,
+    100% 0,
+    100% calc(100% - var(--cut, 20px)),
+    calc(100% - var(--cut, 20px)) 100%,
+    0 100%,
+    0 var(--cut, 20px)
+  );
+}
+.su-corner {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  pointer-events: none;
+}
+.su-gem {
+  display: inline-block;
+  width: 14px;
+  height: 16px;
+  flex: none;
+  background: var(--facet), var(--gem, var(--accent));
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.su-gem.sm {
+  width: 9px;
+  height: 10px;
+}
+.su-hex {
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+@media (forced-colors: active) {
+  .su-facet::before {
+    background: Canvas;
+  }
+}
+
+/* ---------- controls ---------- */
+.su-kbd {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.14) 0 34%,
+    rgba(255, 255, 255, 0.06) 34%
+  );
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+.su-btn {
+  height: 44px;
+  padding: 0 16px;
+  margin: 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+.su-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+.su-btn.accent {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 30%, transparent 30%), var(--accent);
+  color: var(--accent-ink);
+}
+.su-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.su-close {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.su-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.su-btn:focus-visible,
+.su-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@keyframes su-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

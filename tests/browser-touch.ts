@@ -137,8 +137,7 @@ try {
   // Typing movement letters in a form never switches the input mode.
   await page.locator('#profile-name').fill('Touch WASD');
   assert.equal(await page.locator('body').getAttribute('data-input-mode'), 'touch');
-  await page.locator('#profile-save').tap();
-  await page.goto(app.url + '/?diagnostics=1');
+  // Entering the world saves the edited profile.
   await page.locator('#join:not([disabled])').tap();
   await playing(page);
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.controls().touchAvailable);

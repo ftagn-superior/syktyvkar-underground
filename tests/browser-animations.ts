@@ -5,6 +5,7 @@ import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
 import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
+import { hudClick } from './helpers/hud.js';
 
 const output = 'output/playwright/animations';
 const app = await createGameServer({ port: 0 });
@@ -94,19 +95,19 @@ try {
     await sender.keyboard.press('t');
     await sender.locator('#chat-input:focus').waitFor();
     assert.equal(await sender.locator('#animations-panel').isVisible(), false);
-    await sender.locator('#animations-toggle').click();
+    await hudClick(sender, '#animations-toggle');
     assert.equal(await sender.locator('#chat-console').isVisible(), false);
     assert.equal(await sender.locator('#animations-panel').isVisible(), true);
     await sender.keyboard.press('Escape');
     for (const [clipIndex, definition] of ANIMATIONS.entries()) {
       await idle(sender);
       if (definition.id === 'wave') {
-        await sender.locator('#chat-toggle').click();
+        await hudClick(sender, '#chat-toggle');
         await sender.locator('#chat-input').fill('Привет из меню анимаций!');
         await sender.locator('#chat-input').press('Enter');
         await sender.locator('#chat-console').waitFor({ state: 'hidden' });
       }
-      await sender.locator('#animations-toggle').click();
+      await hudClick(sender, '#animations-toggle');
       if (clipIndex < 9) await sender.keyboard.press(String(clipIndex + 1));
       else await sender.locator(`[data-animation-id="${definition.id}"]`).click();
       await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
@@ -128,7 +129,7 @@ try {
         await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 200);
         await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
         assert.ok((await avatar(sender, id)).animation.elapsedMs > WORLD_ACTIVITY_MOVE_DURATION_MS);
-        await sender.locator('#animations-toggle').click();
+        await hudClick(sender, '#animations-toggle');
         assert.equal(
           await sender.locator('.animation-choice:not([disabled])').count(),
           ANIMATIONS.length,
@@ -136,7 +137,7 @@ try {
         await sender.keyboard.press('Escape');
       }
       if (definition.id === 'wave') {
-        await sender.locator('#reactions-toggle').click();
+        await hudClick(sender, '#reactions-toggle');
         await sender.locator('[data-reaction-id="hello"]').click();
         await observer.locator(`.player-reaction[data-entity-id="${id}"]`).waitFor();
         assert.equal(
@@ -155,7 +156,7 @@ try {
         await sender.keyboard.up('s');
       }
       if (definition.id === 'dance') {
-        await sender.locator('#chat-toggle').click();
+        await hudClick(sender, '#chat-toggle');
         await sender.locator('#chat-input').fill('wasd qer');
         await sender.keyboard.press('Escape');
         assert.equal((await avatar(sender, id)).animation.reason, 'playing');
@@ -224,8 +225,8 @@ try {
     'chat and animation panels close each other; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
   );
   const sender = pages[0];
-  await sender.locator('#animations-toggle').click();
-  await sender.locator('#reactions-toggle').click();
+  await hudClick(sender, '#animations-toggle');
+  await hudClick(sender, '#reactions-toggle');
   assert.equal(await sender.locator('#animations-panel').isVisible(), false);
   await sender.keyboard.press('Escape');
   for (const size of [
@@ -235,7 +236,7 @@ try {
     { width: 640, height: 360 },
   ]) {
     await sender.setViewportSize(size);
-    await sender.locator('#animations-toggle').click();
+    await hudClick(sender, '#animations-toggle');
     const box = await sender.locator('#animations-panel').boundingBox();
     assert.ok(
       box &&
@@ -300,7 +301,7 @@ try {
   );
   await sender.setViewportSize({ width: 1280, height: 720 });
   await sender.emulateMedia({ reducedMotion: 'reduce' });
-  await sender.locator('#animations-toggle').click();
+  await hudClick(sender, '#animations-toggle');
   await sender.locator('[data-animation-id="dance"]').click();
   const id = (await snapshot(sender)).authoritative.entityId;
   await active(sender, id, 'dance');

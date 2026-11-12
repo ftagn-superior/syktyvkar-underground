@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { cpus, platform, totalmem } from 'node:os';
+import { hudClick } from './helpers/hud.js';
 
 // A small comparative experiment, not the full T04 hardware acceptance run.
 const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
@@ -33,11 +34,11 @@ try {
   for (const quality of qualities) {
     const qualitySelect = page.locator('#quality');
     if (await qualitySelect.count()) {
-      if (!(await qualitySelect.isVisible())) await page.locator('#diagnostics-toggle').click();
+      if (!(await qualitySelect.isVisible())) await hudClick(page, '#diagnostics-toggle');
       await qualitySelect.selectOption(quality);
       // The diagnostics overlay has identical visibility during every measurement.
       if (await page.locator('#diagnostics').isVisible())
-        await page.locator('#diagnostics-toggle').click();
+        await hudClick(page, '#diagnostics-toggle');
     } else assert.equal(quality, 'standard', 'baseline only supports the standard profile');
     await page.waitForTimeout(warmupMs);
     // Raw browser code avoids tsx's function-name helper leaking into the page.
@@ -95,7 +96,7 @@ try {
     });
     console.log(JSON.stringify({ quality, ...profiles.at(-1)?.frameMs, samples: sorted.length }));
   }
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   assert.deepEqual(errors, [], 'no uncaught browser errors');
   const result = {
     date: new Date().toISOString(),

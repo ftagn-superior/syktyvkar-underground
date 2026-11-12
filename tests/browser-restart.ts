@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createGameServer } from './helpers/game-server.js';
 import { createDatabaseFixture } from './helpers/database-fixture.js';
+import { hudClick } from './helpers/hud.js';
 
 const database = await createDatabaseFixture();
 let app = await createGameServer({ port: 0, pool: database.pool });
@@ -42,7 +43,7 @@ try {
     'restart preserves item identities without repeating seeds',
   );
   assert.deepEqual(errors, []);
-  await page.locator('#leave').click();
+  await hudClick(page, '#leave');
   const result = {
     date: new Date().toISOString(),
     browser: browser.version(),

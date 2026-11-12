@@ -60,7 +60,7 @@ try {
   const stopped = await sender.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
   );
-  await sender.keyboard.type('wasd qer ift');
+  await sender.keyboard.type('wasd qer zxft');
   await sender.waitForTimeout(300);
   const afterTyping = await sender.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
@@ -71,6 +71,15 @@ try {
   await sender.keyboard.press('Escape');
   assert.equal(await sender.locator('#chat-console').isVisible(), false);
   assert.equal(await sender.locator('#world:focus').count(), 1);
+  await sender.keyboard.press('/');
+  await sender.locator('#chat-input:focus').waitFor();
+  assert.equal(await sender.locator('#chat-input').inputValue(), '/');
+  assert.equal(await sender.locator('#chat-counter').textContent(), '1 / 255');
+  await sender.keyboard.type('giveme');
+  assert.equal(await sender.locator('#chat-input').inputValue(), '/giveme');
+  await sender.keyboard.press('/');
+  assert.equal(await sender.locator('#chat-input').inputValue(), '/giveme/');
+  await sender.keyboard.press('Escape');
   await sender.keyboard.press('t');
   assert.equal(await sender.locator('#chat-input').inputValue(), '');
   await sender.locator('#chat-toggle').focus();
@@ -82,7 +91,7 @@ try {
   assert.equal(await sender.locator('#chat-console').isVisible(), true);
   assert.equal(await observer.locator('.player-chat').count(), 0);
   checks.push(
-    'T opens empty focused input, held movement stops, typing triggers no game shortcuts, Escape clears, blank messages stay unsent',
+    'T opens empty input, / opens with one slash and preserves typing, held movement stops, typing triggers no game shortcuts, Escape clears, blank messages stay unsent',
   );
 
   const input = sender.locator('#chat-input');

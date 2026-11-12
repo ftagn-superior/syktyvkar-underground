@@ -48,29 +48,33 @@ try {
       .sort(),
   );
   for (let count = 1; count <= 3; count++) {
-    await page.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
     await page.waitForFunction(
-      (expected) =>
-        (window as any).__SU_DEBUG__.snapshot().inventory.slots.flatMap((s: any) => s.items)
-          .length === expected,
-      count,
+      () =>
+        document.querySelector<HTMLButtonElement>('[aria-keyshortcuts="Z"]')?.disabled === false,
     );
+    await page.keyboard.press('z');
+    await page.waitForFunction((expected) => {
+      const state = (window as any).__SU_DEBUG__.snapshot();
+      return (
+        state.inventory.slots.flatMap((s: any) => s.items).length === expected &&
+        state.items.length === 3 - expected
+      );
+    }, count);
     await page.waitForFunction(
       () => (window as any).__SU_DEBUG__.snapshot().storagePaused === false,
     );
   }
   assert.equal(app.room.state.items.size, 0);
-  await page.keyboard.press('i');
+  await page.keyboard.press('x');
+  assert.equal(await page.locator('.inventory-choice:focus').count(), 1);
   await page.getByRole('button', { name: 'Разделить пополам', exact: true }).click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 2,
   );
-  await page
-    .locator('.inventory-slot')
-    .first()
-    .getByRole('button', { name: 'Переместить / объединить' })
-    .click();
-  // Preparing a return preserves the open inventory and its selected move source.
+  await page.locator('.inventory-choice').first().click();
+  await page.getByRole('button', { name: 'Переместить / объединить' }).click();
+  assert.equal(await page.locator('.inventory-slot:last-child .inventory-choice:focus').count(), 1);
+  // Preparing a return preserves the open inventory and selected move source.
   const beforeReturn = await page.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
   );
@@ -80,24 +84,15 @@ try {
     return state.connection === 'playing' && state.authoritative.revision > revision;
   }, beforeReturn);
   assert.equal(await page.locator('.inventory-panel').isVisible(), true);
-  await page
-    .locator('.inventory-slot')
-    .last()
-    .getByRole('button', { name: 'Поменять местами' })
-    .click();
+  await page.locator('.inventory-choice').last().click();
+  await page.getByRole('button', { name: 'Поменять местами' }).click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots[0].items.length === 1,
   );
-  await page
-    .locator('.inventory-slot')
-    .first()
-    .getByRole('button', { name: 'Переместить / объединить' })
-    .click();
-  await page
-    .locator('.inventory-slot')
-    .last()
-    .getByRole('button', { name: 'Объединить сюда' })
-    .click();
+  await page.locator('.inventory-choice').first().click();
+  await page.getByRole('button', { name: 'Переместить / объединить' }).click();
+  await page.locator('.inventory-choice').last().click();
+  await page.getByRole('button', { name: 'Объединить сюда' }).click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 1,
   );
@@ -107,8 +102,47 @@ try {
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots[0].items[0].itemId,
   );
   await page.getByRole('button', { name: '📦 Деревянный ящик × 3', exact: true }).click();
-  await page.getByRole('button', { name: 'X +15°', exact: true }).click();
-  await page.getByRole('button', { name: 'Y +15°', exact: true }).click();
+  assert.equal(await page.locator('#inventory-panel').isVisible(), true);
+  const controls = () =>
+    page.evaluate(() => ({
+      position: (window as any).__SU_DEBUG__.snapshot().authoritative.position,
+      camera: (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+    }));
+  const distance = (a: { x: number; z: number }, b: { x: number; z: number }) =>
+    Math.hypot(a.x - b.x, a.z - b.z);
+  // A key held before placement must not resume movement when placement ends.
+  await page.keyboard.down('ArrowUp');
+  await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
+  assert.equal(await page.locator('.placement-toolbar button').count(), 2);
+  await page.waitForTimeout(200);
+  const beforeCancel = await controls();
+  await page.keyboard.down('d');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Shift');
+  await page.waitForTimeout(250);
+  assert.ok(distance((await controls()).position, beforeCancel.position) < 0.03);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.placement-toolbar').isVisible(), false);
+  assert.equal(await page.locator('#controls-title').textContent(), 'Свободное движение');
+  await page.waitForTimeout(250);
+  assert.ok(distance((await controls()).position, beforeCancel.position) < 0.03);
+  await page.keyboard.up('ArrowUp');
+  await page.keyboard.up('d');
+  await page.keyboard.press('e');
+  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
+  assert.ok(Math.abs((await controls()).camera - beforeCancel.camera - Math.PI / 2) < 0.01);
+  await page.keyboard.press('q');
+  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
+
+  await page.keyboard.press('x');
+  await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
+  const beforeRotation = await controls();
+  // Opposite pairs cancel, then S/D/E apply +15 degrees around each of the three axes.
+  for (const key of ['w', 's', 'a', 'd', 'q', 'e', 's', 'd', 'e']) await page.keyboard.press(key);
+  await page.waitForTimeout(300);
+  const afterRotation = await controls();
+  assert.ok(distance(afterRotation.position, beforeRotation.position) < 0.03);
+  assert.ok(Math.abs(afterRotation.camera - beforeRotation.camera) < 0.001);
   const confirm = page.getByRole('button', { name: 'Разместить', exact: true });
   let found = false;
   for (const y of [420, 400, 440, 460, 480]) {
@@ -127,14 +161,30 @@ try {
   await confirm.click();
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().items.length === 1);
   assert.equal(app.room.state.items.values().next().value!.entityId, chosenId);
-  assert.ok(
-    Math.abs(app.room.state.items.values().next().value!.qx) > 0.01,
-    'full 3D rotation reaches the server',
-  );
+  const placed = app.room.state.items.values().next().value!;
+  const sin = Math.sin(Math.PI / 24),
+    cos = Math.cos(Math.PI / 24);
+  const expectedRotation = {
+    qx: sin * cos * (cos - sin),
+    qy: sin * cos * (cos + sin),
+    qz: sin * cos * (cos - sin),
+    qw: cos ** 3 + sin ** 3,
+  };
+  for (const key of ['qx', 'qy', 'qz', 'qw'] as const)
+    assert.ok(
+      Math.abs(placed[key] - expectedRotation[key]) < 0.025,
+      `${key}: all six keys rotate the object by the expected 15-degree steps`,
+    );
   await page.waitForFunction(
     () => (document.querySelector('.placement-toolbar') as HTMLElement).hidden,
   );
-  await page.getByRole('button', { name: 'Подобрать · F', exact: true }).click();
+  assert.equal(await page.locator('#controls-title').textContent(), 'Свободное движение');
+  await page.keyboard.press('e');
+  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
+  assert.ok(Math.abs((await controls()).camera - beforeRotation.camera - Math.PI / 2) < 0.01);
+  await page.keyboard.press('q');
+  await page.waitForFunction(() => !(window as any).__SU_DEBUG__.report().rendering.camera.turning);
+  await page.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
   await page.waitForFunction(
     () =>
       (window as any).__SU_DEBUG__.snapshot().items.length === 0 &&
@@ -157,7 +207,7 @@ try {
       .sort(),
   );
   assert.deepEqual(restored, originalIds);
-  await page.getByRole('button', { name: 'Инвентарь · I', exact: true }).click();
+  await page.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
   await page.locator('#inventory-panel').waitFor({ state: 'visible' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'output/playwright/items-inventory-small.png' });
@@ -179,6 +229,8 @@ try {
           'swap',
           'merge',
           'rotated preview',
+          'WASDQE rotate all three axes in 15-degree steps without moving the player or camera',
+          'held movement keys cleared and normal controls restored after cancellation and placement',
           'placement of same ID',
           'pickup again',
           'restart',

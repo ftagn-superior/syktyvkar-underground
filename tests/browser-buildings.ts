@@ -105,19 +105,16 @@ try {
   // Camera moves without changing the authoritative position, and completes a full circuit.
   const stationary = (await snapshot(pages[0])).authoritative.position;
   const initialAngle = (await report(pages[0])).rendering.camera.azimuth;
-  for (const selector of ['#camera-left', '#camera-right']) {
+  for (const key of ['q', 'e'] as const) {
     const before = (await report(pages[0])).rendering.camera.azimuth;
-    await pages[0].locator(selector).click();
-    await pages[0].waitForFunction(
-      () => !(window as any).__SU_DEBUG__.report().rendering.camera.turning,
-    );
+    await turn(pages[0], key);
     const after = (await report(pages[0])).rendering.camera.azimuth;
     assert.ok(Math.abs(Math.abs(angleDelta(after, before)) - Math.PI / 2) < 0.01);
   }
   assert.ok(
     Math.abs(angleDelta((await report(pages[0])).rendering.camera.azimuth, initialAngle)) < 0.01,
   );
-  checks.push('both visible camera buttons rotate by a quarter turn');
+  checks.push('Q and E each rotate the camera by a quarter turn');
   let sawOpaque = false;
   for (let i = 0; i < 4; i++) {
     await turn(pages[0], 'e');

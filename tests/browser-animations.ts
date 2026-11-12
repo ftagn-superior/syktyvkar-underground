@@ -71,12 +71,12 @@ try {
     const observer = pages[1 - index];
     const id = (await snapshot(sender)).authoritative.entityId;
     await idle(sender);
-    await sender.locator('#animations-toggle').click();
+    await sender.keyboard.press('f');
     assert.equal(await sender.locator('.animation-choice').count(), 3);
     assert.equal(await sender.locator('.animation-choice:focus').count(), 1);
-    await sender.keyboard.press('Escape');
+    await sender.keyboard.press('f');
     assert.equal(await sender.locator('#world:focus').count(), 1);
-    await sender.locator('#animations-toggle').click();
+    await sender.keyboard.press('f');
     await sender.keyboard.press('t');
     await sender.locator('#chat-input:focus').waitFor();
     assert.equal(await sender.locator('#animations-panel').isVisible(), false);
@@ -93,7 +93,8 @@ try {
         await sender.locator('#chat-console').waitFor({ state: 'hidden' });
       }
       await sender.locator('#animations-toggle').click();
-      await sender.locator(`[data-animation-id="${definition.id}"]`).click();
+      if (definition.id === 'wave') await sender.keyboard.press('1');
+      else await sender.locator(`[data-animation-id="${definition.id}"]`).click();
       await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
       await sender.locator('#animations-panel').waitFor({ state: 'hidden' });
       for (const page of [sender, observer]) {

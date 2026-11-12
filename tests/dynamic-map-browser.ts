@@ -56,7 +56,8 @@ try {
     await page.setViewportSize(size);
     await page.locator('#world').dispatchEvent('wheel', { deltaY: 10_000 });
     for (let turn = 0; turn < 4; turn++) {
-      await page.locator('#camera-right').click();
+      await page.locator('#world').focus();
+      await page.keyboard.press('e');
       await page.waitForFunction(
         () => {
           const r = (window as any).__SU_DEBUG__.report().rendering;

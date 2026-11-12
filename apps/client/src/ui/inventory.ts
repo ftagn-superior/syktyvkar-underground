@@ -11,10 +11,15 @@ export class InventoryPanel {
   private readonly panel = document.createElement('section');
   private readonly grid = document.createElement('div');
   private readonly message = document.createElement('p');
+  private readonly summary = document.createElement('span');
+  private readonly details = document.createElement('section');
   private readonly toolbar = document.createElement('section');
+  private readonly placementTitle = document.createElement('strong');
   private readonly placementStatus = document.createElement('p');
   private readonly confirm: HTMLButtonElement;
   private selected?: InventoryItem;
+  private activeSlot?: string;
+  private pendingFocusKey?: string;
   private targetSlot?: string;
   private rotation = Quaternion.Identity();
   private pose?: ItemPose;
@@ -24,51 +29,106 @@ export class InventoryPanel {
     private readonly session: GameSession,
     private readonly canvas: HTMLCanvasElement,
     private readonly onOpen?: () => void,
+    private readonly onPlacementChange?: (active: boolean) => void,
   ) {
     this.toggle.className = this.pickup.className = 'button quiet';
-    this.toggle.textContent = 'Инвентарь · I';
+    this.toggle.id = 'inventory-toggle';
+    this.toggle.append(
+      'Инвентарь ',
+      Object.assign(document.createElement('kbd'), { textContent: 'X' }),
+    );
+    this.toggle.setAttribute('aria-label', 'Инвентарь · X');
     this.toggle.hidden = true;
     this.toggle.setAttribute('aria-controls', 'inventory-panel');
     this.toggle.setAttribute('aria-expanded', 'false');
-    this.pickup.textContent = 'Подобрать · F';
+    this.toggle.setAttribute('aria-keyshortcuts', 'X');
+    this.pickup.append(
+      'Подобрать ',
+      Object.assign(document.createElement('kbd'), { textContent: 'Z' }),
+    );
+    this.pickup.setAttribute('aria-label', 'Подобрать · Z');
+    this.pickup.setAttribute('aria-keyshortcuts', 'Z');
     this.pickup.hidden = true;
     document.querySelector('.actions')!.prepend(this.pickup, this.toggle);
     this.panel.id = 'inventory-panel';
-    this.panel.className = 'inventory-panel';
+    this.panel.className = 'inventory-panel hud-panel';
     this.panel.hidden = true;
     this.panel.setAttribute('aria-label', 'Личный инвентарь');
+    const heading = document.createElement('div');
+    heading.className = 'catalog-heading';
+    const titles = document.createElement('div');
+    const eyebrow = document.createElement('span');
+    eyebrow.className = 'catalog-eyebrow';
+    eyebrow.textContent = 'Личные вещи';
     const title = document.createElement('h2');
-    title.textContent = 'Личный инвентарь';
-    const close = this.button('Закрыть', () => this.open(false));
+    title.textContent = 'Инвентарь ';
+    this.summary.className = 'catalog-count';
+    title.append(this.summary);
+    titles.append(eyebrow, title);
+    const close = this.button('×', () => this.open(false));
+    close.className = 'reaction-close catalog-close';
     close.setAttribute('aria-label', 'Закрыть инвентарь');
+    close.title = 'Закрыть (Esc)';
+    heading.append(titles, close);
+    const description = document.createElement('p');
+    description.className = 'catalog-description';
+    description.textContent = 'Выберите стопку, затем действие.';
+    this.message.className = 'catalog-status inventory-status';
     this.message.setAttribute('role', 'status');
+    this.message.tabIndex = -1;
     this.grid.className = 'inventory-grid';
-    this.panel.append(title, close, this.message, this.grid);
+    this.grid.setAttribute('role', 'group');
+    this.grid.setAttribute('aria-label', 'Предметы в инвентаре');
+    this.details.className = 'inventory-details';
+    this.details.setAttribute('aria-label', 'Действия с выбранной стопкой');
+    const footer = document.createElement('div');
+    footer.className = 'catalog-footer';
+    for (const text of ['Подобрать рядом — Z', 'Закрыть — Esc']) {
+      const hint = document.createElement('span');
+      hint.textContent = text;
+      footer.append(hint);
+    }
+    this.panel.append(heading, description, this.message, this.grid, this.details, footer);
     this.toolbar.className = 'placement-toolbar';
     this.toolbar.hidden = true;
     this.toolbar.setAttribute('aria-label', 'Размещение предмета');
     this.placementStatus.setAttribute('role', 'status');
-    this.toolbar.append(this.placementStatus);
-    for (const [name, axis] of [
-      ['X', Vector3.Right()],
-      ['Y', Vector3.Up()],
-      ['Z', Vector3.Forward()],
-    ] as const) {
-      for (const sign of [-1, 1])
-        this.toolbar.append(
-          this.button(`${name} ${sign > 0 ? '+' : '−'}15°`, () => {
-            this.rotation = Quaternion.RotationAxis(axis, (sign * Math.PI) / 12)
-              .multiply(this.rotation)
-              .normalize();
-            this.canvas.focus({ preventScroll: true });
-          }),
-        );
+    this.placementTitle.className = 'placement-title';
+    this.placementStatus.className = 'catalog-status';
+    this.toolbar.append(this.placementTitle, this.placementStatus);
+    const hints = document.createElement('div');
+    hints.className = 'placement-keys';
+    hints.id = 'placement-keys';
+    for (const [keys, label] of [
+      ['W S', 'наклон'],
+      ['A D', 'поворот'],
+      ['Q E', 'крен'],
+    ]) {
+      const hint = document.createElement('span');
+      for (const key of keys.split(' ')) {
+        const keycap = document.createElement('kbd');
+        keycap.textContent = key;
+        hint.append(keycap);
+      }
+      hint.append(` — ${label}`);
+      hints.append(hint);
     }
+    const step = document.createElement('span');
+    step.textContent = 'Шаг 15° · персонаж стоит на месте';
+    hints.append(step);
+    this.toolbar.setAttribute('aria-describedby', hints.id);
     this.confirm = this.button('Разместить', () => this.place());
-    this.toolbar.append(
+    this.confirm.className = 'button inventory-primary';
+    const placementActions = document.createElement('div');
+    placementActions.className = 'inventory-actions';
+    placementActions.append(
       this.confirm,
-      this.button('Отмена · Esc', () => this.cancel()),
+      this.button('Отмена · Esc', () => {
+        this.cancel();
+        this.canvas.focus({ preventScroll: true });
+      }),
     );
+    this.toolbar.append(hints, placementActions);
     document.body.append(this.panel, this.toolbar);
     const options = { signal: this.controller.signal };
     this.toggle.addEventListener('click', () => this.open(this.panel.hidden), options);
@@ -92,18 +152,33 @@ export class InventoryPanel {
             (event.target.matches('input,textarea,select') || event.target.isContentEditable))
         )
           return;
-        if (event.code === 'KeyI') {
+        if (event.code === 'KeyX') {
           event.preventDefault();
           this.open(this.panel.hidden);
         }
-        if (event.code === 'KeyF') {
+        if (event.code === 'KeyZ') {
           event.preventDefault();
           this.collect();
         }
-        if (event.code === 'Escape') {
+        if (event.code === 'Escape' && (!this.panel.hidden || this.selected)) {
+          event.preventDefault();
           this.cancel();
           this.open(false);
+          this.canvas.focus({ preventScroll: true });
         }
+      },
+      options,
+    );
+    window.addEventListener(
+      'pointerdown',
+      (event) => {
+        if (
+          !this.panel.hidden &&
+          event.target instanceof Node &&
+          !this.panel.contains(event.target) &&
+          !this.toggle.contains(event.target)
+        )
+          this.open(false, false);
       },
       options,
     );
@@ -119,10 +194,11 @@ export class InventoryPanel {
     button.type = 'button';
     button.className = 'button quiet';
     button.textContent = text;
+    button.dataset.focusKey = text;
     button.addEventListener('click', click, { signal: this.controller.signal });
     return button;
   }
-  private open(open: boolean) {
+  private open(open: boolean, restoreFocus = true) {
     if (
       open &&
       (!['playing', 'preparing', 'waiting'].includes(this.session.state) ||
@@ -136,12 +212,17 @@ export class InventoryPanel {
     if (open) {
       this.cancel();
       this.update();
-      this.panel.querySelector('button')?.focus();
-    } else this.canvas.focus({ preventScroll: true });
+      (
+        this.panel.querySelector<HTMLButtonElement>(
+          '.inventory-choice[aria-pressed="true"]:not(:disabled)',
+        ) ?? this.panel.querySelector('button')
+      )?.focus({ preventScroll: true });
+    } else if (restoreFocus) this.canvas.focus({ preventScroll: true });
   }
   close(): void {
     this.panel.hidden = true;
     this.toggle.setAttribute('aria-expanded', 'false');
+    this.pendingFocusKey = undefined;
     this.cancel();
   }
   private collect() {
@@ -153,10 +234,20 @@ export class InventoryPanel {
       this.session.itemAction({ kind: 'place', itemId: this.selected.itemId, pose: this.pose });
   }
   private cancel() {
+    const wasPlacing = !!this.selected;
     this.selected = undefined;
     this.pose = undefined;
+    this.valid = false;
     this.targetSlot = undefined;
     this.toolbar.hidden = true;
+    if (wasPlacing) this.onPlacementChange?.(false);
+  }
+  rotatePlacement(axis: 'x' | 'y' | 'z', direction: -1 | 1): void {
+    if (!this.selected || this.session.itemPending || this.session.worldPaused) return;
+    const vector = axis === 'x' ? Vector3.Right() : axis === 'y' ? Vector3.Up() : Vector3.Forward();
+    this.rotation = Quaternion.RotationAxis(vector, (direction * Math.PI) / 12)
+      .multiply(this.rotation)
+      .normalize();
   }
   update() {
     const preparing = ['preparing', 'waiting'].includes(this.session.state);
@@ -173,85 +264,203 @@ export class InventoryPanel {
     const busy = preparing || this.session.itemPending || this.session.worldPaused;
     this.pickup.disabled = busy || !this.session.nearestItem() || !!this.selected;
     this.toggle.disabled = false;
+    const slots = this.session.inventory.slots;
+    if (!slots.some((slot) => slot.slotId === this.activeSlot)) this.activeSlot = slots[0]?.slotId;
+    if (!slots.some((slot) => slot.slotId === this.targetSlot)) this.targetSlot = undefined;
     const signature = canonicalJson({
       inventory: this.session.inventory,
       busy,
       target: this.targetSlot,
+      active: this.activeSlot,
     });
     if (signature === this.signature) return;
     this.signature = signature;
+    const focusKey = this.panel.contains(document.activeElement)
+      ? (document.activeElement as HTMLElement).dataset.focusKey
+      : undefined;
+    const restorePendingFocus = document.activeElement === this.message && !!this.pendingFocusKey;
+    const gridScroll = this.grid.scrollTop;
     this.panel.setAttribute('aria-busy', String(busy));
+    const count = slots.reduce((total, slot) => total + slot.items.length, 0);
+    this.summary.textContent = String(count);
+    this.summary.setAttribute('aria-label', `Всего предметов: ${count}`);
+    this.message.dataset.state = busy || this.targetSlot ? 'waiting' : 'ready';
     this.message.textContent = preparing
       ? 'Готовим окружение. Инвентарь доступен для просмотра.'
       : busy
         ? 'Ожидаем подтверждение сервера…'
         : this.targetSlot
-          ? 'Выберите ячейку для обмена местами или объединения.'
-          : this.session.inventory.slots.length
-            ? 'Выберите предмет для размещения. Подбор дополняет стопки автоматически.'
-            : 'Здесь пока пусто. Подойдите к предмету и нажмите F.';
+          ? 'Выберите другую ячейку для обмена или объединения.'
+          : 'Одинаковые вещи собираются в стопки.';
+    this.message.hidden = !slots.length;
     this.grid.replaceChildren();
-    for (const slot of this.session.inventory.slots) {
+    this.details.replaceChildren();
+    this.details.hidden = !slots.length;
+    this.grid.classList.toggle('is-empty', !slots.length);
+    if (!slots.length) {
+      const empty = document.createElement('div');
+      empty.className = 'inventory-empty';
+      const icon = document.createElement('span');
+      icon.className = 'inventory-empty-icon';
+      icon.textContent = '📦';
+      icon.setAttribute('aria-hidden', 'true');
+      const title = document.createElement('strong');
+      title.textContent = 'Здесь пока пусто';
+      const hint = document.createElement('p');
+      hint.textContent = 'Подойдите к предмету в мире и нажмите Z, чтобы забрать его с собой.';
+      empty.append(icon, title, hint);
+      this.grid.append(empty);
+    }
+    for (const [index, slot] of slots.entries()) {
       const item = slot.items[0],
         type = this.session.definition.itemCatalog.types[item.typeId];
       const cell = document.createElement('article');
       cell.className = 'inventory-slot';
       cell.dataset.slotId = slot.slotId;
+      cell.dataset.source = String(this.targetSlot === slot.slotId);
       const choose = this.button(`${type.icon} ${type.name} × ${slot.items.length}`, () => {
-        this.selected = item;
-        this.rotation = Quaternion.Identity();
-        this.open(false);
-        this.toolbar.hidden = false;
+        this.activeSlot = slot.slotId;
+        this.update();
       });
+      choose.className = 'inventory-choice';
+      choose.dataset.focusKey = `slot:${slot.slotId}`;
+      choose.setAttribute('aria-pressed', String(this.activeSlot === slot.slotId));
+      choose.setAttribute('aria-label', choose.textContent!);
+      const icon = document.createElement('span');
+      icon.className = 'inventory-item-icon';
+      icon.textContent = type.icon;
+      icon.setAttribute('aria-hidden', 'true');
+      const name = document.createElement('strong');
+      name.textContent = type.name;
+      const amount = document.createElement('span');
+      amount.className = 'inventory-amount';
+      amount.textContent = `×${slot.items.length}`;
+      const number = document.createElement('span');
+      number.className = 'inventory-slot-number';
+      number.textContent =
+        this.targetSlot === slot.slotId ? 'Откуда' : String(index + 1).padStart(2, '0');
+      choose.replaceChildren(number, icon, name, amount);
       choose.disabled = busy;
       cell.append(choose);
-      if (slot.items.length > 1)
-        cell.append(
-          this.button('Разделить пополам', () =>
-            this.session.itemAction({
-              kind: 'split',
-              slotId: slot.slotId,
-              count: Math.floor(slot.items.length / 2),
+      this.grid.append(cell);
+    }
+    const active = slots.find((slot) => slot.slotId === this.activeSlot);
+    if (active) {
+      const item = active.items[0];
+      const type = this.session.definition.itemCatalog.types[item.typeId];
+      const title = document.createElement('h3');
+      title.textContent = type.name;
+      const meta = document.createElement('p');
+      meta.className = 'inventory-item-meta';
+      meta.textContent = `В стопке: ${active.items.length} / ${type.maxStack} · Масса предмета: ${type.mass} кг`;
+      const actions = document.createElement('div');
+      actions.className = 'inventory-actions';
+      this.details.append(title, meta, actions);
+      if (!this.targetSlot) {
+        const place = this.button('Разместить в мире', () => {
+          this.selected = item;
+          this.rotation = Quaternion.Identity();
+          this.placementTitle.textContent = `${type.icon} ${type.name}`;
+          this.open(false);
+          this.toolbar.hidden = false;
+          this.onPlacementChange?.(true);
+        });
+        place.className = 'button inventory-primary';
+        actions.append(place);
+        if (active.items.length > 1)
+          actions.append(
+            this.button('Разделить пополам', () =>
+              this.session.itemAction({
+                kind: 'split',
+                slotId: active.slotId,
+                count: Math.floor(active.items.length / 2),
+              }),
+            ),
+          );
+        const move = this.button('Переместить / объединить', () => {
+          this.targetSlot = active.slotId;
+          this.update();
+        });
+        move.disabled = slots.length < 2;
+        if (move.disabled) move.title = 'Нужна ещё одна стопка в инвентаре';
+        actions.append(move);
+      } else {
+        const source = slots.find((slot) => slot.slotId === this.targetSlot)!;
+        meta.textContent =
+          source === active
+            ? 'Выберите ячейку назначения в сетке выше.'
+            : `Из ячейки ${slots.indexOf(source) + 1} → в ячейку ${slots.indexOf(active) + 1}`;
+        if (source !== active) {
+          actions.append(
+            this.button('Поменять местами', () => {
+              const slotId = this.targetSlot!;
+              this.targetSlot = undefined;
+              this.session.itemAction({
+                kind: 'move',
+                slotId,
+                targetSlotId: active.slotId,
+              });
+              this.update();
             }),
-          ),
-        );
-      if (!this.targetSlot)
-        cell.append(
-          this.button('Переместить / объединить', () => {
-            this.targetSlot = slot.slotId;
-            this.update();
-          }),
-        );
-      else if (this.targetSlot !== slot.slotId) {
-        cell.append(
-          this.button('Поменять местами', () => {
-            this.session.itemAction({
-              kind: 'move',
-              slotId: this.targetSlot!,
-              targetSlotId: slot.slotId,
-            });
+          );
+          const merge = this.button('Объединить сюда', () => {
+            const slotId = this.targetSlot!;
             this.targetSlot = undefined;
-          }),
-        );
-        cell.append(
-          this.button('Объединить сюда', () => {
             this.session.itemAction({
               kind: 'merge',
-              slotId: this.targetSlot!,
-              targetSlotId: slot.slotId,
+              slotId,
+              targetSlotId: active.slotId,
             });
-            this.targetSlot = undefined;
-          }),
-        );
-      } else
-        cell.append(
+            this.update();
+          });
+          const compatible = source.items.every(
+            (entry) =>
+              entry.typeId === item.typeId &&
+              canonicalJson(entry.properties) === canonicalJson(item.properties),
+          );
+          merge.disabled = !compatible || active.items.length >= type.maxStack;
+          merge.className = 'button inventory-primary';
+          if (merge.disabled) {
+            const reason = document.createElement('p');
+            reason.className = 'inventory-item-meta';
+            reason.textContent = compatible
+              ? 'Эта стопка уже заполнена.'
+              : 'Объединять можно только одинаковые предметы.';
+            merge.title = reason.textContent;
+            this.details.append(reason);
+          }
+          actions.append(merge);
+        }
+        actions.append(
           this.button('Отменить выбор', () => {
             this.targetSlot = undefined;
             this.update();
           }),
         );
-      for (const button of cell.querySelectorAll('button')) button.disabled = busy;
-      this.grid.append(cell);
+      }
+      if (busy) for (const button of actions.querySelectorAll('button')) button.disabled = true;
+    }
+    this.grid.scrollTop = gridScroll;
+    if (!this.panel.hidden && (focusKey || restorePendingFocus)) {
+      const key = focusKey ?? this.pendingFocusKey;
+      const matching = Array.from(
+        this.panel.querySelectorAll<HTMLButtonElement>('[data-focus-key]'),
+      ).find((button) => button.dataset.focusKey === key && !button.disabled);
+      if (matching) {
+        this.pendingFocusKey = undefined;
+        matching.focus({ preventScroll: true });
+      } else if (busy) {
+        this.pendingFocusKey = key;
+        this.message.focus({ preventScroll: true });
+      } else {
+        this.pendingFocusKey = undefined;
+        const choices = Array.from(this.grid.querySelectorAll<HTMLButtonElement>('button'));
+        (
+          choices.find(
+            (button) => this.targetSlot && button.dataset.focusKey !== `slot:${this.targetSlot}`,
+          ) ?? choices.find((button) => button.getAttribute('aria-pressed') === 'true')
+        )?.focus({ preventScroll: true });
+      }
     }
   }
   frame(view: WorldView) {
@@ -278,9 +487,12 @@ export class InventoryPanel {
           ? 'Подойдите ближе · не более 3 метров'
           : 'Выберите свободную поверхность с опорой';
     if (this.placementStatus.textContent !== text) this.placementStatus.textContent = text;
+    this.placementStatus.dataset.state =
+      this.valid && !this.session.itemPending ? 'ready' : 'waiting';
     this.confirm.disabled = !this.valid || this.session.itemPending || this.session.worldPaused;
   }
   dispose() {
+    this.cancel();
     this.controller.abort();
     this.panel.remove();
     this.toolbar.remove();

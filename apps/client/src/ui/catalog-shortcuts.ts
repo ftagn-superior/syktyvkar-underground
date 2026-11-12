@@ -5,6 +5,7 @@ export function bindCatalogShortcuts(
   signal: AbortSignal,
 ): void {
   choices.forEach((button, index) => {
+    if (index >= 9) return;
     button.setAttribute('aria-keyshortcuts', String(index + 1));
     const key = document.createElement('kbd');
     key.className = 'catalog-choice-key';

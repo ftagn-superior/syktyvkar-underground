@@ -8,7 +8,7 @@ export * from './animations.js';
 export * from './world-layout-patch.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 export const WORLD_FORMAT_VERSION = 4;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -115,7 +115,7 @@ export interface WorldCellManifest {
   /** Optional bounded transport packs; individual files remain the authoritative fallback. */
   graphicsPacks?: string[];
 }
-export type MoveInput = { moveX: number; moveZ: number; sprint?: boolean };
+export type MoveInput = { moveX: number; moveZ: number; sprint?: boolean; facingYaw?: number };
 export const NEUTRAL_INPUT: Readonly<MoveInput> = Object.freeze({
   moveX: 0,
   moveZ: 0,
@@ -268,7 +268,7 @@ export interface RespawnRequest {
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 export function normalizeInput(value: unknown): MoveInput | undefined {
   if (!value || typeof value !== 'object') return;
-  const { moveX, moveZ, sprint = false } = value as MoveInput;
+  const { moveX, moveZ, sprint = false, facingYaw } = value as MoveInput;
   if (
     typeof moveX !== 'number' ||
     typeof moveZ !== 'number' ||
@@ -279,7 +279,16 @@ export function normalizeInput(value: unknown): MoveInput | undefined {
     return;
   if (Math.abs(moveX) > 100 || Math.abs(moveZ) > 100) return;
   const length = Math.max(1, Math.hypot(moveX, moveZ));
-  return { moveX: moveX / length, moveZ: moveZ / length, sprint };
+  const input: MoveInput = { moveX: moveX / length, moveZ: moveZ / length, sprint };
+  if (typeof facingYaw === 'number' && Number.isFinite(facingYaw))
+    input.facingYaw = normalizeYaw(facingYaw);
+  return input;
+}
+/** World yaw: zero faces +Z. Canonical range includes -PI and excludes +PI. */
+export function normalizeYaw(yaw: number): number {
+  if (yaw >= -Math.PI && yaw < Math.PI) return yaw;
+  const turn = Math.PI * 2;
+  return (((yaw % turn) + Math.PI + turn) % turn) - Math.PI;
 }
 export { validateWorld, validateWorldHeader, validateEntities, canonicalJson } from './world.js';
 export {

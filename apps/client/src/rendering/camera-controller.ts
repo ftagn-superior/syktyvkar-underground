@@ -1,4 +1,4 @@
-import { normalizeInput, type MoveInput } from '@su/contracts';
+import { normalizeInput, normalizeYaw, type MoveInput } from '@su/contracts';
 
 export const INITIAL_CAMERA_ANGLE = Math.PI / 4;
 const ROTATION_SPEED = Math.PI / 2;
@@ -25,6 +25,10 @@ export class CameraOrbit {
     this.direction = 0;
     this.remaining = 0;
   }
+  setAngle(angle: number): void {
+    this.stop();
+    this.angle = normalizeYaw(angle);
+  }
   advance(seconds: number): number {
     // A resumed tab or a slow frame must not produce a large orbit jump.
     const delta = Math.min(0.1, Math.max(0, seconds));
@@ -41,6 +45,23 @@ export class CameraOrbit {
     }
     return this.angle;
   }
+}
+
+export const FIRST_PERSON = Object.freeze({
+  fov: Math.PI / 3,
+  minZ: 0.05,
+  maxZ: 300,
+  radius: 200,
+  pitchLimit: (85 * Math.PI) / 180,
+  sensitivity: 0.002,
+});
+
+export const yawFromOrbit = (alpha: number): number => normalizeYaw(-Math.PI / 2 - alpha);
+export const orbitFromYaw = (yaw: number): number => normalizeYaw(-Math.PI / 2 - yaw);
+
+/** The same horizontal movement basis in both projections; pitch cannot affect speed. */
+export function firstPersonMovement(input: MoveInput, yaw: number): MoveInput {
+  return { ...input, facingYaw: normalizeYaw(yaw) };
 }
 
 /** Ground-plane axes of our right-handed orthographic camera at the actual orbit angle. */

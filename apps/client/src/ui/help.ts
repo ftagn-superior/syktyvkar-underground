@@ -12,7 +12,10 @@ export class HelpMenu {
   private tipTimer?: ReturnType<typeof setTimeout>;
   private available = false;
 
-  constructor(private readonly focusWorld: () => void) {
+  constructor(
+    private readonly focusWorld: () => void,
+    private readonly onOpen?: () => void,
+  ) {
     const options = { signal: this.controller.signal };
     this.toggle.addEventListener('click', () => this.open(this.panel.hidden), options);
     document
@@ -53,7 +56,10 @@ export class HelpMenu {
     if (open && !this.available) return;
     this.panel.hidden = !open;
     this.toggle.setAttribute('aria-expanded', String(open));
-    if (open) this.hideTip();
+    if (open) {
+      this.hideTip();
+      this.onOpen?.();
+    }
   }
   close(restoreFocus: boolean): void {
     const hadFocus = this.panel.contains(document.activeElement);

@@ -294,6 +294,37 @@ describe('tree instancing', () => {
     }
   });
 
+  it('restores opaque tree batches in the first perspective frame and resumes overview fades', async () => {
+    const f = await fixture();
+    try {
+      f.add('near');
+      f.add('far', 0, -4);
+      const own = new Vector3(0, 1, -10);
+      for (let i = 0; i < 30; i++) f.update(own, i * 100);
+      expect(f.views.aggregateDiagnostics().fadedTrees).toBe(2);
+      f.views.update(
+        own,
+        new Vector3(0, 1, 20),
+        new Vector3(0, 0, -1),
+        0.05,
+        3001,
+        1 / 60,
+        own,
+        200,
+        true,
+      );
+      expect(f.views.diagnostics().buildings.every((b) => b.opacity === 1 && !b.occluded)).toBe(
+        true,
+      );
+      expect(f.views.aggregateDiagnostics().treeInstances).toBe(2);
+      expect(f.views.aggregateDiagnostics().fadedTrees).toBe(0);
+      f.update(own, 3002);
+      expect(f.views.diagnostics().buildings.every((b) => b.occluded && b.opacity < 1)).toBe(true);
+    } finally {
+      f.dispose();
+    }
+  });
+
   it('keeps independent appearance times when a chunk grows and compacts after unloading', async () => {
     const radial = { center: { x: 0, y: 0, z: 0 }, radius: 500, time: 1000, appearMs: 300 };
     const f = await fixture(true, radial);

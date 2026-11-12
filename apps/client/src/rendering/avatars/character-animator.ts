@@ -60,6 +60,16 @@ export class CharacterAnimator {
       q.w * q.w + q.x * q.x - q.y * q.y - q.z * q.z,
     );
     const previous = this.previous;
+    const vx = predicted
+      ? frame.velocity.x
+      : previous
+        ? (frame.position.x - previous.x) / delta
+        : 0;
+    const vz = predicted
+      ? frame.velocity.z
+      : previous
+        ? (frame.position.z - previous.z) / delta
+        : 0;
     const distance = previous
       ? Math.hypot(frame.position.x - previous.x, frame.position.z - previous.z)
       : 0;
@@ -120,6 +130,19 @@ export class CharacterAnimator {
       this.airborne,
       reducedMotion,
     );
+    const speed = Math.hypot(vx, vz);
+    if (!discontinuity && enabled && frame.grounded && speed > 0.08) {
+      const forward = (vx * Math.sin(targetYaw) + vz * Math.cos(targetYaw)) / speed;
+      const lateral = (vx * Math.cos(targetYaw) - vz * Math.sin(targetYaw)) / speed;
+      const swing = (this.pose.rightLeg - this.pose.leftLeg) / 2;
+      this.pose.leftLeg = -swing * forward + 0.2 * this.airborne;
+      this.pose.rightLeg = swing * forward + 0.2 * this.airborne;
+      this.pose.leftLegRoll = swing * lateral;
+      this.pose.rightLegRoll = -swing * lateral;
+      this.pose.leftArm *= forward;
+      this.pose.rightArm *= forward;
+      this.pose.lean *= forward;
+    }
     this.pose.facingOffset = angleDifference(this.yaw - targetYaw);
     this.applyAnimation(frame, previousPose, reducedMotion);
     return this.pose;

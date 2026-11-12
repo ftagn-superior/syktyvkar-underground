@@ -5,6 +5,8 @@ const source = (): AnimationSource => ({
   entityId: 'p',
   revision: 0,
   grounded: true,
+  qy: 0,
+  qw: 1,
   animationId: '',
   animationSequence: 0,
   animationStartedAtTick: 0,
@@ -12,6 +14,31 @@ const source = (): AnimationSource => ({
   animationChangedAtTick: 0,
 });
 describe('animation presentation timeline', () => {
+  it.each([-1, 1])(
+    'interpolates body facing over the shortest arc at the pi seam (%s)',
+    (direction) => {
+      const buffer = new AnimationBuffer(),
+        player = source();
+      const start = direction * (Math.PI - 0.4),
+        end = -start;
+      player.qy = Math.sin(start / 2);
+      player.qw = Math.cos(start / 2);
+      buffer.capture('epoch', 60, 1000, [player], false);
+      player.qy = Math.sin(end / 2);
+      player.qw = Math.cos(end / 2);
+      buffer.capture('epoch', 66, 1100, [player], false);
+      for (const time of [1000, 1025, 1050, 1075, 1100]) {
+        const yaw = buffer.sample('p', time)!.facingYaw;
+        expect(Math.cos(yaw)).toBeLessThan(-0.9);
+      }
+      expect(Math.abs(buffer.sample('p', 1050)!.facingYaw)).toBeCloseTo(Math.PI);
+      player.revision++;
+      player.qy = 0;
+      player.qw = 1;
+      buffer.capture('epoch', 67, 1150, [player], false);
+      expect(buffer.sample('p', 1050)!.facingYaw).toBe(0);
+    },
+  );
   it('applies a movement deadline on the delayed timeline without restarting the clip', () => {
     const buffer = new AnimationBuffer(),
       player = source();

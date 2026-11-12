@@ -8,11 +8,14 @@ import {
 } from '@colyseus/sdk';
 import {
   MoveInputSchema,
+  readMoveInput,
+  writeMoveInput,
   WorldState,
   toPlayerState,
   toItemState,
   toLocalSimulationSnapshot,
   type EntitySchema,
+  type WireMoveInput,
 } from '@su/protocol';
 import type { PredictionWorld } from '@su/simulation/prediction';
 import {
@@ -211,7 +214,7 @@ export class GameSession {
   private wasm?: ArrayBuffer;
   private input?: InputHandle<MoveInputSchema>;
   private predictor?: Predict;
-  private simulation?: SimReconciler<MoveInput, Pose, { physics: PredictionWorld }>;
+  private simulation?: SimReconciler<WireMoveInput, Pose, { physics: PredictionWorld }>;
   private readonly revisions = new Map<string, number>();
   private readonly trackedEntities = new Map<string, EntitySchema>();
   private actionId = 0;
@@ -791,7 +794,10 @@ export class GameSession {
     this.predictor!.attach(
       entity,
       Object.fromEntries(
-        fields.map((field) => [field, { mode: 'lerp', delay: REMOTE_INTERPOLATION_MS, snap: 2 }]),
+        (entity.kind === 'player' ? ['x', 'y', 'z'] : fields).map((field) => [
+          field,
+          { mode: 'lerp', delay: REMOTE_INTERPOLATION_MS, snap: 2 },
+        ]),
       ),
     );
     this.revisions.set(entity.entityId, entity.revision);
@@ -812,7 +818,7 @@ export class GameSession {
       world: { physics },
       step: (context, world, command) => {
         const before = world.physics.getState().position;
-        world.physics.step(command, context.dt);
+        world.physics.step(readMoveInput(command), context.dt);
         const after = world.physics.getState().position;
         this.history.set(context.tick, {
           at: this.history.get(context.tick)?.at ?? performance.now(),
@@ -923,7 +929,7 @@ export class GameSession {
         this.state !== 'reconnecting' &&
         now - this.lastNeutralAt >= 1000 / this.definition.simulation.tickRate
       ) {
-        Object.assign(this.input.data, NEUTRAL_INPUT);
+        writeMoveInput(this.input.data, NEUTRAL_INPUT);
         this.input.send();
         this.lastNeutralAt = now;
       }
@@ -996,9 +1002,7 @@ export class GameSession {
           );
         i++
       ) {
-        this.input.data.moveX = command.moveX;
-        this.input.data.moveZ = command.moveZ;
-        this.input.data.sprint = command.sprint ?? false;
+        writeMoveInput(this.input.data, command);
         this.input.send();
       }
     }
@@ -1035,7 +1039,15 @@ export class GameSession {
         grounded: player === self ? state.grounded : (presentation?.grounded ?? state.grounded),
         animation: presentation?.animation,
         position: { x: pose.x, y: pose.y, z: pose.z },
-        rotation: player === self ? state.rotation : this.remoteRotation(player),
+        rotation:
+          player === self || !presentation
+            ? state.rotation
+            : {
+                x: 0,
+                y: Math.sin(presentation.facingYaw / 2),
+                z: 0,
+                w: Math.cos(presentation.facingYaw / 2),
+              },
         motionRevision: this.motionRevision,
         motionEnabled:
           this.state === 'playing' &&
@@ -1135,6 +1147,22 @@ export class GameSession {
       this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused
     );
   }
+  /** Eyes follow the collision controller, never the SDK's decorative correction offset. */
+  ownPhysicalPosition(): Vec3 | undefined {
+    if (this.simulation && this.physics) return this.physics.getState().position;
+    const room = this.room;
+    const own = room?.state.players.get(room.sessionId);
+    return own ? { x: own.x, y: own.y, z: own.z } : undefined;
+  }
+  overlayBlocked(from: Vec3, to: Vec3, targetId?: string): boolean {
+    const hit = this.physics?.surfaceRay(from, to);
+    return (
+      !!hit &&
+      (targetId === undefined || hit.entityId !== targetId) &&
+      Math.hypot(hit.point.x - from.x, hit.point.y - from.y, hit.point.z - from.z) <
+        Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) - 0.08
+    );
+  }
   get storageUnavailable() {
     return this.room?.state.pauseReason === 'STORAGE_UNAVAILABLE';
   }
@@ -1196,7 +1224,7 @@ export class GameSession {
       this.stalled
     )
       return;
-    Object.assign(this.input.data, NEUTRAL_INPUT);
+    writeMoveInput(this.input.data, NEUTRAL_INPUT);
     this.input.send();
   }
   /** Pause local controls independently of the connection, e.g. during GPU recovery. */

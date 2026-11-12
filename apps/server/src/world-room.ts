@@ -32,7 +32,6 @@ import {
   REACTION_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
-  normalizeInput,
   worldNeighborhood,
   type PrepareArea,
   type AreaResult,
@@ -54,6 +53,7 @@ import {
 import {
   EntitySchema,
   MoveInputSchema,
+  readMoveInput,
   PlayerSchema,
   WorldState,
   applyEntityState,
@@ -540,7 +540,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         client?.send('resync', { serverTick: this.state.serverTick });
       }
       const command = session.connected ? input.next() : undefined;
-      session.lastInput = normalizeInput(command) ?? { ...NEUTRAL_INPUT };
+      session.lastInput = command ? readMoveInput(command) : { ...NEUTRAL_INPUT };
       this.world.setInput(session.entityId, session.lastInput);
     }
     const physicsStart = performance.now();

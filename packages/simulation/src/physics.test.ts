@@ -6,6 +6,58 @@ import { createPhysicsWorld } from './physics-world.js';
 import { NEUTRAL_INPUT } from '@su/contracts';
 
 describe('Havok shared world', () => {
+  it('identifies wall and peer ray hits while excluding the local collision body', async () => {
+    const world = await createAuthoritativeWorld(fixture());
+    const prediction = await createPredictionWorld(fixture(), await loadServerWasm());
+    try {
+      world.addPlayer('own');
+      world.addPlayer('peer', { x: -3, y: 0, z: 0 });
+      const snapshot = world.getSnapshot();
+      prediction.reconcile(snapshot.players[0], snapshot);
+      const eye = { x: 0, y: 1.6, z: 0 };
+      expect(prediction.surfaceRay(eye, { x: -3, y: 1.6, z: 0 })?.entityId).toBe('peer');
+      expect(prediction.surfaceRay(eye, { x: 8, y: 1.6, z: 0 })?.entityId).toBe('wall');
+      expect(prediction.surfaceRay(eye, { x: 0, y: 1.6, z: -3 })).toBeUndefined();
+    } finally {
+      world.dispose();
+      prediction.dispose();
+    }
+  });
+  it('replays independent facing identically, preserves it on neutral and keeps overview movement facing', async () => {
+    const definition = fixture();
+    const server = await createAuthoritativeWorld(definition);
+    const prediction = await createPredictionWorld(definition, await loadServerWasm());
+    try {
+      server.addPlayer('a');
+      const snapshot = server.getSnapshot();
+      prediction.reconcile(snapshot.players[0], snapshot);
+      for (const input of [
+        { moveX: 0, moveZ: 0, facingYaw: Math.PI / 2 },
+        { moveX: 0, moveZ: -1, facingYaw: 0 },
+        { moveX: -1, moveZ: 0, facingYaw: 0 },
+        NEUTRAL_INPUT,
+        { ...NEUTRAL_INPUT, facingYaw: NaN },
+        { moveX: 1, moveZ: 0 },
+      ]) {
+        server.setInput('a', input);
+        for (let step = 0; step < 6; step++) {
+          server.step();
+          prediction.step(input);
+        }
+        const actual = server.getSnapshot().players[0];
+        expect(prediction.getState().rotation).toEqual(actual.rotation);
+        expect(prediction.getState().position.x).toBeCloseTo(actual.position.x, 4);
+        expect(prediction.getState().position.z).toBeCloseTo(actual.position.z, 4);
+        const yaw = input.moveX === 1 || input.facingYaw === Math.PI / 2 ? Math.PI / 2 : 0;
+        expect(actual.rotation.y).toBeCloseTo(Math.sin(yaw / 2));
+        // Replay an authoritative correction followed by the same command.
+        prediction.reconcile(actual, server.getSnapshot());
+      }
+    } finally {
+      server.dispose();
+      prediction.dispose();
+    }
+  });
   it('accepts structural input fields exposed through prototype accessors', async () => {
     class Input {
       get moveX() {

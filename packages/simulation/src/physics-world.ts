@@ -427,7 +427,8 @@ export class PhysicsWorld {
       record.controller.setVelocity(
         new Vector3(input.moveX * speed, vertical, input.moveZ * speed),
       );
-      if (Math.hypot(input.moveX, input.moveZ) > 0.001)
+      if (input.facingYaw !== undefined) record.yaw = input.facingYaw;
+      else if (Math.hypot(input.moveX, input.moveZ) > 0.001)
         record.yaw = Math.atan2(input.moveX, input.moveZ);
       record.controller.integrate(dt, support, this.gravity);
     }
@@ -475,7 +476,11 @@ export class PhysicsWorld {
       shouldHitTriggers: false,
     });
     return hit.hasHit
-      ? { point: plain(hit.hitPointWorld), normal: plain(hit.hitNormalWorld) }
+      ? {
+          point: plain(hit.hitPointWorld),
+          normal: plain(hit.hitNormalWorld),
+          entityId: hit.body?.transformNode.name,
+        }
       : undefined;
   }
   canReach(playerId: string, position: Vec3, targetId?: string): ItemError | undefined {

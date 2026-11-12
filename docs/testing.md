@@ -30,6 +30,8 @@ pnpm build
 | Хранение, сетевые операции, миграции и физика предметов | `pnpm test:items`, `pnpm test:items:browser` |
 | Выдача предметов и приватность ответов | `pnpm test:giveme:browser` |
 | Сенсорный MVP: мультитач, режимы, прерывания и DPR | `pnpm test:touch:browser` |
+| Первое лицо: два клиента, Pointer Lock, чат, качества и восстановление | `pnpm test:first-person:browser` |
+| Первое лицо: стены, физические лучи, глаза и авторизованные предметы | `pnpm test:first-person:geometry` |
 | Эквивалентность физики Node/Chromium | `pnpm test:physics:browser` |
 | GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser` |
 | Повреждённый кеш и неверные ресурсы | `pnpm test:assets:browser` |

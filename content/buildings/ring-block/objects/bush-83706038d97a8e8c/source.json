@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "bush",
+      "role": "detail",
+      "fade": false,
+      "color": "#4b7a3e",
+      "shapes": [
+        {
+          "cone": {
+            "center": [0, 0, 0],
+            "radiusBottom": 1.219,
+            "radiusTop": 0.732,
+            "height": 1.198,
+            "sides": 7
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 0.5, 0],
+      "size": [1.463, 1, 1.463],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

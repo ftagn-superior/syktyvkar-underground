@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "wall",
+      "role": "detail",
+      "fade": false,
+      "color": "#9b8f84",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 1, 0],
+            "size": [33.02, 2, 0.35],
+            "yaw": 0
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 1, 0],
+      "size": [33.02, 2, 0.35],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

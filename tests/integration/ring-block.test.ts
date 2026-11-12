@@ -11,8 +11,6 @@ import { generateFootprint, generateGround } from '../../tools/world-build/src/c
 import { generateKit } from '../../tools/world-build/src/kit.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import {
-  clampOutOfIsland,
-  replacedByRoundabout,
   roundaboutApproaches,
   roundaboutCrosswalks,
   roundaboutCurbPatches,
@@ -465,6 +463,59 @@ describe('детали фасадов и модели из конструкто�
   });
 });
 
+describe('входы в здания', () => {
+  it('вход у стены даёт дверь с козырьком на ближайшем фасаде', () => {
+    const { parts } = generateFootprint('test-doors', {
+      formatVersion: 1,
+      outline: [
+        [-10, -5],
+        [10, -5],
+        [10, 5],
+        [-10, 5],
+      ],
+      height: 9,
+      floors: 3,
+      windows: true,
+      wallColor: '#cccccc',
+      roofColor: '#888888',
+      windowColor: '#333333',
+      doors: [[0, 5.4]],
+    });
+    const doors = parts.find((p) => p.partId === 'doors')!;
+    const zs = doors.positions.filter((_, i) => i % 3 === 2);
+    // Дверь лежит на южной стене (z = 5) с небольшим выносом наружу.
+    expect(Math.min(...zs)).toBeGreaterThan(5);
+    expect(Math.max(...zs)).toBeLessThan(5.1);
+    expect(parts.some((p) => p.partId === 'door-canopies')).toBe(true);
+  });
+
+  it('слияние частей сохраняет цвет каждой части в вершинах', () => {
+    const base = {
+      formatVersion: 1 as const,
+      outline: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ] as Point2[],
+      height: 6,
+      floors: 2,
+      windows: true,
+      wallColor: '#ffffff',
+      roofColor: '#000000',
+      windowColor: '#000000',
+    };
+    const plain = generateFootprint('test-merge', base);
+    const merged = generateFootprint('test-merge', { ...base, merge: true });
+    expect(merged.parts.map((p) => p.partId)).toEqual(['fading']);
+    const [part] = merged.parts;
+    expect(part.positions.length).toBe(plain.parts.reduce((s, p) => s + p.positions.length, 0));
+    // Белые стены и чёрные окна: в вершинах есть оба цвета.
+    const reds = new Set(part.colors!.filter((_, i) => i % 3 === 0));
+    expect([...reds].sort()).toEqual([0, 1]);
+  });
+});
+
 describe('кольцевая развязка', () => {
   const config: RoundaboutConfig = {
     center: [0, 0],
@@ -478,20 +529,6 @@ describe('кольцевая развязка', () => {
     ],
   };
   const radius = (p: Point2) => Math.hypot(p[0], p[1]);
-
-  it('концы дорог не заходят на центральный остров', () => {
-    const cap: Point2[] = [
-      [-5, -60],
-      [5, -60],
-      [5, -28],
-      [0, -25],
-      [-5, -28],
-    ];
-    const clamped = clampOutOfIsland(cap, config);
-    for (const p of clamped) expect(radius(p)).toBeGreaterThanOrEqual(30 - 1e-9);
-    // Точки снаружи острова не двигаются.
-    expect(clamped.slice(0, 2)).toEqual(cap.slice(0, 2));
-  });
 
   it('островок — треугольник у кольца с вершиной на оси подъезда', () => {
     const islands = roundaboutIslands(config);
@@ -751,49 +788,6 @@ describe('кольцевая развязка', () => {
         expect(triangulate(ring).coverage).toBeCloseTo(1, 9);
     });
 
-    it('разметка OSM внутри обведённой дороги и рядом с обведённой «зеброй» заменяется', () => {
-      const both = tracedGeometry({
-        traces: [
-          {
-            name: 'a:edge-east',
-            points: [
-              [13, -90],
-              [45, -45],
-              [90, -20],
-            ],
-          },
-          {
-            name: 'a:edge-west',
-            points: [
-              [-13, -90],
-              [-45, -45],
-              [-90, 0],
-            ],
-          },
-          {
-            name: 'a:crosswalk',
-            points: [
-              [-13, -80],
-              [13, -80],
-              [13, -84],
-            ],
-          },
-        ],
-      });
-      const cfg: RoundaboutConfig = { ...config, traced: both };
-      const dash = (x: number, z: number): Point2[] => [
-        [x - 0.1, z - 1],
-        [x + 0.1, z - 1],
-        [x + 0.1, z + 1],
-        [x - 0.1, z + 1],
-      ];
-      // Между обведёнными краями и у «зебры» OSM-линии лишние; дальше по подъезду остаются.
-      expect(replacedByRoundabout(dash(0, -60), cfg)).toBe(true);
-      expect(replacedByRoundabout(dash(0, -86), cfg)).toBe(true);
-      expect(replacedByRoundabout(dash(0, -140), cfg)).toBe(false);
-      expect(replacedByRoundabout(dash(0, -140), config)).toBe(false);
-    });
-
     it('островок относится к подъезду по месту, а не по имени трассы', () => {
       // Подпись «east» неверна: контур лежит у северного подъезда, значит заменит его треугольник.
       const mislabeled: RoundaboutConfig = {
@@ -889,19 +883,6 @@ describe('кольцевая развязка', () => {
     expect(Math.max(...east.map(([, z]) => z))).toBeGreaterThan(4);
   });
 
-  it('разметка OSM на кольце и под островками заменяется, на подъезде остаётся', () => {
-    const strip = (x: number, z: number): Point2[] => [
-      [x - 0.1, z - 1],
-      [x + 0.1, z - 1],
-      [x + 0.1, z + 1],
-      [x - 0.1, z + 1],
-    ];
-    expect(replacedByRoundabout(strip(0, -36), config)).toBe(true);
-    expect(replacedByRoundabout(strip(0, -50), config)).toBe(true);
-    expect(replacedByRoundabout(strip(-7, -50), config)).toBe(false);
-    expect(replacedByRoundabout(strip(0, -70), config)).toBe(false);
-  });
-
   it('неверные параметры кольца останавливают сборку', () => {
     expect(() => validateRoundabout({ ...config, outer: 31 })).toThrow(/radii/);
     expect(() =>
@@ -967,7 +948,7 @@ describe('мир ring-block', () => {
       expect.arrayContaining(['lobby-body', 'body-body', 'stage-body']),
     );
     expect(definition.buildingAssets['trudovaya-slava'].colliders.length).toBeGreaterThan(2);
-    // Ручные уточнения из import.json попали в модель Октябрьского проспекта, 40.
+    // Сохранённые авторские уточнения модели Октябрьского проспекта, 40.
     const taibala = definition.buildingAssets['osm-way-1292842070'];
     expect(taibala.bounds.max.y).toBeGreaterThan(30);
     expect(

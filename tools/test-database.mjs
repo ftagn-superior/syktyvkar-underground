@@ -34,6 +34,7 @@ const child = spawn(
               'tests/integration/items-network.test.ts',
               'tests/integration/giveme.test.ts',
               'tests/integration/world-migration.test.ts',
+              'tests/integration/static-object-migration.test.ts',
               'packages/simulation/src/items.test.ts',
             ]
           : ['tests/integration/accounts.test.ts']),

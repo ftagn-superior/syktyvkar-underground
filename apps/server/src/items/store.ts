@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { WorldOwnership } from '../world-ownership.js';
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import {
   canonicalJson,
@@ -58,54 +59,28 @@ function physicsCatalog(catalog: ItemCatalog) {
 
 /** All access uses the session holding the world lock, including after connection recovery. */
 export class ItemStore {
-  private lease?: PoolClient;
-  private failed = false;
   private started = false;
-  onConnectionFailure?: () => void;
+  readonly ownership: WorldOwnership;
+  get onConnectionFailure(): (() => void) | undefined {
+    return this.ownership.onConnectionFailure;
+  }
+  set onConnectionFailure(callback: (() => void) | undefined) {
+    this.ownership.onConnectionFailure = callback;
+  }
   constructor(
     readonly pool: Pool,
     readonly definition: WorldDefinition,
     readonly epoch: string,
-  ) {}
+    ownership?: WorldOwnership,
+    private readonly initializeLayout?: () => Promise<void>,
+  ) {
+    this.ownership = ownership ?? new WorldOwnership(pool, definition.worldId, epoch);
+  }
   async connect(): Promise<void> {
-    if (this.lease && !this.failed) {
-      try {
-        await this.lease.query('SELECT 1');
-        return;
-      } catch (error) {
-        this.failed = true;
-        throw error;
-      }
-    }
-    this.lease?.release(true);
-    this.lease = undefined;
-    const client = await this.pool.connect();
-    client.on('error', () => {
-      this.failed = true;
-      this.onConnectionFailure?.();
-    });
-    try {
-      const locked = await client.query<{ locked: boolean }>(
-        "SELECT pg_try_advisory_lock(hashtextextended(current_database() || ':' || current_schema() || ':' || $1, 193708)) AS locked",
-        [this.definition.worldId],
-      );
-      if (!locked.rows[0].locked) throw new Error('Persistent world already has an owner');
-      const current = await client.query<{ epoch: string }>(
-        'SELECT epoch FROM persistent_worlds WHERE id=$1',
-        [this.definition.worldId],
-      );
-      if (current.rowCount && current.rows[0].epoch !== this.epoch && this.started)
-        throw new Error('World ownership epoch changed; restart required');
-      this.lease = client;
-      this.failed = false;
-    } catch (error) {
-      client.release(true);
-      throw error;
-    }
+    await this.ownership.connect();
   }
   private get db(): PoolClient {
-    if (!this.lease || this.failed) throw new Error('World database connection unavailable');
-    return this.lease;
+    return this.ownership.db;
   }
   async initialize(): Promise<ItemState[]> {
     await this.connect();
@@ -163,12 +138,14 @@ export class ItemStore {
         'SELECT DISTINCT account_id FROM inventory_slots',
       );
       for (const { account_id } of accounts.rows) await this.normalizeStacks(account_id);
+      await this.initializeLayout?.();
     });
     this.started = true;
+    this.ownership.markStarted();
     return this.worldItems();
   }
   /** Explicit offline upgrade: preserve every item and accept only poses valid in the new map. */
-  async migrateGeometry() {
+  async migrateGeometry(afterValidation?: () => Promise<void>, dryRun = false) {
     if (this.started) throw new Error('Stop the world before migrating its geometry.');
     await this.connect();
     return this.transaction(async () => {
@@ -180,7 +157,10 @@ export class ItemStore {
       // A fresh database is populated once by initialize(), after all startup checks pass.
       if (!found.rowCount) return { from: null, to, changed: false };
       const from = found.rows[0].compatibility_hash;
-      if (from === to) return { from, to, changed: false };
+      if (from === to) {
+        if (!dryRun) await afterValidation?.();
+        return { from, to, changed: false };
+      }
 
       const catalog = physicsCatalog(this.definition.itemCatalog);
       const used = await this.db.query<{ id: string; physics: unknown }>(
@@ -207,10 +187,13 @@ export class ItemStore {
       } finally {
         world.dispose();
       }
-      await this.db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
-        this.definition.worldId,
-        to,
-      ]);
+      if (!dryRun) {
+        await this.db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
+          this.definition.worldId,
+          to,
+        ]);
+        await afterValidation?.();
+      }
       return { from, to, changed: true };
     });
   }
@@ -486,17 +469,6 @@ export class ItemStore {
     });
   }
   async close() {
-    const client = this.lease;
-    this.lease = undefined;
-    if (!client) return;
-    try {
-      if (!this.failed)
-        await client.query(
-          "SELECT pg_advisory_unlock(hashtextextended(current_database() || ':' || current_schema() || ':' || $1, 193708))",
-          [this.definition.worldId],
-        );
-    } finally {
-      client.release(true);
-    }
+    await this.ownership.close();
   }
 }

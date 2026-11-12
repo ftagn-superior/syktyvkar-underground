@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "crown-spruce",
+      "role": "detail",
+      "fade": true,
+      "color": "#3f6844",
+      "shapes": [
+        {
+          "cone": {
+            "center": [0, 2.188, 0],
+            "radiusBottom": 3.001,
+            "radiusTop": 0,
+            "height": 7.502,
+            "sides": 7
+          }
+        },
+        {
+          "cone": {
+            "center": [0, 6.251, 0],
+            "radiusBottom": 2.1,
+            "radiusTop": 0,
+            "height": 6.251,
+            "sides": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "trunk",
+      "role": "detail",
+      "fade": true,
+      "color": "#6b5a49",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 1.563, 0],
+            "size": [0.3, 3.126, 0.3],
+            "yaw": 58.583
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 1.563, 0],
+      "size": [0.4, 3.126, 0.4],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

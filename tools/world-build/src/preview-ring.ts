@@ -1,21 +1,18 @@
 /**
  * Офлайн-просмотр кольца: вид сверху на поверхность, дома и разметку без сервера и браузерной игры.
  *
- *   pnpm world:preview-ring            # импорт участка → dist/preview/ring.html
- *   pnpm world:preview-ring -- --no-import   # только перерисовать из уже собранного контента
+ *   pnpm world:preview-ring            # собственные рецепты → dist/preview/ring.html
  *
  * Файл самодостаточный: откройте его двойным щелчком. Поверх схемы можно включить
  * эталоны из `reference/ring/` (карта и спутниковый снимок) и менять их прозрачность.
  * Слои рисуются в том же порядке, что и в игре. Север сверху, как в игре при стандартной камере.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { importDistrict } from './import-district.js';
+import { dirname, resolve } from 'node:path';
 import type { Point2 } from './triangulate.js';
 
-const CONFIG = 'content/worlds/ring-block/import.json';
+const SOURCE = 'content/worlds/ring-block/world.json';
 const OUT = 'dist/preview/ring.html';
-const TRACE_FILE = 'content/worlds/ring-block/ring-trace.json';
 /**
  * Что трассируется. Линии ведутся от дальнего конца подъезда к кольцу и заканчиваются там,
  * где край дороги встречает внешнюю окружность кольца; островки — замкнутые контуры.
@@ -76,29 +73,68 @@ async function readJson<T>(file: string): Promise<T> {
   return JSON.parse(await readFile(file, 'utf8')) as T;
 }
 
-export async function renderRingPreview(withImport = true) {
-  if (withImport) await importDistrict(CONFIG);
-  const config = await readJson<{ worldId: string; roundabout?: unknown }>(CONFIG);
-  const buildings = join('content/buildings', config.worldId);
-  const ground = await readJson<{ layers: Layer[]; color: string }>(
-    join(buildings, `${config.worldId}-ground`, 'source.json'),
-  );
-  // Контуры домов лежат в координатах модели: сдвигаются на положение экземпляра в ячейке.
-  const cell = await readJson<{
-    buildings: { assetId: string; position: { x: number; z: number } }[];
-  }>(join('content/worlds', config.worldId, 'cells/0_0.json'));
-  const houses: Point2[][] = [];
-  for (const { assetId, position } of cell.buildings) {
-    if (!assetId.startsWith('osm-way-')) continue;
-    const source = await readJson<{ outline?: Point2[] }>(join(buildings, assetId, 'source.json'));
-    if (source.outline)
-      houses.push(source.outline.map(([x, z]) => [x + position.x, z + position.z] as Point2));
+interface Instance {
+  entityId: string;
+  assetId: string;
+  position: { x: number; y?: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
+}
+
+/** Та же трансформация локального контура, что и у экземпляра в игре. */
+function worldPoint([x, z]: Point2, instance: Instance): Point2 {
+  const q = instance.rotation;
+  const tx = 2 * q.y * z,
+    ty = 2 * (q.z * x - q.x * z),
+    tz = -2 * q.y * x;
+  return [
+    x + q.w * tx + q.y * tz - q.z * ty + instance.position.x,
+    z + q.w * tz + q.x * ty - q.y * tx + instance.position.z,
+  ];
+}
+
+/** Читает только авторское размещение и рецепты; не меняет контент мира. */
+export async function renderRingPreview(source = SOURCE, output = OUT) {
+  const sourceDirectory = dirname(resolve(source));
+  const world = await readJson<{ assetCatalog: string; cells: string[] }>(source);
+  const catalogPath = resolve(sourceDirectory, world.assetCatalog);
+  const catalog = await readJson<{ assets: Record<string, string> }>(catalogPath);
+  const instances = new Map<string, Instance>();
+  for (const file of world.cells) {
+    const cell = await readJson<{ buildings: Instance[] }>(resolve(sourceDirectory, file));
+    for (const instance of cell.buildings) instances.set(instance.entityId, instance);
   }
+  const houses: Point2[][] = [];
+  let ground: { layers: Layer[]; color: string } | undefined;
+  for (const instance of instances.values()) {
+    const descriptorPath = resolve(dirname(catalogPath), catalog.assets[instance.assetId]);
+    const descriptor = await readJson<{ source: { kind: string; file: string } }>(descriptorPath);
+    if (!['ground', 'footprint'].includes(descriptor.source.kind)) continue;
+    const recipePath = resolve(dirname(descriptorPath), descriptor.source.file);
+    if (descriptor.source.kind === 'ground') {
+      if (ground) throw new Error('Ring preview expects one authored ground recipe');
+      const recipe = await readJson<{ layers: Layer[]; color: string }>(recipePath);
+      ground = {
+        ...recipe,
+        layers: recipe.layers.map((layer) => ({
+          ...layer,
+          polygons: layer.polygons.map((polygon) =>
+            polygon.map((ring) => ring.map((point) => worldPoint(point, instance))),
+          ),
+        })),
+      };
+    } else {
+      const recipe = await readJson<{ outline?: Point2[] }>(recipePath);
+      if (recipe.outline) houses.push(recipe.outline.map((point) => worldPoint(point, instance)));
+    }
+  }
+  if (!ground) throw new Error('Ring preview requires an authored ground recipe');
   let traces: unknown[] = [];
   try {
-    traces = (await readJson<{ traces: unknown[] }>(TRACE_FILE)).traces;
-  } catch {
-    // файла трассировки ещё нет
+    traces = (await readJson<{ traces: unknown[] }>(resolve(sourceDirectory, 'ring-trace.json')))
+      .traces;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    // Файл трассировки ещё не создан.
   }
   const [x0, x1] = VIEW.x,
     [z0, z1] = VIEW.z;
@@ -249,13 +285,13 @@ addEventListener('keydown',e=>{
 redraw();
 </script></body></html>
 `;
-  await mkdir('dist/preview', { recursive: true });
-  await writeFile(OUT, html);
-  return resolve(OUT);
+  await mkdir(dirname(resolve(output)), { recursive: true });
+  await writeFile(output, html);
+  return resolve(output);
 }
 
 const entry = process.argv[1] ? resolve(process.argv[1]).replaceAll('\\', '/') : '';
 if (entry.endsWith('tools/world-build/src/preview-ring.ts')) {
-  const file = await renderRingPreview(!process.argv.includes('--no-import'));
+  const file = await renderRingPreview();
   console.log(`Предпросмотр кольца: ${file}`);
 }

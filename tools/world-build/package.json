@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@su/contracts": "workspace:*",
+    "@su/world-release": "workspace:*",
     "gltf-validator": "2.0.0-dev.3.10"
   }
 }

@@ -1,0 +1,44 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "metal",
+      "role": "detail",
+      "fade": false,
+      "color": "#3a3d40",
+      "shapes": [
+        {
+          "box": {
+            "center": [2.399405134609, 1.3, -3.735229e-6],
+            "size": [0.1, 2.6, 0.1],
+            "yaw": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "sign",
+      "role": "detail",
+      "fade": false,
+      "color": "#2f6db5",
+      "shapes": [
+        {
+          "box": {
+            "center": [2.399405134609, 2.45, -3.735229e-6],
+            "size": [0.6, 0.4, 0.05],
+            "yaw": 0
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [2.399405134609, 1.3, -3.735229e-6],
+      "size": [0.1, 2.6, 0.1],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

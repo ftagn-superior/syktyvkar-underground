@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "retaining",
+      "role": "detail",
+      "fade": false,
+      "color": "#8f8b84",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 0.5, 0],
+            "size": [40.782, 1, 0.4],
+            "yaw": 0
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 0.5, 0],
+      "size": [40.782, 1, 0.4],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

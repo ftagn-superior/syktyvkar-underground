@@ -1,5 +1,6 @@
 import {
   loadCellPhysics,
+  loadWorldCell,
   worldNeighborhood,
   worldCellBounds,
   cellsIntersectingCircle,
@@ -34,6 +35,10 @@ type Cell = {
   id: string;
   controller: AbortController;
   set?: LocalStaticSet;
+  physicsLoaded?: boolean;
+  physicsBytes?: number;
+  physicsController?: AbortController;
+  graphicsController?: AbortController;
   loading: boolean;
   releaseModels?: () => void;
   releaseDecoration?: () => void;
@@ -162,6 +167,9 @@ export class CellStreamer {
           startedAt: now,
         });
     for (const cell of this.cells.values()) {
+      if (!this.physicsWanted.has(cell.id)) cell.physicsController?.abort();
+      // Joining may promote a still-loading graphical preview to critical physics.
+      if (this.physicsWanted.has(cell.id) && !cell.physicsLoaded) cell.graphicsController?.abort();
       if (this.physicsWanted.has(cell.id)) cell.physicsReleaseAt = undefined;
       else cell.physicsReleaseAt ??= now + STREAMING_LIMITS.releaseMs;
       if (this.graphicsWanted.has(cell.id)) cell.graphicsReleaseAt = undefined;
@@ -186,7 +194,8 @@ export class CellStreamer {
           !cell.loading &&
           !cell.controller.signal.aborted &&
           ((!cell.set && (this.physicsWanted.has(cell.id) || this.graphicsWanted.has(cell.id))) ||
-            (cell.set && !cell.releaseModels && this.graphicsWanted.has(cell.id))),
+            (cell.set && !cell.releaseModels && this.graphicsWanted.has(cell.id)) ||
+            (cell.set && !cell.physicsLoaded && this.physicsWanted.has(cell.id))),
       )
       .sort((a, b) => this.priority(a) - this.priority(b));
     for (const cell of pending) {
@@ -208,23 +217,57 @@ export class CellStreamer {
       const read = (path: string, requestSignal?: AbortSignal) =>
         this.resources.read(path, requestSignal ?? signal, this.priority(cell));
       if (!cell.set) {
-        const set = await loadCellPhysics(this.manifest, cell.id, (path) => read(path));
+        const loaded = await loadWorldCell(this.manifest, cell.id, (path) => read(path));
         if (!valid()) return;
-        cell.set = set;
+        cell.set = { cell: loaded, buildingAssets: {} };
+      }
+      if (this.physicsWanted.has(cell.id) && !cell.physicsLoaded) {
+        const controller = new AbortController();
+        cell.physicsController = controller;
+        const physicsSignal = AbortSignal.any([signal, controller.signal]);
+        try {
+          const set = await loadCellPhysics(
+            this.manifest,
+            cell.id,
+            (path) => read(path, physicsSignal),
+            cell.set.cell,
+          );
+          if (!valid()) return;
+          if (this.physicsWanted.has(cell.id)) {
+            cell.set.buildingAssets = set.buildingAssets;
+            cell.physicsLoaded = true;
+            cell.physicsBytes = new TextEncoder().encode(
+              JSON.stringify(set.buildingAssets),
+            ).byteLength;
+          }
+        } catch (error) {
+          if (!controller.signal.aborted || this.physicsWanted.has(cell.id)) throw error;
+        } finally {
+          cell.physicsController = undefined;
+        }
       }
       if (this.graphicsWanted.has(cell.id) && !cell.releaseModels) {
-        const descriptor = this.manifest.cells.find((item) => item.cellId === cell.id)!;
-        const release = await this.graphics.prepareCellAssets(
-          this.manifest,
-          descriptor.assetIds,
-          read,
-          signal,
-        );
-        if (!valid() || !this.graphicsWanted.has(cell.id)) {
-          release();
-          return;
+        const controller = new AbortController();
+        cell.graphicsController = controller;
+        const graphicsSignal = AbortSignal.any([signal, controller.signal]);
+        try {
+          const descriptor = this.manifest.cells.find((item) => item.cellId === cell.id)!;
+          const release = await this.graphics.prepareCellAssets(
+            this.manifest,
+            descriptor.assetIds,
+            read,
+            graphicsSignal,
+          );
+          if (!valid() || controller.signal.aborted || !this.graphicsWanted.has(cell.id)) {
+            release();
+            return;
+          }
+          cell.releaseModels = release;
+        } catch (error) {
+          if (!controller.signal.aborted || !this.physicsWanted.has(cell.id)) throw error;
+        } finally {
+          cell.graphicsController = undefined;
         }
-        cell.releaseModels = release;
       }
     } catch (error) {
       if (valid()) cell.error = String(error);
@@ -248,7 +291,12 @@ export class CellStreamer {
       const version = building
         ? this.manifest.assets[item.assetId].version
         : this.manifest.mapVersion;
-      if (!cell.error && this.physicsWanted.has(cell.id) && !cell.physics.has(id)) {
+      if (
+        !cell.error &&
+        cell.physicsLoaded &&
+        this.physicsWanted.has(cell.id) &&
+        !cell.physics.has(id)
+      ) {
         if (!this.entities.has(id) && this.entities.size >= STREAMING_LIMITS.staticEntities)
           throw new Error('Required static content budget exceeded');
         this.physics.retainStatic(
@@ -294,6 +342,7 @@ export class CellStreamer {
         yield;
       }
     }
+    this.releasePhysicsData(cell);
     if (this.graphicsReady(cell) && this.manifest.cells.length === 1 && !cell.releaseDecoration)
       cell.releaseDecoration = this.graphics.activateCell?.(set.cell);
     if (!cell.graphics.size && (!this.graphicsWanted.has(cell.id) || cell.error)) {
@@ -350,10 +399,24 @@ export class CellStreamer {
       cell.releaseModels?.();
       cell.releaseModels = undefined;
     }
+    this.releasePhysicsData(cell);
+  }
+  private releasePhysicsData(cell: Cell) {
+    if (
+      cell.set &&
+      !cell.physics.size &&
+      !this.physicsWanted.has(cell.id) &&
+      (cell.physicsReleaseAt ?? Infinity) <= this.clock()
+    ) {
+      cell.set.buildingAssets = {};
+      cell.physicsLoaded = false;
+      cell.physicsBytes = 0;
+    }
   }
   private physicsReady(cell: Cell): boolean {
     return (
       !!cell.set &&
+      !!cell.physicsLoaded &&
       !cell.error &&
       cell.physics.size === cell.set.cell.statics.length + cell.set.cell.buildings.length
     );
@@ -375,7 +438,10 @@ export class CellStreamer {
       const count = cell.set.cell.statics.length + cell.set.cell.buildings.length;
       return (
         (cell.error && (cell.physics.size > 0 || cell.graphics.size > 0 || !!cell.releaseModels)) ||
-        (!cell.error && this.physicsWanted.has(cell.id) && cell.physics.size < count) ||
+        (!cell.error &&
+          cell.physicsLoaded &&
+          this.physicsWanted.has(cell.id) &&
+          cell.physics.size < count) ||
         (!cell.error &&
           this.graphicsWanted.has(cell.id) &&
           !!cell.releaseModels &&
@@ -396,8 +462,13 @@ export class CellStreamer {
         : this.releaseDue(cell, start)
           ? -1e9 + this.priority(cell)
           : this.priority(cell);
+    const preparingCritical = this.critical.size > 0 && !this.criticalReady;
     const work = [...this.cells.values()]
-      .filter(needsWork)
+      .filter(
+        (cell) =>
+          needsWork(cell) &&
+          (!preparingCritical || this.critical.has(cell.id) || this.releaseDue(cell, start)),
+      )
       .sort((a, b) => workPriority(a) - workPriority(b));
     outer: for (const cell of work) {
       if (this.releaseDue(cell, start) && !cell.releasing) {
@@ -432,6 +503,7 @@ export class CellStreamer {
       }
     }
     for (const cell of this.cells.values()) {
+      this.releasePhysicsData(cell);
       if (
         !cell.loading &&
         !cell.physics.size &&
@@ -511,6 +583,11 @@ export class CellStreamer {
       ready: this.ready,
       criticalReady: this.criticalReady,
       backgroundReady: this.backgroundReady,
+      parsedPhysicsCells: [...this.cells.values()].filter((cell) => cell.physicsLoaded).length,
+      parsedCollisionBytes: [...this.cells.values()].reduce(
+        (sum, cell) => sum + (cell.physicsBytes ?? 0),
+        0,
+      ),
       error: this.problem,
       required: [...this.critical],
       physicsRequired: [...this.physicsWanted],

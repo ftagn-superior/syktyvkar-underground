@@ -1,0 +1,355 @@
+{
+  "method": "Addressed rg inventory of code/test references and documentation links; retained sourceRef/OSM IDs and baseline hashes are historical metadata. Not an import API.",
+  "retainedLegacyInputs": [
+    "content/worlds/ring-block/import.json",
+    "content/sources/ring-block/osm.json",
+    "data/syktyvkar-offline.html"
+  ],
+  "locations": [
+    {
+      "path": "tests/integration/osm-details.test.ts",
+      "line": 9,
+      "text": "} from '../../tools/world-build/src/fetch-osm.js';"
+    },
+    {
+      "path": "tests/integration/osm-details.test.ts",
+      "line": 10,
+      "text": "import { buildDetails } from '../../tools/world-build/src/osm-details.js';"
+    },
+    {
+      "path": "tests/integration/road-markings.test.ts",
+      "line": 6,
+      "text": "} from '../../tools/world-build/src/fetch-osm.js';"
+    },
+    {
+      "path": "tests/integration/road-markings.test.ts",
+      "line": 7,
+      "text": "import { roadMarkings, trafficSignals } from '../../tools/world-build/src/road-markings.js';"
+    },
+    {
+      "path": "docs/static-object-extraction-agent.md",
+      "line": 20,
+      "text": "4. Работай локально. Не запускай старый `world:import` против рабочей копии: он удаляет и пересоздаёт сгенерированные каталоги и ячейки. Если требуется исполнение старой логики, используй изолированную копию во временной папке."
+    },
+    {
+      "path": "docs/static-object-extraction-agent.md",
+      "line": 33,
+      "text": "| [Последняя конфигурация импорта](../content/worlds/ring-block/import.json)                                     | Локальные источники, ручные уточнения и настройки текущего результата |"
+    },
+    {
+      "path": "docs/static-object-extraction-agent.md",
+      "line": 34,
+      "text": "| [Импорт района](../tools/world-build/src/import-district.ts)                                                   | Проекция, отбор, основания, сохранение рецептов, ручные объекты       |"
+    },
+    {
+      "path": "docs/static-object-extraction-agent.md",
+      "line": 35,
+      "text": "| [Детали OSM](../tools/world-build/src/osm-details.ts)                                                          | Семантические границы предметов до объединения в участки              |"
+    },
+    {
+      "path": "docs/static-object-extraction-agent.md",
+      "line": 36,
+      "text": "| [Светофоры и разметка](../tools/world-build/src/road-markings.ts)                                              | Отдельные направления светофоров и их ориентация                      |"
+    },
+    {
+      "path": "docs/static-object-extraction-agent.md",
+      "line": 258,
+      "text": "Удали из `package.json` команды `world:import` и `world:fetch-osm` и обнови актуальные инструкции наполнения в README, `docs/ring-block.md` и `docs/building-assets.md`. Сохрани `world:preview-ring`, но убери его неявный вызов импортёра и чтение импортной конфигурации: просмотр должен читать наше определение мира и готовые собственные рецепты. Отмена автоматического импорта не должна отключать ручную трассировку и её экспорт. Объясни, что карта теперь редактируется в собственных исходниках, а размещение пока остаётся в JSON до этапа БД. Не пиши, что БД или редактор уже реализованы."
+    },
+    {
+      "path": "README.md",
+      "line": 299,
+      "text": "| [Автономная карта](data/syktyvkar-offline.html)                            | Исторический прототип участка вокруг кольца                      |"
+    },
+    {
+      "path": "docs/dynamic-map-integration-scope.md",
+      "line": 69,
+      "text": "Источники для сверки: [контракты main](https://github.com/ftagn-superior/syktyvkar-underground/blob/edbce4f4733a3efffd99becca9fb5ad593cd309a/packages/contracts/src/index.ts), [комната](https://github.com/ftagn-superior/syktyvkar-underground/blob/edbce4f4733a3efffd99becca9fb5ad593cd309a/apps/server/src/world-room.ts), [миграции БД](https://github.com/ftagn-superior/syktyvkar-underground/blob/edbce4f4733a3efffd99becca9fb5ad593cd309a/apps/server/src/migrations.ts), [постоянные предметы](https://github.com/ftagn-superior/syktyvkar-underground/blob/edbce4f4733a3efffd99becca9fb5ad593cd309a/apps/server/src/items/store.ts), [городской импорт](https://github.com/ftagn-superior/syktyvkar-underground/blob/edbce4f4733a3efffd99becca9fb5ad593cd309a/tools/world-build/src/import-district.ts)."
+    },
+    {
+      "path": "docs/PROJECT_CONTEXT.md",
+      "line": 46,
+      "text": "Два Markdown-файла содержат историю исследований, включая выводы, уточнения и журналы инструментов. [syktyvkar-offline.html](../data/syktyvkar-offline.html) — собранный автономный прототип «Сыктывкар · Вокруг кольца». Исходники новой технодемо находятся в `apps/` и `packages/`; этот HTML сохранён как независимый исторический прототип."
+    },
+    {
+      "path": "docs/PROJECT_CONTEXT.md",
+      "line": 173,
+      "text": "- [data/syktyvkar-offline.html](../data/syktyvkar-offline.html): фактический состав текущего прототипа, встроенные данные `u3` и код визуализации."
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 2,
+      "text": "* Импорт городского участка из автономного прототипа `data/syktyvkar-offline.html`."
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 8,
+      "text": "*   pnpm world:import            # content/worlds/ring-block/import.json"
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 9,
+      "text": "*   pnpm world:import -- <путь к import.json>"
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 19,
+      "text": "import { toGame as osmToGame, type OsmSettings, type OsmSnapshot } from './fetch-osm.js';"
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 20,
+      "text": "import { buildDetails } from './osm-details.js';"
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 64,
+      "text": "/** Снимок OSM для мелких объектов, входов и тегов домов; см. fetch-osm.ts. */"
+    },
+    {
+      "path": "tools/world-build/src/import-district.ts",
+      "line": 663,
+      "text": "const config = process.argv[2] ?? 'content/worlds/ring-block/import.json';"
+    },
+    {
+      "path": "docs/static-world-migration-plan.md",
+      "line": 54,
+      "text": "| [Детали OSM](../tools/world-build/src/osm-details.ts), [слияние](../tools/world-build/src/merge.ts)                      | Семантические предметы пока теряются при объединении примитивов в старые участки                                                                    |"
+    },
+    {
+      "path": "docs/static-world-migration-plan.md",
+      "line": 361,
+      "text": "- команды `world:fetch-osm` и `world:import`, если они ещё не удалены;"
+    },
+    {
+      "path": "docs/static-world-migration-plan.md",
+      "line": 362,
+      "text": "- `fetch-osm.ts`, `import-district.ts`, `osm-details.ts`, `road-markings.ts` и специализированный код без оставшихся потребителей;"
+    },
+    {
+      "path": "docs/static-world-migration-plan.md",
+      "line": 363,
+      "text": "- `content/worlds/ring-block/import.json` и снимок `content/sources/ring-block/osm.json` после переноса нужного происхождения;"
+    },
+    {
+      "path": "docs/static-world-migration-plan.md",
+      "line": 369,
+      "text": "Исторический `data/syktyvkar-offline.html` не должен участвовать в сборке или заполнении игры. Удаление самостоятельного исторического прототипа не является обязательной частью удаления импортёра. Происхождение и существующие сведения об источниках сохраняются как метаданные, без работающей интеграции с OSM."
+    },
+    {
+      "path": "docs/architecture.md",
+      "line": 235,
+      "text": "│   └── syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/ring-block.md",
+      "line": 34,
+      "text": "Автоматическое наполнение из OSM прекращено. Команды `world:import` и `world:fetch-osm` удалены из поддерживаемого процесса: повторный запуск старого импортёра перезаписал бы самостоятельные объекты. Не запускайте его против рабочей карты. Старые `import.json`, снимок OSM, HTML-прототип и код конвейера сохранены до отдельного этапа удаления и не участвуют в обычной сборке или просмотре."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5692,
+      "text": ">   \"code\": \"let proto = await cua.createBrowserTab(\\\"iab\\\", \\\"file:///Users/ilia-may/Documents/Codex/2026-11-11/new-chat/outputs/syktyvkar-offline.html\\\", { visible: true });\","
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5709,
+      "text": "> - Ran `curl --max-time 10 -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/syktyvkar-offline.html`"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5717,
+      "text": ">   \"code\": \"let preview = await cua.createBrowserTab(\\\"iab\\\", \\\"http://127.0.0.1:8765/syktyvkar-offline.html\\\", { visible: true });\","
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5723,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5724,
+      "text": "> 0 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5732,
+      "text": "> \t\t8 link Description: Вернуться к кольцу, Value: 127.0.0.1:8765/syktyvkar-offline.html#, ID: brand-home"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5779,
+      "text": "> The focused UI element is 0 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5811,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5877,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5913,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5914,
+      "text": "> 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5922,
+      "text": "> \t\t9 link Description: Вернуться к кольцу, Value: 127.0.0.1:8765/syktyvkar-offline.html#, ID: brand-home"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5962,
+      "text": "> The focused UI element is 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 5977,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6003,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6021,
+      "text": "> The focused UI element is 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6036,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6094,
+      "text": "> f=Path('outputs/syktyvkar-offline.html');s=f.read_text()"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6131,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6158,
+      "text": "> The focused UI element is 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6173,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6178,
+      "text": "> The focused UI element is 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6206,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6238,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6280,
+      "text": "> Browser tab: 3, Title: \"Сыктывкар · Вокруг кольца\", URL: \"http://127.0.0.1:8765/syktyvkar-offline.html\"."
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6281,
+      "text": "> 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6289,
+      "text": "> \t\t9 link Description: Вернуться к кольцу, Value: 127.0.0.1:8765/syktyvkar-offline.html#, ID: brand-home"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6330,
+      "text": "> The focused UI element is 1 AXWebArea Сыктывкар · Вокруг кольца, URL: 127.0.0.1:8765/syktyvkar-offline.html"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6363,
+      "text": "> p=Path('outputs/syktyvkar-offline.html');z=Path('outputs/syktyvkar-offline.zip')"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6371,
+      "text": "> - Ran `/Users/ilia-may/.venvs/stefania-generations-48eb8b48d979/d1faf021d6c14756a056cdbaabc3e1c7/bin/python -I -S /Users/ilia-may/.agents/skills/stefania-memory/scripts/journal.py note --session 01a1ca3b-4505-7b63-aa71-4fa6c9f5fd39 --kind decision 'Собран самостоятельный офлайн-HTML карты Сыктывкара (Three.js, 3.4 МБ, 1673 здания OSM, 2.3×2.3 км). По уточнению пользователя центр строго на кольце Коммунистической/Октябрьского: 61.6638672971, 50.8159517742. outputs/syktyvkar-offline.html и zip; исходники work/prototype. Проверены поиск, карточки кликом, масштаб, поворот, сезоны и ночь через localhost; file:// заблокирован политикой проверочного браузера. В HTML встроены все ресурсы, CSP connect-src none; рельеф плоский, цвета, деревья и машины условные.'`"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6390,
+      "text": "[HTML-файл · 3,4 МБ](./outputs/syktyvkar-offline.html) · [Архив для отправки · 0,86 МБ](./outputs/syktyvkar-offline.zip)"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6408,
+      "text": "> - Listed files in `syktyvkar-offline.html`"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6419,
+      "text": "> - Ran `pwd && rg --files -g 'hosting.json' -g 'syktyvkar-offline.html' -g 'AGENTS.md' -g '!node_modules' -g '!work/prototype/.venv' .`"
+    },
+    {
+      "path": "docs/pre-pre-search.md",
+      "line": 6432,
+      "text": ">  source=Path('outputs/syktyvkar-offline.html')"
+    },
+    {
+      "path": "tools/world-build/src/fetch-osm.ts",
+      "line": 5,
+      "text": "*   pnpm world:fetch-osm            # content/worlds/ring-block/import.json"
+    },
+    {
+      "path": "tools/world-build/src/fetch-osm.ts",
+      "line": 153,
+      "text": "const result = await fetchOsm(process.argv[2] ?? 'content/worlds/ring-block/import.json');"
+    },
+    {
+      "path": "tools/world-build/src/osm-details.ts",
+      "line": 8,
+      "text": "import type { OsmElement, OsmSettings, OsmSnapshot } from './fetch-osm.js';"
+    },
+    {
+      "path": "tools/world-build/src/osm-details.ts",
+      "line": 9,
+      "text": "import { toGame } from './fetch-osm.js';"
+    },
+    {
+      "path": "tools/world-build/src/osm-details.ts",
+      "line": 10,
+      "text": "import { roadMarkings, trafficSignals } from './road-markings.js';"
+    },
+    {
+      "path": "tools/world-build/src/road-markings.ts",
+      "line": 10,
+      "text": "import type { OsmElement, OsmSettings, OsmSnapshot } from './fetch-osm.js';"
+    },
+    {
+      "path": "tools/world-build/src/road-markings.ts",
+      "line": 11,
+      "text": "import { toGame } from './fetch-osm.js';"
+    }
+  ]
+}

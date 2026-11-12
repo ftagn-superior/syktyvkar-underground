@@ -1,12 +1,4 @@
-/**
- * Кольцевая развязка с единообразной разметкой.
- *
- * Разметка из OSM на кольце рвётся: у каждого примыкания она отступает от узла,
- * а число полос подбирается заново на каждом отрезке. Поэтому внутри кольца
- * разметка строится здесь: прерывистые окружности между полосами, «зубы дракона»
- * (знак «Уступи дорогу») поперёк въездов и треугольные островки безопасности
- * между въездом и выездом. Концы подъездных дорог не заходят на центральный остров.
- */
+/** Собственная геометрия кольца: ручные контуры, островки, подъезды и разметка. */
 import type { Point2 } from './triangulate.js';
 
 export interface RoundaboutArm {
@@ -42,11 +34,9 @@ export interface RoundaboutConfig {
   /** Радиусы прерывистых линий между полосами; без поля линии делят кольцо на `lanes` равных полос. */
   lines?: number[];
   arms: RoundaboutArm[];
-  /** «Зебры», которых нет в OSM: отрезок поперёк проезжей части от `from` до `to` (игровые метры). */
+  /** Авторские «зебры»: отрезок поперёк проезжей части в локальных метрах основания. */
   crosswalks?: { from: Point2; to: Point2 }[];
-  /** Файл трассировки по снимку (`content/worlds/ring-block/ring-trace.json`): контуры, которых нет в OSM и прототипе. */
-  trace?: string;
-  /** Разобранная трассировка; заполняется при импорте из `trace`. */
+  /** Разобранные авторские трассы в локальных метрах основания. */
   traced?: TracedGeometry;
 }
 
@@ -73,7 +63,15 @@ const polar = (c: Point2, r: number, angle: number): Point2 => [
 ];
 
 export function validateRoundabout(config: RoundaboutConfig) {
-  if (!(config.inner > 0 && config.outer > config.inner + 2))
+  const point = (value: unknown): value is Point2 =>
+    Array.isArray(value) && value.length === 2 && value.every(Number.isFinite);
+  if (!point(config.center) || !Array.isArray(config.arms))
+    throw new Error('Roundabout requires a finite center and arms');
+  if (
+    !Number.isFinite(config.inner) ||
+    !Number.isFinite(config.outer) ||
+    !(config.inner > 0 && config.outer > config.inner + 2)
+  )
     throw new Error('Roundabout radii must satisfy 0 < inner < outer');
   if (!Number.isInteger(config.lanes) || config.lanes < 1 || config.lanes > 6)
     throw new Error('Roundabout lanes must be an integer from 1 to 6');
@@ -81,23 +79,36 @@ export function validateRoundabout(config: RoundaboutConfig) {
     throw new Error('Roundabout lane lines must lie between inner and outer radii');
   const ids = new Set<string>();
   for (const arm of config.arms) {
+    if (!point(arm.at) || !point(arm.direction) || !Number.isFinite(arm.width) || arm.width <= 0)
+      throw new Error(`Invalid roundabout arm ${arm.id}`);
     if (ids.has(arm.id)) throw new Error(`Duplicate roundabout arm ${arm.id}`);
     ids.add(arm.id);
     if (Math.abs(Math.hypot(...arm.direction) - 1) > 1e-3)
       throw new Error(`Roundabout arm ${arm.id} direction must be a unit vector`);
+    if (
+      arm.island &&
+      (!Number.isFinite(arm.island.base) ||
+        !Number.isFinite(arm.island.length) ||
+        arm.island.base <= 0 ||
+        arm.island.length <= 0)
+    )
+      throw new Error(`Invalid roundabout island ${arm.id}`);
     if (arm.island && arm.island.base >= arm.width)
       throw new Error(`Roundabout arm ${arm.id} island is wider than the road`);
+    if (
+      arm.fillet &&
+      Object.values(arm.fillet).some((radius) => !Number.isFinite(radius) || radius <= 0)
+    )
+      throw new Error(`Invalid roundabout fillet ${arm.id}`);
+    if (
+      arm.approach &&
+      (!Number.isFinite(arm.approach.length) ||
+        !Number.isFinite(arm.approach.taper) ||
+        arm.approach.length < 0 ||
+        arm.approach.taper < 0)
+    )
+      throw new Error(`Invalid roundabout approach ${arm.id}`);
   }
-}
-
-/** Точки дороги внутри центрального острова сдвигаются на его край: остров остаётся кругом. */
-export function clampOutOfIsland(ring: Point2[], config: RoundaboutConfig): Point2[] {
-  return ring.map((p) => {
-    const d: Point2 = [p[0] - config.center[0], p[1] - config.center[1]];
-    const r = Math.hypot(d[0], d[1]);
-    if (r >= config.inner || r === 0) return p;
-    return add(config.center, d, config.inner / r);
-  });
 }
 
 /** Точка на линии подъезда со смещением `offset` от оси, лежащая на окружности радиуса `radius`. */
@@ -201,7 +212,14 @@ export function tracedGeometry(
 ): TracedGeometry {
   const out: TracedGeometry = { curbs: [], islands: [], crosswalks: [], lines: [] };
   const need = (name: string, points: Point2[], count: number) => {
-    if (points.length < count) throw new Error(`Trace ${name} needs at least ${count} points`);
+    if (!Array.isArray(points) || points.length < count)
+      throw new Error(`Trace ${name} needs at least ${count} points`);
+    if (
+      !points.every(
+        (point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite),
+      )
+    )
+      throw new Error(`Trace ${name} requires finite points`);
   };
   const STYLES = {
     'lane-dashed': 'dashed',
@@ -553,47 +571,4 @@ function inside(p: Point2, ring: Point2[]) {
     if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi) hit = !hit;
   }
   return hit;
-}
-
-/** Разметка OSM, которую заменяет разметка кольца: на самом кольце и на островках. */
-const zoneCache = new WeakMap<TracedGeometry, { patches: Point2[][]; frames: CrosswalkFrame[] }>();
-
-/** Участки обведённой дороги и «зебры», внутри которых разметка OSM заменяется обведённой. */
-function tracedZones(config: RoundaboutConfig) {
-  const traced = config.traced;
-  if (!traced) return { patches: [] as Point2[][], frames: [] as CrosswalkFrame[] };
-  let zones = zoneCache.get(traced);
-  if (!zones) {
-    zones = {
-      patches: roundaboutCurbPatches(config),
-      frames: traced.crosswalks.map(crosswalkFrame),
-    };
-    zoneCache.set(traced, zones);
-  }
-  return zones;
-}
-
-export function replacedByRoundabout(polygon: Point2[], config: RoundaboutConfig): boolean {
-  const centroid: Point2 = [
-    polygon.reduce((s, p) => s + p[0], 0) / polygon.length,
-    polygon.reduce((s, p) => s + p[1], 0) / polygon.length,
-  ];
-  if (
-    Math.hypot(centroid[0] - config.center[0], centroid[1] - config.center[1]) <
-    config.outer + 0.5
-  )
-    return true;
-  // Между обведёнными краями разметку задают трассы; OSM-линии старого рисунка здесь лишние.
-  const { patches, frames } = tracedZones(config);
-  if (patches.some((ring) => inside(centroid, ring))) return true;
-  // «Зебра» OSM рядом с обведённой — дубль: запас 7 м, потому что узел OSM сидит не по центру.
-  const near = frames.some(({ origin, across, along, length, depth }) => {
-    const rel: Point2 = [centroid[0] - origin[0], centroid[1] - origin[1]];
-    const u = rel[0] * across[0] + rel[1] * across[1];
-    const v = rel[0] * along[0] + rel[1] * along[1];
-    return u > -7 && u < length + 7 && v > -7 && v < depth + 7;
-  });
-  if (near) return true;
-  // Под островком с запасом 0,6 м не остаётся кусков линий.
-  return roundaboutIslands(config, 0.6).some((island) => polygon.some((p) => inside(p, island)));
 }

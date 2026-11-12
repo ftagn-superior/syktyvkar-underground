@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { ItemStore } from './items/store.js';
+import type { WorldOwnership } from './world-ownership.js';
 import { ItemRuntime } from './items/runtime.js';
 import { randomUUID } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
@@ -88,6 +89,8 @@ interface ClientAction {
   code?: ErrorCode;
 }
 export interface WorldRoomOptions {
+  ownership?: WorldOwnership;
+  itemStore?: ItemStore;
   definition: WorldDefinition;
   manifest: WorldManifest;
   reconnectSeconds?: number;
@@ -156,7 +159,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.prepareTimeoutMs = options.prepareTimeoutMs ?? PREPARE_TIMEOUT_MS;
     this.accounts = options.accounts;
     this.itemCreationEnabled = options.itemCreationEnabled ?? true;
-    this.state.worldEpoch = randomUUID();
+    this.state.worldEpoch = options.ownership?.epoch ?? randomUUID();
     this.state.protocolVersion = PROTOCOL_VERSION;
     this.state.mapVersion = options.manifest.mapVersion;
     this.state.simulationConfigHash = options.manifest.simulationConfigHash;
@@ -165,7 +168,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     await this.setPrivate(true);
     this.world = await createAuthoritativeWorld({ ...options.definition, initialItems: [] });
     this.items = new ItemRuntime(
-      new ItemStore(options.pool, options.definition, this.state.worldEpoch),
+      options.itemStore ?? new ItemStore(options.pool, options.definition, this.state.worldEpoch),
       this.world,
       () => this.persistenceStatus(),
     );

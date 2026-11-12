@@ -31,6 +31,19 @@ export interface BuildingInstance {
   rotation: Quat;
   sourceRef?: { provider: string; type: string; id: string };
 }
+/** Editable placement. Active instances use the existing v4/v2 cell transport. */
+export interface StaticObjectInstance extends BuildingInstance {
+  instanceRevision: number;
+  enabled: boolean;
+}
+export interface WorldLayoutSnapshot {
+  formatVersion: 1;
+  worldId: string;
+  assetReleaseVersion: string;
+  seedVersion: string;
+  revision: number;
+  instances: StaticObjectInstance[];
+}
 interface ColliderTransform {
   id: string;
   position: Vec3;

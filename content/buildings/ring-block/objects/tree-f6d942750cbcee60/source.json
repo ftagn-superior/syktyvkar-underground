@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "crown-leaf",
+      "role": "detail",
+      "fade": true,
+      "color": "#55813f",
+      "shapes": [
+        {
+          "cone": {
+            "center": [0, 3.666, 0],
+            "radiusBottom": 1.873,
+            "radiusTop": 3.405,
+            "height": 3.073,
+            "sides": 7
+          }
+        },
+        {
+          "cone": {
+            "center": [0, 6.739, 0],
+            "radiusBottom": 3.405,
+            "radiusTop": 1.192,
+            "height": 4.61,
+            "sides": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "trunk",
+      "role": "detail",
+      "fade": true,
+      "color": "#6b5a49",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 2.156, 0],
+            "size": [0.3, 4.313, 0.3],
+            "yaw": 16.178
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "c0",
+      "center": [0, 2.156, 0],
+      "size": [0.4, 4.313, 0.4],
+      "yaw": 0
+    }
+  ],
+  "merge": true
+}

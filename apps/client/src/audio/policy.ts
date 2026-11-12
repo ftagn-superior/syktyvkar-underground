@@ -30,8 +30,8 @@ const generic = ['impactGeneric_light_000'];
 const ball = ['impactSoft_heavy_000'];
 
 export const UI_SAMPLES: Record<UiCue, string> = {
-  open: 'open_001',
-  close: 'close_001',
+  open: 'click_001',
+  close: 'click_005',
   click: 'click_003',
   error: 'error_004',
   pickup: 'confirmation_001',
@@ -52,8 +52,8 @@ export const WORLD_MIX: Record<
   impact: { near: 3, far: 30, gain: 0.48, cooldown: 100 },
 };
 export const UI_GAIN: Record<UiCue, number> = {
-  open: 0.26,
-  close: 0.24,
+  open: 0.22,
+  close: 0.16,
   click: 0.2,
   error: 0.24,
   pickup: 0.3,

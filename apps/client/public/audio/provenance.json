@@ -142,32 +142,32 @@
       "originalSha256": "49e7ca88743fca974bb8676ea138b751cfd8f9033b5e7af8736c2a215d6edbc1"
     },
     {
-      "file": "open_001.wav",
-      "sha256": "cd82f23fa53c653bb1024f0bb23659f3a8578b10c9bdc1df445d0bbd59fdb9b3",
-      "bytes": 13100,
-      "seconds": 0.14802721088435375,
-      "format": "PCM16 mono 44100 Hz; channel average, no gain or trimming",
+      "file": "click_001.wav",
+      "sha256": "ea67c9d78750e5a356bf53ef8c2063b52cc3ccdae6ae8afeec87f97f79ae692d",
+      "bytes": 10190,
+      "seconds": 0.11464852607709751,
+      "format": "PCM16 mono 44100 Hz; original mono WAV copied without gain, filtering or trimming",
       "author": "Kenney",
       "license": "CC0-1.0",
       "pack": "Interface Sounds",
       "originalSource": "https://kenney.nl/assets/interface-sounds",
       "retrievedFrom": "https://github.com/Calinou/kenney-interface-sounds",
-      "originalFile": "open_001.wav",
-      "originalSha256": "c69aab75d09d98363934c68cda0e9d050973eb5c3ab9987ce8fd5d336a8f7fbd"
+      "originalFile": "click_001.wav",
+      "originalSha256": "ea67c9d78750e5a356bf53ef8c2063b52cc3ccdae6ae8afeec87f97f79ae692d"
     },
     {
-      "file": "close_001.wav",
-      "sha256": "6dc75cc024621ad26b76f513dbf5d4e805e822fd9db373eb59dd7d63b691b2e6",
-      "bytes": 13100,
-      "seconds": 0.14802721088435375,
-      "format": "PCM16 mono 44100 Hz; channel average, no gain or trimming",
+      "file": "click_005.wav",
+      "sha256": "d6006cd60538f3e02d9d2980bff5fb73481b9d5abf1145761739e09baec640ee",
+      "bytes": 1742,
+      "seconds": 0.01886621315192744,
+      "format": "PCM16 mono 44100 Hz; original mono WAV copied without gain, filtering or trimming",
       "author": "Kenney",
       "license": "CC0-1.0",
       "pack": "Interface Sounds",
       "originalSource": "https://kenney.nl/assets/interface-sounds",
       "retrievedFrom": "https://github.com/Calinou/kenney-interface-sounds",
-      "originalFile": "close_001.wav",
-      "originalSha256": "423ae3dd2981045649bed82653e43f9770c2baad6da7582d004f9161ef9b0439"
+      "originalFile": "click_005.wav",
+      "originalSha256": "d6006cd60538f3e02d9d2980bff5fb73481b9d5abf1145761739e09baec640ee"
     },
     {
       "file": "confirmation_001.wav",

@@ -6,6 +6,7 @@ import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
 import { ReactionMenu } from './ui/reactions';
+import { AnimationMenu } from './ui/animations';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 
@@ -32,6 +33,11 @@ const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
 const cameraLeft = element<HTMLButtonElement>('camera-left');
 const cameraRight = element<HTMLButtonElement>('camera-right');
+const actions = document.querySelector<HTMLElement>('.actions')!;
+const actionsResize = new ResizeObserver(() => {
+  actions.style.setProperty('--game-actions-height', `${actions.getBoundingClientRect().height}px`);
+});
+actionsResize.observe(actions);
 const qualityStorageKey = 'su:render-quality:v1';
 let quality: RenderQuality = 'standard';
 try {
@@ -47,6 +53,7 @@ let starting = false;
 let keyboard: KeyboardInput;
 let graphicsLost = false;
 let reactions: ReactionMenu | undefined;
+let animations: AnimationMenu | undefined;
 let inventory: InventoryPanel | undefined;
 
 function showNotice(message: string): void {
@@ -104,6 +111,7 @@ function updateState(state: ConnectionState, message?: string): void {
   if (message) showNotice(message);
   renderRespawn();
   reactions?.update(session.reactionStatus());
+  animations?.update(session.animationStatus());
   inventory?.update();
 }
 const session = new GameSession(updateState, showNotice);
@@ -122,7 +130,12 @@ const accounts = new AccountPanel(
   },
   () => session.leave(),
 );
-inventory = new InventoryPanel(session, canvas);
+inventory = new InventoryPanel(session, canvas, () => {
+  reactions?.close(false);
+  animations?.close(false);
+  diagnostics.hidden = true;
+  diagnosticsToggle.setAttribute('aria-expanded', 'false');
+});
 const accountPreparation = accounts.load();
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
@@ -138,6 +151,24 @@ reactions = new ReactionMenu(
     reactions!.update(session.reactionStatus());
   },
   () => {
+    animations?.close(false);
+    inventory?.close();
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+);
+animations = new AnimationMenu(
+  element<HTMLButtonElement>('animations-toggle'),
+  element('animations-panel'),
+  element('animations-status'),
+  canvas,
+  (id) => {
+    session.animate(id);
+    animations!.update(session.animationStatus());
+  },
+  () => {
+    reactions?.close(false);
+    inventory?.close();
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
@@ -300,6 +331,8 @@ leave.addEventListener('click', () => {
 });
 diagnosticsToggle.addEventListener('click', () => {
   reactions?.close(false);
+  animations?.close(false);
+  inventory?.close();
   diagnostics.hidden = !diagnostics.hidden;
   diagnosticsToggle.setAttribute('aria-expanded', String(!diagnostics.hidden));
   renderMetrics();
@@ -336,6 +369,7 @@ const uiTimer = setInterval(() => {
   renderRespawn();
   renderMetrics();
   reactions?.update(session.reactionStatus());
+  animations?.update(session.animationStatus());
   inventory?.update();
 }, 250);
 window.addEventListener('pageshow', (event) => {
@@ -346,11 +380,13 @@ window.addEventListener(
   () => {
     clearInterval(uiTimer);
     clearTimeout(noticeTimer);
+    actionsResize.disconnect();
     session.neutral();
     session.dispose();
     view?.dispose();
     keyboard.dispose();
     reactions?.dispose();
+    animations?.dispose();
     inventory?.dispose();
   },
   { once: true },

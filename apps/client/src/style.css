@@ -619,6 +619,47 @@ dd {
 .reaction-choice:disabled {
   cursor: default;
 }
+#animations-toggle[aria-expanded='true'] {
+  color: var(--mint);
+  border-color: #72e0c566;
+}
+#animations-status {
+  min-height: 32px;
+  margin: 10px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.animation-choices {
+  display: grid;
+  gap: 8px;
+}
+.animation-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #20323e;
+  color: #edf3f4;
+  text-align: left;
+}
+.animation-choice span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.animation-choice .animation-hint:empty {
+  display: none;
+}
+.animation-choice:hover:not(:disabled) {
+  border-color: var(--mint);
+  background: #29443f;
+}
+.animation-choice:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 /* Подписи заметных мест города. Создаются раньше подписей игроков, поэтому лежат под ними. */
 .landmark-label {
   position: fixed;
@@ -835,13 +876,6 @@ dd {
   }
 }
 @media (max-width: 430px) {
-  .reactions-panel {
-    position: fixed;
-    left: 18px;
-    right: 18px;
-    bottom: 78px;
-    width: auto;
-  }
   .bottom-bar {
     flex-wrap: wrap;
     gap: 8px;
@@ -949,6 +983,14 @@ dd {
 @media (max-width: 760px) {
   .bottom-bar .controls {
     display: none;
+  }
+  .reactions-panel {
+    position: fixed;
+    left: auto;
+    right: 18px;
+    bottom: calc(32px + var(--game-actions-height, 96px));
+    width: min(350px, calc(100vw - 36px));
+    max-height: calc(100dvh - 100px - var(--game-actions-height, 96px));
   }
   .actions {
     flex-wrap: wrap;

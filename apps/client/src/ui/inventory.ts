@@ -23,6 +23,7 @@ export class InventoryPanel {
   constructor(
     private readonly session: GameSession,
     private readonly canvas: HTMLCanvasElement,
+    private readonly onOpen?: () => void,
   ) {
     this.toggle.className = this.pickup.className = 'button quiet';
     this.toggle.textContent = 'Инвентарь · I';
@@ -123,6 +124,7 @@ export class InventoryPanel {
   }
   private open(open: boolean) {
     if (open && (this.session.state !== 'playing' || !this.session.accountId)) return;
+    if (open) this.onOpen?.();
     this.panel.hidden = !open;
     this.toggle.setAttribute('aria-expanded', String(open));
     if (open) {
@@ -130,6 +132,11 @@ export class InventoryPanel {
       this.update();
       this.panel.querySelector('button')?.focus();
     } else this.canvas.focus({ preventScroll: true });
+  }
+  close(): void {
+    this.panel.hidden = true;
+    this.toggle.setAttribute('aria-expanded', 'false');
+    this.cancel();
   }
   private collect() {
     const id = this.session.nearestItem();

@@ -125,6 +125,15 @@ describe('avatar visual ownership', () => {
       motionRevision: 0,
       motionEnabled: true,
       color: '#65d6bc',
+      animation: {
+        worldEpoch: 'epoch',
+        animationId: 'wave',
+        sequence: 1,
+        startedAtTick: 0,
+        endsAtTick: 180,
+        changedAtTick: 0,
+        displayTick: 60,
+      },
     };
     try {
       for (let step = 0; step < 60; step++) avatar.update(player, 1 / 60, true, false);
@@ -136,6 +145,8 @@ describe('avatar visual ownership', () => {
         avatar.update(player, 1 / 60, true, false);
         const state = avatar.diagnostics();
         expect(state.skinId).toBe(player.skinId);
+        expect(state.animation.elapsedMs).toBe(1000);
+        expect(state.animation.reason).toBe('playing');
         expect(state.movement).toBeGreaterThan(0.99);
         expect((state.phase - before + Math.PI * 2) % (Math.PI * 2)).toBeLessThan(0.5);
         expect(root.position.equals(position)).toBe(true);

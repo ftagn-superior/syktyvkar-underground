@@ -3,7 +3,10 @@ export interface AvatarPose {
   rightArm: number;
   leftLeg: number;
   rightLeg: number;
-  armSpread: number;
+  leftArmYaw: number;
+  rightArmYaw: number;
+  leftArmRoll: number;
+  rightArmRoll: number;
   lean: number;
   roll: number;
   /** Vertical offset as a fraction of character height. */
@@ -18,7 +21,10 @@ export function restingPose(): AvatarPose {
     rightArm: 0,
     leftLeg: 0,
     rightLeg: 0,
-    armSpread: 0.1,
+    leftArmYaw: 0,
+    rightArmYaw: 0,
+    leftArmRoll: -0.1,
+    rightArmRoll: 0.1,
     lean: 0,
     roll: 0,
     lift: 0,
@@ -41,7 +47,9 @@ export function sampleLocomotion(
   pose.rightLeg = swing + 0.2 * airborne;
   pose.leftArm = swing * 0.8 - 0.3 * airborne;
   pose.rightArm = -swing * 0.8 - 0.3 * airborne;
-  pose.armSpread = 0.1 + 0.6 * airborne;
+  pose.leftArmYaw = pose.rightArmYaw = 0;
+  pose.leftArmRoll = -(0.1 + 0.6 * airborne);
+  pose.rightArmRoll = 0.1 + 0.6 * airborne;
   pose.lean =
     ((0.07 + 0.14 * running) * groundedMovement - 0.06 * airborne) * (reducedMotion ? 0.35 : 1);
   pose.roll = reducedMotion ? 0 : Math.sin(phase) * 0.025 * groundedMovement;

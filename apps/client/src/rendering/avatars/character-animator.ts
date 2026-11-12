@@ -1,5 +1,12 @@
 import type { DisplayPlayer } from '../../presentation/display-state';
-import { restingPose, sampleLocomotion } from './locomotion';
+import { findAnimation, TICK_RATE } from '@su/contracts';
+import { restingPose, sampleLocomotion, type AvatarPose } from './locomotion';
+import {
+  ANIMATION_CLIPS,
+  ANIMATION_BLEND_MS,
+  animationWeight,
+  smoothWeight,
+} from './animation-clips';
 
 export type AvatarMotion = Pick<
   DisplayPlayer,
@@ -11,7 +18,9 @@ export type AvatarMotion = Pick<
   | 'motionRevision'
   | 'motionEnabled'
   | 'connected'
->;
+> &
+  Pick<DisplayPlayer, 'animation' | 'animationMoving'> &
+  Partial<Pick<DisplayPlayer, 'entityId'>>;
 const TAU = Math.PI * 2;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const angleDifference = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -27,6 +36,12 @@ export class CharacterAnimator {
   private airborne = 0;
   private yaw = 0;
   private mode: 'idle' | 'walk' | 'run' | 'airborne' = 'idle';
+  private readonly clipPose = restingPose();
+  private animationKey = '';
+  private suppressedKey = '';
+  private animationMask: readonly (keyof AvatarPose)[] = [];
+  private transition?: { pose: AvatarPose; mask: readonly (keyof AvatarPose)[]; time: number };
+  private animationDiagnostic = { id: '', elapsedMs: 0, weight: 0, reason: 'inactive' };
 
   constructor(
     private readonly walkSpeed: number,
@@ -38,6 +53,7 @@ export class CharacterAnimator {
   }
 
   update(frame: AvatarMotion, delta: number, predicted: boolean, reducedMotion = false) {
+    const previousPose = { ...this.pose };
     const q = frame.rotation;
     // Remote quaternion components are interpolated before the root normalizes them.
     const targetYaw = Math.atan2(
@@ -106,7 +122,72 @@ export class CharacterAnimator {
       reducedMotion,
     );
     this.pose.facingOffset = angleDifference(this.yaw - targetYaw);
+    this.applyAnimation(frame, previousPose, reducedMotion);
     return this.pose;
+  }
+
+  private applyAnimation(frame: AvatarMotion, previousPose: AvatarPose, reduced: boolean): void {
+    const playback = frame.animation;
+    if (!playback) {
+      this.animationKey = '';
+      this.transition = undefined;
+      this.animationMask = [];
+      this.animationDiagnostic = { id: '', elapsedMs: 0, weight: 0, reason: 'inactive' };
+      return;
+    }
+    const identity = `${playback.worldEpoch}/${frame.entityId ?? ''}/${frame.revision}`;
+    const key = `${identity}/${playback.sequence}/${playback.animationId ?? ''}`;
+    const definition = findAnimation(playback.animationId);
+    const clip = definition && ANIMATION_CLIPS[definition.id];
+    const elapsedMs = ((playback.displayTick - playback.startedAtTick) * 1000) / TICK_RATE;
+    const time = playback.displayTimeMs ?? (playback.displayTick * 1000) / TICK_RATE;
+    if (definition?.mode === 'fullBody' && frame.animationMoving) this.suppressedKey = key;
+    const reason = !definition
+      ? 'inactive'
+      : !clip
+        ? 'missing-clip'
+        : clip.rig !== definition.rig
+          ? 'incompatible-rig'
+          : !frame.grounded
+            ? 'airborne'
+            : this.suppressedKey === key
+              ? 'local-movement'
+              : playback.displayTick >= playback.endsAtTick
+                ? 'expired'
+                : 'playing';
+    const mask = reason === 'playing' ? clip!.mask : [];
+    if (key !== this.animationKey) {
+      // Entity/revision changes must discard decorative history as well as locomotion.
+      this.transition =
+        this.animationKey.startsWith(`${identity}/`) && this.animationMask.length
+          ? { pose: previousPose, mask: this.animationMask, time }
+          : undefined;
+      this.animationKey = key;
+    }
+    // Falling always wins. Movement cancellation can blend only while grounded.
+    if (!frame.grounded) this.transition = undefined;
+    const weight =
+      reason === 'playing'
+        ? animationWeight(
+            elapsedMs,
+            ((playback.endsAtTick - playback.startedAtTick) * 1000) / TICK_RATE,
+          )
+        : 0;
+    if (weight > 0) {
+      clip!.sample(this.clipPose, elapsedMs, reduced);
+      for (const joint of mask)
+        this.pose[joint] += (this.clipPose[joint] - this.pose[joint]) * weight;
+    }
+    if (this.suppressedKey === key) this.transition = undefined;
+    if (this.transition) {
+      const t = smoothWeight((time - this.transition.time) / ANIMATION_BLEND_MS);
+      for (const joint of this.transition.mask)
+        this.pose[joint] =
+          this.transition.pose[joint] + (this.pose[joint] - this.transition.pose[joint]) * t;
+      if (t >= 1) this.transition = undefined;
+    }
+    this.animationMask = mask.length ? mask : (this.transition?.mask ?? []);
+    this.animationDiagnostic = { id: playback.animationId ?? '', elapsedMs, weight, reason };
   }
 
   diagnostics() {
@@ -117,6 +198,7 @@ export class CharacterAnimator {
       movement: this.movement,
       running: this.running,
       airborne: this.airborne,
+      animation: { ...this.animationDiagnostic },
       pose: { ...this.pose },
     };
   }

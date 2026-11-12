@@ -18,7 +18,8 @@ const manifest: WorldManifest = await fetch(app.url + info.manifestUrl).then((re
 const modelFile = Object.values(manifest.assets)[0].modelFile;
 const packFile = manifest.cells.flatMap((cell) => cell.graphicsPacks ?? [])[0];
 assert.ok(packFile, 'Current publisher must provide an actual graphics pack for this test');
-let targetPath = `/worlds/physics-lab/${packFile}`;
+const publicationPath = new URL('.', new URL(info.manifestUrl, app.url)).pathname;
+let targetPath = publicationPath + packFile;
 // A tiny browser fixture exercises the actual legacy resource loader independently
 // of the production manifest identity and multiplayer handshake.
 const legacyLoader = await build({
@@ -178,7 +179,7 @@ try {
 
   // Legacy manifests still use independently hashed GLB files. The same actual
   // browser HTTP cache must recover once, and reject permanently damaged bytes.
-  targetPath = `/worlds/physics-lab/${modelFile}`;
+  targetPath = publicationPath + modelFile;
   const legacyManifest = {
     ...manifest,
     cells: manifest.cells.map(({ graphicsPacks: _packs, ...cell }) => cell),
@@ -195,10 +196,10 @@ try {
   corrupt = false;
   const verifyLegacy = async (target: typeof legacy) =>
     target.evaluate(
-      async ({ manifest, modelFile }) => {
+      async ({ manifest, modelFile, publicationPath }) => {
         const moduleUrl = '/resource-loader-fixture.js';
         const { VerifiedResources } = await import(moduleUrl);
-        const resources = new VerifiedResources(manifest, '/worlds/physics-lab/');
+        const resources = new VerifiedResources(manifest, publicationPath);
         try {
           await resources.prefetchGraphics(manifest.cells[0].cellId);
           const bytes = await resources.read(modelFile);
@@ -209,7 +210,7 @@ try {
           resources.dispose();
         }
       },
-      { manifest: legacyManifest, modelFile },
+      { manifest: legacyManifest, modelFile, publicationPath },
     );
   const legacyRecovery = await verifyLegacy(legacy);
   assert.equal(legacyRecovery.ok, true);

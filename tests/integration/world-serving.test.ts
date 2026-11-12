@@ -33,14 +33,14 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)('serves verified world assets', asy
       modelFile: string;
       collisionFile: string;
     }[]) {
-      const model = await fetch(`${app.url}/worlds/physics-lab/${asset.modelFile}`);
+      const model = await fetch(new URL(asset.modelFile, app.url + info.manifestUrl).href);
       expect(model.status).toBe(200);
       expect(model.headers.get('cache-control')).toContain('immutable');
       const bytes = new Uint8Array(await model.arrayBuffer());
       expect(new TextDecoder().decode(bytes.subarray(0, 4))).toBe('glTF');
-      expect((await fetch(`${app.url}/worlds/physics-lab/${asset.collisionFile}`)).status).toBe(
-        200,
-      );
+      expect(
+        (await fetch(new URL(asset.collisionFile, app.url + info.manifestUrl).href)).status,
+      ).toBe(200);
     }
     expect((await fetch(app.url + '/worlds/physics-lab/not-listed.glb')).status).toBe(404);
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);

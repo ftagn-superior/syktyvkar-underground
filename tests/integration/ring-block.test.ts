@@ -974,7 +974,9 @@ describe('мир ring-block', () => {
     const app = await createGameServer({ port: 0, worldDirectory: release });
     try {
       const info = await fetch(app.url + '/api/world').then((r) => r.json());
-      expect(info.manifestUrl).toBe('/worlds/ring-block/manifest.json');
+      expect(info.manifestUrl).toMatch(
+        /^\/worlds\/ring-block\/layouts\/[a-f0-9]{64}\/[a-f0-9]{64}\/manifest\.json$/,
+      );
       expect((await fetch(app.url + info.manifestUrl)).status).toBe(200);
       expect((await fetch(app.url + '/worlds/physics-lab/manifest.json')).status).not.toBe(200);
     } finally {

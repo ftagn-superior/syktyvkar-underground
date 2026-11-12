@@ -46,6 +46,9 @@ const previewCenter =
     : { ...header.spawnPoints[0], y: 0 };
 const worldPath = '/worlds/profile/';
 const info: WorldInfo = {
+  assetReleaseVersion: 'a'.repeat(64),
+  layoutRevision: 1,
+  layoutHash: 'b'.repeat(64),
   roomId: 'loading-profile',
   worldEpoch: 'loading-profile',
   protocolVersion: PROTOCOL_VERSION,

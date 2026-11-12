@@ -22,6 +22,7 @@ import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-repo
 import { ReactionMenu } from './ui/reactions';
 import { AnimationMenu } from './ui/animations';
 import { ChatConsole } from './ui/chat';
+import { StaticPlacement } from './ui/static-placement';
 import { InventoryPanel } from './ui/inventory';
 import { AccountPanel } from './ui/account-panel';
 import { bindTouchButtons } from './ui/touch-buttons';
@@ -92,6 +93,8 @@ let reactions: ReactionMenu | undefined;
 let animations: AnimationMenu | undefined;
 let chat: ChatConsole | undefined;
 let inventory: InventoryPanel | undefined;
+let staticPlacement: StaticPlacement | undefined;
+let placementOwner: 'inventory' | 'static' | undefined;
 let preview: CharacterPreview | undefined;
 let help: HelpMenu | undefined;
 let interactions: InteractionSystem | undefined;
@@ -147,6 +150,7 @@ function resetGameInput(): void {
   session.neutral();
 }
 function closeGamePanels(): void {
+  staticPlacement?.close();
   reactions?.close(false);
   animations?.close(false);
   chat?.close(false);
@@ -168,16 +172,20 @@ const inputMode = new GameInputMode(canvas, stick, (mode) => {
       : 'Управление переключено на мышь и клавиатуру. Нажмите клавишу движения ещё раз.',
   );
 });
-function renderControls(placing = false): void {
+function renderControls(placing = !!placementOwner): void {
   element('overview-camera-controls').hidden = !!firstPerson?.selected;
   element('first-person-camera-controls').hidden = !firstPerson?.selected;
-  element('controls-title').textContent = firstPerson?.selected
-    ? 'От первого лица'
-    : placing
-      ? 'Поворот предмета'
+  element('controls-title').textContent = placing
+    ? placementOwner === 'static'
+      ? 'Размещение скамейки'
+      : 'Поворот предмета'
+    : firstPerson?.selected
+      ? 'От первого лица'
       : 'Свободное движение';
   element('controls-description').textContent = placing
-    ? 'W / S — наклон · A / D — поворот · Q / E — крен'
+    ? placementOwner === 'static'
+      ? 'A / D — поворот на 15° · колесо — масштаб'
+      : 'W / S — наклон · A / D — поворот · Q / E — крен'
     : firstPerson?.selected
       ? 'WASD / стрелки — ходьба и боковые шаги · мышь — взгляд · Shift — бег · T — чат · V — обзор'
       : inputMode.value === 'touch'
@@ -230,6 +238,7 @@ function firstPersonEligible(): boolean {
     pageActive &&
     !document.hidden &&
     inputMode.value === 'desktop' &&
+    !placementOwner &&
     session.gameplayInputEnabled &&
     !!room?.state.players.get(room.sessionId)
   );
@@ -311,6 +320,7 @@ function showNotice(message: string, options: { toast?: { hint?: string } } = {}
   );
 }
 function updateState(state: ConnectionState, message?: string): void {
+  if (state !== 'playing' && state !== 'waiting') staticPlacement?.close();
   const playing = state === 'playing';
   if (!playing) audio.stopWorld();
   const reconnecting = state === 'reconnecting';
@@ -414,6 +424,7 @@ inventory = new InventoryPanel(
   session,
   canvas,
   () => {
+    staticPlacement?.close();
     chat?.close(false);
     reactions?.close(false);
     animations?.close(false);
@@ -421,12 +432,35 @@ inventory = new InventoryPanel(
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
   (placing) => {
-    keyboard?.setPlacementMode(placing);
+    if (placing) {
+      staticPlacement?.close();
+      placementOwner = 'inventory';
+    } else if (placementOwner === 'inventory') placementOwner = undefined;
+    keyboard?.setPlacementMode(!!placementOwner);
     resetGameInput();
     renderControls(placing);
   },
   (name) => showNotice(`В инвентарь: ${name}`, { toast: { hint: 'X' } }),
 );
+staticPlacement = new StaticPlacement(
+  session,
+  canvas,
+  () => view,
+  (active) => {
+    placementOwner = active ? 'static' : undefined;
+    keyboard?.setPlacementMode(active);
+    resetGameInput();
+    renderControls(active);
+  },
+  () => inputMode.value === 'desktop' && !graphicsLost,
+);
+session.onStaticPlacementOpen = (effect) => {
+  if (inputMode.value !== 'desktop' || graphicsLost) return;
+  firstPerson?.overview();
+  closeGamePanels();
+  help?.close(false);
+  void staticPlacement?.open(effect);
+};
 help = new HelpMenu(
   () => canvas.focus({ preventScroll: true }),
   () => {
@@ -450,7 +484,11 @@ interactions = new InteractionSystem({
   candidates: () => pickups.candidates(),
   project: (anchor, out) => (view ? view.project(anchor, out) : (out.visible = false)),
   enabled: () =>
-    loaded && !graphicsLost && inputMode.value === 'desktop' && !!inventory?.canCollect,
+    loaded &&
+    !graphicsLost &&
+    inputMode.value === 'desktop' &&
+    placementOwner !== 'static' &&
+    !!inventory?.canCollect,
 });
 const accountPreparation = accounts.load();
 function setCameraRotation(direction: -1 | 0 | 1): void {
@@ -523,6 +561,7 @@ chat = new ChatConsole(
     keyboard?.setEnabled(!open && !graphicsLost && inputMode.value === 'desktop');
     resetGameInput();
     if (open) {
+      staticPlacement?.close();
       reactions?.close(false);
       animations?.close(false);
       inventory?.close();
@@ -552,6 +591,7 @@ function renderChat(): void {
   chat?.update({
     ...state,
     available: state.available && !graphicsLost && inputMode.value === 'desktop',
+    keepOpen: session.state === 'waiting' && !graphicsLost && inputMode.value === 'desktop',
   });
 }
 keyboard = new KeyboardInput(
@@ -560,7 +600,11 @@ keyboard = new KeyboardInput(
   () => reactions!.toggleOpen(),
   (initialText) => chat!.open(initialText),
   () => animations!.toggleOpen(),
-  (axis, direction) => inventory?.rotatePlacement(axis, direction),
+  (axis, direction) => {
+    if (placementOwner === 'static') {
+      if (axis === 'y') staticPlacement?.rotate(direction);
+    } else inventory?.rotatePlacement(axis, direction);
+  },
 );
 cameraPointer = new CameraPointerInput(
   canvas,
@@ -778,7 +822,8 @@ async function start(): Promise<void> {
         const area = view!.graphicalArea();
         view!.setStreamingRadius(session.updateVisualArea(area.center, area.drawRadius));
         interactions?.tick(now);
-        inventory?.frame(view!);
+        if (placementOwner === 'static') staticPlacement?.frame();
+        else inventory?.frame(view!);
       } catch (error) {
         recoverGameLoop(error);
       }
@@ -850,6 +895,7 @@ graphicsReload.addEventListener('click', () => location.reload());
 canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   graphicsLost = true;
+  staticPlacement?.close();
   firstPerson?.suspend();
   syncAudioActivity();
   keyboard.setEnabled(false);
@@ -865,7 +911,10 @@ canvas.addEventListener('webglcontextlost', (event) => {
 // Feedback remains alive even when WebGL has stopped producing frames.
 const uiTimer = setInterval(() => {
   syncTouchInput();
-  storageStatus.hidden = !session.storageUnavailable;
+  storageStatus.hidden = !session.storageUnavailable && !session.layoutUpdating;
+  storageStatus.textContent = session.layoutUpdating
+    ? 'Обновляется окружение. Игра продолжится после подготовки игроков.'
+    : 'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
   renderRespawn();
   renderMetrics();
   const loading = session.state === 'preparing' || session.state === 'waiting';
@@ -889,6 +938,8 @@ window.addEventListener(
   'pagehide',
   () => {
     clearInterval(uiTimer);
+    clearInterval(previewRefreshTimer);
+    window.removeEventListener('focus', refreshPreview);
     clearTimeout(noticeTimer);
     unbindTouchButtons();
     resetGameInput();
@@ -897,6 +948,7 @@ window.addEventListener(
     touch?.dispose();
     inputMode.dispose();
     cameraPointer?.dispose();
+    staticPlacement?.dispose();
     view?.dispose();
     keyboard.dispose();
     help?.dispose();
@@ -938,4 +990,10 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
     writable: false,
   });
 }
+const refreshPreview = () => {
+  if (loaded && !session.room && !document.hidden)
+    void session.refreshPublication().catch(() => {});
+};
+window.addEventListener('focus', refreshPreview);
+const previewRefreshTimer = setInterval(refreshPreview, 15_000);
 void start();

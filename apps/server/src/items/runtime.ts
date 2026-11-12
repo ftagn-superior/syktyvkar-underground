@@ -22,6 +22,7 @@ export type ItemSound = Pick<
 /** One ordered writer. A failed/uncertain commit stays at the head until it can be resolved. */
 export class ItemRuntime {
   unavailable = false;
+  layoutPaused = false;
   closing = false;
   private reservations = 0;
   private queue: Job[] = [];
@@ -40,7 +41,7 @@ export class ItemRuntime {
     private readonly onItemSound?: (event: ItemSound) => void,
   ) {}
   get paused() {
-    return this.unavailable || this.closing || this.reservations > 0;
+    return this.unavailable || this.closing || this.layoutPaused || this.reservations > 0;
   }
   async initialize() {
     const items = await this.store.initialize();
@@ -106,6 +107,20 @@ export class ItemRuntime {
       this.statusChanged();
       if (this.queue.length && !this.timer) void this.drain();
     }
+  }
+  setLayoutPaused(paused: boolean) {
+    this.layoutPaused = paused;
+    this.statusChanged();
+  }
+  /** Runs on the existing writer; flush never enqueues recursively. */
+  placeStatic<T>(run: (flush: () => Promise<void>) => Promise<T>): Promise<T> {
+    return this.enqueue(() =>
+      run(async () => {
+        const items = this.world.getSnapshot().items;
+        await this.store.save(items, ++this.snapshotSequence);
+        for (const item of items) this.saved.set(item.entityId, canonicalJson(item));
+      }),
+    );
   }
   inventory(accountId: string): Promise<InventoryView> {
     return this.enqueue(() => this.store.inventory(accountId));

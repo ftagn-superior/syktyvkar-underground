@@ -2,12 +2,17 @@ import { ITEM_GIVE_COOLDOWN_MS, type ItemError } from '@su/contracts';
 
 export type ChatCommand =
   | { kind: 'give'; typeId: string }
+  | { kind: 'staticPlacement' }
   | { kind: 'invalid'; code: 'INVALID_INPUT' | 'UNKNOWN_COMMAND'; message: string };
 
 /** Slash-prefixed input is always private, including unknown or malformed commands. */
 export function parseChatCommand(text: string): ChatCommand | undefined {
   if (!text.startsWith('/')) return;
   const [name, typeId, ...extra] = text.split(' ');
+  if (name === '/motherlode')
+    return typeId || extra.length
+      ? { kind: 'invalid', code: 'INVALID_INPUT', message: 'Формат команды: /motherlode.' }
+      : { kind: 'staticPlacement' };
   if (name !== '/giveme')
     return { kind: 'invalid', code: 'UNKNOWN_COMMAND', message: 'Неизвестная команда.' };
   if (!typeId || !/^[a-zA-Z0-9_-]{1,64}$/.test(typeId) || extra.length)

@@ -2,6 +2,7 @@ import { CHAT_MAX_LENGTH, normalizeChatText } from '@su/contracts';
 
 export interface ChatConsoleStatus {
   available: boolean;
+  keepOpen?: boolean;
   pending: boolean;
   remainingMs: number;
 }
@@ -108,23 +109,26 @@ export class ChatConsole {
   update(state: ChatConsoleStatus): void {
     this.state = state;
     this.toggle.hidden = !state.available;
-    if (!state.available) this.close(false);
+    if (!state.available && !state.keepOpen) this.close(false);
     this.render();
   }
   private render(): void {
     this.counter.textContent = `${this.input.value.length} / ${CHAT_MAX_LENGTH}`;
     this.input.readOnly = this.state.pending;
     this.form.setAttribute('aria-busy', String(this.state.pending));
+    const command = this.input.value.trimStart().startsWith('/');
     this.submit.disabled =
       !this.state.available ||
       this.state.pending ||
-      this.state.remainingMs > 0 ||
+      (this.state.remainingMs > 0 && !command) ||
       !normalizeChatText(this.input.value);
     const message = this.state.pending
       ? 'Отправляем…'
-      : this.state.remainingMs > 0
+      : this.state.remainingMs > 0 && !command
         ? `Следующее сообщение через ${Math.ceil(this.state.remainingMs / 1000)} с`
-        : 'Enter — отправить · Esc — отменить';
+        : command
+          ? 'Enter — выполнить команду · Esc — отменить'
+          : 'Enter — отправить · Esc — отменить';
     if (this.status.textContent !== message) this.status.textContent = message;
   }
   dispose(): void {

@@ -1,5 +1,7 @@
+import type { StaticPlacementEffect } from './static-placement.js';
 import { PROFILE_COLORS } from './accounts.js';
 export * from './accounts.js';
+export * from './static-placement.js';
 export * from './items.js';
 export * from './item-shapes.js';
 export * from './foliage-shapes.js';
@@ -9,7 +11,7 @@ export * from './sounds.js';
 export * from './world-layout-patch.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 export const WORLD_FORMAT_VERSION = 5;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -34,7 +36,7 @@ export interface BuildingInstance {
   rotation: Quat;
   sourceRef?: { provider: string; type: string; id: string };
 }
-/** Editable placement. Active instances use the existing v4/v2 cell transport. */
+/** Editable placement. Active instances use the existing v5/v2 cell transport. */
 export interface StaticObjectInstance extends BuildingInstance {
   instanceRevision: number;
   enabled: boolean;
@@ -208,6 +210,9 @@ export interface LocalSimulationSnapshot {
   items: ItemState[];
 }
 export interface WorldInfo {
+  assetReleaseVersion: string;
+  layoutRevision: number;
+  layoutHash: string;
   roomId: string;
   worldEpoch: string;
   protocolVersion: number;
@@ -241,12 +246,14 @@ export interface ActionResult {
   message?: string;
   /** Remaining server-enforced delay before the same kind of action can be accepted. */
   retryAfterMs?: number;
+  effect?: StaticPlacementEffect;
 }
 export interface PrepareArea {
   prepareId: string;
+  layoutRevision: number;
   worldEpoch: string;
   mapVersion: string;
-  reason: 'spawn' | 'respawn' | 'reconnect';
+  reason: 'spawn' | 'respawn' | 'reconnect' | 'layout';
   position: Vec3;
   cellIds: string[];
   expiresAt: number;
@@ -254,6 +261,7 @@ export interface PrepareArea {
 }
 export interface AreaReady {
   prepareId: string;
+  layoutRevision: number;
   worldEpoch: string;
   mapVersion: string;
 }

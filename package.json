@@ -70,7 +70,8 @@
     "test:giveme:browser": "node tools/test-database.mjs --giveme --browser",
     "test:avatars:browser": "node tools/test-database.mjs --avatars --browser",
     "test:avatars:profile": "node --import tsx tests/browser-avatar-profile.ts",
-    "test:dynamic-map:browser": "node --import tsx tests/dynamic-map-browser.ts"
+    "test:dynamic-map:browser": "node --import tsx tests/dynamic-map-browser.ts",
+    "test:static-placement:browser": "node --import tsx tests/browser-static-placement.ts"
   },
   "devDependencies": {
     "@babylonjs/core": "9.35.0",

@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import {
   applyWorldLayoutPatch,
   canonicalJson,
+  placedStaticInstance,
+  STATIC_PLACEMENT_COOLDOWN_MS,
+  type PlaceStaticRequest,
+  type PlaceStaticResult,
   type StaticObjectInstance,
   type WorldLayoutSnapshot,
   type WorldLayoutPatch,
@@ -146,6 +150,113 @@ export class StaticLayoutStore {
     snapshot.revision = result.rows[0].revision;
     candidate.initialized = true;
     candidate.previousRelease = snapshot.assetReleaseVersion;
+  }
+
+  /** History and instance must both exist. Headers are not part of replay identity. */
+  async replayGame(
+    accountId: string,
+    request: PlaceStaticRequest,
+  ): Promise<PlaceStaticResult | undefined> {
+    const i = placedStaticInstance(request);
+    const prior = await this.db.query(
+      `SELECT o.*, i.entity_id AS present FROM world_static_operations o
+      LEFT JOIN world_static_instances i ON i.world_id=o.world_id AND i.entity_id=o.entity_id
+      WHERE o.world_id=$1 AND o.operation_id=$2 AND o.entity_id=$3`,
+      [this.release.definition.worldId, request.operationId, i.entityId],
+    );
+    if (!prior.rowCount) {
+      const partial = await this.db.query(
+        'SELECT 1 FROM world_static_instances WHERE world_id=$1 AND entity_id=$2',
+        [this.release.definition.worldId, i.entityId],
+      );
+      if (partial.rowCount) throw new Error('Placement has no successful history');
+      return;
+    }
+    const row = prior.rows[0],
+      after = row.after_state;
+    if (!row.present || !after) throw new Error('Successful placement is incomplete');
+    if (
+      row.source !== 'game' ||
+      row.account_id !== accountId ||
+      after.asset_id !== i.assetId ||
+      after.position_x !== i.position.x ||
+      after.position_y !== i.position.y ||
+      after.position_z !== i.position.z ||
+      after.rotation_x !== i.rotation.x ||
+      after.rotation_y !== i.rotation.y ||
+      after.rotation_z !== i.rotation.z ||
+      after.rotation_w !== i.rotation.w
+    )
+      return { operationId: request.operationId, ok: false, code: 'OPERATION_CONFLICT' };
+    return {
+      operationId: request.operationId,
+      ok: true,
+      entityId: i.entityId,
+      layoutRevision: row.layout_revision,
+    };
+  }
+  async gameRateLimited(accountId: string) {
+    return !!(
+      await this.db.query(
+        `SELECT 1 FROM world_static_operations WHERE world_id=$1
+      AND account_id=$2 AND source='game' AND created_at > clock_timestamp() - $3 * INTERVAL '1 millisecond' LIMIT 1`,
+        [this.release.definition.worldId, accountId, STATIC_PLACEMENT_COOLDOWN_MS],
+      )
+    ).rowCount;
+  }
+  /** One additive live transaction on the advisory-lock owner. An uncertain commit is replayed. */
+  async createGame(
+    accountId: string,
+    request: PlaceStaticRequest,
+    validatedHash: string,
+    compatibilityHash: string,
+  ) {
+    const db = this.db;
+    try {
+      await db.query('BEGIN');
+      const row = await db.query(
+        'SELECT revision FROM world_layouts WHERE world_id=$1 FOR UPDATE',
+        [this.release.definition.worldId],
+      );
+      if (row.rows[0]?.revision !== request.expectedLayoutRevision) {
+        await db.query('ROLLBACK');
+        return undefined;
+      }
+      const i = placedStaticInstance(request);
+      await db.query(
+        `SELECT set_config('su.layout_operation',$1,true),set_config('su.layout_source','game',true),set_config('su.layout_account',$2,true)`,
+        [request.operationId, accountId],
+      );
+      await db.query(
+        `INSERT INTO world_static_instances(world_id,entity_id,asset_id,position_x,position_y,position_z,rotation_x,rotation_y,rotation_z,rotation_w,enabled)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true)`,
+        [
+          this.release.definition.worldId,
+          i.entityId,
+          i.assetId,
+          i.position.x,
+          i.position.y,
+          i.position.z,
+          i.rotation.x,
+          i.rotation.y,
+          i.rotation.z,
+          i.rotation.w,
+        ],
+      );
+      const updated = await db.query(
+        'UPDATE world_layouts SET validated_revision=revision,validated_hash=$2 WHERE world_id=$1 RETURNING revision',
+        [this.release.definition.worldId, validatedHash],
+      );
+      await db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
+        this.release.definition.worldId,
+        compatibilityHash,
+      ]);
+      await db.query('COMMIT');
+      return updated.rows[0].revision as number;
+    } catch (error) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw error;
+    }
   }
 
   /** Only called inside ItemStore.migrateGeometry's transaction on the owning session. */

@@ -69,7 +69,7 @@ export class ItemStore {
   }
   constructor(
     readonly pool: Pool,
-    readonly definition: WorldDefinition,
+    public definition: WorldDefinition,
     readonly epoch: string,
     ownership?: WorldOwnership,
     private readonly initializeLayout?: () => Promise<void>,

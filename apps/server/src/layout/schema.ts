@@ -109,3 +109,25 @@ BEGIN
 END $$;
 CREATE TRIGGER world_layout_before BEFORE UPDATE OR DELETE ON world_layouts FOR EACH ROW EXECUTE FUNCTION world_layout_before_change();
 `;
+
+export const gameStaticLayoutSchema = `
+ALTER TABLE world_static_operations DROP CONSTRAINT world_static_operations_source_check;
+ALTER TABLE world_static_operations ADD CONSTRAINT world_static_operations_source_check
+  CHECK(source IN ('sql','seed','migration','game'));
+CREATE OR REPLACE FUNCTION world_static_after_change() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target text; entity text; next_revision integer; operation uuid; origin text; author uuid;
+BEGIN
+  target := CASE WHEN TG_OP='DELETE' THEN OLD.world_id ELSE NEW.world_id END;
+  entity := CASE WHEN TG_OP='DELETE' THEN OLD.entity_id ELSE NEW.entity_id END;
+  UPDATE world_layouts SET revision=revision+1,validated_revision=NULL,validated_hash=NULL WHERE world_id=target RETURNING revision INTO next_revision;
+  operation := COALESCE(NULLIF(current_setting('su.layout_operation',true),'')::uuid,gen_random_uuid());
+  origin := COALESCE(NULLIF(current_setting('su.layout_source',true),''),'sql');
+  author := CASE WHEN origin='game' THEN NULLIF(current_setting('su.layout_account',true),'')::uuid END;
+  IF origin='game' AND author IS NULL THEN RAISE EXCEPTION 'Game placement requires an author'; END IF;
+  INSERT INTO world_static_operations(world_id,operation_id,entity_id,source,account_id,before_state,after_state,layout_revision)
+    VALUES(target,operation,entity,origin,author,CASE WHEN TG_OP<>'INSERT' THEN to_jsonb(OLD) END,
+      CASE WHEN TG_OP<>'DELETE' THEN to_jsonb(NEW) END,next_revision)
+    ON CONFLICT(world_id,operation_id,entity_id) DO UPDATE SET after_state=EXCLUDED.after_state,layout_revision=EXCLUDED.layout_revision;
+  RETURN NULL;
+END $$;
+`;

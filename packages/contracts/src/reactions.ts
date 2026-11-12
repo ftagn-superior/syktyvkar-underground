@@ -6,7 +6,7 @@ export interface ReactionDefinition {
   asset: string;
 }
 
-export const REACTION_DURATION_MS = 3000;
+export const REACTION_COOLDOWN_MS = 3000;
 export const REACTIONS: readonly ReactionDefinition[] = [
   { id: 'hello', label: 'Привет', category: 'Общение', asset: 'hello.svg' },
   { id: 'like', label: 'Класс', category: 'Общение', asset: 'like.svg' },
@@ -29,5 +29,6 @@ export interface ReactionRequest {
 export interface DisplayReaction {
   id: string;
   sequence: number;
+  /** Infinity until the author's first movement after selecting this reaction. */
   remainingMs: number;
 }

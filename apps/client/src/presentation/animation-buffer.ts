@@ -62,7 +62,8 @@ export class AnimationBuffer {
         const previous = history.transitions.at(-1)!.playback;
         if (
           previous.sequence !== playback.sequence ||
-          previous.animationId !== playback.animationId
+          previous.animationId !== playback.animationId ||
+          previous.endsAtTick !== playback.endsAtTick
         ) {
           const effectiveTime = time - Math.max(0, tick - playback.changedAtTick) * TICK_MS;
           history.transitions.push({

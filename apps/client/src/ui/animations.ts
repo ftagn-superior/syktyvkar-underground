@@ -1,4 +1,4 @@
-import { ANIMATIONS, type AnimationId } from '@su/contracts';
+import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS, type AnimationId } from '@su/contracts';
 import type { GameSession } from '../network/session';
 type Status = ReturnType<GameSession['animationStatus']>;
 
@@ -24,7 +24,7 @@ export class AnimationMenu {
       const title = document.createElement('strong');
       title.textContent = animation.label;
       const detail = document.createElement('span');
-      detail.textContent = `${animation.category} · ${animation.durationMs / 1000} с`;
+      detail.textContent = `${animation.category} · до движения + ${WORLD_ACTIVITY_MOVE_DURATION_MS / 1000} с`;
       const hint = document.createElement('span');
       hint.className = 'animation-hint';
       button.append(title, detail, hint);
@@ -90,7 +90,7 @@ export class AnimationMenu {
         : state.paused
           ? 'Мир приостановлен.'
           : state.busy
-            ? 'Дождитесь окончания текущей анимации.'
+            ? 'Дождитесь, прежде чем выбрать другую анимацию.'
             : !state.grounded
               ? 'Дождитесь опоры'
               : 'Выберите анимацию · движение остаётся доступным');

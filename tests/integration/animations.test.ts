@@ -1,7 +1,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/index.js';
-import { type ActionResult, type WorldInfo } from '../../packages/contracts/src/index.js';
+import {
+  WORLD_ACTIVITY_MOVE_DURATION_MS,
+  TICK_RATE,
+  type ActionResult,
+  type WorldInfo,
+} from '../../packages/contracts/src/index.js';
 import type { AuthoritativeWorld } from '../../packages/simulation/src/authoritative-world.js';
 import type { PhysicsWorld } from '../../packages/simulation/src/physics-world.js';
 import type { ItemRuntime } from '../../apps/server/src/items/runtime.js';
@@ -55,7 +60,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     await app?.close();
   });
 
-  it('replicates fixed deadlines, rejects overlap, shares reactions, and deduplicates after expiry and cache eviction', async () => {
+  it('replicates idle loops and movement deadlines, limits selection, and deduplicates after expiry and cache eviction', async () => {
     const { room, results, player } = await join();
     const observer = await join();
     const bodies = app.room.diagnostics().bodies;
@@ -69,9 +74,9 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
         results.length === 1 &&
         observer.room.state.players.get(room.sessionId)?.animationId === 'wave',
     );
-    expect(player().animationEndsAtTick - player().animationStartedAtTick).toBe(180);
+    expect(player().animationEndsAtTick).toBe(0);
     expect(observer.player().animationId).toBe('');
-    const end = player().animationEndsAtTick;
+    const start = player().animationStartedAtTick;
     request(room, 1, 'dance');
     request(room, 2, 'clap');
     room.send('requestReaction', {
@@ -86,7 +91,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     expect(player().reactionId).toBe('hello');
     expect(player().animationSequence).toBe(1);
     const late = await join();
-    expect(late.room.state.players.get(room.sessionId)!.animationEndsAtTick).toBe(end);
+    expect(late.room.state.players.get(room.sessionId)!.animationEndsAtTick).toBe(0);
     const observerToken = observer.room.reconnectionToken;
     observer.room.connection.close(1000);
     await until(() => !observer.player().connected);
@@ -99,9 +104,18 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     await until(
       () => recoveredObserver.state?.players?.get(room.sessionId)?.animationId === 'wave',
     );
-    expect(recoveredObserver.state.players.get(room.sessionId)!.animationEndsAtTick).toBe(end);
+    expect(recoveredObserver.state.players.get(room.sessionId)!.animationEndsAtTick).toBe(0);
     expect(recoveredObserver.state.players.get(room.sessionId)!.animationSequence).toBe(1);
-    await until(() => player().animationId === '', 4000);
+    const input = room.input({ type: MoveInputSchema, mode: 'reliable' });
+    input.data.moveX = 1;
+    input.send();
+    await until(() => player().animationEndsAtTick > 0);
+    const end = player().animationEndsAtTick;
+    expect(end - player().animationChangedAtTick).toBe(
+      (WORLD_ACTIVITY_MOVE_DURATION_MS * TICK_RATE) / 1000,
+    );
+    expect(player().animationStartedAtTick).toBe(start);
+    await until(() => player().animationId === '', WORLD_ACTIVITY_MOVE_DURATION_MS + 1500);
     expect(player().animationChangedAtTick).toBe(end);
     expect(player().animationSequence).toBe(1);
     request(room, 1);
@@ -141,6 +155,46 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     expect(player().animationSequence).toBe(1);
     expect(player().chatSequence).toBe(1);
     expect(player().reactionSequence).toBe(1);
+    await sleep(WORLD_ACTIVITY_MOVE_DURATION_MS + 200);
+    expect(player().chatText).toBe('Привет!');
+    expect(player().reactionId).toBe('hello');
+    expect(player().animationId).toBe('wave');
+    expect(player().chatExpiresAtTick).toBe(0);
+    expect(player().reactionExpiresAtTick).toBe(0);
+    expect(player().animationEndsAtTick).toBe(0);
+    request(room, 5, 'dance');
+    room.send('requestReaction', { requestId: 6, worldEpoch: info.worldEpoch, reactionId: 'love' });
+    await until(
+      () =>
+        results.length === 8 && player().animationId === 'dance' && player().reactionId === 'love',
+    );
+    expect(results.slice(-2).every((r) => r.ok)).toBe(true);
+    expect(player().animationEndsAtTick).toBe(0);
+    expect(player().reactionExpiresAtTick).toBe(0);
+    const input = room.input({ type: MoveInputSchema, mode: 'reliable' });
+    input.data.moveX = 1;
+    input.send();
+    await until(() => player().animationEndsAtTick > 0);
+    const end = player().animationEndsAtTick;
+    expect(player().reactionExpiresAtTick).toBe(end);
+    expect(player().chatExpiresAtTick).toBe(end);
+    input.data.moveX = 0;
+    input.send();
+    await sleep(150);
+    input.data.moveX = 1;
+    input.send();
+    await sleep(150);
+    expect(player().animationId).toBe('dance');
+    expect(player().animationEndsAtTick).toBe(end);
+    expect(player().reactionExpiresAtTick).toBe(end);
+    expect(player().chatExpiresAtTick).toBe(end);
+    const late = await join();
+    await until(() => late.room.state.players.get(room.sessionId)?.animationEndsAtTick === end);
+    expect(late.room.state.players.get(room.sessionId)!.reactionExpiresAtTick).toBe(end);
+    await until(
+      () => !player().animationId && !player().reactionId && !player().chatText,
+      WORLD_ACTIVITY_MOVE_DURATION_MS + 1500,
+    );
   });
 
   it('validates unknown input, epoch, readiness, support and rig', async () => {
@@ -181,7 +235,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     expect(results.at(-1)!.code).toBe('ANIMATION_NOT_ALLOWED');
   });
 
-  it('rejects dance with accepted movement even at a wall, cancels on input, and permits sprint alone', async () => {
+  it('rejects starting dance at a wall, keeps it for five seconds after movement, and permits sprint alone', async () => {
     const { room, results, player } = await join();
     const input = room.input({ type: MoveInputSchema, mode: 'reliable' });
     request(room, 1, 'dance');
@@ -192,8 +246,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     expect(player().animationId).toBe('dance');
     input.data.moveX = 1;
     input.send();
-    await until(() => player().animationId === '');
-    expect(player().animationSequence).toBe(2);
+    await until(() => player().animationEndsAtTick > 0);
+    expect(player().animationId).toBe('dance');
+    expect(player().animationSequence).toBe(1);
+    await until(() => player().animationId === '', WORLD_ACTIVITY_MOVE_DURATION_MS + 1500);
     const physics = (internals().world as unknown as { world: PhysicsWorld }).world;
     const actual = internals()
       .world.getSnapshot()
@@ -251,7 +307,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     failed.mockRestore();
     room.send('requestRespawn', { requestId: 4, worldEpoch: info.worldEpoch });
     await until(() => results.length === 4 && player().animationId === '');
-    await until(() => player().grounded);
+    await until(() => player().revision > actual.revision && player().grounded);
     request(room, 5);
     await until(() => player().animationId === 'wave');
     const runtime = internals().items;

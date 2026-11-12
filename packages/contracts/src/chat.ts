@@ -1,5 +1,4 @@
 export const CHAT_MAX_LENGTH = 255;
-export const CHAT_MOVE_DURATION_MS = 5000;
 export const CHAT_MIN_COOLDOWN_MS = 5000;
 export const CHAT_MAX_COOLDOWN_MS = 15_000;
 

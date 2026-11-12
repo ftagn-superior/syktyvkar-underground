@@ -32,9 +32,8 @@ view.onFrame((now,delta) => {
     entity.rotation = {x:0,y:Math.sin(yaw/2),z:0,w:Math.cos(yaw/2)};
     const selected = ANIMATIONS.find(a => a.id === window.avatarProfileAnimation);
     entity.animation = selected ? {worldEpoch:'profile', animationId:selected.id,
-      sequence:Math.floor(time*1000/selected.durationMs), startedAtTick:0,
-      endsAtTick:selected.durationMs*.06, changedAtTick:0,
-      displayTick:(time*1000%selected.durationMs)*.06, displayTimeMs:time*1000} : undefined;
+      sequence:1, startedAtTick:0, endsAtTick:0, changedAtTick:0,
+      displayTick:time*60, displayTimeMs:time*1000} : undefined;
   });
   view.update(entities,'avatar-0',delta);
 });

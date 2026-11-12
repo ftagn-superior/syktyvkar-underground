@@ -24,7 +24,7 @@ import {
   PROTOCOL_VERSION,
   RECONNECT_SECONDS,
   RESPAWN_COOLDOWN_MS,
-  REACTION_DURATION_MS,
+  REACTION_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
   normalizeInput,
@@ -32,7 +32,7 @@ import {
   findAnimation,
   normalizeChatText,
   chatCooldownMs,
-  CHAT_MOVE_DURATION_MS,
+  WORLD_ACTIVITY_MOVE_DURATION_MS,
   findAvatarSkin,
   DEFAULT_AVATAR_SKIN,
   type AvatarSkinId,
@@ -66,6 +66,7 @@ interface Session {
   lastRequest: number;
   lastRespawn: number;
   chatAvailableAtTick: number;
+  reactionAvailableAtTick: number;
   lastInput: MoveInput;
   results: Map<number, ActionResult>;
   pendingActions: Set<number>;
@@ -239,6 +240,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       lastRequest: 0,
       lastRespawn: -Infinity,
       chatAvailableAtTick: 0,
+      reactionAvailableAtTick: 0,
       lastInput: { ...NEUTRAL_INPUT },
       results: new Map(),
     });
@@ -307,12 +309,6 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       }
       const command = session.connected ? input.next() : undefined;
       session.lastInput = normalizeInput(command) ?? { ...NEUTRAL_INPUT };
-      const player = this.state.players.get(sessionId)!;
-      if (
-        findAnimation(player.animationId)?.mode === 'fullBody' &&
-        (session.lastInput.moveX !== 0 || session.lastInput.moveZ !== 0)
-      )
-        this.cancelAnimation(player, this.state.serverTick + 1);
       this.world.setInput(session.entityId, session.lastInput);
     }
     this.world.step(ctx.dt);
@@ -323,23 +319,29 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       if (actual && (!actual.grounded || actual.revision !== player.revision))
         this.cancelAnimation(player, this.state.serverTick + 1);
       if (actual) applyEntityState(player, actual);
+      const tick = this.state.serverTick + 1;
+      if (actual && Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08) {
+        const expires = tick + Math.ceil((WORLD_ACTIVITY_MOVE_DURATION_MS * TICK_RATE) / 1000);
+        if (player.reactionId && !player.reactionExpiresAtTick)
+          player.reactionExpiresAtTick = expires;
+        if (player.animationId && !player.animationEndsAtTick) {
+          player.animationEndsAtTick = expires;
+          player.animationChangedAtTick = tick;
+        }
+        if (player.chatText && !player.chatExpiresAtTick) player.chatExpiresAtTick = expires;
+      }
       this.expireAnimation(player, this.state.serverTick + 1);
-      if (player.reactionId && this.state.serverTick >= player.reactionExpiresAtTick) {
+      if (
+        player.reactionId &&
+        player.reactionExpiresAtTick &&
+        tick >= player.reactionExpiresAtTick
+      ) {
         player.reactionId = '';
         player.reactionExpiresAtTick = 0;
       }
-      if (player.chatText) {
-        if (
-          !player.chatExpiresAtTick &&
-          actual &&
-          Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08
-        )
-          player.chatExpiresAtTick =
-            this.state.serverTick + 1 + Math.ceil((CHAT_MOVE_DURATION_MS * TICK_RATE) / 1000);
-        if (player.chatExpiresAtTick && this.state.serverTick + 1 >= player.chatExpiresAtTick) {
-          player.chatText = '';
-          player.chatExpiresAtTick = 0;
-        }
+      if (player.chatText && player.chatExpiresAtTick && tick >= player.chatExpiresAtTick) {
+        player.chatText = '';
+        player.chatExpiresAtTick = 0;
       }
     }
     this.projectItems(snapshot.items);
@@ -441,6 +443,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const player = this.state.players.get(client.sessionId);
     const remainingTicks = Math.max(
       0,
+      session.reactionAvailableAtTick - this.state.serverTick,
       (player?.reactionExpiresAtTick ?? 0) - this.state.serverTick,
     );
     if (!code) {
@@ -449,8 +452,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       else {
         player!.reactionId = reaction.id;
         player!.reactionSequence++;
-        player!.reactionExpiresAtTick =
-          this.state.serverTick + Math.ceil((REACTION_DURATION_MS * TICK_RATE) / 1000);
+        player!.reactionExpiresAtTick = 0;
+        session.reactionAvailableAtTick =
+          this.state.serverTick + Math.ceil((REACTION_COOLDOWN_MS * TICK_RATE) / 1000);
       }
     }
     this.finishAction(client, session, {
@@ -461,14 +465,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         ? {
             retryAfterMs: code
               ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
-              : REACTION_DURATION_MS,
+              : REACTION_COOLDOWN_MS,
           }
         : {}),
     });
   }
 
   private expireAnimation(player: PlayerSchema, tick: number): void {
-    if (player.animationId && tick >= player.animationEndsAtTick) {
+    if (player.animationId && player.animationEndsAtTick && tick >= player.animationEndsAtTick) {
       player.animationId = '';
       player.animationChangedAtTick = player.animationEndsAtTick;
     }
@@ -491,7 +495,13 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const player = this.state.players.get(client.sessionId);
     if (player) this.expireAnimation(player, this.state.serverTick);
     const remainingTicks = player?.animationId
-      ? Math.max(0, player.animationEndsAtTick - this.state.serverTick)
+      ? Math.max(
+          0,
+          player.animationStartedAtTick +
+            Math.ceil(((findAnimation(player.animationId)?.cooldownMs ?? 0) * TICK_RATE) / 1000) -
+            this.state.serverTick,
+          player.animationEndsAtTick - this.state.serverTick,
+        )
       : 0;
     if (!code) {
       const actual = this.world.getSnapshot().players.find((p) => p.entityId === session.entityId);
@@ -510,8 +520,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         player!.animationSequence++;
         player!.animationId = animation.id;
         player!.animationStartedAtTick = player!.animationChangedAtTick = this.state.serverTick;
-        player!.animationEndsAtTick =
-          this.state.serverTick + Math.ceil((animation.durationMs * TICK_RATE) / 1000);
+        player!.animationEndsAtTick = 0;
       }
     }
     this.finishAction(client, session, {

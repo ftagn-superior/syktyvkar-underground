@@ -12,6 +12,25 @@ const source = (): AnimationSource => ({
   animationChangedAtTick: 0,
 });
 describe('animation presentation timeline', () => {
+  it('applies a movement deadline on the delayed timeline without restarting the clip', () => {
+    const buffer = new AnimationBuffer(),
+      player = source();
+    Object.assign(player, {
+      animationId: 'wave',
+      animationSequence: 1,
+      animationStartedAtTick: 20,
+      animationChangedAtTick: 20,
+    });
+    buffer.capture('epoch', 600, 10000, [player], false);
+    Object.assign(player, { animationEndsAtTick: 903, animationChangedAtTick: 603 });
+    buffer.capture('epoch', 606, 10100, [player], false);
+    expect(buffer.sample('p', 10025)!.animation.endsAtTick).toBe(0);
+    const after = buffer.sample('p', 10075)!.animation;
+    expect(after.endsAtTick).toBe(903);
+    expect(after.sequence).toBe(1);
+    expect(after.startedAtTick).toBe(20);
+    expect(after.displayTick).toBeCloseTo(604.5);
+  });
   it('holds multiple transitions and support on the delayed position timeline', () => {
     const buffer = new AnimationBuffer(),
       player = source();

@@ -17,7 +17,6 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Rendering/edgesRenderer';
 import {
   findReaction,
-  REACTION_DURATION_MS,
   type ItemPose,
   type Vec3,
   type WorldDefinition,
@@ -41,6 +40,7 @@ type EntityView = {
   reaction?: HTMLElement;
   reactionImage?: HTMLImageElement;
   reactionSequence?: number;
+  reactionShownAt?: number;
   expiredReactionSequence?: number;
   chat?: HTMLElement;
   chatSequence?: number;
@@ -389,11 +389,12 @@ export class WorldView {
     }
     if (view.reactionSequence !== active.sequence) {
       view.reactionSequence = active.sequence;
+      view.reactionShownAt = performance.now();
       view.reaction.dataset.reactionId = definition.id;
       view.reactionImage!.src = `/reactions/${definition.asset}`;
       view.reactionImage!.alt = definition.label;
     }
-    const appear = Math.min(1, (REACTION_DURATION_MS - active.remainingMs) / 150);
+    const appear = Math.min(1, (performance.now() - view.reactionShownAt!) / 150);
     const disappear = Math.min(1, active.remainingMs / 250);
     const progress = Math.max(0, Math.min(appear, disappear));
     view.reaction.style.opacity = this.reducedMotion.matches ? '1' : progress.toFixed(3);

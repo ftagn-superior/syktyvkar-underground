@@ -6,7 +6,7 @@ export * from './avatars.js';
 export * from './animations.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 export const WORLD_FORMAT_VERSION = 3;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;
@@ -18,6 +18,8 @@ export const INPUT_TIMEOUT_MS = 250;
 export const MAX_INPUT_QUEUE = 32;
 export const MAX_PREDICTION_MS = 500;
 export const RESPAWN_COOLDOWN_MS = 3000;
+/** Chat, reactions and animations expire this long after the author's first movement. */
+export const WORLD_ACTIVITY_MOVE_DURATION_MS = 5000;
 export type Vec3 = { x: number; y: number; z: number };
 export type Quat = Vec3 & { w: number };
 export type Bounds = { min: Vec3; max: Vec3 };

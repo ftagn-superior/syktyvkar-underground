@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
-import { CHAT_MAX_LENGTH, CHAT_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
+import {
+  CHAT_MAX_LENGTH,
+  WORLD_ACTIVITY_MOVE_DURATION_MS,
+} from '../packages/contracts/src/index.js';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 
@@ -106,7 +109,7 @@ try {
   await input.fill('Следующее');
   assert.equal(await sender.locator('#chat-send').isDisabled(), true);
   await sender.keyboard.press('Escape');
-  await sender.waitForTimeout(CHAT_MOVE_DURATION_MS + 300);
+  await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 300);
   assert.equal(await sender.locator(bubble).textContent(), message);
   assert.equal(await observer.locator(bubble).textContent(), message);
   await sender.keyboard.press('t');

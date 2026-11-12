@@ -51,10 +51,12 @@ export class PlayerSchema extends EntitySchema.extend(
     connected: t.boolean().default(true),
     reactionId: t.string().default(''),
     reactionSequence: t.uint32().default(0),
+    // Zero with an active ID means the author has not moved yet.
     reactionExpiresAtTick: t.uint32().default(0),
     animationId: t.string().default(''),
     animationSequence: t.uint32().default(0),
     animationStartedAtTick: t.uint32().default(0),
+    // Zero with an active ID means the animation keeps cycling until movement.
     animationEndsAtTick: t.uint32().default(0),
     animationChangedAtTick: t.uint32().default(0),
     chatText: t.string().default(''),

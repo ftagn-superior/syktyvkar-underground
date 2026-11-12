@@ -4,7 +4,7 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
-import { ANIMATIONS } from '../packages/contracts/src/index.js';
+import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
 
 const output = 'output/playwright/animations';
 const app = await createGameServer({ port: 0 });
@@ -109,6 +109,17 @@ try {
       }
       const a = await avatar(sender, id);
       assert.equal(a.skinId, index ? 'standard' : 'minifigure');
+      if (index === 0) {
+        await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 200);
+        await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
+        assert.ok((await avatar(sender, id)).animation.elapsedMs > WORLD_ACTIVITY_MOVE_DURATION_MS);
+        await sender.locator('#animations-toggle').click();
+        assert.equal(
+          await sender.locator('.animation-choice:not([disabled])').count(),
+          ANIMATIONS.length,
+        );
+        await sender.keyboard.press('Escape');
+      }
       if (definition.id === 'wave') {
         await sender.locator('#reactions-toggle').click();
         await sender.locator('[data-reaction-id="hello"]').click();
@@ -132,19 +143,20 @@ try {
         await sender.locator('#chat-toggle').click();
         await sender.locator('#chat-input').fill('wasd qer');
         await sender.keyboard.press('Escape');
-        assert.equal((await snapshot(sender)).animation.busy, true);
+        assert.equal((await avatar(sender, id)).animation.reason, 'playing');
         const initial = (await snapshot(sender)).authoritative.position;
         await sender.locator('#world').focus();
         await sender.keyboard.down('Shift');
         await sender.waitForTimeout(150);
-        assert.equal((await snapshot(sender)).animation.busy, true);
+        assert.equal((await avatar(sender, id)).animation.reason, 'playing');
         await sender.keyboard.up('Shift');
         await sender.screenshot({
           path: `${output}/${index ? 'standard' : 'minifigure'}-dance.png`,
         });
         await sender.keyboard.down('s');
-        await sender.waitForFunction(() => !(window as any).__SU_DEBUG__.snapshot().animation.busy);
+        await sender.waitForTimeout(200);
         await sender.keyboard.up('s');
+        await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
         const after = (await snapshot(sender)).authoritative.position;
         assert.ok(Math.hypot(after.x - initial.x, after.z - initial.z) < 3);
       } else {
@@ -152,6 +164,24 @@ try {
           path: `${output}/${index ? 'standard' : 'minifigure'}-${definition.id}.png`,
         });
       }
+      if (definition.id === 'clap') {
+        await sender.locator('#world').focus();
+        await sender.keyboard.down('s');
+        await sender.waitForTimeout(200);
+        await sender.keyboard.up('s');
+      }
+      await Promise.all(
+        [sender, observer].map((page) =>
+          page.waitForFunction(
+            (id) => {
+              const a = (window as any).__SU_DEBUG__.avatars().find((a: any) => a.entityId === id);
+              return a?.animation.reason !== 'playing';
+            },
+            id,
+            { timeout: WORLD_ACTIVITY_MOVE_DURATION_MS + 2500 },
+          ),
+        ),
+      );
       await idle(sender);
     }
   }
@@ -159,7 +189,10 @@ try {
     'three clips on both skins reach independent clients, including an observer with 100ms RTT and jitter',
   );
   checks.push(
-    'wave preserves walking legs and shares the independent reaction sticker; movement cancels dance, sprint alone does not',
+    'all clips loop beyond five seconds while idle and permit another selection after the cooldown; wave preserves walking legs and shares the reaction sticker',
+  );
+  checks.push(
+    'movement starts a five-second countdown for every clip including dance; stopping does not cancel it and sprint alone does not start it',
   );
   checks.push('catalog, keyboard focus, Escape, successful close and pending/busy recovery');
   checks.push(

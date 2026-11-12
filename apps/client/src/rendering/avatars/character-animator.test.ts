@@ -78,23 +78,37 @@ describe('character animation from displayed motion', () => {
     expect(poses[0]).toEqual(poses[1]);
     expect(poses[1]).toEqual(poses[2]);
   });
-  it('suppresses the same dance after local movement and gives falling priority', () => {
-    const animator = new CharacterAnimator(4, 14),
-      input = frame();
-    input.animation = playback('dance');
-    animator.update(input, 1 / 60, true);
-    input.animationMoving = true;
-    animator.update(input, 1 / 60, true);
-    input.animationMoving = false;
-    animator.update(input, 1 / 60, true);
-    expect(animator.diagnostics().animation.reason).toBe('local-movement');
-    input.animation.sequence++;
-    animator.update(input, 1 / 60, true);
-    expect(animator.diagnostics().animation.reason).toBe('playing');
-    input.grounded = false;
-    animator.update(input, 1 / 60, true);
-    expect(animator.diagnostics().animation.weight).toBe(0);
-  });
+  it.each(['wave', 'clap', 'dance'] as const)(
+    'cycles %s indefinitely until a movement deadline, with falling priority',
+    (id) => {
+      const animator = new CharacterAnimator(4, 14),
+        input = frame();
+      input.animation = { ...playback(id, 600), endsAtTick: 0 };
+      animator.update(input, 1 / 60, true);
+      const before = { ...animator.pose };
+      expect(animator.diagnostics().animation.reason).toBe('playing');
+      expect(animator.diagnostics().animation.weight).toBe(1);
+      input.animation.displayTick = 610;
+      animator.update(input, 1 / 60, true);
+      expect(animator.pose).not.toEqual(before);
+      input.velocity.x = 4;
+      input.animation.endsAtTick = 910;
+      animator.update(input, 1 / 60, true);
+      expect(animator.diagnostics().animation.reason).toBe('playing');
+      expect(animator.diagnostics().animation.weight).toBe(1);
+      input.velocity.x = 0;
+      input.animation.displayTick = 900;
+      animator.update(input, 1 / 60, true);
+      expect(animator.diagnostics().animation.reason).toBe('playing');
+      input.grounded = false;
+      animator.update(input, 1 / 60, true);
+      expect(animator.diagnostics().animation.weight).toBe(0);
+      input.grounded = true;
+      input.animation.displayTick = 911;
+      animator.update(input, 1 / 60, true);
+      expect(animator.diagnostics().animation.reason).toBe('expired');
+    },
+  );
   it('fades cancellation into the current base and allows another clip during the fade', () => {
     const animator = new CharacterAnimator(4, 14),
       input = frame();

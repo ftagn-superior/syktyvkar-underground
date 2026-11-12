@@ -1,4 +1,10 @@
-import { WORLD_FORMAT_VERSION, type WorldDefinition, type Vec3 } from './index.js';
+import {
+  validateItemCatalog,
+  validPose,
+  WORLD_FORMAT_VERSION,
+  type WorldDefinition,
+  type Vec3,
+} from './index.js';
 import {
   validateBuildingPhysicsAsset,
   validateBuildingInstances,
@@ -36,17 +42,15 @@ export function validateWorld(value: unknown): WorldDefinition {
   vector(world.simulation.gravity, 'gravity');
   const character = world.simulation.character;
   invariant(character && typeof character === 'object', 'character');
-  for (const key of ['height', 'radius', 'speed', 'mass'] as const) {
+  for (const key of ['height', 'radius', 'speed', 'sprintSpeed', 'mass'] as const) {
     invariant(
       Number.isFinite(character[key]) && character[key] > 0 && character[key] <= 1000,
       `character.${key}`,
     );
   }
+  invariant(character.sprintSpeed >= character.speed, 'sprintSpeed must be at least speed');
   invariant(character.height >= 2 * character.radius, 'capsule height');
-  invariant(
-    Array.isArray(world.entities) && world.entities.length > 0 && world.entities.length <= 1000,
-    'entities',
-  );
+  invariant(Array.isArray(world.entities) && world.entities.length <= 1000, 'entities');
   const ids = new Set<string>();
   for (const entity of world.entities) {
     invariant(entity && typeof entity === 'object', 'entity');
@@ -56,18 +60,14 @@ export function validateWorld(value: unknown): WorldDefinition {
     );
     invariant(!ids.has(entity.entityId), `duplicate ID ${entity.entityId}`);
     ids.add(entity.entityId);
-    invariant(entity.kind === 'obstacle' || entity.kind === 'crate', 'entity kind');
+    invariant(entity.kind === 'obstacle', 'entity kind');
     vector(entity.position, `${entity.entityId}.position`);
     vector(entity.size, `${entity.entityId}.size`);
     invariant(
       Object.values(entity.size).every((n) => n > 0 && n <= 1000),
       'positive box size',
     );
-    invariant(
-      Number.isFinite(entity.mass) &&
-        (entity.kind === 'crate' ? entity.mass > 0 : entity.mass === 0),
-      'mass',
-    );
+    invariant(Number.isFinite(entity.mass) && entity.mass === 0, 'mass');
     invariant(
       Number.isFinite(entity.friction) && entity.friction >= 0 && entity.friction <= 10,
       'friction',
@@ -78,14 +78,20 @@ export function validateWorld(value: unknown): WorldDefinition {
     );
     invariant(typeof entity.color === 'string' && /^#[a-f\d]{6}$/i.test(entity.color), 'color');
   }
-  invariant(
-    world.entities.filter((e) => e.kind === 'crate').length === 1,
-    'exactly one crate required',
-  );
-  invariant(
-    world.entities.some((e) => e.kind === 'crate' && e.entityId === 'crate-01'),
-    'crate-01 required',
-  );
+  validateItemCatalog(world.itemCatalog);
+  invariant(Array.isArray(world.initialItems) && world.initialItems.length <= 1000, 'initialItems');
+  for (const seed of world.initialItems) {
+    invariant(
+      seed &&
+        typeof seed.seedId === 'string' &&
+        /^[a-zA-Z0-9_-]{1,64}$/.test(seed.seedId) &&
+        !ids.has(seed.seedId),
+      'initial item ID',
+    );
+    ids.add(seed.seedId);
+    invariant(Object.hasOwn(world.itemCatalog.types, seed.typeId), 'unknown item type');
+    invariant(validPose(seed), 'initial item pose');
+  }
   invariant(
     world.buildingAssets &&
       typeof world.buildingAssets === 'object' &&
@@ -128,6 +134,28 @@ export function validateWorld(value: unknown): WorldDefinition {
         Math.abs(spawn.z - entity.position.z) < entity.size.z / 2 + character.radius &&
         Math.abs(centerY - entity.position.y) < (entity.size.y + character.height) / 2 - 0.01;
       invariant(!intersects, `spawn intersects ${entity.entityId}`);
+    }
+  }
+  if (world.landmarks !== undefined) {
+    invariant(Array.isArray(world.landmarks) && world.landmarks.length <= 256, 'landmarks');
+    const landmarkIds = new Set<string>();
+    for (const landmark of world.landmarks) {
+      invariant(
+        landmark &&
+          typeof landmark === 'object' &&
+          typeof landmark.id === 'string' &&
+          /^[a-z0-9-]{1,64}$/.test(landmark.id) &&
+          !landmarkIds.has(landmark.id),
+        'landmark id',
+      );
+      landmarkIds.add(landmark.id);
+      invariant(
+        typeof landmark.name === 'string' &&
+          landmark.name.trim().length > 0 &&
+          landmark.name.length <= 80,
+        `landmark ${landmark.id} name`,
+      );
+      vector(landmark.position, `landmark ${landmark.id} position`);
     }
   }
   for (let i = 0; i < world.spawnPoints.length; i++)

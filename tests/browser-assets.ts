@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer, request } from 'node:http';
 import { connect, type Socket } from 'node:net';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 
 // This proxy can corrupt a real immutable response while preserving its cache headers.
 // Browser routing disables HTTP caching, so route.fulfill cannot cover this regression.

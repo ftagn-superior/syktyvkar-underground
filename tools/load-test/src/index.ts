@@ -63,7 +63,7 @@ try {
         const t = (now - start) / 1000;
         const target =
           scenario === 'crowd'
-            ? room.state.crate
+            ? (room.state.items.values().next().value ?? { x: 0, z: 0 })
             : { x: Math.cos(t / 5 + index) * 13, z: Math.sin(t / 5 + index) * 13 };
         const dx = target.x - player.x,
           dz = target.z - player.z;

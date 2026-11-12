@@ -38,10 +38,13 @@ const asset: BuildingPhysicsAsset = {
     },
   ],
 };
-const base = JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8'));
+const base = {
+  ...JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8')),
+  itemCatalog: JSON.parse(await readFile('content/items/catalog.json', 'utf8')),
+};
 const hash = 'a'.repeat(64);
 const manifest: WorldManifest = {
-  formatVersion: 2,
+  formatVersion: 3,
   worldId: base.worldId,
   mapVersion: hash,
   simulationConfigHash: hash,

@@ -5,6 +5,11 @@ import { GameSession, readableError, type ConnectionState } from './network/sess
 import { WorldView } from './rendering/world-view';
 import type { RenderQuality } from './rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from './ui/diagnostic-report';
+import { ReactionMenu } from './ui/reactions';
+import { AnimationMenu } from './ui/animations';
+import { ChatConsole } from './ui/chat';
+import { InventoryPanel } from './ui/inventory';
+import { AccountPanel } from './ui/account-panel';
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -29,6 +34,11 @@ const graphicsRecovery = element('graphics-recovery');
 const graphicsReload = element<HTMLButtonElement>('graphics-reload');
 const cameraLeft = element<HTMLButtonElement>('camera-left');
 const cameraRight = element<HTMLButtonElement>('camera-right');
+const actions = document.querySelector<HTMLElement>('.actions')!;
+const actionsResize = new ResizeObserver(() => {
+  actions.style.setProperty('--game-actions-height', `${actions.getBoundingClientRect().height}px`);
+});
+actionsResize.observe(actions);
 const qualityStorageKey = 'su:render-quality:v1';
 let quality: RenderQuality = 'standard';
 try {
@@ -43,6 +53,10 @@ let loaded = false;
 let starting = false;
 let keyboard: KeyboardInput;
 let graphicsLost = false;
+let reactions: ReactionMenu | undefined;
+let animations: AnimationMenu | undefined;
+let chat: ChatConsole | undefined;
+let inventory: InventoryPanel | undefined;
 
 function showNotice(message: string): void {
   notice.textContent = message;
@@ -56,7 +70,8 @@ function updateState(state: ConnectionState, message?: string): void {
   const playing = state === 'playing';
   const reconnecting = state === 'reconnecting';
   welcome.hidden = graphicsLost || playing || (reconnecting && !!session.room);
-  join.disabled = graphicsLost || state === 'loading' || state === 'connecting' || reconnecting;
+  join.disabled =
+    graphicsLost || accounts.busy || state === 'loading' || state === 'connecting' || reconnecting;
   joinLabel.textContent =
     state === 'loading'
       ? 'Загружаем мир…'
@@ -70,7 +85,9 @@ function updateState(state: ConnectionState, message?: string): void {
               : 'Повторить загрузку'
             : session.reloadRequired
               ? 'Перезагрузить страницу'
-              : 'Войти';
+              : accounts.enabled && !accounts.account
+                ? 'Войти гостем'
+                : 'Войти';
   status.textContent = {
     loading: 'Загрузка',
     ready: session.reloadRequired
@@ -95,13 +112,111 @@ function updateState(state: ConnectionState, message?: string): void {
   }
   if (message) showNotice(message);
   renderRespawn();
+  reactions?.update(session.reactionStatus());
+  animations?.update(session.animationStatus());
+  renderChat();
+  inventory?.update();
 }
 const session = new GameSession(updateState, showNotice);
+const storageStatus = document.createElement('div');
+storageStatus.className = 'storage-status';
+storageStatus.setAttribute('role', 'status');
+storageStatus.hidden = true;
+storageStatus.textContent =
+  'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
+document.body.append(storageStatus);
+const accounts = new AccountPanel(
+  () => {
+    session.accountId = accounts.account?.accountId;
+    session.guestSkinId = accounts.selectedSkinId;
+    updateState(session.state);
+  },
+  () => session.leave(),
+);
+inventory = new InventoryPanel(session, canvas, () => {
+  chat?.close(false);
+  reactions?.close(false);
+  animations?.close(false);
+  diagnostics.hidden = true;
+  diagnosticsToggle.setAttribute('aria-expanded', 'false');
+});
+const accountPreparation = accounts.load();
 function rotateCamera(direction: -1 | 1): void {
   if (!loaded || graphicsLost) return;
   view?.rotateCamera(direction);
 }
-keyboard = new KeyboardInput(() => session.neutral(), rotateCamera);
+reactions = new ReactionMenu(
+  element<HTMLButtonElement>('reactions-toggle'),
+  element('reactions-panel'),
+  element('reactions-status'),
+  canvas,
+  (id) => {
+    session.react(id);
+    reactions!.update(session.reactionStatus());
+  },
+  () => {
+    animations?.close(false);
+    inventory?.close();
+    chat?.close(false);
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+);
+animations = new AnimationMenu(
+  element<HTMLButtonElement>('animations-toggle'),
+  element('animations-panel'),
+  element('animations-status'),
+  canvas,
+  (id) => {
+    session.animate(id);
+    animations!.update(session.animationStatus());
+  },
+  () => {
+    reactions?.close(false);
+    inventory?.close();
+    chat?.close(false);
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+);
+chat = new ChatConsole(
+  element<HTMLButtonElement>('chat-toggle'),
+  element<HTMLFormElement>('chat-console'),
+  element<HTMLInputElement>('chat-input'),
+  element('chat-status'),
+  element('chat-counter'),
+  element<HTMLButtonElement>('chat-send'),
+  canvas,
+  (text) => {
+    session.sendChat(text);
+    renderChat();
+  },
+  (open) => {
+    keyboard?.setEnabled(!open && !graphicsLost);
+    session.neutral();
+    if (open) {
+      reactions?.close(false);
+      animations?.close(false);
+      inventory?.close();
+      diagnostics.hidden = true;
+      diagnosticsToggle.setAttribute('aria-expanded', 'false');
+    }
+  },
+);
+session.onChatResult = (result) => {
+  chat?.complete(result.ok);
+  renderChat();
+};
+function renderChat(): void {
+  const state = session.chatStatus();
+  chat?.update({ ...state, available: state.available && !graphicsLost });
+}
+keyboard = new KeyboardInput(
+  () => session.neutral(),
+  rotateCamera,
+  () => reactions!.toggleOpen(),
+  () => chat!.open(),
+);
 function renderRespawn(): void {
   const { pending, remainingMs } = session.respawnStatus();
   respawn.disabled = graphicsLost || session.state !== 'playing' || pending || remainingMs > 0;
@@ -196,7 +311,8 @@ async function start(): Promise<void> {
       try {
         const frame = session.frame(now, delta, keyboard.read(view!.cameraAngle));
         view!.follow(frame.ownId);
-        view!.update(frame.entities, frame.ownId);
+        view!.update(frame.entities, frame.ownId, delta);
+        inventory?.frame(view!);
       } catch (error) {
         loaded = false;
         starting = true;
@@ -214,6 +330,7 @@ async function start(): Promise<void> {
       }
     });
     loaded = true;
+    await accountPreparation;
     session.markPrepared();
     await session.restore();
   } catch (error) {
@@ -228,7 +345,10 @@ async function start(): Promise<void> {
 }
 join.addEventListener('click', () => {
   if (session.reloadRequired) location.reload();
-  else if (loaded) void session.join();
+  else if (loaded)
+    void accounts.prepareJoin().then((ready) => {
+      if (ready) void session.join();
+    });
   else void start();
 });
 cameraLeft.addEventListener('click', () => {
@@ -249,6 +369,10 @@ leave.addEventListener('click', () => {
   void session.leave();
 });
 diagnosticsToggle.addEventListener('click', () => {
+  chat?.close(false);
+  reactions?.close(false);
+  animations?.close(false);
+  inventory?.close();
   diagnostics.hidden = !diagnostics.hidden;
   diagnosticsToggle.setAttribute('aria-expanded', String(!diagnostics.hidden));
   renderMetrics();
@@ -281,8 +405,13 @@ canvas.addEventListener('webglcontextlost', (event) => {
 });
 // Feedback remains alive even when WebGL has stopped producing frames.
 const uiTimer = setInterval(() => {
+  storageStatus.hidden = !session.storageUnavailable;
   renderRespawn();
   renderMetrics();
+  reactions?.update(session.reactionStatus());
+  animations?.update(session.animationStatus());
+  renderChat();
+  inventory?.update();
 }, 250);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) location.reload();
@@ -292,10 +421,15 @@ window.addEventListener(
   () => {
     clearInterval(uiTimer);
     clearTimeout(noticeTimer);
+    actionsResize.disconnect();
     session.neutral();
     session.dispose();
     view?.dispose();
     keyboard.dispose();
+    reactions?.dispose();
+    animations?.dispose();
+    chat?.dispose();
+    inventory?.dispose();
   },
   { once: true },
 );
@@ -306,6 +440,7 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).get('diagnostics
       corrections: () => session.correctionHistory(),
       report: () => diagnosticReport(session, view, graphicsLost),
       buildings: () => structuredClone(view?.buildingDiagnostics() ?? []),
+      avatars: () => view?.avatarDiagnostics() ?? [],
     }),
     writable: false,
   });

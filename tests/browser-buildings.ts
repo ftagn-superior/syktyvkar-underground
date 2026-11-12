@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { Page } from 'playwright';
 import { buildWorld } from '../tools/world-build/src/index.js';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 
 // A separate test release changes only placements/spawns; controls still use real keyboard input.
 const temporary = await mkdtemp(join(tmpdir(), 'su-buildings-browser-'));

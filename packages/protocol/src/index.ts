@@ -1,11 +1,19 @@
 import { schema, t } from '@colyseus/schema';
-import type { EntityState, PlayerState, SimulationSnapshot } from '@su/contracts';
+import {
+  PROTOCOL_VERSION,
+  DEFAULT_AVATAR_SKIN,
+  type EntityState,
+  type ItemState,
+  type PlayerState,
+  type SimulationSnapshot,
+} from '@su/contracts';
 
 /** Flat input is encoded and acknowledged by Colyseus, independently of actions. */
 export class MoveInputSchema extends schema(
   {
     moveX: t.float32().default(0),
     moveZ: t.float32().default(0),
+    sprint: t.boolean().default(false),
   },
   'MoveInput',
 ) {}
@@ -13,7 +21,9 @@ export class MoveInputSchema extends schema(
 export class EntitySchema extends schema(
   {
     entityId: t.string().default(''),
-    kind: t.string().default('crate'),
+    kind: t.string().default('item'),
+    typeId: t.string().default(''),
+    placementVersion: t.uint32().default(0),
     revision: t.uint32().default(0),
     x: t.float32().default(0),
     y: t.float32().default(0),
@@ -37,7 +47,19 @@ export class PlayerSchema extends EntitySchema.extend(
     sessionId: t.string().default(''),
     name: t.string().default(''),
     color: t.string().default(''),
+    skinId: t.string().default(DEFAULT_AVATAR_SKIN),
     connected: t.boolean().default(true),
+    reactionId: t.string().default(''),
+    reactionSequence: t.uint32().default(0),
+    reactionExpiresAtTick: t.uint32().default(0),
+    animationId: t.string().default(''),
+    animationSequence: t.uint32().default(0),
+    animationStartedAtTick: t.uint32().default(0),
+    animationEndsAtTick: t.uint32().default(0),
+    animationChangedAtTick: t.uint32().default(0),
+    chatText: t.string().default(''),
+    chatSequence: t.uint32().default(0),
+    chatExpiresAtTick: t.uint32().default(0),
   },
   'Player',
 ) {}
@@ -45,13 +67,15 @@ export class WorldState extends schema(
   {
     worldEpoch: t.string().default(''),
     serverTick: t.uint32().default(0),
-    protocolVersion: t.uint16().default(1),
+    protocolVersion: t.uint16().default(PROTOCOL_VERSION),
     mapVersion: t.string().default(''),
     simulationConfigHash: t.string().default(''),
     occupancy: t.uint8().default(0),
     stepMs: t.float32().default(0),
     players: t.map(PlayerSchema),
-    crate: t.ref(EntitySchema),
+    items: t.map(EntitySchema),
+    paused: t.boolean().default(false),
+    pauseReason: t.string().default(''),
   },
   'World',
 ) {}
@@ -59,6 +83,10 @@ export class WorldState extends schema(
 export function applyEntityState(target: EntitySchema, source: EntityState): void {
   target.entityId = source.entityId;
   target.kind = source.kind;
+  if (source.kind === 'item') {
+    target.typeId = (source as ItemState).typeId;
+    target.placementVersion = (source as ItemState).placementVersion;
+  }
   target.revision = source.revision;
   target.x = source.position.x;
   target.y = source.position.y;
@@ -78,7 +106,7 @@ export function applyEntityState(target: EntitySchema, source: EntityState): voi
 export function toEntityState(source: EntitySchema): EntityState {
   return {
     entityId: source.entityId,
-    kind: source.kind === 'player' ? 'player' : 'crate',
+    kind: source.kind === 'player' ? 'player' : 'item',
     revision: source.revision,
     position: { x: source.x, y: source.y, z: source.z },
     rotation: { x: source.qx, y: source.qy, z: source.qz, w: source.qw },
@@ -92,6 +120,17 @@ export function toPlayerState(source: PlayerSchema): PlayerState {
 export function toSimulationSnapshot(source: WorldState): SimulationSnapshot {
   return {
     players: Array.from(source.players.values(), toPlayerState),
-    crate: toEntityState(source.crate),
+    items: Array.from(source.items.values(), toItemState),
+  };
+}
+
+export function toItemState(source: EntitySchema): ItemState {
+  const entity = toEntityState(source);
+  return {
+    ...entity,
+    kind: 'item',
+    typeId: source.typeId,
+    placementVersion: source.placementVersion,
+    safePose: { position: entity.position, rotation: entity.rotation },
   };
 }

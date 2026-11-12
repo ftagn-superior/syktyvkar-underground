@@ -1,0 +1,59 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "basin",
+      "role": "detail",
+      "fade": false,
+      "color": "#4a4642",
+      "shapes": [
+        {
+          "cylinder": {
+            "center": [0, 0.3, 0],
+            "radius": 5.4,
+            "length": 0.6,
+            "axis": "y",
+            "sides": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "water",
+      "role": "detail",
+      "fade": false,
+      "color": "#5f8fae",
+      "shapes": [
+        {
+          "cylinder": {
+            "center": [0, 0.605, 0],
+            "radius": 4.9,
+            "length": 0.03,
+            "axis": "y",
+            "sides": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "centre",
+      "role": "detail",
+      "fade": false,
+      "color": "#3f3b37",
+      "shapes": [{ "box": { "center": [0, 0.9, 0], "size": [2.2, 1, 2.2] } }]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "basin",
+      "cone": {
+        "center": [0, 0, 0],
+        "radiusBottom": 5.4,
+        "radiusTop": 5.4,
+        "height": 0.6,
+        "sides": 20
+      }
+    },
+    { "id": "centre", "center": [0, 0.9, 0], "size": [2.2, 1, 2.2] }
+  ]
+}

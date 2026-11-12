@@ -6,8 +6,13 @@ const require = createRequire(new URL('../packages/simulation/package.json', imp
 await viteBuild({ configFile: 'apps/client/vite.config.ts' });
 await mkdir('dist/server', { recursive: true });
 await bundle({
-  entryPoints: ['apps/server/src/main.ts'],
-  outfile: 'dist/server/main.mjs',
+  entryPoints: [
+    'apps/server/src/main.ts',
+    'apps/server/src/migrate.ts',
+    'apps/server/src/migrate-world.ts',
+  ],
+  outdir: 'dist/server',
+  outExtension: { '.js': '.mjs' },
   bundle: true,
   platform: 'node',
   format: 'esm',

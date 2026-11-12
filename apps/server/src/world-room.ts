@@ -1,24 +1,57 @@
+import type { Pool } from 'pg';
+import { ItemStore } from './items/store.js';
+import { ItemRuntime } from './items/runtime.js';
 import { randomUUID } from 'node:crypto';
-import { CloseCode, Room, ServerError, type Client, type StepContext } from '@colyseus/core';
+import {
+  CloseCode,
+  Room,
+  ServerError,
+  type Client,
+  type StepContext,
+  type AuthContext,
+} from '@colyseus/core';
 import {
   MAX_PLAYERS,
+  parseItemCommand,
+  type ItemResult,
+  type ItemState,
+  ITEM_GIVE_COOLDOWN_MS,
   MAX_INPUT_QUEUE,
   PATCH_RATE,
   PLAYER_COLORS,
+  PROFILE_COLORS,
   PREPARE_TIMEOUT_MS,
   PROTOCOL_VERSION,
   RECONNECT_SECONDS,
   RESPAWN_COOLDOWN_MS,
+  REACTION_DURATION_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
   normalizeInput,
+  findReaction,
+  findAnimation,
+  normalizeChatText,
+  chatDurationMs,
+  findAvatarSkin,
+  DEFAULT_AVATAR_SKIN,
+  type AvatarSkinId,
+  type MoveInput,
   type ActionResult,
   type ErrorCode,
   type WorldDefinition,
   type WorldManifest,
 } from '@su/contracts';
-import { MoveInputSchema, PlayerSchema, WorldState, applyEntityState } from '@su/protocol';
+import {
+  EntitySchema,
+  MoveInputSchema,
+  PlayerSchema,
+  WorldState,
+  applyEntityState,
+} from '@su/protocol';
 import { createAuthoritativeWorld } from '@su/simulation/server';
+import type { AccountHttp } from './accounts/http.js';
+import type { AuthenticatedAccount } from './accounts/store.js';
+import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
 
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 interface Session {
@@ -28,15 +61,28 @@ interface Session {
   connected: boolean;
   name: string;
   color: string;
+  skinId: AvatarSkinId;
   lastRequest: number;
   lastRespawn: number;
+  lastInput: MoveInput;
   results: Map<number, ActionResult>;
+  pendingActions: Set<number>;
+  auth?: AuthenticatedAccount;
+  cancelReconnect?: () => void;
+}
+interface ClientAction {
+  session: Session;
+  requestId: number;
+  code?: ErrorCode;
 }
 export interface WorldRoomOptions {
   definition: WorldDefinition;
   manifest: WorldManifest;
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
+  accounts?: AccountHttp;
+  pool: Pool;
+  itemCreationEnabled?: boolean;
 }
 
 /** Connection lifecycle and replication only; simulation owns all physical state. */
@@ -55,6 +101,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     },
   });
   private world!: PhysicsWorld;
+  private items!: ItemRuntime;
+  private itemRequests = 0;
+  private shutdown?: Promise<void>;
   private sessions = new Map<string, Session>();
   private guestCounter = 0;
   private reconnectSeconds = RECONNECT_SECONDS;
@@ -62,6 +111,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private stepSamples: number[] = [];
   private disposed = false;
   private readonly stepHistogram = new Uint32Array(1001);
+  private accounts?: AccountHttp;
+  private itemCreationEnabled = true;
+  private accountPlayers = new Map<string, string>();
   private measuredSteps = 0;
   private maxStepMs = 0;
   private resyncs = 0;
@@ -69,6 +121,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   async onCreate(options: WorldRoomOptions): Promise<void> {
     this.reconnectSeconds = options.reconnectSeconds ?? RECONNECT_SECONDS;
     this.prepareTimeoutMs = options.prepareTimeoutMs ?? PREPARE_TIMEOUT_MS;
+    this.accounts = options.accounts;
+    this.itemCreationEnabled = options.itemCreationEnabled ?? true;
     this.state.worldEpoch = randomUUID();
     this.state.protocolVersion = PROTOCOL_VERSION;
     this.state.mapVersion = options.manifest.mapVersion;
@@ -76,10 +130,31 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.seatReservationTimeout = 10;
     this.setPatchRate(1000 / PATCH_RATE);
     await this.setPrivate(true);
-    this.world = await createAuthoritativeWorld(options.definition);
-    applyEntityState(this.state.crate, this.world.getSnapshot().crate);
+    this.world = await createAuthoritativeWorld({ ...options.definition, initialItems: [] });
+    this.items = new ItemRuntime(
+      new ItemStore(options.pool, options.definition, this.state.worldEpoch),
+      this.world,
+      () => this.persistenceStatus(),
+    );
+    try {
+      await this.items.initialize();
+    } catch (error) {
+      await this.items.store.close();
+      this.world.dispose();
+      throw error;
+    }
+    this.projectItems(this.world.getSnapshot().items);
+    this.onMessage('itemCommand', (client, request: unknown) => {
+      void this.itemCommand(client, request);
+    });
+    this.onMessage('inventoryRequest', (client) => {
+      void this.sendInventory(client);
+    });
     this.onMessage('clientReady', (client) => this.ready(client));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
+    this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
+    this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
+    this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
     this.onMessage('resync', (client) => {
       this.inputs.get(client.sessionId).clear();
       const session = this.sessions.get(client.sessionId);
@@ -87,9 +162,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       client.send('resync', { serverTick: this.state.serverTick });
     });
     this.setFixedTimestep((context) => this.step(context), TICK_RATE);
+    this.clock.setInterval(() => {
+      for (const session of this.sessions.values())
+        if (session.auth && session.auth.expiresAt <= Date.now())
+          this.revokeAuthSession(session.auth.authSessionId);
+    }, 1000);
   }
 
-  onAuth(_client: Client, options: Record<string, unknown>): boolean {
+  async onAuth(
+    _client: Client,
+    options: Record<string, unknown>,
+    context: AuthContext,
+  ): Promise<true | AuthenticatedAccount> {
     if (
       !options ||
       options.protocolVersion !== PROTOCOL_VERSION ||
@@ -98,34 +182,78 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     ) {
       throw new ServerError(4001, 'VERSION_MISMATCH');
     }
-    return true;
+    if (!this.isReady()) throw new ServerError(503, 'WORLD_NOT_READY');
+    if (options.accountMode === 'guest') {
+      if (options.skinId !== undefined && !findAvatarSkin(options.skinId))
+        throw new ServerError(4001, 'INVALID_SKIN');
+      return true;
+    }
+    const token = this.accounts?.readToken(context.headers);
+    if (options.accountMode !== 'account' && !token) {
+      if (options.skinId !== undefined && !findAvatarSkin(options.skinId))
+        throw new ServerError(4001, 'INVALID_SKIN');
+      return true;
+    }
+    if (!this.accounts || !token) throw new ServerError(401, 'AUTH_REQUIRED');
+    try {
+      const account = await this.accounts.store.authenticate(token);
+      if (!account) throw new ServerError(401, 'AUTH_REQUIRED');
+      if (
+        options.expectedAccountId !== undefined &&
+        options.expectedAccountId !== account.accountId
+      )
+        throw new ServerError(401, 'ACCOUNT_CHANGED');
+      return account;
+    } catch (error) {
+      if (error instanceof ServerError) throw error;
+      throw new ServerError(503, 'ACCOUNTS_UNAVAILABLE');
+    }
   }
 
-  onJoin(client: Client): void {
+  onJoin(client: Client, options: { skinId?: unknown } = {}): void {
+    const auth =
+      typeof client.auth === 'object' && client.auth?.accountId
+        ? (client.auth as AuthenticatedAccount)
+        : undefined;
+    // No await between the uniqueness check and claiming the slot: covers parallel joins and preparing players.
+    if (auth && this.accountPlayers.has(auth.accountId))
+      throw new ServerError(409, 'ACCOUNT_IN_USE');
+    if (auth && (auth.expiresAt <= Date.now() || this.accounts?.wasRevoked(auth.authSessionId)))
+      throw new ServerError(401, 'AUTH_REQUIRED');
     const ordinal = ++this.guestCounter;
     const usedColors = new Set([...this.sessions.values()].map((s) => s.color));
     this.sessions.set(client.sessionId, {
       entityId: `player-${randomUUID()}`,
       joinedAt: performance.now(),
       connected: true,
-      name: `Гость ${ordinal}`,
+      pendingActions: new Set(),
+      auth,
+      name: auth?.profile.displayName ?? `Гость ${ordinal}`,
+      skinId: auth?.profile.skinId ?? findAvatarSkin(options.skinId)?.id ?? DEFAULT_AVATAR_SKIN,
       color:
+        (auth ? PROFILE_COLORS.find((c) => c.id === auth.profile.colorId)!.hex : undefined) ??
         PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
         PLAYER_COLORS[ordinal % PLAYER_COLORS.length],
       lastRequest: 0,
       lastRespawn: -Infinity,
+      lastInput: { ...NEUTRAL_INPUT },
       results: new Map(),
     });
+    if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
     this.state.occupancy = this.sessions.size;
   }
 
   private ready(client: Client): void {
     const session = this.sessions.get(client.sessionId);
-    if (!session || this.state.players.has(client.sessionId) || session.readyAt !== undefined)
+    if (!session) return;
+    if (this.state.players.has(client.sessionId) || session.readyAt !== undefined) {
+      void this.sendInventory(client);
       return;
+    }
     session.readyAt = performance.now();
     this.inputs.get(client.sessionId).clear();
-    this.trySpawn(client.sessionId, session);
+    if (!this.items.paused) this.trySpawn(client.sessionId, session);
+    void this.sendInventory(client);
   }
 
   private trySpawn(sessionId: string, session: Session): void {
@@ -136,6 +264,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     projected.sessionId = sessionId;
     projected.name = session.name;
     projected.color = session.color;
+    projected.skinId = session.skinId;
     projected.connected = session.connected;
     this.state.players.set(sessionId, projected);
   }
@@ -147,6 +276,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   private step(ctx: StepContext): void {
+    if (this.items.paused) {
+      for (const id of this.sessions.keys()) this.inputs.get(id).clear();
+      return;
+    }
     const start = performance.now();
     for (const [sessionId, session] of this.sessions) {
       const client = this.clients.getById(sessionId);
@@ -170,17 +303,36 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         client?.send('resync', { serverTick: this.state.serverTick });
       }
       const command = session.connected ? input.next() : undefined;
-      this.world.setInput(session.entityId, normalizeInput(command) ?? NEUTRAL_INPUT);
+      session.lastInput = normalizeInput(command) ?? { ...NEUTRAL_INPUT };
+      const player = this.state.players.get(sessionId)!;
+      if (
+        findAnimation(player.animationId)?.mode === 'fullBody' &&
+        (session.lastInput.moveX !== 0 || session.lastInput.moveZ !== 0)
+      )
+        this.cancelAnimation(player, this.state.serverTick + 1);
+      this.world.setInput(session.entityId, session.lastInput);
     }
     this.world.step(ctx.dt);
     const snapshot = this.world.getSnapshot();
     const byId = new Map(snapshot.players.map((player) => [player.entityId, player]));
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
+      if (actual && (!actual.grounded || actual.revision !== player.revision))
+        this.cancelAnimation(player, this.state.serverTick + 1);
       if (actual) applyEntityState(player, actual);
+      this.expireAnimation(player, this.state.serverTick + 1);
+      if (player.reactionId && this.state.serverTick >= player.reactionExpiresAtTick) {
+        player.reactionId = '';
+        player.reactionExpiresAtTick = 0;
+      }
+      if (player.chatText && this.state.serverTick >= player.chatExpiresAtTick) {
+        player.chatText = '';
+        player.chatExpiresAtTick = 0;
+      }
     }
-    applyEntityState(this.state.crate, snapshot.crate);
-    this.state.serverTick = ctx.tick;
+    this.projectItems(snapshot.items);
+    this.state.serverTick++;
+    this.items.step(this.state.serverTick);
     const duration = performance.now() - start;
     // Diagnostics update at the patch rate rather than churning a field at 60Hz.
     if (ctx.tick % 3 === 0) this.state.stepMs = duration;
@@ -193,7 +345,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
 
-  private respawn(client: Client, request: unknown): void {
+  /** All discrete actions share one request sequence and bounded result cache. */
+  private beginAction(client: Client, request: unknown): ClientAction | undefined {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     const data = request as { requestId?: unknown; worldEpoch?: unknown } | null;
@@ -207,6 +360,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       return;
     }
     const requestId = data.requestId;
+    // An asynchronous command will acknowledge all duplicate deliveries once committed.
+    if (session.pendingActions.has(requestId)) return;
     const previous = session.results.get(requestId);
     if (previous) {
       client.send('actionResult', previous);
@@ -223,12 +378,31 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     session.lastRequest = requestId;
     let code: ErrorCode | undefined;
     if (data.worldEpoch !== this.state.worldEpoch) code = 'STALE_WORLD';
-    else if (!this.state.players.has(client.sessionId)) code = 'WORLD_NOT_READY';
-    else if (performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS) code = 'RATE_LIMITED';
-    else if (!this.world.respawnPlayer(session.entityId)) code = 'SPAWN_UNAVAILABLE';
-    else {
-      session.lastRespawn = performance.now();
-      this.inputs.get(client.sessionId).clear();
+    else if (this.items.paused || !session.connected || !this.state.players.has(client.sessionId))
+      code = 'WORLD_NOT_READY';
+    return { session, requestId, code };
+  }
+
+  private finishAction(client: Client, session: Session, result: ActionResult): void {
+    session.results.set(result.requestId, result);
+    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
+    if (session.connected) this.clients.getById(client.sessionId)?.send('actionResult', result);
+  }
+
+  private respawn(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    if (!code) {
+      if (performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS) code = 'RATE_LIMITED';
+      else if (!this.world.respawnPlayer(session.entityId)) code = 'SPAWN_UNAVAILABLE';
+      else {
+        session.lastRespawn = performance.now();
+        this.inputs.get(client.sessionId).clear();
+        session.lastInput = { ...NEUTRAL_INPUT };
+        this.cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
+      }
     }
     const result: ActionResult = {
       requestId,
@@ -243,9 +417,198 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           }
         : {}),
     };
-    session.results.set(requestId, result);
-    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
-    client.send('actionResult', result);
+    this.finishAction(client, session, result);
+  }
+
+  private react(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const reaction = findReaction((request as { reactionId?: unknown }).reactionId);
+    const player = this.state.players.get(client.sessionId);
+    const remainingTicks = Math.max(
+      0,
+      (player?.reactionExpiresAtTick ?? 0) - this.state.serverTick,
+    );
+    if (!code) {
+      if (!reaction) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else {
+        player!.reactionId = reaction.id;
+        player!.reactionSequence++;
+        player!.reactionExpiresAtTick =
+          this.state.serverTick + Math.ceil((REACTION_DURATION_MS * TICK_RATE) / 1000);
+      }
+    }
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === undefined || code === 'RATE_LIMITED'
+        ? {
+            retryAfterMs: code
+              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
+              : REACTION_DURATION_MS,
+          }
+        : {}),
+    });
+  }
+
+  private expireAnimation(player: PlayerSchema, tick: number): void {
+    if (player.animationId && tick >= player.animationEndsAtTick) {
+      player.animationId = '';
+      player.animationChangedAtTick = player.animationEndsAtTick;
+    }
+  }
+
+  private cancelAnimation(player: PlayerSchema, tick = this.state.serverTick): void {
+    this.expireAnimation(player, tick);
+    if (!player.animationId) return;
+    player.animationId = '';
+    player.animationSequence++;
+    player.animationChangedAtTick = tick;
+  }
+
+  private animate(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const animation = findAnimation((request as { animationId?: unknown }).animationId);
+    const player = this.state.players.get(client.sessionId);
+    if (player) this.expireAnimation(player, this.state.serverTick);
+    const remainingTicks = player?.animationId
+      ? Math.max(0, player.animationEndsAtTick - this.state.serverTick)
+      : 0;
+    if (!code) {
+      const actual = this.world.getSnapshot().players.find((p) => p.entityId === session.entityId);
+      if (!animation) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else if (
+        !actual?.grounded ||
+        findAvatarSkin(player!.skinId)?.rig !== animation.rig ||
+        (animation.mode === 'fullBody' &&
+          (Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08 ||
+            session.lastInput.moveX !== 0 ||
+            session.lastInput.moveZ !== 0))
+      )
+        code = 'ANIMATION_NOT_ALLOWED';
+      else {
+        player!.animationSequence++;
+        player!.animationId = animation.id;
+        player!.animationStartedAtTick = player!.animationChangedAtTick = this.state.serverTick;
+        player!.animationEndsAtTick =
+          this.state.serverTick + Math.ceil((animation.durationMs * TICK_RATE) / 1000);
+      }
+    }
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === 'RATE_LIMITED'
+        ? { retryAfterMs: Math.ceil((remainingTicks * 1000) / TICK_RATE) }
+        : {}),
+    });
+  }
+
+  private chat(client: Client, request: unknown): void {
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const text = normalizeChatText((request as { text?: unknown }).text);
+    const command = text && parseChatCommand(text);
+    if (command) {
+      void this.chatCommand(client, action, command);
+      return;
+    }
+    const player = this.state.players.get(client.sessionId);
+    const remainingTicks = Math.max(0, (player?.chatExpiresAtTick ?? 0) - this.state.serverTick);
+    if (!code) {
+      if (!text) code = 'INVALID_INPUT';
+      else if (remainingTicks > 0) code = 'RATE_LIMITED';
+      else {
+        player!.chatText = text;
+        player!.chatSequence++;
+        player!.chatExpiresAtTick =
+          this.state.serverTick + Math.ceil((chatDurationMs(text) * TICK_RATE) / 1000);
+      }
+    }
+    // Cache only the acknowledgement, never the message body or a history.
+    this.finishAction(client, session, {
+      requestId,
+      ok: code === undefined,
+      ...(code ? { code } : {}),
+      ...(code === undefined || code === 'RATE_LIMITED'
+        ? {
+            retryAfterMs: code
+              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
+              : chatDurationMs(text!),
+          }
+        : {}),
+    });
+  }
+
+  private async chatCommand(client: Client, action: ClientAction, command: ChatCommand) {
+    const { session, requestId, code } = action;
+    const fail = (code: ActionResult['code'], message: string) =>
+      this.finishAction(client, session, { requestId, ok: false, code, message });
+    if (code) return fail(code, 'Команда сейчас недоступна. Проверьте состояние мира.');
+    if (command.kind === 'invalid') return fail(command.code, command.message);
+    if (
+      !session.auth ||
+      session.auth.expiresAt <= Date.now() ||
+      this.accounts?.wasRevoked(session.auth.authSessionId)
+    )
+      return fail('AUTH_REQUIRED', giveFailureMessage('AUTH_REQUIRED'));
+    if (!this.itemCreationEnabled)
+      return fail('COMMAND_DISABLED', 'Создание предметов отключено на сервере.');
+    const types = this.items.store.definition.itemCatalog.types;
+    if (!Object.hasOwn(types, command.typeId))
+      return fail('INVALID_INPUT', `Неизвестный тип предмета: ${command.typeId}.`);
+    if (this.itemRequests >= 32) return fail('RATE_LIMITED', giveFailureMessage('RATE_LIMITED'));
+
+    session.pendingActions.add(requestId);
+    this.itemRequests++;
+    try {
+      const result = await this.items.give(
+        session.auth.accountId,
+        `chat-${this.state.worldEpoch}-${client.sessionId}-${requestId}`,
+        command.typeId,
+        () => {
+          if (
+            session.auth!.expiresAt <= Date.now() ||
+            this.accounts?.wasRevoked(session.auth!.authSessionId)
+          )
+            return 'AUTH_REQUIRED';
+          if (
+            this.sessions.get(client.sessionId) !== session ||
+            !session.connected ||
+            !this.state.players.has(client.sessionId)
+          )
+            return 'WORLD_NOT_READY';
+        },
+      );
+      if (result.ok) await this.sendInventory(client);
+      this.finishAction(client, session, {
+        requestId,
+        ok: result.ok,
+        ...(result.code ? { code: result.code } : {}),
+        message: result.ok
+          ? `Получен предмет: ${types[command.typeId].name} ×1.`
+          : giveFailureMessage(result.code),
+        ...(result.ok || result.code === 'RATE_LIMITED'
+          ? { retryAfterMs: ITEM_GIVE_COOLDOWN_MS }
+          : {}),
+      });
+    } catch {
+      // Storage uncertainty remains queued in ItemRuntime; rejection means shutdown.
+      fail('WORLD_NOT_READY', giveFailureMessage('WORLD_NOT_READY'));
+    } finally {
+      session.pendingActions.delete(requestId);
+      this.itemRequests--;
+    }
   }
 
   onDrop(client: Client, code?: number): void {
@@ -255,7 +618,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.world.setInput(session.entityId, NEUTRAL_INPUT);
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
-    if (player) player.connected = false;
+    if (player) {
+      player.connected = false;
+      this.cancelAnimation(player);
+    }
     // 4010 is the SDK's intentional offline/drop signal, not an application
     // rejection. Only terminal codes release an established session immediately.
     const terminal =
@@ -263,13 +629,35 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       code === CloseCode.SERVER_SHUTDOWN ||
       code === CloseCode.WITH_ERROR ||
       code === CloseCode.FAILED_TO_RECONNECT;
-    if (terminal || !player) return;
-    void this.allowReconnection(client, this.reconnectSeconds).catch(() => {});
+    if (terminal || !player || (session.auth && session.auth.expiresAt <= Date.now())) return;
+    const reconnection = this.allowReconnection(client, this.reconnectSeconds);
+    const cancel = () => reconnection.reject(new Error('AUTH_REQUIRED'));
+    session.cancelReconnect = cancel;
+    void reconnection
+      .catch(() => {})
+      .finally(() => {
+        if (session.cancelReconnect === cancel) session.cancelReconnect = undefined;
+      });
   }
-  onReconnect(client: Client): void {
+  async onReconnect(client: Client): Promise<void> {
     const session = this.sessions.get(client.sessionId);
     if (!session) throw new ServerError(4002, 'STALE_WORLD');
+    if (session.auth) {
+      let restored: AuthenticatedAccount | undefined;
+      try {
+        restored = await this.accounts?.store.sessionById(session.auth.authSessionId);
+      } catch {
+        throw new ServerError(503, 'ACCOUNTS_UNAVAILABLE');
+      }
+      if (
+        !restored ||
+        restored.accountId !== session.auth.accountId ||
+        session.auth.expiresAt <= Date.now()
+      )
+        throw new ServerError(401, 'AUTH_REQUIRED');
+    }
     session.connected = true;
+    void this.sendInventory(client);
     this.inputs.get(client.sessionId).clear();
     const player = this.state.players.get(client.sessionId);
     if (player) player.connected = true;
@@ -277,16 +665,138 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   onLeave(client: Client): void {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
+    const player = this.state.players.get(client.sessionId);
+    if (player) this.cancelAnimation(player);
     this.world.removePlayer(session.entityId);
     this.state.players.delete(client.sessionId);
     this.sessions.delete(client.sessionId);
+    if (session.auth && this.accountPlayers.get(session.auth.accountId) === client.sessionId)
+      this.accountPlayers.delete(session.auth.accountId);
     this.state.occupancy = this.sessions.size;
   }
-  onDispose(): void {
-    this.disposed = true;
-    this.world?.dispose();
-    this.sessions.clear();
-    this.stepSamples.length = 0;
+  revokeAuthSession(authSessionId: string): void {
+    for (const [sessionId, session] of this.sessions) {
+      if (session.auth?.authSessionId !== authSessionId) continue;
+      session.auth.expiresAt = 0;
+      session.connected = false;
+      const player = this.state.players.get(sessionId);
+      if (player) this.cancelAnimation(player);
+      this.world.setInput(session.entityId, NEUTRAL_INPUT);
+      session.cancelReconnect?.();
+      const client = this.clients.getById(sessionId);
+      client?.send('problem', { code: 'AUTH_REQUIRED' });
+      void client?.leave(CloseCode.CONSENTED, 'AUTH_REQUIRED');
+    }
+  }
+  isReady() {
+    return !!this.items && !this.items.unavailable && !this.items.closing;
+  }
+  private projectItems(items: ItemState[]) {
+    const ids = new Set(items.map((i) => i.entityId));
+    for (const id of this.state.items.keys()) if (!ids.has(id)) this.state.items.delete(id);
+    for (const item of items) {
+      let schema = this.state.items.get(item.entityId);
+      if (!schema) {
+        schema = new EntitySchema();
+        this.state.items.set(item.entityId, schema);
+      }
+      applyEntityState(schema, item);
+    }
+  }
+  private persistenceStatus() {
+    const wasPaused = this.state.paused;
+    this.state.paused = this.items.paused;
+    this.state.pauseReason = this.items.unavailable
+      ? 'STORAGE_UNAVAILABLE'
+      : this.items.closing
+        ? 'WORLD_NOT_READY'
+        : '';
+    if (!wasPaused && this.state.paused)
+      for (const player of this.state.players.values()) this.cancelAnimation(player);
+    if (wasPaused && !this.state.paused) {
+      this.projectItems(this.world.getSnapshot().items);
+      for (const id of this.sessions.keys()) this.inputs.get(id).clear();
+      this.broadcast('resync', { serverTick: this.state.serverTick });
+    }
+  }
+  private async sendInventory(client: Client) {
+    const session = this.sessions.get(client.sessionId);
+    if (!session?.auth || session.auth.expiresAt <= Date.now()) return;
+    try {
+      const inventory = await this.items.inventory(session.auth.accountId);
+      if (
+        session.connected &&
+        session.auth.expiresAt > Date.now() &&
+        this.sessions.get(client.sessionId) === session
+      )
+        client.send('inventory', inventory);
+    } catch {
+      /* Shutdown closes pending reads along with the connection. */
+    }
+  }
+  private async itemCommand(client: Client, request: unknown) {
+    const command = parseItemCommand(request);
+    if (!command) {
+      client.send('problem', { code: 'INVALID_INPUT' });
+      return;
+    }
+    const session = this.sessions.get(client.sessionId);
+    const respond = (result: ItemResult) => {
+      if (session?.connected) client.send('itemResult', result);
+    };
+    if (!session?.auth || session.auth.expiresAt <= Date.now()) {
+      respond({ operationId: command.operationId, ok: false, code: 'AUTH_REQUIRED' });
+      return;
+    }
+    if (!this.isReady() || this.itemRequests >= 32) {
+      respond({
+        operationId: command.operationId,
+        ok: false,
+        code: this.items.unavailable ? 'STORAGE_UNAVAILABLE' : 'RATE_LIMITED',
+      });
+      return;
+    }
+    this.itemRequests++;
+    try {
+      const result = await this.items.command(
+        session.auth.accountId,
+        session.entityId,
+        command,
+        () => {
+          if (
+            session.auth!.expiresAt <= Date.now() ||
+            this.accounts?.wasRevoked(session.auth!.authSessionId)
+          )
+            return 'AUTH_REQUIRED';
+          if (command.worldEpoch !== this.state.worldEpoch) return 'STALE_WORLD';
+          if (!session.connected || !this.state.players.has(client.sessionId))
+            return 'WORLD_NOT_READY';
+        },
+      );
+      this.projectItems(this.world.getSnapshot().items);
+      await this.sendInventory(client);
+      respond(result);
+    } catch {
+      /* Uncertain operations stay queued until recovered; shutdown disconnects. */
+    } finally {
+      this.itemRequests--;
+    }
+  }
+  shutdownWorld(): Promise<void> {
+    return (this.shutdown ??= this.items?.close() ?? Promise.resolve());
+  }
+  async onDispose(): Promise<void> {
+    try {
+      await this.shutdownWorld();
+    } catch {
+      console.error('World disposal follows an incomplete final save.');
+    } finally {
+      this.disposed = true;
+      this.world?.dispose();
+      this.sessions.clear();
+      this.accountPlayers.clear();
+      this.stepSamples.length = 0;
+    }
   }
   diagnostics() {
     const sorted = [...this.stepSamples].sort((a, b) => a - b);
@@ -319,6 +829,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       memory: { rss, heapUsed },
       resyncs: this.resyncs,
       disposed: this.disposed,
+      items: this.state.items.size,
+      persistence: { paused: this.state.paused, unavailable: this.items.unavailable },
     };
   }
 }

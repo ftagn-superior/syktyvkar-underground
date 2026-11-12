@@ -1,7 +1,7 @@
 import { launchTestBrowser } from './helpers/browser.js';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createGameServer } from '../apps/server/src/index.js';
+import { createGameServer } from './helpers/game-server.js';
 
 let app = await createGameServer({ port: 0 });
 const address = new URL(app.url);

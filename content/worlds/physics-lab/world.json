@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "worldId": "physics-lab",
   "bounds": {
     "min": {
@@ -24,6 +24,7 @@
       "height": 1.8,
       "radius": 0.35,
       "speed": 4,
+      "sprintSpeed": 14,
       "mass": 70
     }
   },
@@ -267,26 +268,26 @@
       "friction": 0.6,
       "restitution": 0.05,
       "color": "#414f60"
-    },
+    }
+  ],
+  "cells": ["cells/0_0.json"],
+  "assetCatalog": "../../buildings/catalog.json",
+  "itemCatalog": "../../items/catalog.json",
+  "initialItems": [
     {
-      "entityId": "crate-01",
-      "kind": "crate",
+      "seedId": "crate-01",
+      "typeId": "wooden-crate",
       "position": {
         "x": 0,
         "y": 0.52,
         "z": 0
       },
-      "size": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "mass": 10,
-      "friction": 0.6,
-      "restitution": 0.05,
-      "color": "#e8ae64"
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
     }
-  ],
-  "cells": ["cells/0_0.json"],
-  "assetCatalog": "../../buildings/catalog.json"
+  ]
 }

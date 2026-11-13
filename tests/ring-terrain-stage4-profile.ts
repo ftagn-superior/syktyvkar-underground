@@ -1,4 +1,4 @@
-/** Sequential hardware comparison of the proven flat reference and exact prepared pilot. */
+/** Sequential hardware comparison of the flat reference and an exact prepared terrain release. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -13,21 +13,23 @@ import {
   readPreparedRingProfilePublication,
 } from './helpers/ring-terrain-profile.js';
 
+// Optional candidate directory and kind allow the same strict measurement for full ring.
+const candidate = resolve(process.argv[2] ?? 'output/ring-terrain-stage4');
+const candidateKind = process.argv[3] ?? 'terrain-pilot';
+assert.ok(candidateKind === 'terrain-pilot' || candidateKind === 'terrain-full');
 const output = resolve(
-  process.env.SU_RING_STAGE4_PROFILE_OUTPUT ?? 'output/ring-terrain-stage4/hardware-profile',
+  process.env.SU_RING_STAGE4_PROFILE_OUTPUT ?? join(candidate, 'hardware-profile'),
 );
 const source = resolve('output/ring-terrain-stage0/source-world');
 const flatDirectory = resolve('output/ring-terrain-stage2/flat-4m');
-const authoringDirectory = resolve('output/ring-terrain-stage4/authoring-world');
-const pilotDirectory = resolve('output/ring-terrain-stage4/export-world');
+const authoringDirectory = join(candidate, 'authoring-world');
+const pilotDirectory = join(candidate, 'export-world');
 const layoutFile = resolve('data/map-layout.json');
 const layoutBytes = await readFile(layoutFile);
 assert.equal(hash(layoutBytes), 'f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193');
 const snapshot = JSON.parse(layoutBytes.toString()) as WorldLayoutSnapshot;
 validateWorldLayoutSnapshot(snapshot);
-const preparation = JSON.parse(
-  await readFile('output/ring-terrain-stage4/static-preflight.json', 'utf8'),
-);
+const preparation = JSON.parse(await readFile(join(candidate, 'static-preflight.json'), 'utf8'));
 assert.deepEqual(preparation.issues, []);
 const targetSnapshot = preparation.targetSnapshot as WorldLayoutSnapshot;
 validateWorldLayoutSnapshot(targetSnapshot);
@@ -66,6 +68,7 @@ const pilot = await readPreparedRingProfilePublication(
   authoringDirectory,
   targetSnapshot,
   pilotDirectory,
+  candidateKind,
 );
 assert.equal(flat.profileFixture.kind, 'flat-4m');
 assert.equal(flat.terrainGrid!.spacing, 4);
@@ -79,7 +82,7 @@ assert.deepEqual(
 );
 const variants = [
   { kind: 'flat-4m', prepared: flat, directory: flatDirectory },
-  { kind: 'terrain-pilot', prepared: pilot, directory: pilotDirectory },
+  { kind: candidateKind, prepared: pilot, directory: pilotDirectory },
 ];
 const preflight: { kind: string; gridFile: string; mapVersion: string; profileFixture: unknown }[] =
   [];
@@ -110,11 +113,11 @@ for (const variant of variants) {
         SU_RING_BASELINE_SOURCE_RELEASE: source,
         SU_RING_BASELINE_CANDIDATE_RELEASE: variant.kind === 'flat-4m' ? flatDirectory : '',
         SU_RING_BASELINE_PREPARED_AUTHORING:
-          variant.kind === 'terrain-pilot' ? authoringDirectory : '',
-        SU_RING_BASELINE_PREPARED_PUBLICATION:
-          variant.kind === 'terrain-pilot' ? pilotDirectory : '',
+          variant.kind === candidateKind ? authoringDirectory : '',
+        SU_RING_BASELINE_PREPARED_PUBLICATION: variant.kind === candidateKind ? pilotDirectory : '',
         SU_RING_BASELINE_PREPARED_SNAPSHOT:
-          variant.kind === 'terrain-pilot' ? targetSnapshotFile : '',
+          variant.kind === candidateKind ? targetSnapshotFile : '',
+        SU_RING_BASELINE_PREPARED_KIND: candidateKind,
         SU_RING_BASELINE_TERRAIN_GRID: proof.gridFile,
         SU_RING_BASELINE_WARMUP_MS: '60000',
         SU_RING_BASELINE_SAMPLE_MS: '60000',
@@ -143,6 +146,7 @@ const baseline = reports[0];
 for (const key of [
   'host',
   'browser',
+  'browserSurface',
   'viewport',
   'quality',
   'fixedHour',
@@ -206,6 +210,7 @@ const comparison = {
   scope: baseline.scope,
   host: baseline.host,
   browser: baseline.browser,
+  browserSurface: baseline.browserSurface,
   renderer: baseline.initial.rendering.renderer,
   viewport: baseline.viewport,
   quality: baseline.quality,
@@ -219,9 +224,18 @@ const comparison = {
   layoutRevision: snapshot.revision,
   scripts,
   strictFrameP95BudgetMs: 16.7,
+  acceptedCriterion: {
+    minimumAverageFps: 59,
+    maximumFrameP95Ms: 20,
+    reportFrameMaximaSeparately: true,
+    userDecisionDate: '2026-11-13',
+  },
   relativeBudget:
     'max(1.2 * flat-4m p95, flat-4m p95 + 1 ms), separately for frame and local physics',
-  pilotGates: {
+  candidateKind,
+  candidateGates: {
+    acceptedAverageFpsPassed: measured[1].phases.every((phase: any) => phase.averageFps >= 59),
+    acceptedFrameP95Passed: measured[1].phases.every((phase: any) => phase.frameMs.p95 <= 20),
     strictFrameP95Passed: measured[1].phases.every((phase: any) => phase.p95Within16_7Ms),
     relativeFrameP95Passed: measured[1].phases.every(
       (phase: any) => phase.relativeGates.framePassed,
@@ -237,7 +251,7 @@ await writeFile(join(output, 'comparison.json'), JSON.stringify(comparison, null
 console.log(
   JSON.stringify({
     status: comparison.status,
-    pilotGates: comparison.pilotGates,
+    candidateGates: comparison.candidateGates,
     report: join(output, 'comparison.json'),
   }),
 );

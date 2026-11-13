@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { createServer } from 'vite';
 import { launchTestBrowser } from './helpers/browser.js';
 import { loadServerWasm } from '../packages/simulation/src/server.js';
+import { sampleTerrain, validateTerrainGrid } from '../packages/contracts/src/index.js';
 
 const output = resolve(process.argv[2] ?? 'output/ring-terrain-stage4');
 const directory = join(output, 'export-world');
@@ -19,6 +20,8 @@ const owner = (id: string) => {
   return value.position;
 };
 const pilot = owner('osm-way-1258973447');
+const full = process.argv[3] === '--full';
+const selectedFrame = full ? process.argv[4] : process.argv[3];
 const select = (prefix: string) =>
   prefix === 'bench-'
     ? snapshot.instances.find((o: any) => o.entityId === 'bench-e81b6a3635e6cc487a3b')
@@ -54,6 +57,29 @@ const framesToCapture = [
     };
   }),
 ];
+if (full) {
+  const report = JSON.parse(await readFile(join(output, 'build-report.json'), 'utf8'));
+  const grid = validateTerrainGrid(JSON.parse(await readFile(report.gridFile, 'utf8')));
+  const point = (x: number, z: number) => {
+    const sample = sampleTerrain(grid, x, z);
+    assert.ok(sample, 'Full visual witness is outside the terrain');
+    return { x, y: sample.height, z };
+  };
+  framesToCapture.push(
+    ...[
+      { kind: 'full-northern-crest', focus: owner('osm-way-110777684'), zoom: 3.5 },
+      { kind: 'full-northwest-edge', focus: point(-245, -650), zoom: 2.5 },
+      { kind: 'full-northeast-edge', focus: point(295, -650), zoom: 2.5 },
+      { kind: 'full-western-courts', focus: point(-205, -430), zoom: 3 },
+      { kind: 'full-eastern-yards', focus: point(250, -510), zoom: 3.5 },
+      { kind: 'full-southern-overview', focus: point(30, 60), zoom: 3.5 },
+      { kind: 'full-southwest-edge', focus: point(-230, 75), zoom: 2.5 },
+      { kind: 'full-southeast-edge', focus: point(280, 70), zoom: 2.5 },
+      { kind: 'full-school-1', focus: owner('osm-way-111538131'), zoom: 3 },
+      { kind: 'full-opera-theatre', focus: owner('osm-way-146724915'), zoom: 3 },
+    ].map((frame) => ({ ...frame, angle: -0.8, beta: 0.65 })),
+  );
+}
 const module = String.raw`
 import { loadWorldHeader } from '/packages/contracts/src/index.ts';
 import { createPhysicsWorld } from '/packages/simulation/src/physics-world.ts';
@@ -68,7 +94,10 @@ document.body.style.cssText = 'margin:0;overflow:hidden;background:#101820';
 const canvas = document.createElement('canvas');
 canvas.style.cssText = 'display:block;width:100vw;height:100vh';
 document.body.append(canvas);
-const view = new WorldView(canvas, document.createElement('div'), header, 'standard');
+const labels = document.createElement('div');
+labels.id = 'labels';
+if (${full}) document.body.append(labels);
+const view = new WorldView(canvas, labels, header, 'standard');
 view.setTimeOfDay(12);
 const stream = new CellStreamer(manifest, resources, world, view);
 const camera = view.scene.activeCamera;
@@ -105,7 +134,8 @@ window.__SUPPORT_PREVIEW__ = {
       await frame();
     }
     for(let i=0;i<30;i++) await frame();
-    return {rendering:view.renderingDiagnostics(), physics:world.staticDiagnostics(), meshes:view.scene.meshes.length};
+    return {rendering:view.renderingDiagnostics(), physics:world.staticDiagnostics(), meshes:view.scene.meshes.length,
+      labels:[...labels.children].map(label => ({text:label.textContent, hidden:label.hidden, transform:label.style.transform, opacity:label.style.opacity}))};
   },
   dispose() { stream.dispose(); world.dispose(); view.dispose(); }
 };
@@ -126,7 +156,11 @@ const server = await createServer({
             if (path === '/witness') {
               response.setHeader('content-type', 'text/html');
               response.end(
-                '<!doctype html><title>Terrain supports</title><script type="module" src="/witness-module.js"></script>',
+                '<!doctype html><title>Terrain supports</title>' +
+                  (full
+                    ? '<link rel="stylesheet" href="/apps/client/src/style.css"><link rel="stylesheet" href="/apps/client/src/ui/theme.css"><link rel="stylesheet" href="/apps/client/src/ui/hud.css">'
+                    : '') +
+                  '<script type="module" src="/witness-module.js"></script>',
               );
             } else if (path === '/witness-module.js') {
               response.setHeader('content-type', 'text/javascript');
@@ -165,9 +199,7 @@ try {
     timeout: 120000,
   });
   const frames = [];
-  for (const control of framesToCapture.filter(
-    (c) => !process.argv[3] || c.kind === process.argv[3],
-  )) {
+  for (const control of framesToCapture.filter((c) => !selectedFrame || c.kind === selectedFrame)) {
     const result = await page.evaluate(
       (control) => (window as any).__SUPPORT_PREVIEW__.frame(control),
       control,
@@ -177,11 +209,12 @@ try {
   }
   assert.deepEqual(errors, []);
   await writeFile(
-    join(output, process.argv[3] ? 'preview-extra-report.json' : 'preview-report.json'),
+    join(output, selectedFrame ? 'preview-extra-report.json' : 'preview-report.json'),
     JSON.stringify(
       {
         status: 'passed',
         mapVersion: manifest.mapVersion,
+        mode: full ? 'full-map' : 'pilot',
         browser: browser.version(),
         frames,
         errors,

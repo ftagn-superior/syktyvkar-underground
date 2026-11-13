@@ -37,6 +37,7 @@ describe('explicit support rules in authored flat releases', () => {
       entities: [],
       spawnPoints: [-3, 3].flatMap((z) => [-3, -1, 1, 3].map((x) => ({ x, y: 0, z }))),
       initialItems: [],
+      landmarks: [{ id: 'relief-landmark', name: 'Raised roof', position: { x: 0, y: 5.1, z: 0 } }],
       cells: ['cell.json'],
       itemCatalog: 'items.json',
       assetCatalog: 'assets/catalog.json',
@@ -163,6 +164,7 @@ describe('explicit support rules in authored flat releases', () => {
         y: 2,
       })),
       initialItems: [],
+      landmarks: [{ id: 'relief-landmark', name: 'Raised roof', position: { x: 0, y: 7.1, z: 0 } }],
     };
     const statics = [
       {
@@ -185,6 +187,7 @@ describe('explicit support rules in authored flat releases', () => {
     expect(release.seed[0].position.y).toBe(2.1);
     expect(release.definition.bounds).toEqual(header.bounds);
     expect(release.definition.spawnPoints).toEqual(header.spawnPoints);
+    expect(release.definition.landmarks).toEqual(header.landmarks);
     expect(release.definition.entities).toEqual(statics);
     const ground =
       release.definition.buildingAssets[

@@ -103,6 +103,9 @@ const prepared = preparedPublication
       preparedAuthoring!,
       targetSnapshot,
       preparedPublication,
+      process.env.SU_RING_BASELINE_PREPARED_KIND === 'terrain-full'
+        ? 'terrain-full'
+        : 'terrain-pilot',
     )
   : await prepareRingProfilePublication(sourceDirectory, snapshot, candidateDirectory);
 if (terrainGrid)
@@ -340,6 +343,7 @@ const report: Record<string, any> = {
     node: process.version,
   },
   viewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+  browserSurface: process.env.SU_RING_BASELINE_HEADED === '1' ? 'headed' : 'headless',
   quality: 'standard',
   fixedHour: 12,
   warmupMs,
@@ -378,7 +382,11 @@ const report: Record<string, any> = {
 };
 try {
   await server.listen();
-  browser = await launchTestBrowser({ renderer: 'default', channel: 'chromium' });
+  browser = await launchTestBrowser({
+    renderer: 'default',
+    channel: 'chromium',
+    headless: process.env.SU_RING_BASELINE_HEADED !== '1',
+  });
   report.browser = browser.version();
   page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   page.on('pageerror', (error) => errors.push(error.message));

@@ -40,6 +40,10 @@ export interface WorldPublication {
   manifest: WorldManifest;
   payloads: Map<string, Uint8Array>;
 }
+export interface WorldPublicationOptions {
+  /** Explicit transport opt-in; old authored publications remain byte-identical by default. */
+  physicsPacks?: boolean;
+}
 export const hash = (input: string | Uint8Array) =>
   createHash('sha256').update(input).digest('hex');
 export const jsonBytes = (value: unknown) => new TextEncoder().encode(canonicalJson(value) + '\n');
@@ -51,6 +55,7 @@ export function createWorldPublication(
   world: WorldDefinition,
   grid: WorldGrid,
   compiled: Record<string, CompiledWorldAsset>,
+  options: WorldPublicationOptions = {},
 ): WorldPublication {
   validateWorld(world);
   const cells = new Map<string, WorldCell>();
@@ -143,28 +148,17 @@ export function createWorldPublication(
     if (!group) groups.set(key, (group = { owners, assetIds: [] }));
     group.assetIds.push(id);
   }
-  for (const { owners, assetIds } of groups.values()) {
-    const paths = [
-      // Instanced trees have only parameters; other assets include their GLB.
-      ...new Set(
-        assetIds
-          .sort()
-          .flatMap((id) =>
-            assets[id].modelFile
-              ? [assets[id].modelFile!, assets[id].partsFile]
-              : [assets[id].partsFile],
-          ),
-      ),
-    ];
+  const pack = (owners: WorldCellManifest[], paths: string[], kind: 'graphics' | 'physics') => {
+    const field = kind === 'graphics' ? 'graphicsPacks' : 'physicsPacks';
     let pending: [string, Uint8Array][] = [];
     let pendingBytes = 10; // magic, header length, JSON brackets
     const flush = () => {
       if (!pending.length) return;
       const packed = encodeGraphicsPack(pending);
-      const path = put(`graphics/${hash(packed)}.pack`, packed, GRAPHICS_PACK_LIMITS.bytes);
+      const path = put(`${kind}/${hash(packed)}.pack`, packed, GRAPHICS_PACK_LIMITS.bytes);
       for (const cell of owners) {
-        cell.graphicsPacks ??= [];
-        if (!cell.graphicsPacks.includes(path)) cell.graphicsPacks.push(path);
+        cell[field] ??= [];
+        if (!cell[field].includes(path)) cell[field].push(path);
       }
       pending = [];
       pendingBytes = 10;
@@ -182,6 +176,23 @@ export function createWorldPublication(
       pendingBytes += entryBytes;
     }
     flush();
+  };
+  for (const { owners, assetIds } of groups.values()) {
+    const paths = [
+      // Instanced trees have only parameters; other assets include their GLB.
+      ...new Set(
+        assetIds
+          .sort()
+          .flatMap((id) =>
+            assets[id].modelFile
+              ? [assets[id].modelFile!, assets[id].partsFile]
+              : [assets[id].partsFile],
+          ),
+      ),
+    ];
+    pack(owners, paths, 'graphics');
+    if (options.physicsPacks)
+      pack(owners, [...new Set(assetIds.map((id) => assets[id].collisionFile))], 'physics');
   }
   const manifest: WorldManifest = {
     formatVersion: WORLD_FORMAT_VERSION,
@@ -232,7 +243,7 @@ export async function pruneWorldPublication(outputDirectory: string) {
       const path = relative ? `${relative}/${entry.name}` : entry.name;
       if (
         !relative &&
-        !['assets', 'cells', 'graphics', 'layouts'].includes(entry.name) &&
+        !['assets', 'cells', 'graphics', 'physics', 'layouts'].includes(entry.name) &&
         !/^header\.[a-f0-9]{64}\.json$/.test(entry.name)
       )
         continue;

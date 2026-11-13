@@ -395,9 +395,31 @@ function conformPatch(
     collisionNodes.set(key, id);
     return id;
   });
-  const collisionFaces = output
+  const contractedFaces = output
     .map((face) => face.map((id) => collisionIds[id]))
     .filter((face) => new Set(face).size === 3);
+  // A whole thin clipped polygon can collapse into a backtracking fan. Cancel
+  // exact opposite faces together: their oriented boundary and volume sum to
+  // zero. Removing a lone inverted/sliver face would instead open the solid.
+  const pendingFaces = new Map<string, number[]>(),
+    cancelledFaces = new Set<number>();
+  contractedFaces.forEach((face, index) => {
+    const start = face.indexOf(Math.min(...face)),
+      a = face[start],
+      b = face[(start + 1) % 3],
+      c = face[(start + 2) % 3],
+      opposite = pendingFaces.get(`${a},${c},${b}`)?.pop();
+    if (opposite !== undefined) {
+      cancelledFaces.add(opposite);
+      cancelledFaces.add(index);
+    } else {
+      const key = `${a},${b},${c}`,
+        pending = pendingFaces.get(key) ?? [];
+      pending.push(index);
+      pendingFaces.set(key, pending);
+    }
+  });
+  const collisionFaces = contractedFaces.filter((_, index) => !cancelledFaces.has(index));
   const edges = new Map<string, { count: number; balance: number; from: number; to: number }>();
   let area = 0;
   for (const face of collisionFaces) {

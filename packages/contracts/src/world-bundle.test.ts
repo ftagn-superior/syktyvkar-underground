@@ -101,19 +101,22 @@ describe('world bundle validation', () => {
       'manifest version',
     );
   });
-  it('accepts optional graphics packs only when all unique paths are listed', () => {
-    expect(validateWorldManifest(manifest)).toBe(manifest);
-    const packed = structuredClone(manifest);
-    packed.files['graphics/a.pack'] = hash;
-    packed.cells[0].graphicsPacks = ['graphics/a.pack'];
-    expect(validateWorldManifest(packed)).toBe(packed);
-    packed.cells[0].graphicsPacks.push('graphics/a.pack');
-    expect(() => validateWorldManifest(packed)).toThrow('graphics packs');
-    packed.cells[0].graphicsPacks = ['graphics/missing.pack'];
-    expect(() => validateWorldManifest(packed)).toThrow('unlisted file');
-    packed.cells[0].graphicsPacks = ['../escape.pack'];
-    expect(() => validateWorldManifest(packed)).toThrow();
-  });
+  it.each(['graphicsPacks', 'physicsPacks'] as const)(
+    'accepts optional %s only when all unique paths are listed',
+    (kind) => {
+      expect(validateWorldManifest(manifest)).toBe(manifest);
+      const packed = structuredClone(manifest);
+      packed.files['graphics/a.pack'] = hash;
+      packed.cells[0][kind] = ['graphics/a.pack'];
+      expect(validateWorldManifest(packed)).toBe(packed);
+      packed.cells[0][kind]!.push('graphics/a.pack');
+      expect(() => validateWorldManifest(packed)).toThrow('packs');
+      packed.cells[0][kind] = ['graphics/missing.pack'];
+      expect(() => validateWorldManifest(packed)).toThrow('unlisted file');
+      packed.cells[0][kind] = ['../escape.pack'];
+      expect(() => validateWorldManifest(packed)).toThrow();
+    },
+  );
   it('requires strings for identifiers instead of coercing missing or numeric values', () => {
     for (const value of [undefined, null, 1, true]) {
       const checks: [string, () => unknown][] = [

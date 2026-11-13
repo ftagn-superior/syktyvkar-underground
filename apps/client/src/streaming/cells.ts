@@ -229,6 +229,7 @@ export class CellStreamer {
         cell.physicsController = controller;
         const physicsSignal = AbortSignal.any([signal, controller.signal]);
         try {
+          await this.resources.prefetchPhysics(cell.id, physicsSignal, this.priority(cell));
           const set = await loadCellPhysics(
             this.manifest,
             cell.id,

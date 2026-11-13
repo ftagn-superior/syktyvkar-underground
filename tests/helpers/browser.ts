@@ -5,11 +5,17 @@ export function launchTestBrowser({
   renderer = 'software',
   channel,
   args = [],
-}: { renderer?: 'software' | 'default'; channel?: 'chromium'; args?: string[] } = {}) {
+  headless = true,
+}: {
+  renderer?: 'software' | 'default';
+  channel?: 'chromium';
+  args?: string[];
+  headless?: boolean;
+} = {}) {
   return chromium.launch({
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     channel,
-    headless: true,
+    headless,
     args: [
       ...(renderer === 'software'
         ? ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader']

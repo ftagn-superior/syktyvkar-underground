@@ -92,6 +92,8 @@ export interface WorldCellManifest {
   assetIds: string[];
   /** Optional bounded transport packs; individual files remain the authoritative fallback. */
   graphicsPacks?: string[];
+  /** Optional verified transport envelopes containing this cell's collision files. */
+  physicsPacks?: string[];
 }
 export interface EntityDefinition {
   entityId: string;

@@ -24,7 +24,7 @@ const [grid, catalog] = await Promise.all([
 ]);
 const loaded = JSON.parse(await readFile(snapshotPath, 'utf8'));
 const snapshot: WorldLayoutSnapshot = loaded.targetSnapshot ?? loaded;
-const fixedPlacements = Boolean(loaded.targetSnapshot);
+const fixedPlacements = Boolean(loaded.targetSnapshot) || Boolean(process.argv[3]);
 const results = [];
 for (const owner of snapshot.instances.filter((owner) => owner.enabled)) {
   const model = catalog.models.find((model) => model.assetId === owner.assetId);

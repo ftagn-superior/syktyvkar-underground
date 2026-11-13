@@ -1,0 +1,136 @@
+{
+  "formatVersion": 1,
+  "status": "support-geometry-candidate-ready",
+  "databaseAccess": false,
+  "publicationWritten": false,
+  "gameplayAccepted": false,
+  "gridSha256": "959e16bc87bc0f5a766730bba47612b178a3f5b58a4b4155944da729b796161d",
+  "sourceGridSha256": "9f3f1936a5f7426be643913c6e548071ac676d16c118a7c48c8c806e7e5c564b",
+  "configSha256": "d412698d68d342f960ea2e24596eaf136989ad4f2e29b63bcb76becfc5fa714f",
+  "statistics": {
+    "heightY": {
+      "count": 33220,
+      "min": -0.20082829744448039,
+      "p95": 13.530607343557124,
+      "max": 14.52129
+    },
+    "triangleSlopeDegrees": {
+      "count": 65700,
+      "min": 0,
+      "p95": 4.516482122997143,
+      "max": 7.4698102308344625
+    },
+    "changedTriangles": 65700,
+    "boundary": {
+      "north": {
+        "count": 151,
+        "min": 3.26969,
+        "p95": 14.01656,
+        "max": 14.12002
+      },
+      "south": {
+        "count": 151,
+        "min": 0.0391,
+        "p95": 5.025055,
+        "max": 5.08131
+      },
+      "west": {
+        "count": 220,
+        "min": 1.68592,
+        "p95": 11.038442965217921,
+        "max": 11.803604245951075
+      },
+      "east": {
+        "count": 220,
+        "min": 4.35621,
+        "p95": 13.228744430644383,
+        "max": 13.584538522136876
+      }
+    }
+  },
+  "sourceStatistics": {
+    "heightY": {
+      "count": 33220,
+      "min": -0.27638,
+      "p95": 13.5782775,
+      "max": 14.52129
+    },
+    "triangleSlopeDegrees": {
+      "count": 65700,
+      "min": 0.013982547261521587,
+      "p95": 3.9310353842752863,
+      "max": 4.703097727602485
+    },
+    "changedTriangles": 65700,
+    "boundary": {
+      "north": {
+        "count": 151,
+        "min": 3.26969,
+        "p95": 14.01656,
+        "max": 14.12002
+      },
+      "south": {
+        "count": 151,
+        "min": 0.0391,
+        "p95": 5.025055,
+        "max": 5.08131
+      },
+      "west": {
+        "count": 220,
+        "min": 1.68592,
+        "p95": 13.028666,
+        "max": 13.25413
+      },
+      "east": {
+        "count": 220,
+        "min": 4.35621,
+        "p95": 13.815573500000001,
+        "max": 13.90211
+      }
+    }
+  },
+  "intervention": {
+    "changedNodes": 21250,
+    "totalNodes": 33220,
+    "changedTriangles": 43228,
+    "changedAreaM2": 345824,
+    "reviewedPilotBuildingOwners": 27,
+    "retiredPilotBuildingOwners": 13,
+    "fullPlatformBuildingOwners": 5,
+    "fullGradeBuildingOwners": 12,
+    "inheritedPublicOwners": 3,
+    "extraPadOwners": 37,
+    "sourceHeightsUnchangedOutsideExplicitPadInfluence": true
+  },
+  "checked": {
+    "actualOwners": 3709,
+    "buildingModels": 136,
+    "kitModels": 64,
+    "buildingOwners": 136,
+    "kitOwners": 2389,
+    "anchorOwners": 1184
+  },
+  "issues": [],
+  "inputs": {
+    "tools/build-ring-full-terrain.ts": "0c2eb320f774a49a5ec8990a59113929c409fa82fe471e0ad1d0a27385c27bbe",
+    "tools/world-build/src/ring-full-terrain.ts": "0258ccfe63840b5219b5e4b5d493631ffb6957883c9ec35abfeec5bd9d4b497b",
+    "tools/world-build/src/ring-pads.ts": "f96651c3c862be9aa646d34fad6441992066e2b8219458f7225c0b02c2e47d80",
+    "tools/world-build/src/syktsu-pad.ts": "f373e1458ee2b97a179354d3de71168e87fe6f77f041bcf4693d4f6d4b127f6d",
+    "content/worlds/ring-block/terrain-candidate/full-terrain-pads.json": "d412698d68d342f960ea2e24596eaf136989ad4f2e29b63bcb76becfc5fa714f",
+    "content/worlds/ring-block/terrain-candidate/full-grid-4m.json": "9f3f1936a5f7426be643913c6e548071ac676d16c118a7c48c8c806e7e5c564b",
+    "content/worlds/ring-block/terrain-candidate/ring-pads.json": "2a2cce46dad8e8cf6f20a7aa72a56b41ebd4afe41ff84f265fd3521190db95a0",
+    "content/worlds/ring-block/terrain-candidate/public-space-pads.json": "9fe50f95a2cf57d97eca9bf6ceb07de1d2fcc4450e1ab8cf10f7b7990fe34a66",
+    "content/worlds/ring-block/terrain-candidate/model-supports.json": "81ba8577c6773a5433e499eaa77bb02d39c9313d442a2993db1466cdb953a410",
+    "content/worlds/ring-block/terrain-candidate/kit-support-decisions.json": "e1f749acfeabc95d6c1ba53fe320f0f18bc857e321ca4a8095daba5f30a44c46",
+    "content/worlds/ring-block/terrain-candidate/anchor-contact-decisions.json": "e936abc5579263de03c00f07a9d1ff66bfd0f0444609768b40e4610184505b2f",
+    "data/map-layout.json": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193"
+  },
+  "output": {
+    "file": "full-grid-ready.json",
+    "sha256": "d6e9ceb11508a43d542f5a3f6517c86d176b8af924ba4c218ce277483e7f864f"
+  },
+  "limitations": [
+    "Approximate ArcticDEM-derived ground with explicit local gameplay pads, not geodetic truth.",
+    "Entrance approaches, publication, actual saved dynamics, browser/gameplay and performance acceptance are separate."
+  ]
+}

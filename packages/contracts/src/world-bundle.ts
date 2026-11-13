@@ -352,14 +352,15 @@ export function validateWorldManifest(value: unknown): WorldManifest {
         canonicalJson(cell.assetIds) === canonicalJson([...new Set(cell.assetIds)].sort()),
       'cell asset dependencies',
     );
-    if (cell.graphicsPacks !== undefined) {
+    for (const kind of ['graphicsPacks', 'physicsPacks'] as const) {
+      if (cell[kind] === undefined) continue;
       requireValue(
-        Array.isArray(cell.graphicsPacks) &&
-          cell.graphicsPacks.length <= 20_000 &&
-          new Set(cell.graphicsPacks).size === cell.graphicsPacks.length,
-        'cell graphics packs',
+        Array.isArray(cell[kind]) &&
+          cell[kind].length <= 20_000 &&
+          new Set(cell[kind]).size === cell[kind].length,
+        `cell ${kind === 'graphicsPacks' ? 'graphics' : 'physics'} packs`,
       );
-      for (const path of cell.graphicsPacks) fileRef(path);
+      for (const path of cell[kind]) fileRef(path);
     }
   }
   requireValue(

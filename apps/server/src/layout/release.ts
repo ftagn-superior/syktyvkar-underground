@@ -234,7 +234,9 @@ export async function createLayoutPublication(
   }
   return {
     world,
-    publication: createWorldPublication(world, release.manifest.grid, assets),
+    publication: createWorldPublication(world, release.manifest.grid, assets, {
+      physicsPacks: release.manifest.cells.some((cell) => cell.physicsPacks?.length),
+    }),
     hash: layoutHash(snapshot),
   };
 }

@@ -1,0 +1,253 @@
+{
+  "formatVersion": 1,
+  "status": "explicit-unapplied-full-terrain-pads",
+  "sourceGrid": "full-grid-4m.json",
+  "sourceGridSha256": "9f3f1936a5f7426be643913c6e548071ac676d16c118a7c48c8c806e7e5c564b",
+  "sourceExportSha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+  "buildingPads": {
+    "file": "ring-pads.json",
+    "sha256": "2a2cce46dad8e8cf6f20a7aa72a56b41ebd4afe41ff84f265fd3521190db95a0",
+    "replacement": {
+      "reason": "The pilot transition to a flat outer world no longer exists. Reassess all 136 actual building footprints on the full geographical source and retain explicit support exceptions and necessary neighbours. Preserve local source variation through bounded grade corrections. The Syktsu contact/forecourt and four close neighbours share one compatible platform; independently levelled neighbouring pads produced steep unusable seams and were rejected.",
+      "clusters": [
+        {
+          "id": "full-syktsu-and-western-platform",
+          "ownerIds": [
+            "osm-way-1258973447",
+            "osm-way-1291799392",
+            "osm-way-56438158",
+            "osm-way-92104475",
+            "osm-way-92104556"
+          ],
+          "levelMetres": 6.5,
+          "reason": "Syktsu crosses 7.13m of source relief. Its broad footprint/forecourt transition crosses four neighbouring foundations. A shared 6.5m plane resolves these contacts without a steep seam; the source range under this set is 1.25\u201312.37m. Full-only height is independent of the accepted 6m pilot platform."
+        }
+      ],
+      "gradeCorrections": [
+        {
+          "ownerId": "osm-way-109234383",
+          "centerY": 10.608284,
+          "gain": 0.891666,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 9.066\u201312.150m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-109234385",
+          "centerY": 9.969294,
+          "gain": 0.599669,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 7.676\u201312.262m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-111538131",
+          "centerY": 10.894395,
+          "gain": 0.720984,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 8.987\u201312.802m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-118373015",
+          "centerY": 12.496178,
+          "gain": 0.935244,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 11.026\u201313.966m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-1532245447",
+          "centerY": 10.517048,
+          "gain": 0.823101,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 8.847\u201312.188m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-708040943",
+          "centerY": 4.775227,
+          "gain": 0.924406,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 3.288\u20136.263m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-85585763",
+          "centerY": 9.621564,
+          "gain": 0.55,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 7.743\u201311.501m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-92104657",
+          "centerY": 9.47891,
+          "gain": 0.699828,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 7.514\u201311.444m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-92104742",
+          "centerY": 9.911364,
+          "gain": 0.721678,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 8.006\u201311.817m; raw relief exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-146724915",
+          "centerY": 6.85,
+          "gain": 0.5,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 5.443\u20138.266m; the neighbouring Syktsu/public-space platform transition otherwise exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-85585819",
+          "centerY": 10,
+          "gain": 0.8,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 11.739\u201312.604m; the neighbouring Syktsu/public-space platform transition otherwise exceeds the 3m visible foundation budget."
+        },
+        {
+          "ownerId": "osm-way-92104707",
+          "centerY": 10,
+          "gain": 0.8,
+          "plateauMarginMetres": 6,
+          "blendWidthMetres": 40,
+          "reason": "Bound local grade across this actual rigid footprint while retaining source variation. Raw full-source contact range 12.144\u201312.896m; the neighbouring Syktsu/public-space platform transition otherwise exceeds the 3m visible foundation budget."
+        }
+      ],
+      "retiredOwners": [
+        {
+          "ownerId": "osm-way-110770955",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-111538132",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-1277836302",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-56438169",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-662826329",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-696916923",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585732",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585733",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585749",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585762",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585809",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585813",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        },
+        {
+          "ownerId": "osm-way-85585817",
+          "reason": "Full geographic source removes the pilot transition issue; audited actual footprint does not require this former plateau/grade correction."
+        }
+      ]
+    }
+  },
+  "publicPads": {
+    "file": "public-space-pads.json",
+    "sha256": "9fe50f95a2cf57d97eca9bf6ceb07de1d2fcc4450e1ab8cf10f7b7990fe34a66",
+    "levelOverrides": [
+      {
+        "id": "ring-monument",
+        "levelMetres": 0.35,
+        "reason": "Local full-source plinth contact range 0.17\u20130.47m; retain monument geometry on a small flat plaza near its source datum."
+      },
+      {
+        "id": "theatre-public-space",
+        "levelMetres": 4.25,
+        "reason": "Full-source Kuratov plinth range 3.97\u20135.26m and fountain 3.43\u20133.64m; authored shared plaza datum between actual contacts."
+      }
+    ]
+  },
+  "additionalPads": [
+    {
+      "id": "full-eastern-enclosed-yards",
+      "ownerIds": [
+        "wall-040c0df73bdccc683be6",
+        "wall-048d54c31c9f0fbf6cfa",
+        "wall-11b2b224a18d43eeee05",
+        "wall-1361fc23b37d6ccfe637",
+        "wall-1a2f9f6f5f6c146d5af8",
+        "wall-1a814710bfd33dbc4663",
+        "wall-1b31f260852e754cbd8f",
+        "wall-21ce13e41f2fcc29066f",
+        "wall-23b346f1acb283c4d45e",
+        "wall-27f72683a3ba61c7d70d",
+        "wall-296e5f27490492356249",
+        "wall-2b8bb6b9e7e4a18a71b3",
+        "wall-2cb90eb1c46bb57567ed",
+        "wall-2d741c473dd5a36f5a4d",
+        "wall-4996f5a5c134c88a8890",
+        "wall-532430adcc5658d75c17",
+        "wall-64001377b316cebdca48",
+        "wall-65b7777bb76c716e81a3",
+        "wall-6c9a4cb7277e8a1cbaae",
+        "wall-783420ceec521143cbb4",
+        "wall-7c32a4ceec13672d9c54",
+        "wall-7f725bdbdb3bad3930ae",
+        "wall-8d56e8c6a2fafaafb2f5",
+        "wall-919ef9ac919abddcfe7e",
+        "wall-95afc02115d074e34b18",
+        "wall-96d65f818a9a14e263b8",
+        "wall-981052156bea87a303f7",
+        "wall-a5624cad1554188046ad",
+        "wall-b4199e37bdf992dcb82f",
+        "wall-b69607b09bcc91ef9df8",
+        "wall-d1176fb4de3b574b5e68",
+        "wall-d1c9903d012033187132",
+        "wall-d478933ae38fea71771a",
+        "wall-dc18f9ead3cdab1d4179",
+        "wall-e3c1629f9d2de1a81352",
+        "wall-e8c6bd618240a23cae37"
+      ],
+      "levelMetres": 9.5,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 64,
+      "reason": "Connected saved masonry walls bound the eastern yards; the longest rigid wall crosses 3.98m of source relief. A shared explicit 9.5m yard-edge plane avoids conflicting corner heights and limits visible foundation extensions. Every actual wall owner, including duplicate saved instances, is enumerated."
+    },
+    {
+      "id": "full-northern-wall",
+      "ownerIds": [
+        "wall-f7246af134cf7f8aff94"
+      ],
+      "levelMetres": 0.35,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 32,
+      "reason": "This saved long rigid wall crosses 0.67m of local relief, above its 0.6m support limit; local mid-range contact plane."
+    }
+  ]
+}

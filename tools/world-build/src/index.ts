@@ -150,6 +150,8 @@ async function compileBytes(
 }
 
 export interface BuildWorldOptions {
+  /** Opt in only for a new authored transport release. */
+  physicsPacks?: boolean;
   terrainVariant?: 'hill' | 'flat';
   /** Explicit output-only candidate. Rules are private inputs, never prebuilt foundations. */
   groundTerrain?: {
@@ -157,7 +159,8 @@ export interface BuildWorldOptions {
     grid?: TerrainGrid;
     supports?: FoundationSupportRuleV2[];
     /** Reviewed offline changes for a new authored release, never startup adjustments. */
-    header?: Pick<WorldHeader, 'bounds' | 'spawnPoints' | 'initialItems'>;
+    header?: Pick<WorldHeader, 'bounds' | 'spawnPoints' | 'initialItems'> &
+      Partial<Pick<WorldHeader, 'landmarks'>>;
     statics?: WorldDefinition['entities'];
     seedY?: Record<string, number>;
   };
@@ -214,7 +217,9 @@ export async function buildWorld(
     initialItems:
       options.groundTerrain?.header?.initialItems ?? terrain?.initialItems ?? authored.initialItems,
     // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
-    ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
+    ...((options.groundTerrain?.header?.landmarks ?? authored.landmarks)
+      ? { landmarks: options.groundTerrain?.header?.landmarks ?? authored.landmarks }
+      : {}),
     ...(authored.routes ? { routes: authored.routes } : {}),
   };
   validateWorldHeader(base);
@@ -316,7 +321,9 @@ export async function buildWorld(
           explicit.origin.x !== converted.grid.origin.x ||
           explicit.origin.z !== converted.grid.origin.z
         )
-          throw new Error('Explicit terrain grid must match the ground extent and selected spacing');
+          throw new Error(
+            'Explicit terrain grid must match the ground extent and selected spacing',
+          );
         converted.grid = structuredClone(explicit);
       }
       validateTerrainGrid(converted.grid);
@@ -403,7 +410,9 @@ export async function buildWorld(
     buildings,
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });
-  const publication = createWorldPublication(world, grid, Object.fromEntries(compiled));
+  const publication = createWorldPublication(world, grid, Object.fromEntries(compiled), {
+    physicsPacks: options.physicsPacks,
+  });
   await writeWorldPublication(publication, outputDirectory);
   await writeAuthoringMetadata(
     world,

@@ -1,0 +1,123 @@
+{
+  "formatVersion": 1,
+  "status": "unapplied-entrance-study-inputs",
+  "rationale": "Explicit facade interventions selected from final-pilot door geometry and actual-city kit screening. These are study inputs, not accepted access or release overrides.",
+  "additionalProblemDoors": [
+    {
+      "entityId": "osm-way-109234383",
+      "partId": "doors",
+      "index": 1,
+      "reason": "The straight approach intersects fences and the full-city sprint probe loses grounding."
+    },
+    {
+      "entityId": "osm-way-109234383",
+      "partId": "doors",
+      "index": 3,
+      "reason": "The straight approach crosses an actual fence collider."
+    },
+    {
+      "entityId": "osm-way-1277836302",
+      "partId": "doors",
+      "index": 1,
+      "reason": "The straight approach crosses actual fence colliders."
+    },
+    {
+      "entityId": "osm-way-85585815",
+      "partId": "doors",
+      "index": 0,
+      "reason": "The straight approach crosses an actual fence collider."
+    },
+    {
+      "entityId": "osm-way-109234384",
+      "partId": "doors",
+      "index": 1,
+      "reason": "Actual full-grid straight approach intersects a fence collider."
+    },
+    {
+      "entityId": "osm-way-110770957",
+      "partId": "doors",
+      "index": 0,
+      "reason": "Actual full-grid straight approach intersects tree colliders."
+    },
+    {
+      "entityId": "osm-way-111538131",
+      "partId": "south-porch-door",
+      "index": 0,
+      "reason": "Actual full-grid straight approach intersects fence colliders."
+    },
+    {
+      "entityId": "osm-way-1532245447",
+      "partId": "doors",
+      "index": 1,
+      "reason": "Actual full-grid straight approach intersects tree colliders."
+    },
+    {
+      "entityId": "osm-way-109234385",
+      "partId": "doors",
+      "index": 3,
+      "reason": "Straight approach crosses the selected same-owner side descent on the full grid."
+    },
+    {
+      "entityId": "osm-way-1532245447",
+      "partId": "doors",
+      "index": 2,
+      "reason": "Straight approach intersects the proposed same-owner descent; coordinate both entrances."
+    }
+  ],
+  "localProblemDoorsOnly": [
+    "osm-way-109234383",
+    "osm-way-109234385",
+    "osm-way-109234386",
+    "osm-way-1277836302",
+    "osm-way-85585744",
+    "osm-way-85585815",
+    "osm-way-1532245447",
+    "osm-way-110770957",
+    "osm-way-109234384"
+  ],
+  "minimumSideDescentLengthMetres": {
+    "osm-way-109234384": 10,
+    "osm-way-109234386": 16,
+    "osm-way-110778598": 18,
+    "osm-way-1532245447": 18
+  },
+  "descentLaneWidthMetres": {
+    "osm-way-109234386": 1.6,
+    "osm-way-110777695": 1.6
+  },
+  "maximumStraightLengthMetres": {
+    "osm-way-696944805": 60
+  },
+  "preliminarySlopeLimitDegrees": {
+    "osm-way-696944805": 8.1
+  },
+  "galleryEndMarginMetres": {
+    "osm-way-1277836302": 1.5,
+    "osm-way-111538131": 1.5,
+    "osm-way-110777695": 2.025
+  },
+  "cornerConnectionOwner": "osm-way-56438161",
+  "minimumStraightLengthMetres": {
+    "osm-way-109234384/doors/1": 16,
+    "osm-way-110253707/doors/0": 6,
+    "osm-way-1277836302/doors/0": 6,
+    "osm-way-56433426/doors/0": 6,
+    "osm-way-56433426/doors/2": 8,
+    "osm-way-56438151/doors/0": 8,
+    "osm-way-85585749/doors/1": 10,
+    "osm-way-85585749/doors/2": 8,
+    "osm-way-110777687/doors/0": 1
+  },
+  "straightLengthStepMetres": {
+    "osm-way-110777687": 0.25
+  },
+  "maximumActualSlopeDegrees": {
+    "osm-way-696944805": 8.2,
+    "osm-way-110777695": 9.2
+  },
+  "keepStraightAfterCoordinatedReplacement": ["osm-way-110778598"],
+  "maximumSideSlopeDegrees": {
+    "osm-way-110777695": 9.2
+  },
+  "galleryWidthMetres": {}
+}

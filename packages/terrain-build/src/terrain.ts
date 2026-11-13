@@ -210,6 +210,27 @@ export function terrainPatch(g: TerrainGrid, convex: readonly Point2[]): Terrain
         for (let i = 0; i < vertices.length; i++)
           output.push([center, vertices[i], vertices[(i + 1) % vertices.length]]);
       }
+  // Adjacent triangle planes can evaluate one shared cut vertex a few ulps apart.
+  // At a half-micrometre boundary those values occupy different collision weld
+  // buckets, opening an otherwise closed solid. Repair only such round-off splits;
+  // keep all other coordinates (and existing publication bytes) unchanged.
+  const shared = new Map<string, Vec3[]>();
+  for (const triangle of output)
+    for (const vertex of triangle) {
+      const id = `${vertex.x},${vertex.z}`;
+      const vertices = shared.get(id);
+      if (vertices) vertices.push(vertex);
+      else shared.set(id, [vertex]);
+    }
+  for (const vertices of shared.values()) {
+    const first = vertices[0].y;
+    if (vertices.every((vertex) => Math.round(vertex.y * 1e6) === Math.round(first * 1e6)))
+      continue;
+    const tolerance = 64 * Number.EPSILON * Math.max(1, Math.abs(first));
+    if (!vertices.every((vertex) => Math.abs(vertex.y - first) <= tolerance)) continue;
+    const height = sampleTerrain(g, vertices[0].x, vertices[0].z)?.height;
+    if (height !== undefined) for (const vertex of vertices) vertex.y = height;
+  }
   return output;
 }
 

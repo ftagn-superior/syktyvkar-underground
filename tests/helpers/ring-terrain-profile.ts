@@ -156,6 +156,7 @@ export async function readPreparedRingProfilePublication(
   authoringDirectory: string,
   targetSnapshot: WorldLayoutSnapshot,
   publicationDirectory: string,
+  kind: 'terrain-pilot' | 'terrain-full' = 'terrain-pilot',
 ) {
   const before = canonicalJson({ sourceSnapshot, targetSnapshot });
   const source = await readAuthoringRelease(sourceDirectory);
@@ -223,7 +224,7 @@ export async function readPreparedRingProfilePublication(
     world: published.definition,
     terrainGrid: target.terrain.grid,
     profileFixture: {
-      kind: 'terrain-pilot',
+      kind,
       source: {
         directory: source.directory,
         manifestSha256: hash(await readFile(join(source.directory, 'manifest.json'))),

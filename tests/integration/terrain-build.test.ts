@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   terrainCellTriangles,
   terrainPlaneHeight,
+  validateClosedMeshTopology,
   type TerrainGrid,
   type TerrainTriangle,
 } from '../../packages/contracts/src/index.js';
@@ -145,6 +146,43 @@ const cases: { id: string; polygon: Point2[] }[] = [
 ];
 
 describe('terrain generation compatibility', () => {
+  it('closes a publication cut whose shared height straddles a collision weld boundary', () => {
+    // Cropped from full-ring tile 0_0: the two planes produce
+    // 10.842437499999999 and 10.8424375 at (-144, -648).
+    const g: TerrainGrid = {
+      formatVersion: 1,
+      origin: { x: -145, z: -649 },
+      spacing: 4,
+      columns: 2,
+      rows: 2,
+      heights: [10.78773, 11.04379, 10.74717, 11.00656],
+      bottom: -1,
+    };
+    const boundary: Point2[] = [
+      [-145, -649],
+      [-144, -649],
+      [-144, -645],
+      [-145, -645],
+    ];
+    const original = oldPatch(g, boundary);
+    const repaired = terrainPatch(g, boundary);
+    const shared = repaired.flat().filter((p) => p.x === -144 && p.z === -648);
+    expect(shared.length).toBeGreaterThan(1);
+    expect(new Set(shared.map((p) => p.y)).size).toBe(1);
+    expect(repaired.length).toBe(original.length);
+    repaired.flat().forEach((p, index) => {
+      expect(p.x).toBe(original.flat()[index].x);
+      expect(p.z).toBe(original.flat()[index].z);
+      expect(Math.abs(p.y - original.flat()[index].y)).toBeLessThan(1e-12);
+    });
+    const asset = generateTerrainTile('weld-boundary', g, boundary, []);
+    for (const collider of asset.physics.colliders) {
+      expect(collider.kind).toBe('mesh');
+      if (collider.kind === 'mesh')
+        expect(validateClosedMeshTopology(collider.vertices, collider.indices)).toBe(true);
+    }
+  });
+
   it.each(cases)('retains exact brute-force triangle and vertex order: $id', ({ polygon }) => {
     const g = grid();
     expect(terrainPatch(g, polygon)).toEqual(oldPatch(g, polygon));

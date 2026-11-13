@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { hash } from '../../packages/world-release/src/index.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { TerrainGrid, WorldLayoutSnapshot } from '../../packages/contracts/src/index.js';
 import { planSupportPlacement } from '../../packages/terrain-build/src/supports.js';
@@ -32,26 +34,31 @@ describe('explicit simultaneous ring terrain pads', () => {
     expect(inputs.config.gradeCorrections).toHaveLength(4);
   });
 
-  it('meets the full-footprint support limit, including models outside the listed pads', async () => {
-    const snapshot: WorldLayoutSnapshot = JSON.parse(
-      await readFile('data/map-layout.json', 'utf8'),
-    );
-    let checked = 0,
-      maximum = 0;
-    for (const owner of snapshot.instances.filter((owner) => owner.enabled)) {
-      const rule = inputs.rules.find((rule) => rule.assetId === owner.assetId);
-      if (!rule) continue;
-      const plan = planSupportPlacement(grid, rule, owner);
-      const height = plan.minimumY + rule.jointY - plan.terrainMin;
-      expect(height, owner.entityId).toBeLessThanOrEqual(3);
-      if (owner.entityId === 'osm-way-1258973447') expect(height).toBeCloseTo(0.08, 9);
-      maximum = Math.max(maximum, height);
-      checked++;
-    }
-    expect(checked).toBe(136);
-    expect(maximum).toBeCloseTo(2.9261855603508096, 9);
-    expect(ringTerrainGridStatistics(grid).triangleSlopeDegrees.max).toBeLessThan(6.6);
-  });
+  it.skipIf(!existsSync('data/map-layout.json'))(
+    'meets the actual full-footprint support limit (requires exact saved export)',
+    async () => {
+      const snapshotBytes = await readFile('data/map-layout.json');
+      expect(hash(snapshotBytes)).toBe(
+        'f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193',
+      );
+      const snapshot: WorldLayoutSnapshot = JSON.parse(snapshotBytes.toString());
+      let checked = 0,
+        maximum = 0;
+      for (const owner of snapshot.instances.filter((owner) => owner.enabled)) {
+        const rule = inputs.rules.find((rule) => rule.assetId === owner.assetId);
+        if (!rule) continue;
+        const plan = planSupportPlacement(grid, rule, owner);
+        const height = plan.minimumY + rule.jointY - plan.terrainMin;
+        expect(height, owner.entityId).toBeLessThanOrEqual(3);
+        if (owner.entityId === 'osm-way-1258973447') expect(height).toBeCloseTo(0.08, 9);
+        maximum = Math.max(maximum, height);
+        checked++;
+      }
+      expect(checked).toBe(136);
+      expect(maximum).toBeCloseTo(2.9261855603508096, 9);
+      expect(ringTerrainGridStatistics(grid).triangleSlopeDegrees.max).toBeLessThan(6.6);
+    },
+  );
 
   it('rejects an unlisted owner instead of silently giving it a pad', () => {
     expect(() =>

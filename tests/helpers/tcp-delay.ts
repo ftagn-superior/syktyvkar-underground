@@ -26,6 +26,8 @@ export async function createDelayRelay(target: URL, profile: NetworkProfile) {
   let seed = 0x52a1;
   let maxQueuedBytes = 0;
   let forwardedBytes = 0;
+  const connectionErrors: { side: string; code?: string; message: string }[] = [];
+  const discardedQueues: { direction: string; buffered: number; ended: boolean }[] = [];
   const random = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 2 ** 32;
@@ -44,8 +46,15 @@ export async function createDelayRelay(target: URL, profile: NetworkProfile) {
       downstream.destroy();
       upstream.destroy();
     };
-    for (const socket of [downstream, upstream]) {
-      socket.on('error', close);
+    for (const [side, socket] of [
+      ['downstream', downstream],
+      ['upstream', upstream],
+    ] as const) {
+      socket.on('error', (error: NodeJS.ErrnoException) => {
+        if (connectionErrors.length < 100)
+          connectionErrors.push({ side, code: error.code, message: error.message });
+        close();
+      });
       socket.on('close', () => {
         sockets.delete(socket);
       });
@@ -104,6 +113,12 @@ export async function createDelayRelay(target: URL, profile: NetworkProfile) {
         schedule();
       });
       destination.on('close', () => {
+        if (buffered > 0 && discardedQueues.length < 100)
+          discardedQueues.push({
+            direction: source === downstream ? 'request' : 'response',
+            buffered,
+            ended,
+          });
         if (timer) {
           clearTimeout(timer);
           timers.delete(timer);
@@ -121,7 +136,7 @@ export async function createDelayRelay(target: URL, profile: NetworkProfile) {
   const port = (server.address() as net.AddressInfo).port;
   return {
     url: `http://127.0.0.1:${port}`,
-    metrics: () => ({ maxQueuedBytes, forwardedBytes }),
+    metrics: () => ({ maxQueuedBytes, forwardedBytes, connectionErrors, discardedQueues }),
     close: async () => {
       for (const timer of timers) clearTimeout(timer);
       for (const socket of sockets) socket.destroy();

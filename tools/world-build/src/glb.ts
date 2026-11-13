@@ -1,4 +1,5 @@
 import { validateBuildingParts, type Bounds, type BuildingParts } from '@su/contracts';
+import { glowOf } from './glow.js';
 
 export interface StaticMeshPart {
   partId: string;
@@ -14,6 +15,11 @@ export interface StaticMeshPart {
    * деталей содержит итоговый линейный цвет, а `color` становится белым.
    */
   colors?: number[];
+  /**
+   * Необязательный ночной свет: по два числа на вершину — класс `GLOW_KIND` (0 — не
+   * светится) и случайный порог 0..1 окна или вывески. Пишется в TEXCOORD_0.
+   */
+  glow?: number[];
 }
 const invariant = (condition: unknown, message: string): void => {
   if (!condition) throw new Error(`Invalid GLB: ${message}`);
@@ -46,7 +52,7 @@ export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
   const materials: any[] = [];
   const materialIds = new Map<string, number>();
   let offset = 0;
-  const accessor = (values: number[], type: 'VEC3' | 'SCALAR', indices = false) => {
+  const accessor = (values: number[], type: 'VEC2' | 'VEC3' | 'SCALAR', indices = false) => {
     const array = indices ? Uint32Array.from(values) : Float32Array.from(values);
     const bytes = Buffer.from(array.buffer);
     const view = views.length;
@@ -61,7 +67,7 @@ export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
     const result: any = {
       bufferView: view,
       componentType: indices ? 5125 : 5126,
-      count: values.length / (type === 'VEC3' ? 3 : 1),
+      count: values.length / (type === 'VEC3' ? 3 : type === 'VEC2' ? 2 : 1),
       type,
     };
     if (type === 'VEC3') {
@@ -103,6 +109,7 @@ export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
               ? (invariant(part.colors.length === part.positions.length, 'vertex colors'),
                 { COLOR_0: accessor(part.colors, 'VEC3') })
               : {}),
+            ...(part.glow ? { TEXCOORD_0: accessor(glowOf(part)!, 'VEC2') } : {}),
           },
           indices: accessor(part.indices, 'SCALAR', true),
           material,

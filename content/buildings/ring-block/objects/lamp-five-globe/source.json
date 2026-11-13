@@ -56,6 +56,7 @@
       "role": "detail",
       "fade": false,
       "color": "#f4f1e6",
+      "glow": "lamp",
       "shapes": [
         {
           "cylinder": {
@@ -139,6 +140,17 @@
         0.25
       ],
       "yaw": 0
+    }
+  ],
+  "lights": [
+    {
+      "position": [
+        0,
+        4.3,
+        0
+      ],
+      "radius": 11,
+      "color": "#ffe0b0"
     }
   ]
 }

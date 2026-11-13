@@ -34,6 +34,7 @@ import {
   type StaticObjectHit,
   type StaticObjectSelection,
 } from './static-selection';
+import { adoptGlowAttribute, type WorldNightLights } from './environment/night-lights';
 
 type Asset = {
   descriptor: BuildingAssetManifest;
@@ -103,12 +104,15 @@ export class BuildingViews {
   private lastOcclusionTest = -Infinity;
   private opaque = false;
   private minimumVisibleSize = 0;
+  /** Число владельцев экземпляров со своими фонарями: источник света один на экземпляр. */
+  private readonly lit = new Map<string, number>();
 
   constructor(
     private readonly scene: Scene,
     private readonly shadow: ShadowGenerator,
     private readonly definition: WorldDefinition | WorldHeader,
     private readonly radial?: RadialState,
+    private readonly nightLights?: WorldNightLights,
   ) {
     this.trees = new TreeViews(scene, shadow, radial);
     this.glbs = new GlbInstances(scene, shadow, radial);
@@ -240,6 +244,16 @@ export class BuildingViews {
   }
   add(definition: BuildingInstance, version: string): TransformNode | undefined {
     if (this.disposed) throw new Error('Building views disposed');
+    const root = this.addView(definition, version);
+    const lights = this.assets.get(version)?.parts.lights;
+    if (lights && this.nightLights) {
+      const owners = this.lit.get(definition.entityId) ?? 0;
+      if (!owners) this.nightLights.addSources(definition, lights);
+      this.lit.set(definition.entityId, owners + 1);
+    }
+    return root;
+  }
+  private addView(definition: BuildingInstance, version: string): TransformNode | undefined {
     const signature = version + canonicalJson(definition);
     const previous = this.references.get(definition.entityId);
     if (previous) {
@@ -274,6 +288,14 @@ export class BuildingViews {
     return view.root;
   }
   remove(id: string): void {
+    const owners = this.lit.get(id);
+    if (owners !== undefined) {
+      if (owners > 1) this.lit.set(id, owners - 1);
+      else {
+        this.lit.delete(id);
+        this.nightLights?.removeSources(id);
+      }
+    }
     if (this.glbs.has(id)) {
       this.glbs.remove(id);
       return;
@@ -405,6 +427,9 @@ export class BuildingViews {
     if (!descriptor.modelFile) throw new Error('GLB asset is missing its model');
     const model = await readBytes(descriptor.modelFile);
     const container = await loadBuildingContainer(model, this.scene, `${descriptor.assetId}.glb`);
+    // Ночное свечение едет в TEXCOORD_0; переносим его в свой атрибут до клонирования.
+    if (parts.glow)
+      for (const mesh of container.meshes) if (mesh instanceof Mesh) adoptGlowAttribute(mesh);
     if (this.disposed) {
       container.dispose();
       throw new Error('Building preparation was cancelled');
@@ -676,6 +701,8 @@ export class BuildingViews {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const id of this.lit.keys()) this.nightLights?.removeSources(id);
+    this.lit.clear();
     this.trees.dispose();
     this.glbs.dispose();
     for (const [id, entry] of this.references) {

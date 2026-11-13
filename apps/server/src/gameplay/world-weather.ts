@@ -1,14 +1,19 @@
 import {
   applyWeatherAction,
   describeWeather,
+  precipitationCode,
+  precipitationFromCode,
   type ActionResult,
   type WeatherAction,
+  type WorldWeather,
 } from '@su/contracts';
 
 const WEATHER_COMMAND_COOLDOWN_MS = 1000;
 
 interface ReplicatedWeather {
   weatherClouds: boolean;
+  weatherPrecipitation: number;
+  weatherFog: boolean;
 }
 
 /** Погода одной комнаты. Источник истины — реплицируемое состояние; после перезапуска — по умолчанию. */
@@ -16,6 +21,14 @@ export class WorldWeatherControl {
   private changeAvailableAt = 0;
 
   constructor(private readonly state: ReplicatedWeather) {}
+
+  get weather(): WorldWeather {
+    return {
+      clouds: this.state.weatherClouds,
+      precipitation: precipitationFromCode(this.state.weatherPrecipitation),
+      fog: this.state.weatherFog,
+    };
+  }
 
   command(change: WeatherAction | undefined, now: number): Omit<ActionResult, 'requestId'> {
     if (change) {
@@ -28,14 +41,15 @@ export class WorldWeatherControl {
           retryAfterMs: this.changeAvailableAt - now,
         };
       this.changeAvailableAt = now + WEATHER_COMMAND_COOLDOWN_MS;
-      const weather = applyWeatherAction({ clouds: this.state.weatherClouds }, change);
+      const weather = applyWeatherAction(this.weather, change);
       this.state.weatherClouds = weather.clouds;
+      this.state.weatherPrecipitation = precipitationCode(weather.precipitation);
+      this.state.weatherFog = weather.fog;
     }
-    const text = describeWeather({ clouds: this.state.weatherClouds });
     return {
       ok: true,
       retryAfterMs: change ? WEATHER_COMMAND_COOLDOWN_MS : 0,
-      message: `Погода: ${text}.`,
+      message: `Погода: ${describeWeather(this.weather)}.`,
     };
   }
 }

@@ -3,6 +3,7 @@ import {
   type DayClockAction,
   type ItemError,
   type WeatherAction,
+  type WeatherPart,
 } from '@su/contracts';
 
 export type ChatCommand =
@@ -50,22 +51,27 @@ export function parseChatCommand(text: string): ChatCommand | undefined {
     return { kind: 'time', action: { kind: 'set', hour: hours + minutes / 60 } };
   }
   if (name === '/weather') {
-    if (!argument && !extra.length) return { kind: 'weather' };
-    if (argument === 'reset' && !extra.length)
-      return { kind: 'weather', action: { kind: 'reset' } };
-    if (argument === 'clouds' && extra.length === 1) return clouds(extra[0]!);
-    return invalid(WEATHER_FORMAT);
+    if (!argument) return extra.length ? invalid(WEATHER_FORMAT) : { kind: 'weather' };
+    if ((argument === 'reset' || argument === 'clear') && !extra.length)
+      return { kind: 'weather', action: { kind: argument } };
+    if (extra.length > 1 || !isWeatherPart(argument)) return invalid(WEATHER_FORMAT);
+    return weatherPart(argument, extra[0] ?? 'on');
   }
-  // Короткая форма `/weather clouds`.
-  if (name === '/clouds') return extra.length ? invalid(WEATHER_FORMAT) : clouds(argument);
+  // Короткая форма `/weather clouds on|off`.
+  if (name === '/clouds')
+    return argument && !extra.length ? weatherPart('clouds', argument) : invalid(WEATHER_FORMAT);
   return { kind: 'invalid', code: 'UNKNOWN_COMMAND', message: 'Неизвестная команда.' };
 }
-function clouds(state: string | undefined): ChatCommand {
+const WEATHER_PARTS: readonly WeatherPart[] = ['clouds', 'rain', 'snow', 'fog'];
+const isWeatherPart = (value: string): value is WeatherPart =>
+  (WEATHER_PARTS as readonly string[]).includes(value);
+function weatherPart(part: WeatherPart, state: string): ChatCommand {
   return state === 'on' || state === 'off'
-    ? { kind: 'weather', action: { kind: 'clouds', enabled: state === 'on' } }
+    ? { kind: 'weather', action: { kind: 'set', part, enabled: state === 'on' } }
     : invalid(WEATHER_FORMAT);
 }
-const WEATHER_FORMAT = 'Формат команды: /weather [clouds on|off | reset] или /clouds on|off.';
+const WEATHER_FORMAT =
+  'Формат команды: /weather [clouds | rain | snow | fog] [on | off], /weather clear или /weather reset.';
 const TIME_FORMAT = 'Формат команды: /time [ЧЧ[:ММ] | stop | start | reset].';
 
 export function giveFailureMessage(code: ItemError | undefined): string {

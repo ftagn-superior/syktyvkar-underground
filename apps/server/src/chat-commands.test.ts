@@ -50,26 +50,30 @@ describe('chat commands', () => {
 
   it('parses /weather and the /clouds shorthand', () => {
     expect(parseChatCommand('/weather')).toEqual({ kind: 'weather' });
-    expect(parseChatCommand('/weather reset')).toEqual({
-      kind: 'weather',
-      action: { kind: 'reset' },
-    });
-    for (const [text, enabled] of [
-      ['/weather clouds off', false],
-      ['/weather clouds on', true],
-      ['/clouds off', false],
-      ['/clouds on', true],
+    for (const kind of ['reset', 'clear'] as const)
+      expect(parseChatCommand(`/weather ${kind}`)).toEqual({ kind: 'weather', action: { kind } });
+    for (const [text, part, enabled] of [
+      ['/weather clouds off', 'clouds', false],
+      ['/weather clouds on', 'clouds', true],
+      ['/weather rain', 'rain', true],
+      ['/weather rain off', 'rain', false],
+      ['/weather snow on', 'snow', true],
+      ['/weather fog', 'fog', true],
+      ['/weather fog off', 'fog', false],
+      ['/clouds off', 'clouds', false],
+      ['/clouds on', 'clouds', true],
     ] as const)
       expect(parseChatCommand(text)).toEqual({
         kind: 'weather',
-        action: { kind: 'clouds', enabled },
+        action: { kind: 'set', part, enabled },
       });
     for (const text of [
-      '/weather clouds',
       '/weather clouds maybe',
       '/weather clouds on now',
-      '/weather rain on',
+      '/weather hail on',
       '/weather reset now',
+      '/weather clear off',
+      '/weather  rain',
       '/clouds',
       '/clouds on off',
     ])

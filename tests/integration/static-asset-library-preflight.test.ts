@@ -8,6 +8,7 @@ import {
   type StaticAssetRemapRules,
 } from '../../packages/world-release/src/index.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
+import { readWorldModelCatalog } from '../../tools/world-build/src/model-catalog.js';
 import { assetRemapLibraryIssues } from '../../apps/server/src/layout/asset-remap.js';
 import {
   readAuthoringRelease,
@@ -37,6 +38,27 @@ describe('compiled static-library migration preflight', () => {
     expect(staticAssetLibraryHash(rules, release.manifest.assets)).toBe(rules.targetLibraryHash);
     expect(Object.keys(rules.vegetation).length).toBeGreaterThan(0);
     expect(assetRemapLibraryIssues(rules, release)).toEqual([]);
+  });
+
+  it('maps authoring cards to every runtime model while keeping ground tiles in one card', async () => {
+    const catalog = await readWorldModelCatalog(
+      join(directory, 'model-catalog'),
+      release.manifest,
+      release.metadata.assetReleaseVersion,
+    );
+    expect(Object.keys(catalog.models)).toHaveLength(222);
+    expect(catalog.models['ring-block-ground'].sourceKind).toBe('ground');
+    expect(catalog.models['ring-block-ground'].runtimeAssetIds).toHaveLength(40);
+    expect(catalog.models['tree-birch-small'].runtimeAssetIds).toEqual(['tree-birch-small']);
+    expect(release.manifest.assets['tree-birch-small'].modelFile).toBeUndefined();
+    expect(
+      Object.values(catalog.models)
+        .flatMap((model) => model.runtimeAssetIds)
+        .sort(),
+    ).toEqual(Object.keys(release.manifest.assets).sort());
+    expect(Object.keys(release.manifest.files).some((file) => file.includes('model-catalog'))).toBe(
+      false,
+    );
   });
 
   it('allows only tiny coordinate rounding and independently rejects actual dimension changes over ten percent', () => {

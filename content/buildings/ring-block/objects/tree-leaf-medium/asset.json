@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Лиственное дерево, средний размер",
+    "description": "Лиственное дерево с коричневым стволом и гранёной зелёной кроной.",
+    "category": "vegetation",
+    "tags": ["leaf", "medium", "tree"]
   }
 }

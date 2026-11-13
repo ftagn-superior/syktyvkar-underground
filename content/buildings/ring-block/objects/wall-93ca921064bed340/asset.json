@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Стена, вариант 23",
+    "description": "Сплошная серо-коричневая стена, повторяющая локальную геометрию участка.",
+    "category": "barriers",
+    "tags": ["solid", "wall"]
   }
 }

@@ -5,5 +5,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Секция забора, короткая",
+    "description": "Короткий модуль тёмной металлической ограды с горизонтальными перекладинами. Используется для добора длины между секциями.",
+    "category": "barriers",
+    "tags": ["fence", "metal", "modular", "short"]
   }
 }

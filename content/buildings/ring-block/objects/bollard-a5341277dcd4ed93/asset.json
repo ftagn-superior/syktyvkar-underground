@@ -5,5 +5,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Столбик металлический",
+    "description": "Низкий тёмный металлический столбик для ограничения проезда.",
+    "category": "street-furniture",
+    "tags": ["bollard", "metal"]
   }
 }

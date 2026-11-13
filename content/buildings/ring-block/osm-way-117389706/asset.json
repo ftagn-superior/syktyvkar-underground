@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Школа №1, перемычка над аркой",
+    "description": "Синяя перемычка комплекса школы №1 на улице Чернова, 12. Под зданием сохранён проход во внутренний двор.",
+    "category": "buildings",
+    "tags": ["arch", "building", "documented-address", "floors-3", "passage", "school"]
   }
 }

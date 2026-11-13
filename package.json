@@ -9,11 +9,12 @@
   },
   "scripts": {
     "world:build": "node --import tsx tools/world-build/src/index.ts",
+    "world:catalog:check": "node --import tsx tools/world-build/src/catalog-command.ts",
     "world:preview-ring": "node --import tsx tools/world-build/src/preview-ring.ts",
     "world:ring:layers": "node --import tsx tools/world-build/src/ring-layout.ts",
     "world:acceptance": "node --import tsx tests/streaming-fixture.ts",
     "dev": "pnpm world:build && node tools/dev.mjs",
-    "check": "tsc --noEmit && node tools/check-boundaries.mjs",
+    "check": "tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",
     "test": "vitest run",
     "build": "pnpm world:build && pnpm check && node tools/build.mjs",
     "start": "node dist/server/main.mjs",

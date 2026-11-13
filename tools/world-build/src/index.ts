@@ -30,6 +30,7 @@ import {
   writeWorldPublication,
   writeAuthoringMetadata,
   pruneWorldPublication,
+  authoringMetadata,
 } from '@su/world-release';
 import { encodeStaticGlb, inspectStaticGlb, staticMeshBounds } from './glb.js';
 import { generateHouse, type HouseRecipe } from './house.js';
@@ -42,6 +43,11 @@ import {
 } from './city.js';
 import { generateKit, type KitRecipe } from './kit.js';
 import { treeRenderRecipe } from './tree-instances.js';
+import {
+  readWorldModelSources,
+  createWorldModelCatalog,
+  writeWorldModelCatalog,
+} from './model-catalog.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
 export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab'] as const;
@@ -161,6 +167,7 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
 export async function buildWorld(
   source = 'content/worlds/ring-block/world.json',
   output?: string,
+  modelCatalogOutput?: string,
 ): Promise<WorldManifest> {
   const authored = (await readJson(source)) as WorldSource;
   if (
@@ -188,9 +195,10 @@ export async function buildWorld(
   const outputDirectory = output ?? `dist/worlds/${base.worldId}`;
   const sourceDirectory = dirname(resolve(source));
   const catalogPath = resolve(sourceDirectory, authored.assetCatalog);
-  const catalog = await readJson(catalogPath);
-  if (catalog.formatVersion !== 1 || !catalog.assets || typeof catalog.assets !== 'object')
-    throw new Error('Invalid building asset catalog');
+  const modelSources = await readWorldModelSources(catalogPath);
+  const runtimeAssetIds: Record<string, string[]> = Object.fromEntries(
+    Object.keys(modelSources.models).map((id) => [id, []]),
+  );
   let authoredCells: WorldCell[];
   if (authored.generator) {
     if (authored.generator.kind !== 'streaming-lab' || authored.cells.length !== 0)
@@ -218,10 +226,9 @@ export async function buildWorld(
   const fixedInstanceIds: string[] = [];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
   for (const instance of merged.buildings) {
-    if (!Object.hasOwn(catalog.assets, instance.assetId))
+    if (!Object.hasOwn(modelSources.models, instance.assetId))
       throw new Error(`Unknown building asset ${instance.assetId}`);
-    const descriptorPath = sourceFile(dirname(catalogPath), catalog.assets[instance.assetId]);
-    const descriptor = await readJson(descriptorPath);
+    const { path: descriptorPath, descriptor } = modelSources.models[instance.assetId];
     if (descriptor.source?.kind !== 'ground') {
       buildings.push(instance);
       if (!compiled.has(instance.assetId))
@@ -264,15 +271,16 @@ export async function buildWorld(
       fixedInstanceIds.push(`${instance.entityId}-${cellId}`);
       buildings.push({ ...instance, entityId: `${instance.entityId}-${cellId}`, assetId });
       compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
+      if (!runtimeAssetIds[instance.assetId].includes(assetId))
+        runtimeAssetIds[instance.assetId].push(assetId);
     }
   }
   // A catalog model is available even when this seed has no instance of it yet.
-  for (const [assetId, path] of Object.entries(catalog.assets)) {
-    if (compiled.has(assetId)) continue;
-    const descriptorPath = sourceFile(dirname(catalogPath), path);
-    const descriptor = await readJson(descriptorPath);
-    if (descriptor.source?.kind !== 'ground')
-      compiled.set(assetId, await compileAsset(assetId, descriptorPath));
+  for (const [assetId, { path, descriptor }] of Object.entries(modelSources.models)) {
+    if (descriptor.source.kind !== 'ground') {
+      runtimeAssetIds[assetId] = [assetId];
+      if (!compiled.has(assetId)) compiled.set(assetId, await compileAsset(assetId, path));
+    }
   }
   const world: WorldDefinition = validateWorld({
     ...base,
@@ -281,8 +289,19 @@ export async function buildWorld(
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });
   const publication = createWorldPublication(world, grid, Object.fromEntries(compiled));
+  const modelCatalog = createWorldModelCatalog(
+    modelSources,
+    publication.manifest,
+    authoringMetadata(world, publication.manifest, fixedInstanceIds).assetReleaseVersion,
+    runtimeAssetIds,
+  );
   await writeWorldPublication(publication, outputDirectory);
   await writeAuthoringMetadata(world, publication.manifest, fixedInstanceIds, outputDirectory);
+  await writeWorldModelCatalog(
+    modelCatalog,
+    modelCatalogOutput ??
+      (output ? resolve(outputDirectory, 'model-catalog') : `dist/model-catalogs/${base.worldId}`),
+  );
   const manifest = publication.manifest;
   return manifest;
 }
@@ -291,6 +310,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const manifest = await buildWorld(
       `content/worlds/${worldId}/world.json`,
       `dist/worlds/${worldId}`,
+      `dist/model-catalogs/${worldId}`,
     );
     const removed = await pruneWorldPublication(`dist/worlds/${worldId}`);
     console.log(

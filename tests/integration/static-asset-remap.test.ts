@@ -64,6 +64,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('offline static asset catalog
       await json(join(content, 'buildings', assetId, 'asset.json'), {
         formatVersion: 1,
         assetId,
+        metadata: {
+          name: assetId.includes('bench') ? 'Тестовая скамейка' : 'Тестовая ограда',
+          description: 'Модель для проверки переноса сохранённых размещений.',
+          category: assetId.includes('bench') ? 'street-furniture' : 'barriers',
+          tags: ['test'],
+        },
         source: { kind: 'kit', file: 'source.json' },
       });
       await json(join(content, 'buildings', assetId, 'source.json'), {

@@ -1,5 +1,14 @@
 {
   "formatVersion": 1,
   "assetId": "theatre-fountain",
-  "source": { "kind": "kit", "file": "source.json" }
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Фонтан Театральной площади",
+    "description": "Круглая чаша из тёмного камня с водой и квадратным центральным блоком. Одна модель используется для двух фонтанов площади.",
+    "category": "landmarks",
+    "tags": ["fountain", "water"]
+  }
 }

@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "categories": {
+    "buildings": { "name": "Здания" },
+    "vegetation": { "name": "Растительность" },
+    "street-furniture": { "name": "Городское оборудование" },
+    "lighting": { "name": "Освещение" },
+    "barriers": { "name": "Стены и ограждения" },
+    "playgrounds": { "name": "Игровые конструкции" },
+    "landmarks": { "name": "Памятники и фонтаны" },
+    "ground": { "name": "Основание и покрытия" }
+  }
+}

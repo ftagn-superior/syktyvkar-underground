@@ -64,6 +64,7 @@ import {
   type MoveInput,
   type WorldHeader,
   type PrepareArea,
+  type AreaFailed,
   type AreaResult,
   type WorldInfo,
   type WorldManifest,
@@ -190,6 +191,8 @@ export class GameSession {
   private preparationConfirmed = false;
   private plan?: PrepareArea;
   private planAcknowledged?: string;
+  private planFailed?: string;
+  private savedSpawnPending = false;
   private resumeRevision?: number;
   private areaWaiting = false;
   private waitingTarget?: Vec3;
@@ -200,6 +203,7 @@ export class GameSession {
   private prepareStartedAt = 0;
   private readonly preparations: {
     reason: PrepareArea['reason'];
+    spawnSource?: PrepareArea['spawnSource'];
     ms: number;
     ok: boolean;
     code?: string;
@@ -516,6 +520,10 @@ export class GameSession {
   get areaProblem(): string | undefined {
     return this.streamer?.problem ?? this.streamer?.backgroundProblem;
   }
+  /** Only a failure in the current critical area can block otherwise ready gameplay. */
+  get criticalAreaProblem(): string | undefined {
+    return this.streamer?.problem;
+  }
   retryArea(): void {
     this.streamer?.retry();
   }
@@ -800,6 +808,9 @@ export class GameSession {
         }
         const expected = cellNeighborhood(this.manifest, plan.position);
         if (
+          (plan.reason === 'spawn' &&
+            plan.spawnSource !== 'saved' &&
+            plan.spawnSource !== 'default') ||
           !Array.isArray(plan.cellIds) ||
           plan.cellIds.length !== expected.length ||
           !expected.every((id) => plan.cellIds.includes(id))
@@ -808,6 +819,11 @@ export class GameSession {
           return;
         }
         if (this.plan?.prepareId === plan.prepareId) return;
+        if (plan.reason === 'spawn') {
+          if (this.savedSpawnPending && plan.spawnSource === 'default')
+            this.onNotice('Не удалось вернуться на прежнее место. Появляемся на старте');
+          this.savedSpawnPending = plan.spawnSource === 'saved';
+        }
         this.pendingSpawnSound = false;
         this.pausePrediction();
         this.waitingTarget = undefined;
@@ -815,6 +831,7 @@ export class GameSession {
         this.plan = plan;
         this.prepareStartedAt = performance.now();
         this.planAcknowledged = undefined;
+        this.streamer?.setPreparationArea(plan.position);
         const self = room.state.players?.get(room.sessionId);
         this.resumeRevision = plan.reason === 'respawn' && self ? self.revision + 1 : undefined;
         this.setState('preparing');
@@ -830,6 +847,7 @@ export class GameSession {
           return;
         this.preparations.push({
           reason: this.plan.reason,
+          spawnSource: this.plan.spawnSource,
           ms: performance.now() - this.prepareStartedAt,
           ok: result.ok,
           code: result.code,
@@ -843,8 +861,10 @@ export class GameSession {
         }
         this.preparationConfirmed = result.ok || !!room.state.players?.get(room.sessionId);
         this.pendingSpawnSound = result.ok && this.plan.reason !== 'reconnect';
+        this.savedSpawnPending = false;
         this.plan = undefined;
         this.planAcknowledged = undefined;
+        this.planFailed = undefined;
         if (!result.ok) {
           this.resumeRevision = undefined;
           this.onNotice(messages[result.code ?? ''] ?? 'Подготовка области отменена.');
@@ -1155,9 +1175,18 @@ export class GameSession {
       return room ? this.authoritativeDisplay() : { entities: this.preview() };
     this.planArea();
     this.streamer?.pumpFrame(delta);
-    if (/SHA-256|version/i.test(this.areaProblem ?? '')) this.reloadRequired = true;
     if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     const selfNow = room.state.players?.get(room.sessionId);
+    if (this.plan && this.streamer.problem && this.planFailed !== this.plan.prepareId) {
+      this.planFailed = this.plan.prepareId;
+      room.send('areaFailed', {
+        prepareId: this.plan.prepareId,
+        layoutRevision: this.plan.layoutRevision,
+        worldEpoch: this.plan.worldEpoch,
+        mapVersion: this.plan.mapVersion,
+        code: 'RESOURCE_UNAVAILABLE',
+      } satisfies AreaFailed);
+    }
     if (this.plan && this.streamer.criticalReady && this.planAcknowledged !== this.plan.prepareId) {
       this.planAcknowledged = this.plan.prepareId;
       room.send('areaReady', {
@@ -1709,6 +1738,8 @@ export class GameSession {
       this.streamer?.setPreview(this.visualArea.center, this.visualArea.drawRadius);
     this.plan = undefined;
     this.planAcknowledged = undefined;
+    this.planFailed = undefined;
+    this.savedSpawnPending = false;
     this.resumeRevision = undefined;
     this.history.clear();
     this.areaWaiting = false;

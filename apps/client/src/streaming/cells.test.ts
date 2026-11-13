@@ -390,4 +390,48 @@ describe('segmented world ownership', () => {
     }
     expect(failed.physics.size).toBe(0);
   });
+  it('prepares a replacement area after a corrupt saved cell without reusing unverified bytes', async () => {
+    const saved = { x: -950, y: 0.92, z: -950 };
+    const start = { x: 950, y: 0.92, z: 950 };
+    const savedCells = new Set(cellNeighborhood(manifest, saved));
+    const unavailable = new Set(
+      manifest.cells.filter((cell) => savedCells.has(cell.cellId)).map((cell) => cell.file),
+    );
+    const requests: { path: string; cache?: RequestCache }[] = [];
+    const resources = new VerifiedResources(manifest, '/', {
+      fetch: async (url, options) => {
+        const path = String(url).slice(1);
+        requests.push({ path, cache: options?.cache });
+        return new Response(
+          unavailable.has(path) ? new Uint8Array([0]) : await readFile(join(directory, path)),
+        );
+      },
+    });
+    const stream = new CellStreamer(
+      manifest,
+      resources,
+      { retainStatic: () => {}, releaseStatic: () => {} },
+      { prepareCellAssets: async () => () => {}, retainStatic: () => {}, releaseStatic: () => {} },
+    );
+    try {
+      stream.setPreparationArea(saved);
+      await until(stream, () => !!stream.problem);
+      expect(stream.problem).toMatch(/SHA-256/);
+      expect(stream.criticalReady).toBe(false);
+      const corruptPath = requests.find(({ path }) => unavailable.has(path))!.path;
+      expect(requests.filter(({ path }) => path === corruptPath).map(({ cache }) => cache)).toEqual(
+        ['default', 'reload'],
+      );
+      stream.setPreparationArea(start);
+      await until(stream);
+      expect(stream.problem).toBeUndefined();
+      expect(stream.diagnostics().required.sort()).toEqual(
+        cellNeighborhood(manifest, start).sort(),
+      );
+      expect(stream.diagnostics().required.every((id) => !savedCells.has(id))).toBe(true);
+    } finally {
+      stream.dispose();
+    }
+    expect(resources.diagnostics().pending).toBe(0);
+  });
 });

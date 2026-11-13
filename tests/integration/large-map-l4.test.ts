@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, afterEach, describe, expect, it } from 'vitest';
+import { beforeAll, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { cp, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -210,10 +210,18 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       await until(() => observer.room.state.items?.size === 0);
       expect(app.room.state.items.has(item.entityId)).toBe(true);
       expect(internal.world.getSnapshot().items).toHaveLength(1);
-      await delay(650);
-      const saved = await internal.items.store.pool.query(
-        'SELECT id,world_id,slot_id,physical FROM item_instances WHERE id=$1',
-        [item.entityId],
+      // Check the committed checkpoint: its 1s cadence can outlast a fixed 650ms sleep.
+      const saved = await vi.waitFor(
+        async () => {
+          const result = await internal.items.store.pool.query(
+            'SELECT id,world_id,slot_id,physical FROM item_instances WHERE id=$1',
+            [item.entityId],
+          );
+          expect(result.rows[0].physical.position.x).toBeGreaterThan(949);
+          expect(result.rows[0].physical.position.z).toBeGreaterThan(949);
+          return result;
+        },
+        { timeout: 3500, interval: 25 },
       );
       expect(saved.rows[0]).toMatchObject({
         id: item.entityId,

@@ -30,6 +30,19 @@ pnpm test:items:browser
 
 Удаление проверяют `tests/integration/static-removal.test.ts`, `packages/simulation/src/static-removal.test.ts`, клиентские контракты/состояния и `rendering/static-selection.test.ts`. Браузерный сценарий `test:static-removal:browser` использует два клиента, исходное здание вне палитры, два одинаковых экземпляра скамейки и процедурное дерево; проверяет отмену, выход из первого лица, блокировку движения, потерю фокуса/ответа и перезапуск. `test:static-removal:city` проверяет выбор и удаление исходного здания в настоящем `ring-block`, общую паузу и двух клиентов. Все записи используют временную изолированную схему PostgreSQL. Свидетельства: `output/playwright/static-removal/` и `output/playwright/static-removal-city/`.
 
+## Сохранение позиции игрока
+
+После сборки задайте выделенный **тестовый** `SU_TEST_DATABASE_URL`. Эти проверки используют временные схемы и не подставляют `DATABASE_URL` вместо него:
+
+```sh
+pnpm check
+pnpm build
+pnpm exec vitest run packages/simulation/src/player-spawn.test.ts apps/server/src/players/position-runtime.test.ts tests/integration/player-position-store.test.ts tests/integration/player-positions.test.ts tests/integration/player-position-failures.test.ts apps/client/src/network/session.test.ts
+pnpm test:player-positions:browser
+```
+
+SQL-наборы проверяют обновление схемы 6 → 7, упорядочивание снимков, блокировку смены эпохи, тайм-ауты и освобождение соединений. WebSocket-набор проверяет вход, выход, reconnect, отказ подготовки, финальную физическую проверку и рестарт. Браузерный сценарий использует локальный OIDC и игровой ввод. Свидетельства: `output/playwright/player-positions/`; результаты и воспроизводимый городской стенд — в [отчёте](../reports/player-position-persistence-mvp.md). Ручные шаги полного города перечислены в [плане](plans/player-position-persistence-mvp.md#15-ручная-игровая-приёмка-и-критерий-готовности) и выполняются отдельно.
+
 ## Подготовка
 
 Нужны зависимости из lockfile, Node.js ≥24 и pnpm 12.18.0; зафиксированная версия Node — в `.node-version`.

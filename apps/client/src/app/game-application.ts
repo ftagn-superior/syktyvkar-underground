@@ -356,7 +356,7 @@ export function startGame(): void {
       !!gamepad?.snapshot().ready &&
       !gamepadResumeRequired &&
       !help?.isOpen &&
-      !session.areaProblem &&
+      !session.criticalAreaProblem &&
       !isTextInput(document.activeElement)
     );
   }
@@ -384,7 +384,8 @@ export function startGame(): void {
     if (!pageActive || document.hidden) return 'Вернитесь в игру, чтобы продолжить.';
     if (graphicsLost) return 'Графика недоступна. A — перезагрузить страницу.';
     if (help?.isOpen) return '';
-    if (session.areaProblem) return 'Не удалось загрузить окружение. A — повторить · Y — меню.';
+    if (session.criticalAreaProblem)
+      return 'Не удалось загрузить окружение. A — повторить · Y — меню.';
     if ((session.room || gamepadContext === 'waiting') && !gamepadBaseReady())
       return 'Ожидаем готовности мира. Y — меню.';
     if (!state.ready) return 'Отпустите стики и кнопки.';
@@ -413,7 +414,7 @@ export function startGame(): void {
       ? 'graphics'
       : help?.isOpen
         ? help.gamepadContext
-        : session.areaProblem && session.room
+        : session.criticalAreaProblem && session.room
           ? 'area-error'
           : !welcome.hidden
             ? 'lobby'

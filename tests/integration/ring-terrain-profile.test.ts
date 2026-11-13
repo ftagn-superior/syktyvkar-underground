@@ -3,15 +3,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { WorldLayoutSnapshot } from '../../packages/contracts/src/index.js';
-import { jsonBytes, writeAuthoringMetadata } from '../../packages/world-release/src/index.js';
+import {
+  jsonBytes,
+  writeAuthoringMetadata,
+  writeWorldPublication,
+} from '../../packages/world-release/src/index.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import {
   readAuthoringRelease,
+  createLayoutPublication,
   type AuthoringRelease,
 } from '../../apps/server/src/layout/release.js';
 import {
   prepareRingProfilePublication,
   verifyFlatProfileCandidate,
+  readPreparedRingProfilePublication,
 } from '../helpers/ring-terrain-profile.js';
 
 describe('isolated ring terrain profile publication', () => {
@@ -19,6 +25,7 @@ describe('isolated ring terrain profile publication', () => {
   let source: AuthoringRelease;
   let candidate: AuthoringRelease;
   let snapshot: WorldLayoutSnapshot;
+  let pilot: AuthoringRelease, pilotSnapshot: WorldLayoutSnapshot, publicationDirectory: string;
   beforeAll(async () => {
     temporary = await mkdtemp(join(tmpdir(), 'su-terrain-profile-'));
     const sourcePath = join(temporary, 'old');
@@ -65,6 +72,28 @@ describe('isolated ring terrain profile publication', () => {
       ...structuredClone(snapshot.instances[0]),
       entityId: 'placed_profile',
     });
+    const pilotDirectory = join(temporary, 'pilot-authoring');
+    await cp(candidatePath, pilotDirectory, { recursive: true });
+    await writeAuthoringMetadata(
+      source.definition,
+      source.manifest,
+      source.metadata.fixedInstanceIds,
+      pilotDirectory,
+      jsonBytes({ ...candidate.terrain, formatVersion: 2, generatorVersion: 'terrain-build/2' }),
+    );
+    pilot = await readAuthoringRelease(pilotDirectory);
+    pilotSnapshot = structuredClone(snapshot);
+    pilotSnapshot.assetReleaseVersion = pilot.metadata.assetReleaseVersion;
+    pilotSnapshot.instances
+      .filter((i) => i.enabled)
+      .forEach((i) => {
+        i.position.y += 1;
+      });
+    publicationDirectory = join(temporary, 'pilot-publication');
+    await writeWorldPublication(
+      (await createLayoutPublication(pilot, pilotSnapshot)).publication,
+      publicationDirectory,
+    );
   });
   afterAll(async () => {
     if (temporary) await rm(temporary, { recursive: true, force: true });
@@ -112,6 +141,53 @@ describe('isolated ring terrain profile publication', () => {
     expect(result.profileFixture.originalLayoutMapVersion).toBe(
       result.publication.manifest.mapVersion,
     );
+  });
+
+  it('profiles exact prepared migration bytes separately from flat-only rebinding', async () => {
+    const result = await readPreparedRingProfilePublication(
+      source.directory,
+      snapshot,
+      pilot.directory,
+      pilotSnapshot,
+      publicationDirectory,
+    );
+    expect(result.profileFixture.kind).toBe('terrain-pilot');
+    expect(result.profileFixture.exactPreparedPublication).toBe(true);
+    expect(result.profileFixture.unchangedAbsolutePoses).toBe(false);
+    expect(result.profileFixture.preservedOwnerIdentityXZRotationEnabled).toBe(true);
+    expect(
+      result.world.buildings.find((i) => i.entityId === snapshot.instances[0].entityId)!.position.y,
+    ).toBe(snapshot.instances[0].position.y + 1);
+    expect(result.terrainGrid).toEqual(pilot.terrain!.grid);
+    const flat = await prepareRingProfilePublication(source.directory, snapshot, pilot.directory);
+    expect(
+      flat.world.buildings.find((i) => i.entityId === snapshot.instances[0].entityId)!.position.y,
+    ).toBe(snapshot.instances[0].position.y);
+  });
+
+  it('rejects a prepared target that changes XZ and a publication for another snapshot', async () => {
+    const moved = structuredClone(pilotSnapshot);
+    moved.instances[0].position.x += 1;
+    await expect(
+      readPreparedRingProfilePublication(
+        source.directory,
+        snapshot,
+        pilot.directory,
+        moved,
+        publicationDirectory,
+      ),
+    ).rejects.toThrow('more than saved owner Y');
+    const raised = structuredClone(pilotSnapshot);
+    raised.instances[0].position.y += 0.1;
+    await expect(
+      readPreparedRingProfilePublication(
+        source.directory,
+        snapshot,
+        pilot.directory,
+        raised,
+        publicationDirectory,
+      ),
+    ).rejects.toThrow('differs from the accepted target snapshot');
   });
 
   const rejected: [string, (release: AuthoringRelease) => void, RegExp][] = [

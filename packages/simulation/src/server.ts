@@ -4,6 +4,7 @@ import type { WorldDefinition } from '@su/contracts';
 import { createAuthoritativeWorld as createWorld } from './authoritative-world.js';
 import type { WasmBinary } from './physics-world.js';
 export { AuthoritativeWorld } from './authoritative-world.js';
+export type { ItemSupportHit, ItemSupportSweep } from './item-support-query.js';
 const require = createRequire(import.meta.url);
 export async function loadServerWasm(): Promise<Uint8Array> {
   try {

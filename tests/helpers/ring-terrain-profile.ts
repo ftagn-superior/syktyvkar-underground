@@ -14,6 +14,7 @@ import {
   readAuthoringRelease,
   type AuthoringRelease,
 } from '../../apps/server/src/layout/release.js';
+import { readWorldDirectory } from '../../apps/server/src/world-bundle.js';
 
 const sorted = <T extends { entityId: string }>(instances: T[]) =>
   instances.slice().sort((a, b) => a.entityId.localeCompare(b.entityId, 'en'));
@@ -120,6 +121,7 @@ export async function prepareRingProfilePublication(
   });
   return {
     ...prepared,
+    terrainGrid: candidate.terrain?.grid,
     profileFixture: {
       kind: candidateDirectory ? `flat-${candidate.terrain!.grid.spacing}m` : 'legacy',
       source: await provenance(source),
@@ -135,6 +137,122 @@ export async function prepareRingProfilePublication(
       unchangedAbsolutePoses: true,
       unchangedEditableAssets: true,
       unchangedHeaderAndStreamingGrid: true,
+      databaseAccess: false,
+      exportFileWritten: false,
+      liveMigrationAssessed: false,
+    },
+  };
+}
+
+/**
+ * Profile an already generated height migration. This is a separate mode from
+ * the flat-only proof above: it permits audited Y changes, never a blind rebind.
+ * The supplied public bytes must exactly match publishing the supplied saved
+ * target snapshot with its immutable authoring release.
+ */
+export async function readPreparedRingProfilePublication(
+  sourceDirectory: string,
+  sourceSnapshot: WorldLayoutSnapshot,
+  authoringDirectory: string,
+  targetSnapshot: WorldLayoutSnapshot,
+  publicationDirectory: string,
+) {
+  const before = canonicalJson({ sourceSnapshot, targetSnapshot });
+  const source = await readAuthoringRelease(sourceDirectory);
+  const original = await createLayoutPublication(source, sourceSnapshot);
+  verifyPublishedInstances(original.world, source, sourceSnapshot);
+  const target = await readAuthoringRelease(authoringDirectory);
+  assert.ok(target.terrain?.formatVersion === 2, 'Prepared pilot requires private terrain v2');
+  assert.equal(targetSnapshot.worldId, sourceSnapshot.worldId);
+  assert.equal(
+    targetSnapshot.seedVersion,
+    sourceSnapshot.seedVersion,
+    'Saved seed identity changed',
+  );
+  assert.equal(targetSnapshot.assetReleaseVersion, target.metadata.assetReleaseVersion);
+  assert.deepEqual(target.manifest.grid, source.manifest.grid, 'Streaming grid changed');
+  assert.deepEqual(
+    target.definition.simulation,
+    source.definition.simulation,
+    'Simulation settings changed',
+  );
+  const protectedInstance = ({
+    instanceRevision: _r,
+    position,
+    ...rest
+  }: WorldLayoutSnapshot['instances'][number]) => ({
+    ...rest,
+    position: { x: position.x, z: position.z },
+  });
+  assert.deepEqual(
+    sorted(targetSnapshot.instances).map(protectedInstance),
+    sorted(sourceSnapshot.instances).map(protectedInstance),
+    'Prepared profile changed more than saved owner Y/revision',
+  );
+  assert.deepEqual(
+    editableStaticAssetIds(target),
+    editableStaticAssetIds(source),
+    'Editable asset catalog changed',
+  );
+  for (const id of editableStaticAssetIds(source)) {
+    assert.equal(
+      target.manifest.assets[id].version,
+      source.manifest.assets[id].version,
+      `Editable asset changed: ${id}`,
+    );
+    assert.deepEqual(
+      target.definition.buildingAssets[id],
+      source.definition.buildingAssets[id],
+      `Editable physics changed: ${id}`,
+    );
+  }
+  const expected = await createLayoutPublication(target, targetSnapshot);
+  const published = await readWorldDirectory(publicationDirectory);
+  assert.deepEqual(
+    published.manifest,
+    expected.publication.manifest,
+    'Prepared publication differs from the accepted target snapshot',
+  );
+  assert.equal(
+    canonicalJson({ sourceSnapshot, targetSnapshot }),
+    before,
+    'Profile snapshots were mutated',
+  );
+  return {
+    ...expected,
+    world: published.definition,
+    terrainGrid: target.terrain.grid,
+    profileFixture: {
+      kind: 'terrain-pilot',
+      source: {
+        directory: source.directory,
+        manifestSha256: hash(await readFile(join(source.directory, 'manifest.json'))),
+        mapVersion: source.manifest.mapVersion,
+        assetReleaseVersion: source.metadata.assetReleaseVersion,
+        fixedInstanceIds: source.metadata.fixedInstanceIds,
+      },
+      candidate: {
+        directory: target.directory,
+        publicationDirectory,
+        manifestSha256: hash(await readFile(join(publicationDirectory, 'manifest.json'))),
+        mapVersion: published.manifest.mapVersion,
+        assetReleaseVersion: target.metadata.assetReleaseVersion,
+      },
+      originalAssetReleaseVersion: sourceSnapshot.assetReleaseVersion,
+      reboundAssetReleaseVersion: targetSnapshot.assetReleaseVersion,
+      originalLayoutHash: original.hash,
+      originalLayoutMapVersion: original.publication.manifest.mapVersion,
+      enabledInstances: targetSnapshot.instances.filter((i) => i.enabled).length,
+      disabledInstances: targetSnapshot.instances.filter((i) => !i.enabled).length,
+      instancesSha256: hash(canonicalJson(targetSnapshot.instances)),
+      originalInstancesSha256: hash(canonicalJson(sourceSnapshot.instances)),
+      editableAssetIds: editableStaticAssetIds(source),
+      unchangedAbsolutePoses: false,
+      preservedOwnerIdentityXZRotationEnabled: true,
+      unchangedEditableAssets: true,
+      unchangedHeaderAndStreamingGrid: false,
+      unchangedStreamingGridAndSimulation: true,
+      exactPreparedPublication: true,
       databaseAccess: false,
       exportFileWritten: false,
       liveMigrationAssessed: false,

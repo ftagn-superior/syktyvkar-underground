@@ -22,6 +22,7 @@ import {
   type WorldSource,
   type TreeRenderRecipe,
   type BuildingParts,
+  type TerrainGrid,
 } from '@su/contracts';
 import {
   createWorldPublication,
@@ -151,7 +152,15 @@ async function compileBytes(
 export interface BuildWorldOptions {
   terrainVariant?: 'hill' | 'flat';
   /** Explicit output-only candidate. Rules are private inputs, never prebuilt foundations. */
-  groundTerrain?: { spacing: 2 | 4; supports?: FoundationSupportRuleV2[] };
+  groundTerrain?: {
+    spacing: 2 | 4;
+    grid?: TerrainGrid;
+    supports?: FoundationSupportRuleV2[];
+    /** Reviewed offline changes for a new authored release, never startup adjustments. */
+    header?: Pick<WorldHeader, 'bounds' | 'spawnPoints' | 'initialItems'>;
+    statics?: WorldDefinition['entities'];
+    seedY?: Record<string, number>;
+  };
 }
 
 export async function buildWorld(
@@ -181,7 +190,8 @@ export async function buildWorld(
   if (authored.terrain && authored.generator)
     throw new Error('Terrain and world generators cannot compete');
   const itemCatalog = await readJson(resolve(sourceDirectory, authored.itemCatalog));
-  const grid = createWorldGrid(authored.bounds, authored.cellSize ?? 125);
+  const bounds = options.groundTerrain?.header?.bounds ?? authored.bounds;
+  const grid = createWorldGrid(bounds, authored.cellSize ?? 125);
   const terrain = authored.terrain
     ? buildTerrainAuthoring(
         authored,
@@ -196,11 +206,13 @@ export async function buildWorld(
   const base: WorldHeader = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: authored.worldId,
-    bounds: authored.bounds,
+    bounds,
     simulation: authored.simulation,
-    spawnPoints: terrain?.spawnPoints ?? authored.spawnPoints,
+    spawnPoints:
+      options.groundTerrain?.header?.spawnPoints ?? terrain?.spawnPoints ?? authored.spawnPoints,
     itemCatalog,
-    initialItems: terrain?.initialItems ?? authored.initialItems,
+    initialItems:
+      options.groundTerrain?.header?.initialItems ?? terrain?.initialItems ?? authored.initialItems,
     // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
     ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
     ...(authored.routes ? { routes: authored.routes } : {}),
@@ -237,6 +249,13 @@ export async function buildWorld(
       buildings: [],
     });
   const merged = mergeWorldCells(authoredCells);
+  const seedY = options.groundTerrain?.seedY;
+  if (seedY) {
+    const ids = new Set(merged.buildings.map((instance) => instance.entityId));
+    for (const [id, y] of Object.entries(seedY))
+      if (!ids.has(id) || !Number.isFinite(y))
+        throw new Error(`Invalid explicit terrain seed height: ${id}`);
+  }
   for (const rule of supportRules ?? []) {
     if (!Object.hasOwn(catalog.assets, rule.assetId))
       throw new Error(`Unknown terrain support asset: ${rule.assetId}`);
@@ -257,7 +276,11 @@ export async function buildWorld(
     const descriptorPath = sourceFile(dirname(catalogPath), catalog.assets[instance.assetId]);
     const descriptor = await readJson(descriptorPath);
     if (descriptor.source?.kind !== 'ground') {
-      buildings.push(instance);
+      buildings.push(
+        seedY && Object.hasOwn(seedY, instance.entityId)
+          ? { ...instance, position: { ...instance.position, y: seedY[instance.entityId] } }
+          : instance,
+      );
       if (!compiled.has(instance.assetId))
         compiled.set(instance.assetId, await compileAsset(instance.assetId, descriptorPath));
       continue;
@@ -284,6 +307,18 @@ export async function buildWorld(
     if (options.groundTerrain) {
       if (privateTerrain) throw new Error('Ground terrain requires exactly one source ground');
       const converted = createGroundTerrain(recipe, instance, options.groundTerrain.spacing);
+      if (options.groundTerrain.grid) {
+        const explicit = validateTerrainGrid(options.groundTerrain.grid);
+        if (
+          explicit.spacing !== converted.grid.spacing ||
+          explicit.columns !== converted.grid.columns ||
+          explicit.rows !== converted.grid.rows ||
+          explicit.origin.x !== converted.grid.origin.x ||
+          explicit.origin.z !== converted.grid.origin.z
+        )
+          throw new Error('Explicit terrain grid must match the ground extent and selected spacing');
+        converted.grid = structuredClone(explicit);
+      }
       validateTerrainGrid(converted.grid);
       validateTerrainCoverage(converted.grid, base.bounds);
       privateTerrain = validateTerrainPrivateData({
@@ -364,7 +399,7 @@ export async function buildWorld(
       throw new Error(`Terrain support requires a published model asset: ${rule.assetId}`);
   const world: WorldDefinition = validateWorld({
     ...base,
-    entities: merged.statics,
+    entities: options.groundTerrain?.statics ?? merged.statics,
     buildings,
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });

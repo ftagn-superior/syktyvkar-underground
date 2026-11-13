@@ -1,0 +1,285 @@
+{
+  "formatVersion": 1,
+  "status": "unapplied-approximate-gameplay-candidate",
+  "acceptance": "Approximation permitted; geometric, state-migration and gameplay acceptance remain separate.",
+  "source": {
+    "file": "source-grid-2m.json",
+    "sha256": "0db90bcb34b14f8b3de9c2fd02ad10d2567dc79bd5d16d5dfda136bf9484e6dc",
+    "originalPath": "output/ring-terrain-stage0/ground-candidate-grid.json",
+    "originalStatus": "diagnostic_candidate_not_approved_terrain",
+    "dataset": {
+      "dataset": "ArcticDEM mosaic",
+      "version": "4.1",
+      "tile": "44_72_1_1_2m_v4.1",
+      "metadataUrl": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1.json",
+      "metadataSha256": "e14346686dd4a02fc631b4c15665a65a4e6bc20b6150d07c30168081578b3fe8",
+      "crs": "EPSG:3413",
+      "heightDatum": "WGS84 ellipsoid",
+      "license": "CC-BY-4.0"
+    },
+    "georeference": {
+      "origin": {
+        "lat": 61.66386729706631,
+        "lon": 50.815951774241576
+      },
+      "metersPerDegree": {
+        "lon": 52837.29,
+        "lat": 110573.15
+      },
+      "historicalCommit": "81c4ae63b3c0af4144c1fb21c3365ebe13c94fef",
+      "formula": "lon=lon0+x/52837.29; lat=lat0-z/110573.15",
+      "north": "-Z"
+    },
+    "verticalReference": "WGS84 ellipsoid, Y=h-124",
+    "originalRasterInputs": {
+      "dem": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_dem.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-dem-crop.tif",
+        "sha256": "aacf50dc16a1b7b4cd9d44e10991d44b30bf69d1964fe8b3478b303bbd4260ac",
+        "bytes": 428315
+      },
+      "mad": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_mad.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-mad-crop.tif",
+        "sha256": "dcc4210d1b1b3bd985e32f7bf4185e4d8ceb087829467c815065196e4106ad07",
+        "bytes": 388303
+      },
+      "count": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_count.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-count-crop.tif",
+        "sha256": "69432b9342a9f27c4b15d1b46580178805606115838b22a72f0264121d831c96",
+        "bytes": 3280
+      },
+      "datamask": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_datamask.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-datamask-crop.tif",
+        "sha256": "f1baaddf9bb3d899937bf53dc718258656900da3f3e883c7edcdbc62e21a260f",
+        "bytes": 1694
+      },
+      "mindate": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_mindate.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-mindate-crop.tif",
+        "sha256": "a6edf862a616c617f361230b3fa634c90af31ceab68aedd3008287ffe847af00",
+        "bytes": 4031
+      },
+      "maxdate": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_maxdate.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-maxdate-crop.tif",
+        "sha256": "96481afe23f7089d658fd886c9677e10c28af9761a04f2fbae932e9fe366957d",
+        "bytes": 2585
+      }
+    },
+    "groundReconstruction": {
+      "method": "Mapped open areas; 16 m buildings / 4 m vegetation / 2 m other exclusions; source quality; 3x3 DSM range<=2m; 10m blocks with >=3 samples, observed value nearest p20; Huber curvature-regularized 10m lattice; bilinear diagnostic output at 2m",
+      "parameters": {
+        "smoothing": 30,
+        "huberDeltaM": 1,
+        "maxIterations": 100,
+        "convergenceMaxNodeChangeM": 0.001,
+        "convergenceMaxWeightChange": 0.001,
+        "qualityMadMaxM": 1,
+        "blockMeters": 10
+      },
+      "inputs": {
+        "output/ring-terrain-stage0/source-inspection.json": "48e85796bed37f48da367542ec474eb75e5ca866884d3d84969d3534ee3c6a52",
+        "output/ring-terrain-stage0/object-masks.json": "cae0e239dc01e3d22d4a292feb95de6a3c2e7a4d705d0643d078de2678b5287d",
+        "content/buildings/ring-block/ring-block-ground/source.json": "a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6"
+      },
+      "candidateSampleCount": 4953,
+      "anchorCount": 502,
+      "limitations": [
+        "Contemporary authored masks are not a complete historical inventory of roofs and vegetation",
+        "Wide elevated objects can survive candidate selection",
+        "No surveyed bare-earth controls",
+        "Interpolated areas and extrapolation at edges remain uncertain",
+        "Variant spread is not a confidence interval",
+        "Smoothing controls slopes; these are candidate slopes, not proven real slopes"
+      ]
+    },
+    "attribution": {
+      "provider": "Polar Geospatial Center, University of Minnesota; original imagery credited by the dataset",
+      "datasetDoi": "https://doi.org/10.7910/DVN/3VDC4W",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "changes": "Ground reconstruction, local coordinates and zero Y, 4 m resampling; pilot-only smoothstep transition to zero."
+    }
+  },
+  "evidence": {
+    "reports/ring-terrain-stage0-evidence.json": "28619c6e388f86dce1102c0ae1bb275ce5b6f4e2fcc249006bfd59933915878e",
+    "reports/ring-terrain-ground-evidence.json": "73f75f855f2d75164f3182ad002acfdf5e4993a88b0cd15488285f6d35fc4d66"
+  },
+  "generator": {
+    "files": {
+      "tools/build-ring-terrain-candidate.ts": "12a9db2cdf0b403a9809515943f4f591568424d306643c2fc6dd1dd37124aa4c",
+      "tools/world-build/src/ring-terrain-candidate.ts": "68de5201b6bba32a8220438238169f78b22fb31dadc2825598174fda79fb18a7",
+      "packages/contracts/src/terrain.ts": "ae8a40e2708548ea5aed710c7d04cbf8625d428eae7ffe2c8a9e1780d0c7f2dc",
+      "tools/estimate-ring-ground.py": "d6b8aca6f6430da89b9f2d673ef7074dc5982796cbb9f4e43dea3dc39016196a"
+    },
+    "resampling": "Sample the contracts NW-SE triangle surface at 4 m nodes; nodes coincide with the pinned 2 m lattice. No extra smoothing, height clipping or geographic displacement.",
+    "transition": {
+      "plateau": {
+        "maxX": 3,
+        "minZ": -281,
+        "maxZ": -37
+      },
+      "zero": {
+        "minZ": -481,
+        "maxX": 200,
+        "maxZ": 131
+      },
+      "westBoundary": "retain-candidate-height"
+    },
+    "formula": "(1-smoothstep((x-3)/197))*smoothstep((z+481)/200)*(1-smoothstep((z+37)/168))",
+    "alignment": "Plateau expanded to outer adjacent 4 m nodes, preserving every triangle that intersects the original core. Western boundary is not flattened. X=200 zero-weight coordinate lies between nodes; the last changed triangle ends at X=201.",
+    "plannedHeightRangeY": [
+      -1,
+      15
+    ],
+    "rangeAction": "Diagnostic expectation only; values are never clipped."
+  },
+  "outputs": {
+    "full-grid-4m.json": {
+      "sha256": "9f3f1936a5f7426be643913c6e548071ac676d16c118a7c48c8c806e7e5c564b",
+      "bytes": 272311
+    },
+    "pilot-grid-4m.json": {
+      "sha256": "57f1bc2de002ce91dceac37a71995108a887a0601a113fa41309901c3a3002fa",
+      "bytes": 315318
+    }
+  },
+  "diagnostics": {
+    "source2m": {
+      "heightY": {
+        "count": 132139,
+        "min": -0.28106,
+        "p95": 13.578252,
+        "max": 14.52608
+      },
+      "triangleSlopeDegrees": {
+        "count": 262800,
+        "min": 0.0018343599718894724,
+        "p95": 3.9305670114315583,
+        "max": 4.702957495120114
+      },
+      "changedTriangles": 262800,
+      "boundary": {
+        "north": {
+          "count": 301,
+          "min": 3.26969,
+          "p95": 14.02583,
+          "max": 14.12593
+        },
+        "south": {
+          "count": 301,
+          "min": 0.03561,
+          "p95": 5.0304,
+          "max": 5.08131
+        },
+        "west": {
+          "count": 439,
+          "min": 1.68443,
+          "p95": 13.055191,
+          "max": 13.25413
+        },
+        "east": {
+          "count": 439,
+          "min": 4.35621,
+          "p95": 13.816037,
+          "max": 13.90211
+        }
+      }
+    },
+    "full4m": {
+      "heightY": {
+        "count": 33220,
+        "min": -0.27638,
+        "p95": 13.5782775,
+        "max": 14.52129
+      },
+      "triangleSlopeDegrees": {
+        "count": 65700,
+        "min": 0.013982547261521587,
+        "p95": 3.9310353842752863,
+        "max": 4.703097727602485
+      },
+      "changedTriangles": 65700,
+      "boundary": {
+        "north": {
+          "count": 151,
+          "min": 3.26969,
+          "p95": 14.01656,
+          "max": 14.12002
+        },
+        "south": {
+          "count": 151,
+          "min": 0.0391,
+          "p95": 5.025055,
+          "max": 5.08131
+        },
+        "west": {
+          "count": 220,
+          "min": 1.68592,
+          "p95": 13.028666,
+          "max": 13.25413
+        },
+        "east": {
+          "count": 220,
+          "min": 4.35621,
+          "p95": 13.815573500000001,
+          "max": 13.90211
+        }
+      }
+    },
+    "pilot4m": {
+      "heightY": {
+        "count": 33220,
+        "min": -0.12359740877194612,
+        "p95": 8.606756922099153,
+        "max": 12.72866657664
+      },
+      "triangleSlopeDegrees": {
+        "count": 65700,
+        "min": 0,
+        "p95": 4.054676634815277,
+        "max": 6.436559614621921
+      },
+      "changedTriangles": 36107,
+      "boundary": {
+        "north": {
+          "count": 151,
+          "min": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "south": {
+          "count": 151,
+          "min": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "west": {
+          "count": 220,
+          "min": 0,
+          "p95": 12.116809999999997,
+          "max": 12.72866657664
+        },
+        "east": {
+          "count": 220,
+          "min": 0,
+          "p95": 0,
+          "max": 0
+        }
+      }
+    },
+    "corePreservation": {
+      "core": {
+        "minX": -225,
+        "maxX": 0,
+        "minZ": -280,
+        "maxZ": -40
+      },
+      "intersectingCells": 3538,
+      "maxHeightDifferenceMetres": 0
+    },
+    "boundaryRequirement": "West boundary obstacles must follow the new terrain. Existing flat boundary obstacles are insufficient; activation is not performed by this authoring tool."
+  }
+}

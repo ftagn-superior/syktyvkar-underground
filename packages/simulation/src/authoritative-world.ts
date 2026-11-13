@@ -10,6 +10,7 @@ import {
   type WorldDefinition,
 } from '@su/contracts';
 import { createPhysicsWorld, type PhysicsWorld, type WasmBinary } from './physics-world.js';
+import type { ItemSupportSweep } from './item-support-query.js';
 export class AuthoritativeWorld {
   constructor(private readonly world: PhysicsWorld) {}
   addPlayer(entityId: string, spawn?: Vec3) {
@@ -62,6 +63,9 @@ export class AuthoritativeWorld {
   }
   checkSavedItem(item: ItemState) {
     return this.world.checkSavedItem(item);
+  }
+  queryItemSupports(typeId: string, pose: ItemPose, sweep: ItemSupportSweep) {
+    return this.world.queryItemSupports(typeId, pose, sweep);
   }
   checkStaticPlacement(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
     return this.world.checkStaticPlacement(instance, asset);

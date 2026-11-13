@@ -208,7 +208,16 @@ export async function createLayoutPublication(
         if (usedIds.has(id)) throw new Error(`Reserved/duplicate terrain support ID: ${id}`);
         usedIds.add(id);
       }
-      const generated = generateSupportAssets(release.terrain.grid, rule, owner, derivedIds);
+      const generated: ReturnType<typeof generateSupportAssets> = (() => {
+        try {
+          return generateSupportAssets(release.terrain!.grid, rule, owner, derivedIds);
+        } catch (error) {
+          throw new Error(
+            `Terrain support for ${owner.entityId} (${owner.assetId}): ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+          );
+        }
+      })();
       for (const { asset } of generated) {
         const assetId = asset.physics.assetId;
         const compiled = compileGeneratedAsset(assetId, asset);

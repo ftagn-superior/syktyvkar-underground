@@ -101,6 +101,61 @@ const approachRule = (): FoundationSupportRuleV2 => ({
 });
 
 describe('complex foundations on the final terrain triangles', () => {
+  it('contracts sub-micrometre cap cuts consistently before the collision-contract weld', async () => {
+    const fixture = JSON.parse(
+      await readFile(
+        new URL('../fixtures/terrain-support-collision-weld.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { grid: TerrainGrid; rule: FoundationSupportRuleV2; owner: BuildingInstance };
+    const [result] = generateSupportAssets(fixture.grid, fixture.rule, fixture.owner, {
+      foundation: 'submicrometre-foundation',
+      approaches: {},
+    });
+    expect(() => validateBuildingPhysicsAsset(result.asset.physics)).not.toThrow();
+    expect(() => compileGeneratedAsset(result.asset.physics.assetId, result.asset)).not.toThrow();
+    const mesh = result.asset.physics.colliders[0];
+    if (mesh.kind !== 'mesh') throw new Error('Expected a mesh');
+    const area = (ring: readonly (readonly [number, number])[]) =>
+      Math.abs(
+        ring.reduce((sum, p, i) => {
+          const q = ring[(i + 1) % ring.length];
+          return sum + p[0] * q[1] - p[1] * q[0];
+        }, 0),
+      ) / 2;
+    const expected = fixture.rule.components.reduce(
+      (sum, component) =>
+        sum +
+        area(component.outline) -
+        (component.holes ?? []).reduce((total, hole) => total + area(hole), 0),
+      0,
+    );
+    let capArea = 0;
+    const top = fixture.owner.position.y + fixture.rule.jointY;
+    for (let i = 0; i < mesh.indices.length; i += 3) {
+      const [a, b, c] = mesh.indices
+        .slice(i, i + 3)
+        .map((index) => mesh.vertices.slice(index * 3, index * 3 + 3));
+      if ([a, b, c].every((p) => p[1] === top))
+        capArea += Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[0] - a[0])) / 2;
+    }
+    expect(Math.abs(capArea - expected)).toBeLessThan(0.000001);
+    // The regression is a four-component occupied region, including two real
+    // 30 cm piers. The repair must retain each of these separate small solids.
+    for (const component of [fixture.rule.components[0], ...fixture.rule.components.slice(2)]) {
+      const center = component.outline.reduce(
+        (sum, p) => ({
+          x: sum.x + p[0] / component.outline.length,
+          z: sum.z + p[1] / component.outline.length,
+        }),
+        { x: fixture.owner.position.x, z: fixture.owner.position.z },
+      );
+      expect(pointInsideClosedMesh({ ...center, y: top - 0.04 }, mesh.vertices, mesh.indices)).toBe(
+        true,
+      );
+    }
+  });
+
   it('uses the maximum over all occupied components while excluding a hole and a concave gap', () => {
     const g = grid(),
       r = rule();

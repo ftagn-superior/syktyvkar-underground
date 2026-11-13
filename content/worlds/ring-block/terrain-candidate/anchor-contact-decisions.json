@@ -1,0 +1,323 @@
+{
+  "formatVersion": 1,
+  "status": "explicit-unapplied-root-and-post-contact-decisions",
+  "modelClassificationSha256": "eb40bc5fe2d849f59b1fae93de131d2f5a5ee98339297e526424516a08ae9de3",
+  "rationale": "Use the minimum terrain height across the declared contact area as the local planting datum, preserving existing source offsets. The high side embeds into the existing lower trunk/post rather than exposing a gap on the low side. Limit differential burial to 10 cm for the nine reviewed tree models, 5 cm for the street lamp, retain 3 cm for other narrow posts and 30 cm for foliage bases. Models remain rigid and vertical. Saved poses are changed only by the explicit migration plan.",
+  "decisions": [
+    {
+      "assetId": "bollard-a5341277dcd4ed93",
+      "sourceRecipeSha256": "65d6b18d2534b0f22590568f7b2ba4aca6c7ba0f8c33ba8a42af2295a8607919",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.09899494936611666,
+        "maximumTerrainReliefMetres": 0.03,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bus-stop-3b2b648b8ebc6291",
+      "sourceRecipeSha256": "6843722c9639e34d8ac1b57cd8a30363f05cbd7ebb64682b435c68dae34ad86c",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 2.400213731828,
+          "y": 0,
+          "z": -0.00020381827
+        },
+        "contactRadius": 0.07071067811865475,
+        "maximumTerrainReliefMetres": 0.03,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bus-stop-a7ca266ad2579543",
+      "sourceRecipeSha256": "224dbc6ebb569baa3b01cf93a28da65270b692d8a511ecf2997227bd19ded0e0",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 2.399405134609,
+          "y": 0,
+          "z": -3.735229e-06
+        },
+        "contactRadius": 0.07071067811865475,
+        "maximumTerrainReliefMetres": 0.03,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bush-large-high",
+      "sourceRecipeSha256": "4fd39bee055f451c7bf83bca44b357f4c9b0ac617d753dc70845f31d441d994a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 1.197412833,
+        "maximumTerrainReliefMetres": 0.3,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bush-large-low",
+      "sourceRecipeSha256": "2290967f1f3a2d41c802069a7759c1923e1a2061e8cbcc8a731fbaf242e176e7",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 1.197412833,
+        "maximumTerrainReliefMetres": 0.3,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bush-medium-high",
+      "sourceRecipeSha256": "d6d88b948d63b7467190e6ef66af34c2911a77eadc6bce1210b2af5a3ab2e5f6",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 1.019019136,
+        "maximumTerrainReliefMetres": 0.3,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bush-medium-low",
+      "sourceRecipeSha256": "dfb04db8db9289fac287a7d16ba94e4a8e0cf40474add685fe31cdf1457671c3",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 1.019019136,
+        "maximumTerrainReliefMetres": 0.3,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bush-small-high",
+      "sourceRecipeSha256": "9f2cdc076cdd9db1c18f66cbca0aed1f942b310829f37992f40131506f65f907",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.867202999,
+        "maximumTerrainReliefMetres": 0.3,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "bush-small-low",
+      "sourceRecipeSha256": "05ad4fffe4d1e20a320166cb753cc1edb240b88b14385ed74bd1ea7e06f86848",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.867202999,
+        "maximumTerrainReliefMetres": 0.3,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "lamp-five-globe",
+      "sourceRecipeSha256": "ec2c2ea98c6bee3fc3d757e692c059cbb5be65d12a6487f00f300bdc0189981a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.1767766952966369,
+        "maximumTerrainReliefMetres": 0.03,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "lamp-street",
+      "sourceRecipeSha256": "ba54da783c2aa7c796fa612755d8e21e55476637bc1b0a90969f6cdfd275e3d0",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.1131370849898476,
+        "maximumTerrainReliefMetres": 0.05,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "traffic-light-standard",
+      "sourceRecipeSha256": "6b5244cf1df0cb1be70e4b495ce99534391f13a260c6734e3374810fa6aa1d75",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.09899494936611666,
+        "maximumTerrainReliefMetres": 0.03,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-birch-large",
+      "sourceRecipeSha256": "f696b1f6229ab7d273c2d5b884e5aa3d4745a7dcdfa6e3cd12e5571a7de6e803",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-birch-medium",
+      "sourceRecipeSha256": "75eb07ca86ce50ead429dfa1f018688d097a7eb17f0febdfcc794c7a6d9e27c1",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-birch-small",
+      "sourceRecipeSha256": "81fabe46a134749d87dd00ffae79ae7f21f770f0ac703208ccbb6afbe9e9c61f",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-leaf-large",
+      "sourceRecipeSha256": "017478c6766fca19288f9b4bc3b37168a7a8d931e348de26b2333a07c4960e88",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-leaf-medium",
+      "sourceRecipeSha256": "5d701e2712256bb6fd137887a9bf6b8ada6f127eba0bc3d6e7c7bede9c83a61a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-leaf-small",
+      "sourceRecipeSha256": "a0b0d2da4b52e73663dd9bf428ee9a23cefd3de62f7eb3ea56b418bc62805cc7",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-spruce-large",
+      "sourceRecipeSha256": "9d90d6c9155eace40e93a22ff92b45b9595637f7ddf2d42c8f6ef0291f8320bc",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-spruce-medium",
+      "sourceRecipeSha256": "6e28e9ad39c4777e32bdc8cfef59526bd553c52d33d16bfe9e1feb40f70b15c2",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    },
+    {
+      "assetId": "tree-spruce-small",
+      "sourceRecipeSha256": "1a9480a679729184671c359a6372b20a4d451514fe88ee2282c354fd5522a81a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.1,
+        "contactDatum": "minimum"
+      }
+    }
+  ]
+}

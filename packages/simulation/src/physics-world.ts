@@ -26,6 +26,7 @@ import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
 import { createItemShape } from './item-shapes.js';
+import { queryItemSupports, type ItemSupportSweep } from './item-support-query.js';
 import { ImpactCollector } from './impacts.js';
 import {
   canonicalJson,
@@ -765,6 +766,12 @@ export class PhysicsWorld {
     } finally {
       shape.dispose();
     }
+  }
+  /** All contacts for an item's real shape; this query never advances physics. */
+  queryItemSupports(typeId: string, pose: ItemPose, sweep: ItemSupportSweep) {
+    const type = this.definition.itemCatalog.types[typeId];
+    if (!type) throw new Error(`Unknown item type: ${typeId}`);
+    return queryItemSupports(this.scene, this.plugin, this.physics.getBodies(), type, pose, sweep);
   }
   /** The live editor accepts exactly one box asset. Queries use Havok's actual shapes. */
   checkStaticPlacement(

@@ -9,10 +9,16 @@ import { createServer } from 'vite';
 import type { Browser, Page } from 'playwright';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { writeWorldPublication } from '../packages/world-release/src/index.js';
-import { validateWorldLayoutSnapshot } from '../packages/contracts/src/index.js';
+import {
+  validateTerrainGrid,
+  validateWorldLayoutSnapshot,
+} from '../packages/contracts/src/index.js';
 import { loadServerWasm } from '../packages/simulation/src/server.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { prepareRingProfilePublication } from './helpers/ring-terrain-profile.js';
+import {
+  prepareRingProfilePublication,
+  readPreparedRingProfilePublication,
+} from './helpers/ring-terrain-profile.js';
 
 const output = resolve(
   process.env.SU_RING_BASELINE_OUTPUT ?? 'output/ring-terrain-stage0/hardware-baseline',
@@ -20,6 +26,20 @@ const output = resolve(
 const layoutFile = resolve(process.env.SU_RING_BASELINE_LAYOUT ?? 'data/map-layout.json');
 const preparedSource = process.env.SU_RING_BASELINE_SOURCE_RELEASE;
 const candidateDirectory = process.env.SU_RING_BASELINE_CANDIDATE_RELEASE;
+const preparedPublication = process.env.SU_RING_BASELINE_PREPARED_PUBLICATION;
+const preparedAuthoring = process.env.SU_RING_BASELINE_PREPARED_AUTHORING;
+const preparedSnapshotFile = process.env.SU_RING_BASELINE_PREPARED_SNAPSHOT;
+const terrainGridFile = process.env.SU_RING_BASELINE_TERRAIN_GRID;
+assert.ok(
+  !(preparedPublication || preparedAuthoring || preparedSnapshotFile) ||
+    (preparedPublication &&
+      preparedAuthoring &&
+      preparedSnapshotFile &&
+      preparedSource &&
+      terrainGridFile &&
+      !candidateDirectory),
+  'Prepared-publication mode requires source, authoring, snapshot, publication and terrain grid, independently of flat mode',
+);
 assert.ok(
   !candidateDirectory || preparedSource,
   'A flat candidate requires its prepared old source release',
@@ -62,13 +82,37 @@ await mkdir(output, { recursive: true });
 const exportBytes = await readFile(layoutFile);
 const snapshot = JSON.parse(exportBytes.toString());
 validateWorldLayoutSnapshot(snapshot);
+const terrainGridBytes = terrainGridFile ? await readFile(terrainGridFile) : undefined;
+const terrainGrid = terrainGridBytes
+  ? validateTerrainGrid(JSON.parse(terrainGridBytes.toString()))
+  : undefined;
+const targetSnapshotBytes = preparedSnapshotFile ? await readFile(preparedSnapshotFile) : undefined;
+const targetSnapshot = targetSnapshotBytes ? JSON.parse(targetSnapshotBytes.toString()) : undefined;
+if (targetSnapshot) validateWorldLayoutSnapshot(targetSnapshot);
+const preparedManifestSha = preparedPublication
+  ? sha(await readFile(join(preparedPublication, 'manifest.json')))
+  : undefined;
 const oldDistHash = sha(await readFile('dist/worlds/ring-block/manifest.json'));
 const sourceDirectory = preparedSource ? resolve(preparedSource) : join(output, 'source-world');
 const started = performance.now();
 if (!preparedSource) await buildWorld('content/worlds/ring-block/world.json', sourceDirectory);
-const prepared = await prepareRingProfilePublication(sourceDirectory, snapshot, candidateDirectory);
-const directory = join(output, 'export-world');
-await writeWorldPublication(prepared.publication, directory);
+const prepared = preparedPublication
+  ? await readPreparedRingProfilePublication(
+      sourceDirectory,
+      snapshot,
+      preparedAuthoring!,
+      targetSnapshot,
+      preparedPublication,
+    )
+  : await prepareRingProfilePublication(sourceDirectory, snapshot, candidateDirectory);
+if (terrainGrid)
+  assert.deepEqual(
+    terrainGrid,
+    prepared.terrainGrid,
+    'Camera terrain grid differs from the verified profile release',
+  );
+const directory = preparedPublication ? resolve(preparedPublication) : join(output, 'export-world');
+if (!preparedPublication) await writeWorldPublication(prepared.publication, directory);
 const preparationMs = performance.now() - started;
 const manifest = prepared.publication.manifest;
 const wasm = await loadServerWasm();
@@ -76,7 +120,7 @@ const wasm = await loadServerWasm();
 // Served as a module: Vite resolves the existing application and simulation modules.
 // Raw JavaScript avoids injecting tsx helpers into browser functions.
 const browserModule = String.raw`
-import { loadWorldHeader } from '/packages/contracts/src/index.ts';
+import { loadWorldHeader, sampleTerrain } from '/packages/contracts/src/index.ts';
 import { createPhysicsWorld } from '/packages/simulation/src/physics-world.ts';
 import { WorldView } from '/apps/client/src/rendering/world-view.ts';
 import { CellStreamer } from '/apps/client/src/streaming/cells.ts';
@@ -98,7 +142,13 @@ view.setTimeOfDay(12);
 const stream = new CellStreamer(manifest, resources, world, view);
 const camera = view.scene.activeCamera;
 const spawn = header.spawnPoints[0];
-view.target.set(0, 0, 0);
+function focusHeight(x, z) {
+  if (!config.terrainGrid) return 0;
+  const sample = sampleTerrain(config.terrainGrid, x, z);
+  if (!sample) throw new Error('Camera focus is outside the supplied terrain grid');
+  return sample.height;
+}
+view.target.set(0, focusHeight(0, 0), 0);
 camera.setTarget(view.target, false, false, true);
 stream.setArea(spawn);
 const fixedDt = 1 / 60;
@@ -144,7 +194,7 @@ view.onFrame((now, delta) => {
   if (disposed) return;
   if (motion) {
     const center = routeAt((now - motion.started) / motion.duration);
-    view.target.set(center.x, 0, center.z);
+    view.target.set(center.x, focusHeight(center.x, center.z), center.z);
   }
   const area = view.graphicalArea();
   stream.setVisualArea(area.center, area.drawRadius);
@@ -251,7 +301,7 @@ const server = await createServer({
               response.setHeader('content-type', 'text/javascript');
               response.end(browserModule);
             } else if (path === '/baseline-config')
-              response.end(JSON.stringify({ warmupMs, sampleMs, route }));
+              response.end(JSON.stringify({ warmupMs, sampleMs, route, terrainGrid }));
             else if (path === '/baseline-manifest') response.end(JSON.stringify(manifest));
             else if (path === '/baseline-wasm') response.end(wasm);
             else if (path.startsWith('/baseline-assets/')) {
@@ -295,6 +345,14 @@ const report: Record<string, any> = {
   warmupMs,
   sampleMs,
   route,
+  focusHeight: terrainGrid
+    ? {
+        kind: 'terrain-grid',
+        sha256: sha(terrainGridBytes!),
+        spacing: terrainGrid.spacing,
+        origin: terrainGrid.origin,
+      }
+    : { kind: 'zero' },
   routeDescription:
     'Ring → Oktyabrsky landmarks → pilot edge → entrance approach → ring; camera only',
   preparationMs,
@@ -403,6 +461,18 @@ try {
     oldDistManifest: distAfter === oldDistHash,
     benchmark: benchmarkAfter === benchmarkSha256,
     profileFixture: fixtureAfter === profileFixtureSha256,
+    ...(terrainGridFile
+      ? { terrainGrid: (await hashAfter(terrainGridFile)) === sha(terrainGridBytes!) }
+      : {}),
+    ...(preparedSnapshotFile
+      ? { preparedSnapshot: (await hashAfter(preparedSnapshotFile)) === sha(targetSnapshotBytes!) }
+      : {}),
+    ...(preparedPublication
+      ? {
+          preparedPublicationManifest:
+            (await hashAfter(join(preparedPublication, 'manifest.json'))) === preparedManifestSha,
+        }
+      : {}),
   };
   const changed = Object.entries(report.unchanged)
     .filter(([, unchanged]) => !unchanged)

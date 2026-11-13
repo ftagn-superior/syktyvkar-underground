@@ -381,9 +381,26 @@ function conformPatch(
         output.push([center, boundary[i], boundary[(i + 1) % boundary.length]]);
     }
   }
+  // The collision contract welds at 1 micrometre. Two independently clipped
+  // diagonals may leave a valid sub-micrometre sliver here that that weld turns
+  // into a degenerate face. Contract the same nodes throughout the cap, then
+  // remove only the faces whose edges actually collapsed. This preserves shared
+  // edges; deleting a thin face in isolation would leave an open solid. Keep the
+  // 10 nm noding above: using the coarser tolerance for edge cuts can invert fans.
+  const collisionNodes = new Map<string, number>();
+  const collisionIds = vertices.map((vertex, id) => {
+    const key = `${Math.round(vertex.x * 1e6)},${Math.round(vertex.z * 1e6)}`;
+    const previous = collisionNodes.get(key);
+    if (previous !== undefined) return previous;
+    collisionNodes.set(key, id);
+    return id;
+  });
+  const collisionFaces = output
+    .map((face) => face.map((id) => collisionIds[id]))
+    .filter((face) => new Set(face).size === 3);
   const edges = new Map<string, { count: number; balance: number; from: number; to: number }>();
   let area = 0;
-  for (const face of output) {
+  for (const face of collisionFaces) {
     const turn = cross(xz(vertices[face[0]]), xz(vertices[face[1]]), xz(vertices[face[2]]));
     fail(
       turn < -1e-10,
@@ -433,7 +450,7 @@ function conformPatch(
     Math.abs(area - expected) <= Math.max(1e-6, perimeter * EPS * 4, expected * 1e-8),
     'support cap area differs from occupied region',
   );
-  return output.map((face) => face.map((id) => vertices[id]) as unknown as TerrainTriangle);
+  return collisionFaces.map((face) => face.map((id) => vertices[id]) as unknown as TerrainTriangle);
 }
 function regionPatch(grid: TerrainGrid, components: TerrainSupportComponent[]): TerrainTriangle[] {
   const raw: TerrainTriangle[] = [];

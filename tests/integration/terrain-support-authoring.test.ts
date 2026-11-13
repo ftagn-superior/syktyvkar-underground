@@ -143,6 +143,68 @@ describe('explicit support rules in authored flat releases', () => {
     expect(release.seed[0].position.y).toBe(0);
   });
 
+  it('authors explicit nonflat geometry, seed poses, spawns and boundaries without editing source files', async () => {
+    const sourceBefore = await readFile(sourcePath);
+    const cellBefore = await readFile(join(directory, 'cell.json'));
+    const source = JSON.parse(sourceBefore.toString());
+    const grid = {
+      formatVersion: 1 as const,
+      origin: { x: -4, z: -4 },
+      spacing: 4,
+      columns: 3,
+      rows: 3,
+      bottom: -3,
+      heights: [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8],
+    };
+    const header = {
+      bounds: { ...source.bounds, max: { ...source.bounds.max, y: 14 } },
+      spawnPoints: source.spawnPoints.map((p: { x: number; y: number; z: number }) => ({
+        ...p,
+        y: 2,
+      })),
+      initialItems: [],
+    };
+    const statics = [
+      {
+        entityId: 'boundary-test',
+        kind: 'obstacle' as const,
+        position: { x: 3.8, y: 1, z: 0 },
+        size: { x: 0.2, y: 4, z: 8 },
+        mass: 0,
+        friction: 0.6,
+        restitution: 0,
+        color: '#888888',
+      },
+    ];
+    const output = join(directory, 'explicit-relief');
+    await buildWorld(sourcePath, output, {
+      groundTerrain: { spacing: 4, grid, supports: [rule], header, statics, seedY: { owner: 2.1 } },
+    });
+    const release = await readAuthoringRelease(output);
+    expect(release.terrain?.grid).toEqual(grid);
+    expect(release.seed[0].position.y).toBe(2.1);
+    expect(release.definition.bounds).toEqual(header.bounds);
+    expect(release.definition.spawnPoints).toEqual(header.spawnPoints);
+    expect(release.definition.entities).toEqual(statics);
+    const ground =
+      release.definition.buildingAssets[
+        release.definition.buildings.find((b) => b.entityId !== 'owner')!.assetId
+      ];
+    expect(ground.bounds.max.y).toBeCloseTo(1.8);
+    expect(await readFile(sourcePath)).toEqual(sourceBefore);
+    expect(await readFile(join(directory, 'cell.json'))).toEqual(cellBefore);
+    await expect(
+      buildWorld(sourcePath, join(directory, 'bad-grid'), {
+        groundTerrain: { spacing: 4, grid: { ...grid, origin: { x: -3, z: -4 } } },
+      }),
+    ).rejects.toThrow('must match the ground extent');
+    await expect(
+      buildWorld(sourcePath, join(directory, 'bad-seed'), {
+        groundTerrain: { spacing: 4, seedY: { missing: 2 } },
+      }),
+    ).rejects.toThrow('Invalid explicit terrain seed height');
+  });
+
   it('rejects unavailable models and invalid support data before publication', async () => {
     await expect(
       buildWorld(sourcePath, join(directory, 'missing'), {

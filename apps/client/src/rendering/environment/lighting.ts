@@ -47,6 +47,14 @@ const BLOOM_KERNEL = 64;
 const BLOOM_SCALE = 0.5;
 /** Темнота, с которой включается ореол; ниже неё его вес и так незаметен. */
 const BLOOM_MIN_DARK = 0.05;
+/** Тон теней (холодный синий) и светов (тёплый янтарный) в градусах ColorCurves. */
+const SHADOWS_HUE = 225;
+const HIGHLIGHTS_HUE = 35;
+/**
+ * Шаг веса виньетки. Каждое изменение помечает материалы экономичного режима
+ * (там коррекция в их шейдерах), поэтому вес меняется ступенями, а не каждый кадр.
+ */
+const VIGNETTE_STEP = 0.05;
 
 /** Both game cameras sample the same composed map, with one fixed light-space projection. */
 class WorldSun extends DirectionalLight {
@@ -157,7 +165,14 @@ export class WorldLighting {
     imageProcessing.colorCurvesEnabled = true;
     imageProcessing.colorCurves = new ColorCurves();
     imageProcessing.colorCurves.globalSaturation = 8;
-    imageProcessing.vignetteEnabled = false;
+    // Тона теней и светов, насыщенность и виньетку задаёт час (`Sky.grade`).
+    imageProcessing.colorCurves.shadowsHue = SHADOWS_HUE;
+    imageProcessing.colorCurves.highlightsHue = HIGHLIGHTS_HUE;
+    // Виньетка включена всегда, меняется только вес: переключение пересобрало бы шейдеры.
+    imageProcessing.vignetteEnabled = true;
+    imageProcessing.vignetteWeight = 0;
+    imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
+    // Пустота вокруг города; цвет задаёт час, туман на краю берёт его отсюда.
     scene.clearColor = Color4.FromHexString('#101820ff');
     scene.ambientColor = Color3.FromHexString('#8199ac');
 
@@ -203,6 +218,7 @@ export class WorldLighting {
     this.sun.diffuse.set(...sky.lightColor);
     this.dark = darkness(hour);
     this.applyBloom();
+    this.applyAtmosphere(sky);
     const { x, y, z } = sky.lightDirection;
     const direction = this.direction.set(x, y, z);
     if (Vector3.Dot(direction, this.sun.direction) < LIGHT_STEP_COS) {
@@ -270,6 +286,20 @@ export class WorldLighting {
     pipeline.bloomEnabled = false;
     this.pipeline = pipeline;
     this.applyBloom();
+  }
+
+  /** Пустота вокруг города, тон картинки и виньетка этого часа. */
+  private applyAtmosphere(sky: Sky): void {
+    this.scene.clearColor.set(...sky.backdrop, 1);
+    const imageProcessing = this.scene.imageProcessingConfiguration;
+    // ColorCurves пересчитываются при привязке, без пересборки шейдеров.
+    const curves = imageProcessing.colorCurves!;
+    curves.shadowsDensity = sky.grade.shadows;
+    curves.highlightsDensity = sky.grade.highlights;
+    curves.globalSaturation = sky.grade.saturation;
+    const vignette = Math.round(sky.grade.vignette / VIGNETTE_STEP) * VIGNETTE_STEP;
+    if (Math.abs(imageProcessing.vignetteWeight - vignette) > 1e-6)
+      imageProcessing.vignetteWeight = vignette;
   }
 
   /**

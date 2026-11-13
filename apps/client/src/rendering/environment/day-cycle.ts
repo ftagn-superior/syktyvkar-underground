@@ -21,7 +21,16 @@ export type Sky = {
   directLight: number;
   /** Colour of cloud tops under this sky. */
   cloudColor: Rgb;
+  /** Цвет пустоты вокруг города и радиального тумана на его краю. */
+  backdrop: Rgb;
+  /** Цветокоррекция часа: тон теней и светов, насыщенность, виньетка. */
+  grade: Grade;
 };
+/**
+ * Плотности тонирования теней (холодный тон) и светов (тёплый тон) по шкале ColorCurves
+ * −100..100, общая насыщенность и вес виньетки.
+ */
+export type Grade = { shadows: number; highlights: number; saturation: number; vignette: number };
 
 /** Длина суток и ход часов общие с сервером; часы ниже — игровые, 0..24. */
 export { DAY_LENGTH_MS, hourAt } from '@su/contracts';
@@ -32,6 +41,12 @@ const rgb = (hex: string): Rgb => [
   parseInt(hex.slice(3, 5), 16) / 255,
   parseInt(hex.slice(5, 7), 16) / 255,
 ];
+const mixGrade = (a: Grade, b: Grade, t: number): Grade => ({
+  shadows: lerp(a.shadows, b.shadows, t),
+  highlights: lerp(a.highlights, b.highlights, t),
+  saturation: lerp(a.saturation, b.saturation, t),
+  vignette: lerp(a.vignette, b.vignette, t),
+});
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
@@ -63,19 +78,31 @@ const DAY = {
   sky: rgb('#d6e7f4'),
   ground: rgb('#888563'),
   cloud: rgb('#f4f1ea'),
+  backdrop: rgb('#1a2c40'),
 };
 const HORIZON = {
   light: rgb('#ffa866'),
   sky: rgb('#c2a3b6'),
   ground: rgb('#5f5660'),
   cloud: rgb('#f2b48c'),
+  backdrop: rgb('#2a1f33'),
 };
 const NIGHT = {
   light: rgb('#a9c0ff'),
   sky: rgb('#3c4a7c'),
   ground: rgb('#212737'),
   cloud: rgb('#59648a'),
+  backdrop: rgb('#080c16'),
 };
+/**
+ * Днём картинка нейтральна (эталон арт-направления). В сумерки света тёплые, а тени
+ * холодные; ночью тени уходят в синеву и края кадра темнеют.
+ */
+const GRADE = {
+  day: { shadows: 0, highlights: 0, saturation: 8, vignette: 0 },
+  horizon: { shadows: 14, highlights: 28, saturation: 16, vignette: 0.6 },
+  night: { shadows: 30, highlights: 0, saturation: 4, vignette: 1.6 },
+} satisfies Record<string, Grade>;
 const SUN_INTENSITY = 3;
 // Ночь заметно темнее дня: окна, вывески и фонари должны читаться на её фоне.
 const MOON_INTENSITY = 0.5;
@@ -117,5 +144,7 @@ export function skyAt(hour: number): Sky {
     skyIntensity: lerp(NIGHT_FILL, lerp(0.42, 0.45, toDay), fromNight),
     directLight: sunlight + 0.5 * moonlight,
     cloudColor: blend('cloud'),
+    backdrop: blend('backdrop'),
+    grade: mixGrade(mixGrade(GRADE.night, GRADE.horizon, fromNight), GRADE.day, toDay),
   };
 }

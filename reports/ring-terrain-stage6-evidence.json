@@ -1573,5 +1573,34 @@
         "bytes": 1918
       }
     }
+  },
+  "postAcceptanceCleanup": {
+    "completedAt": "2026-11-13T21:47:21.276995+00:00",
+    "sourceMerge": "fast-forward objects into main, retaining validated commit d4fe109 and complete history",
+    "localTemporaryFilesBytesRemoved": 12875914147,
+    "localTaskOutputFilesRemoved": 337414,
+    "localTemporaryServersListening": 0,
+    "temporaryPostgresDirectoryRemoved": true,
+    "remoteTemporaryDatabaseRemoved": "su_terrain_rollback_20261113",
+    "productionProcessPreserved": true,
+    "productionReadinessAfterCleanup": 200,
+    "localPrivateRecoveryDirectory": ".local-backups/ring-terrain-20261113",
+    "remotePrivateRecoveryDirectory": "/root/backups/syktyvkar-underground/ring-terrain-20261113",
+    "evidenceArchive": {
+      "path": ".local-backups/ring-terrain-20261113/acceptance-evidence.tar.gz",
+      "sha256": "03a3f60e37710740020369fa0a4fa26f3f3ca388658bdb7be02dbcc5ed62a26d",
+      "bytes": 67791893,
+      "evidenceFiles": 759,
+      "allFilesVerified": true,
+      "originalRelativePathsPreserved": true,
+      "excludedDirectRawRasterReferences": 6
+    },
+    "retainedActiveRemoteLog": "output/ring-terrain-switch-20261113/server-4.log",
+    "notes": [
+      "Full temporary DB clones, repeated world/application builds, task caches and source rasters were removed.",
+      "Source rasters can be obtained again from recorded provenance; six historical direct raster links are explicitly excluded from the evidence archive.",
+      "Private recovery database dump and compatible old runtime are retained separately; they are not Git content.",
+      "Other user inputs and unrelated output artifacts were preserved."
+    ]
   }
 }

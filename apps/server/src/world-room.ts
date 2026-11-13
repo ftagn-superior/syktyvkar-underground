@@ -67,6 +67,7 @@ import type { AuthenticatedAccount } from './accounts/store.js';
 import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
 import { ActionLedger, rememberResult } from './gameplay/action-ledger.js';
 import { WorldClock } from './gameplay/world-clock.js';
+import { WorldWeatherControl } from './gameplay/world-weather.js';
 import {
   PlayerActivities,
   cancelAnimation,
@@ -120,6 +121,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   };
   private itemRequests = 0;
   private readonly dayClock = new WorldClock(this.state);
+  private readonly weather = new WorldWeatherControl(this.state);
   private staticPlacement?: LiveStaticPlacement;
   private layoutGroup?: Set<string>;
   private layoutFailureReported = false;
@@ -959,16 +961,23 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         'AUTH_REQUIRED',
         command.kind === 'time'
           ? 'Чтобы управлять временем, войдите через Telegram.'
-          : command.kind === 'staticPlacement'
-            ? 'Чтобы размещать объекты, войдите через Telegram.'
-            : command.kind === 'staticRemoval'
-              ? 'Чтобы удалять объекты, войдите через Telegram.'
-              : giveFailureMessage('AUTH_REQUIRED'),
+          : command.kind === 'weather'
+            ? 'Чтобы управлять погодой, войдите через Telegram.'
+            : command.kind === 'staticPlacement'
+              ? 'Чтобы размещать объекты, войдите через Telegram.'
+              : command.kind === 'staticRemoval'
+                ? 'Чтобы удалять объекты, войдите через Telegram.'
+                : giveFailureMessage('AUTH_REQUIRED'),
       );
     if (command.kind === 'time')
       return this.finishAction(client, session, {
         requestId,
         ...this.dayClock.command(command.action, Date.now()),
+      });
+    if (command.kind === 'weather')
+      return this.finishAction(client, session, {
+        requestId,
+        ...this.weather.command(command.action, Date.now()),
       });
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();

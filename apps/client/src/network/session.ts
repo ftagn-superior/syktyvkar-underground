@@ -41,6 +41,8 @@ import {
   type ItemError,
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
+  DEFAULT_WEATHER,
+  type WorldWeather,
   RESPAWN_COOLDOWN_MS,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
@@ -157,6 +159,8 @@ export class GameSession {
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
   dayClock: DayClock = DEFAULT_DAY_CLOCK;
   onDayClock?: (clock: DayClock) => void;
+  weather: WorldWeather = DEFAULT_WEATHER;
+  onWeather?: (weather: WorldWeather) => void;
   onSpawn?: () => void;
   onActionFeedback?: (cue: 'click' | 'error') => void;
   private readonly worldSounds = new WorldSoundEvents();
@@ -984,6 +988,7 @@ export class GameSession {
       offsetMs: room.state.dayOffsetMs,
       frozenHour: room.state.dayFrozenHour,
     });
+    this.setWeather({ clouds: room.state.weatherClouds });
     const self = room.state.players.get(room.sessionId);
     this.physics?.syncRemote(toLocalSimulationSnapshot(room.state), self?.entityId ?? '');
     const previousRevision = self && this.revisions.get(self.entityId);
@@ -1013,6 +1018,11 @@ export class GameSession {
       return;
     this.dayClock = clock;
     this.onDayClock?.(clock);
+  }
+  private setWeather(weather: WorldWeather): void {
+    if (weather.clouds === this.weather.clouds) return;
+    this.weather = weather;
+    this.onWeather?.(weather);
   }
   private clearEntityTracking(): void {
     for (const entity of this.trackedEntities.values()) this.predictor?.detach(entity);
@@ -1710,6 +1720,7 @@ export class GameSession {
     this.publicationTarget = undefined;
     this.persistencePaused = false;
     this.setDayClock(DEFAULT_DAY_CLOCK);
+    this.setWeather(DEFAULT_WEATHER);
     this.onInventoryChange?.();
     this.respawnRequest.reset();
     this.reactionRequest.reset();

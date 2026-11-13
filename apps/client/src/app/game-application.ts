@@ -672,6 +672,7 @@ export function startGame(): void {
     chatSettings,
   );
   session.onDayClock = (clock) => view?.setDayClock(clock);
+  session.onWeather = (weather) => view?.setWeather(weather);
   session.onChatResult = (result) => {
     chat?.complete(result.ok);
     renderChat();
@@ -902,6 +903,7 @@ export function startGame(): void {
       view = new WorldView(canvas, element('labels'), session.definition, quality);
       view.setAudio(audio);
       view.setDayClock(session.dayClock);
+      view.setWeather(session.weather);
       if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
       view.setTouchMode(inputMode.value === 'touch');
       view.setGamepadMode(inputMode.value === 'gamepad');

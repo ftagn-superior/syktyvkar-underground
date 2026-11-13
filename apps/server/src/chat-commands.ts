@@ -1,9 +1,16 @@
-import { ITEM_GIVE_COOLDOWN_MS, type DayClockAction, type ItemError } from '@su/contracts';
+import {
+  ITEM_GIVE_COOLDOWN_MS,
+  type DayClockAction,
+  type ItemError,
+  type WeatherAction,
+} from '@su/contracts';
 
 export type ChatCommand =
   | { kind: 'give'; typeId: string }
   /** Без `action` команда только сообщает текущее время. */
   | { kind: 'time'; action?: DayClockAction }
+  /** Без `action` команда только сообщает текущую погоду. */
+  | { kind: 'weather'; action?: WeatherAction }
   | { kind: 'staticPlacement' }
   | { kind: 'staticRemoval' }
   | { kind: 'invalid'; code: 'INVALID_INPUT' | 'UNKNOWN_COMMAND'; message: string };
@@ -42,8 +49,23 @@ export function parseChatCommand(text: string): ChatCommand | undefined {
     if (!match || hours > 23 || minutes > 59) return invalid(TIME_FORMAT);
     return { kind: 'time', action: { kind: 'set', hour: hours + minutes / 60 } };
   }
+  if (name === '/weather') {
+    if (!argument && !extra.length) return { kind: 'weather' };
+    if (argument === 'reset' && !extra.length)
+      return { kind: 'weather', action: { kind: 'reset' } };
+    if (argument === 'clouds' && extra.length === 1) return clouds(extra[0]!);
+    return invalid(WEATHER_FORMAT);
+  }
+  // Короткая форма `/weather clouds`.
+  if (name === '/clouds') return extra.length ? invalid(WEATHER_FORMAT) : clouds(argument);
   return { kind: 'invalid', code: 'UNKNOWN_COMMAND', message: 'Неизвестная команда.' };
 }
+function clouds(state: string | undefined): ChatCommand {
+  return state === 'on' || state === 'off'
+    ? { kind: 'weather', action: { kind: 'clouds', enabled: state === 'on' } }
+    : invalid(WEATHER_FORMAT);
+}
+const WEATHER_FORMAT = 'Формат команды: /weather [clouds on|off | reset] или /clouds on|off.';
 const TIME_FORMAT = 'Формат команды: /time [ЧЧ[:ММ] | stop | start | reset].';
 
 export function giveFailureMessage(code: ItemError | undefined): string {

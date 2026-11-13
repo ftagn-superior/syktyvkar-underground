@@ -38,8 +38,9 @@ try {
   await page.waitForFunction(
     () => document.querySelector('#connection-status')?.textContent === 'В сети',
   );
-  await page.waitForFunction(() =>
-    document.querySelector('.player-label')?.textContent?.includes('Игрок Сыктывкара'),
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.player-label.own')?.getAttribute('data-name') === 'Игрок Сыктывкара',
   );
   assert.equal([...app.room.state.players.values()][0].color, '#7D86F0');
   assert.equal([...app.room.state.players.values()][0].skinId, 'standard');

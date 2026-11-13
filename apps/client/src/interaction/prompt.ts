@@ -13,6 +13,8 @@ export interface InteractionHost {
   project(anchor: Vec3, out: { x: number; y: number; visible: boolean }): void;
   /** False while a panel/placement owns the input or the player cannot act. */
   enabled(): boolean;
+  /** False when only a tap or click may activate the prompt (touch mode). Defaults to true. */
+  keys?(): boolean;
 }
 
 /**
@@ -35,7 +37,7 @@ export class InteractionSystem {
   constructor(private readonly host: InteractionHost) {
     this.layer.className = 'su-prompts';
     this.button.type = 'button';
-    this.button.className = 'su-ctx su-facet';
+    this.button.className = 'su-ctx ui-panel';
     this.button.hidden = true;
     this.keyCap.className = 'su-key';
     const text = document.createElement('span');
@@ -53,6 +55,7 @@ export class InteractionSystem {
       (event) => {
         const target = this.current;
         if (!target || event.code !== target.key || event.repeat) return;
+        if (this.host.keys && !this.host.keys()) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         if (
           event.target instanceof HTMLElement &&

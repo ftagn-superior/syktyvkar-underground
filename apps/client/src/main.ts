@@ -5,12 +5,16 @@ import './ui/hud.css';
 import { HelpMenu } from './ui/help';
 import { InteractionSystem } from './interaction/prompt';
 import { PickupSource } from './interaction/pickups';
-import { applyAccent } from './ui/theme';
+import { applyPlayerColor } from './ui/theme';
+import { UiThemeController } from './ui/ui-theme';
+import { WorldChips, type PlayerEntry } from './ui/world-chips';
+import { ChatLog, type ChatSource } from './ui/chat-log';
+import { ICONS, type IconName } from './ui/icons';
 import { CharacterPreview } from './ui/character-preview';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from './input/keyboard';
 import { FirstPersonInput } from './input/first-person';
-import { NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
+import { dayClockHour, MAX_PLAYERS, NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
 import { firstPersonMovement } from './rendering/camera-controller';
 import { CameraPointerInput } from './input/camera-pointer';
 import { GameInputMode } from './input/mode';
@@ -35,6 +39,9 @@ function element<T extends HTMLElement>(id: string): T {
   if (!node) throw new Error(`Missing UI: ${id}`);
   return node as T;
 }
+for (const node of document.querySelectorAll<HTMLElement>('[data-icon]'))
+  node.insertAdjacentHTML('afterbegin', ICONS[node.dataset.icon as IconName] ?? '');
+const uiTheme = new UiThemeController();
 const canvas = element<HTMLCanvasElement>('world');
 const stick = element('touch-stick');
 const welcome = element('welcome');
@@ -99,13 +106,17 @@ let preview: CharacterPreview | undefined;
 let help: HelpMenu | undefined;
 let interactions: InteractionSystem | undefined;
 let appliedAccent = '';
+let chips: WorldChips | undefined;
+const chatLog = new ChatLog(element('chat-log'));
+// ?time=14.5 holds the world at one game hour: for screenshots and visual tests.
+const fixedHour = Number.parseFloat(new URLSearchParams(location.search).get('time') ?? '');
 const previewCanvas = element<HTMLCanvasElement>('preview-canvas');
 const previewFallback = element<HTMLImageElement>('preview-fallback');
 
 function setAccent(hex: string): void {
   if (hex === appliedAccent) return;
   appliedAccent = hex;
-  applyAccent(hex);
+  applyPlayerColor(hex);
 }
 /** The lobby shows the real model in a private scene; it is released as soon as play starts. */
 function syncPreview(): void {
@@ -155,6 +166,7 @@ function closeGamePanels(): void {
   animations?.close(false);
   chat?.close(false);
   inventory?.close();
+  chips?.close();
   view?.showPlacement();
   diagnostics.hidden = true;
   diagnosticsToggle.setAttribute('aria-expanded', 'false');
@@ -206,10 +218,10 @@ function renderInputMode(): void {
   const isTouch = inputMode.value === 'touch';
   document.body.dataset.inputMode = inputMode.value;
   stick.hidden = !isTouch || session.state !== 'playing' || graphicsLost;
-  keyboard?.setEnabled(!isTouch && !graphicsLost && element('chat-console').hidden);
-  inventory?.setEnabled(
-    !isTouch && !graphicsLost && !firstPerson?.selected && !firstPerson?.requesting,
-  );
+  // Typing in the chat field never reaches the world; with the field open, movement keys work.
+  keyboard?.setEnabled(!isTouch && !graphicsLost);
+  inventory?.setTouch(isTouch);
+  inventory?.setEnabled(!graphicsLost && !firstPerson?.selected && !firstPerson?.requesting);
   renderControls();
   syncTouchInput();
 }
@@ -261,13 +273,13 @@ function readMovement(): MoveInput {
 function renderFirstPerson(): void {
   const selected = firstPerson?.selected ?? false;
   const pending = firstPerson?.requesting ?? false;
-  element<HTMLButtonElement>('view-toggle').disabled =
-    !selected && !pending && !firstPersonEligible();
-  element('view-toggle-label').textContent = selected
-    ? 'Обзор'
-    : pending
-      ? 'Отменить вход'
-      : 'От первого лица';
+  const viewToggle = element<HTMLButtonElement>('view-toggle');
+  viewToggle.disabled = !selected && !pending && !firstPersonEligible();
+  viewToggle.setAttribute('aria-pressed', String(selected || pending));
+  viewToggle.setAttribute(
+    'aria-label',
+    selected ? 'Обзор' : pending ? 'Отменить вход от первого лица' : 'Вид от первого лица',
+  );
   element('first-person-hud').hidden = !selected && !pending;
   element('first-person-hint').hidden = !!firstPerson?.locked;
   element('first-person-hint').textContent = pending
@@ -283,25 +295,27 @@ function continuationHint(): string {
       : 'Нажмите клавишу движения, чтобы продолжить.';
 }
 
-function showNotice(message: string, options: { toast?: { hint?: string } } = {}): void {
+function showNotice(
+  message: string,
+  options: { toast?: { hint?: string; icon?: string } } = {},
+): void {
   const text = document.createElement('span');
   text.textContent = message;
   const parts: Node[] = [];
-  if (options.toast) {
-    // Pickup feedback: hexagon icon + text + the key that opens the result.
+  if (options.toast?.icon) {
+    // Pickup feedback: item icon + text + the key that opens the backpack.
     const icon = document.createElement('span');
     icon.className = 'ic';
     icon.setAttribute('aria-hidden', 'true');
-    icon.innerHTML =
-      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>';
+    icon.textContent = options.toast.icon;
     parts.push(icon);
   }
   parts.push(text);
-  if (options.toast?.hint) {
+  if (options.toast?.hint && inputMode.value === 'desktop') {
     const hint = document.createElement('span');
     hint.className = 'muted';
     const key = document.createElement('kbd');
-    key.className = 'su-kbd';
+    key.className = 'ui-kbd';
     key.textContent = options.toast.hint;
     hint.append(key, 'открыть');
     parts.push(hint);
@@ -316,7 +330,7 @@ function showNotice(message: string, options: { toast?: { hint?: string } } = {}
     () => {
       notice.hidden = true;
     },
-    options.toast ? 2800 : 7000,
+    options.toast ? 2400 : 7000,
   );
 }
 function updateState(state: ConnectionState, message?: string): void {
@@ -336,6 +350,7 @@ function updateState(state: ConnectionState, message?: string): void {
     state === 'connecting' ||
     preparing ||
     reconnecting;
+  document.body.classList.toggle('world-ready', loaded && !graphicsLost);
   joinLabel.textContent =
     state === 'loading'
       ? 'Загружаем мир…'
@@ -382,7 +397,7 @@ function updateState(state: ConnectionState, message?: string): void {
   if (
     playing &&
     !graphicsLost &&
-    !document.querySelector('.inventory-panel:not([hidden]), .chat-console:not([hidden])')
+    !document.querySelector('.inventory-panel:not([hidden]), .chat-form:not([hidden])')
   ) {
     canvas.focus({ preventScroll: true });
   }
@@ -394,6 +409,7 @@ function updateState(state: ConnectionState, message?: string): void {
     if (own?.color) setAccent(own.color);
   }
   help?.setAvailable(welcome.hidden && !graphicsLost && !!session.room);
+  if (!session.room) chatLog.clear();
   syncPreview();
 }
 const session = new GameSession(updateState, showNotice);
@@ -406,12 +422,12 @@ function syncAudioActivity(): void {
 }
 syncAudioActivity();
 const storageStatus = document.createElement('div');
-storageStatus.className = 'storage-status';
+storageStatus.className = 'storage-status ui-panel';
 storageStatus.setAttribute('role', 'status');
 storageStatus.hidden = true;
 storageStatus.textContent =
   'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
-document.body.append(storageStatus);
+element('hud-top').append(storageStatus);
 const accounts = new AccountPanel(
   () => {
     session.accountId = accounts.account?.accountId;
@@ -425,9 +441,9 @@ inventory = new InventoryPanel(
   canvas,
   () => {
     staticPlacement?.close();
-    chat?.close(false);
     reactions?.close(false);
     animations?.close(false);
+    chips?.close();
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
@@ -440,7 +456,7 @@ inventory = new InventoryPanel(
     resetGameInput();
     renderControls(placing);
   },
-  (name) => showNotice(`В инвентарь: ${name}`, { toast: { hint: 'X' } }),
+  (name, icon) => showNotice(`${name} — в рюкзаке`, { toast: { hint: 'X', icon } }),
 );
 staticPlacement = new StaticPlacement(
   session,
@@ -464,16 +480,29 @@ session.onStaticPlacementOpen = (effect) => {
 help = new HelpMenu(
   () => canvas.focus({ preventScroll: true }),
   () => {
+    chips?.close();
     if (!firstPerson?.selected && !firstPerson?.requesting) return;
     firstPerson?.suspend();
     resetGameInput();
   },
+  uiTheme,
+);
+chips = new WorldChips(
+  () => {
+    reactions?.close(false);
+    animations?.close(false);
+    inventory?.close();
+    help?.close(false);
+    diagnostics.hidden = true;
+    diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  },
+  () => canvas.focus({ preventScroll: true }),
 );
 const pickups = new PickupSource(
   session,
   () => view,
   () => appliedAccent || '#6EE0C4',
-  (itemId, name) => inventory?.pickup(itemId, name),
+  (itemId, name, typeId) => inventory?.pickup(itemId, name, typeId),
 );
 interactions = new InteractionSystem({
   player: () => {
@@ -483,12 +512,9 @@ interactions = new InteractionSystem({
   },
   candidates: () => pickups.candidates(),
   project: (anchor, out) => (view ? view.project(anchor, out) : (out.visible = false)),
-  enabled: () =>
-    loaded &&
-    !graphicsLost &&
-    inputMode.value === 'desktop' &&
-    placementOwner !== 'static' &&
-    !!inventory?.canCollect,
+  enabled: () => loaded && !graphicsLost && placementOwner !== 'static' && !!inventory?.canCollect,
+  // Touch players tap the prompt; a stray hardware key does not collect.
+  keys: () => inputMode.value === 'desktop',
 });
 const accountPreparation = accounts.load();
 function setCameraRotation(direction: -1 | 0 | 1): void {
@@ -514,7 +540,7 @@ reactions = new ReactionMenu(
   () => {
     animations?.close(false);
     inventory?.close();
-    chat?.close(false);
+    chips?.close();
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
@@ -538,7 +564,7 @@ animations = new AnimationMenu(
   () => {
     reactions?.close(false);
     inventory?.close();
-    chat?.close(false);
+    chips?.close();
     diagnostics.hidden = true;
     diagnosticsToggle.setAttribute('aria-expanded', 'false');
   },
@@ -546,6 +572,7 @@ animations = new AnimationMenu(
 chat = new ChatConsole(
   element<HTMLButtonElement>('chat-toggle'),
   element<HTMLFormElement>('chat-console'),
+  element('chat-row'),
   element<HTMLInputElement>('chat-input'),
   element('chat-status'),
   element('chat-counter'),
@@ -558,13 +585,13 @@ chat = new ChatConsole(
   },
   (open) => {
     if (open) firstPerson?.suspend();
-    keyboard?.setEnabled(!open && !graphicsLost && inputMode.value === 'desktop');
     resetGameInput();
     if (open) {
       staticPlacement?.close();
       reactions?.close(false);
       animations?.close(false);
       inventory?.close();
+      chips?.close();
       diagnostics.hidden = true;
       diagnosticsToggle.setAttribute('aria-expanded', 'false');
     }
@@ -581,6 +608,7 @@ const menuSounds = new MenuSounds(
     'reactions-panel',
     'animations-panel',
     'inventory-panel',
+    'players-panel',
     'chat-console',
     'diagnostics',
   ].map((id) => element(id)),
@@ -682,9 +710,26 @@ function renderRespawn(): void {
       ? `На старт · ${Math.ceil(remainingMs / 1000)} с`
       : 'На старт';
 }
+/** Clock and players chips, the chat log and the day/night theme. Called by the UI timer. */
+function renderWorldHud(): void {
+  const hour =
+    view?.hour ??
+    (Number.isFinite(fixedHour) ? fixedHour : dayClockHour(session.dayClock, Date.now()));
+  uiTheme.setHour(hour);
+  chips?.setClock(hour, uiTheme.daylight);
+  const room = session.room;
+  const players: PlayerEntry[] = [];
+  const sources: [string, ChatSource][] = [];
+  room?.state?.players?.forEach((player: ChatSource, key: string) => {
+    const name = player.name || 'Гость';
+    players.push({ key, name, color: player.color ?? '', own: key === room.sessionId });
+    sources.push([key, player]);
+  });
+  chips?.setPlayers(Math.max(session.occupancy, players.length), players);
+  if (room) chatLog.observe(sources, room.sessionId);
+}
 function renderMetrics(): void {
-  element('player-count').textContent = `${session.occupancy} / 8`;
-  element('help-online').textContent = `${session.occupancy} / 8 в сети`;
+  element('player-count').textContent = `${session.occupancy} из ${MAX_PLAYERS}`;
   if (diagnostics.hidden) return;
   const data = session.diagnostics();
   const rendering = view?.renderingDiagnostics();
@@ -761,8 +806,6 @@ async function start(): Promise<void> {
     view = new WorldView(canvas, element('labels'), session.definition, quality);
     view.setAudio(audio);
     view.setDayClock(session.dayClock);
-    // ?time=14.5 holds the world at one game hour: for screenshots and visual tests.
-    const fixedHour = Number.parseFloat(new URLSearchParams(location.search).get('time') ?? '');
     if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
     view.setTouchMode(inputMode.value === 'touch');
     view.setOverlayTest((from, to, targetId) => session.overlayBlocked(from, to, targetId));
@@ -922,6 +965,7 @@ const uiTimer = setInterval(() => {
     : 'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
   renderRespawn();
   renderMetrics();
+  renderWorldHud();
   const loading = session.state === 'preparing' || session.state === 'waiting';
   const problem = session.areaProblem;
   element('area-status').hidden = (!loading && !problem) || graphicsLost;
@@ -957,6 +1001,7 @@ window.addEventListener(
     view?.dispose();
     keyboard.dispose();
     help?.dispose();
+    chips?.dispose();
     interactions?.dispose();
     preview?.dispose();
     reactions?.dispose();

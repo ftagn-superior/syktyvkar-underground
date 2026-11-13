@@ -1,55 +1,159 @@
-# Client UI
+# Интерфейс клиента
 
-The UI is plain DOM + CSS over the Babylon canvas. Three principles drive it:
+Интерфейс — обычный DOM и CSS поверх холста Babylon. Образец внешнего вида и все решения —
+в [`plans/ui-rework/`](plans/ui-rework/README.md) (спецификация — `design-spec.md`, макет — `mock.html`).
 
-1. **Player colour = UI accent.** `ui/theme.ts` `applyAccent(hex)` sets `--accent`, `--accent-soft`,
-   `--accent-line`, `--accent-ink` and `--accent-text` on `:root`. Every highlight uses those
-   variables, so a colour change recolours the whole UI at once (lobby: live preview; world: the
-   player's own colour).
-2. **Hidden HUD.** In the world only the `?` hexagon is visible. `ui/help.ts` opens the controls
-   panel (click, `H`; `Esc` closes). Chat/reactions/animations/inventory/respawn/leave/diagnostics
-   live in that panel; available hotkeys also work directly. First person adds a persistent Overview button and a resume hint. A first-time tip is stored under the
-   `su:help-tip:v1` localStorage key.
-3. **Low-poly styling.** Cut corners (`clip-path`), hexagons and faceted highlights; primitives are in
-   `ui/theme.css` (`.su-facet`, `.su-corner`, `.su-gem`, `.su-hex`).
+Три принципа:
 
-## Files
+1. **Печатная бумага.** Непрозрачные панели с чернильной рамкой 2px и жёсткой тенью строго вниз, без
+   стекла и `backdrop-filter`. Красный («брусника») — только для главного: одна главная кнопка на экране,
+   клавиша в подсказке действия, счётчик рюкзака, лента орнамента.
+2. **Две темы по игровым суткам.** «Берёста» днём, «полночь» ночью. Тема — атрибут `data-ui-theme`
+   на `<html>`; компоненты читают только токены.
+3. **Цвет игрока — только про игрока.** Он задаёт одну переменную `--me` и окрашивает персонажа и знак
+   игрока. Остальной интерфейс от цвета игрока не зависит.
 
-| Path | Role |
+## Файлы
+
+| Путь | Роль |
 | --- | --- |
-| `ui/theme.css`, `ui/theme.ts` | tokens, accent maths, primitives |
-| `ui/lobby.css`, `ui/hud.css` | lobby windows / in-world HUD |
-| `ui/characters.ts` | lobby character catalog (data driven; locked placeholders) |
-| `ui/avatar-picker.ts`, `ui/color-picker.ts`, `ui/character-preview.ts` | lobby widgets; the preview renders the real avatar in a small private Babylon scene |
-| `ui/help.ts` | help button/panel/tip |
-| `interaction/` | contextual prompts (see below) |
+| `index.html` | Вся статическая разметка: лобби, HUD, панель управления, диагностика |
+| `style.css` | Сброс, холст мира, слой подписей |
+| `ui/theme.css` | Токены обеих тем, шрифты, примитивы: `.ui-panel`, `.ui-btn`, `.ui-chip`, `.ui-pop`, `.ui-orn`, `.ui-badge`, `.ui-kbd`, `.ui-input` |
+| `ui/hud.css`, `ui/lobby.css` | Раскладка HUD в мире и лобби |
+| `ui/theme.ts` | `--me`, математика цвета, «свой цвет» (оттенок и тон) |
+| `ui/ui-theme.ts` | Правило темы и `UiThemeController` |
+| `ui/player-sign.ts` | Знак игрока: девять фигур |
+| `ui/icons.ts` | Иконки интерфейса (SVG 24×24) |
+| `ui/help.ts` | Кнопка `?`, панель управления, первая подсказка, настройка темы |
+| `ui/world-chips.ts` | Часы мира и список игроков |
+| `ui/chat.ts`, `ui/chat-log.ts` | Поле ввода чата и лента последних сообщений |
+| `ui/reactions.ts`, `ui/animations.ts`, `ui/catalog-shortcuts.ts` | Окна реакций и анимаций, фильтры, клавиши 1–9 |
+| `ui/inventory.ts` | Рюкзак и размещение предмета |
+| `ui/static-placement.ts` | Размещение скамейки |
+| `ui/account-panel.ts`, `ui/color-picker.ts`, `ui/avatar-picker.ts`, `ui/characters.ts`, `ui/character-preview.ts` | Лобби |
+| `interaction/` | Подсказки действия у предметов (см. ниже) |
 
-## First person
+## Токены и шрифты
 
-`V` and the help menu switch one character between overview and first person. `input/first-person.ts`
-waits for browser Pointer Lock confirmation, consumes entry/resume clicks and releases cancelled late
-requests. Text fields retain `V` as text. The selected view is independent of mouse capture: chat,
-help, Esc, blur, session waits and WebGL loss leave first person selected with neutral input and a
-free cursor. Canvas clicks explicitly resume capture. A persistent Overview button remains reachable
-with a free cursor. Touch switches back to overview and consumes the switching gesture.
+| Токен | День | Ночь | Назначение |
+| --- | --- | --- | --- |
+| `--p` | `#F3EAD8` | `#18213F` | Фон панели |
+| `--p2` | `#E7DCC6` | `#232D52` | Кнопка, поле, вставка |
+| `--ink` | `#1F2420` | `#F1ECDF` | Текст, иконки |
+| `--mut` | `#6A685C` | `#A3ABC6` | Вторичный текст |
+| `--ln` | `#2B2F2A` | `#5D6A99` | Рамки |
+| `--hard` | `#8A8170` | `#0A0E1F` | Жёсткая тень |
+| `--pri`, `--pri-ink` | `#C8342F`, `#FFF4E6` | те же | Главное действие, орнамент |
+| `--amber` | `#E8A33A` | тот же | Кольцо фокуса |
+| `--me` | цвет игрока | цвет игрока | Только элементы «про игрока» |
 
-First person permits walking and chat. Inventory, pickup prompts/rings, placement, new reactions and
-animation requests are disabled, including shortcuts and periodic UI updates. Already submitted
-requests continue through the session. Overview restores those actions. See the
-[implementation report](../reports/first-person-mode.md) for browser coverage and remaining acceptance.
+Полупрозрачны только подложки строк чата и подписей над головой (`--p-veil`, `--p-tag`).
+Шрифты: Rubik 800 для заголовков, главной кнопки и `?` (класс `.disp`), Golos Text для остального.
+Обе гарнитуры содержат Ӧ и І. Подписи клавиш — Golos Text 700, без моноширинного шрифта.
+Размеры HUD в `em` от `--hud-size` (около 15px на 1440px, не меньше 11px).
 
-## Profile colours
+## Тема по суткам
 
-`colorId` is a preset id (`mint`, `cyan`, …, plus legacy `amber`/`sky`/`lilac`) **or** a custom
-`#RRGGBB`. `resolveProfileColor()` in `@su/contracts` is the single resolver; migration 4 relaxes the
-old enum `CHECK`. Saving happens when entering the world (there is no separate save button).
+`autoTheme(высота солнца, текущая тема)` в `ui/ui-theme.ts` — чистая функция с гистерезисом ±0,02
+у горизонта. Высоту даёт `sunPosition(hour).y`; час — `WorldView.hour` (час последнего кадра, с учётом
+`?time=` и `/time`). `main.ts` раз в 250 мс передаёт час в `UiThemeController`, который пишет атрибут
+только при смене темы. Настройка «Авто / День / Ночь» в панели управления хранится в `localStorage`
+под ключом `su:ui-theme:v1` и не влияет на свет в мире. Лобби лежит поверх того же мира и использует
+ту же тему.
 
-## Interaction prompts
+## HUD в мире
 
-`interaction/interactable.ts` defines the registry type and `INTERACTION_KINDS` (key, label, range,
-priority). `InteractionSystem` (`interaction/prompt.ts`) scans every 100 ms, shows one prompt for the
-nearest interactable in range (pickups beat vaults), keeps it 150 ms after leaving range, and routes
-the key / a click to `onActivate`. `PickupSource` turns replicated items into pickup interactables.
-To add a kind (door, ladder, sit): add an entry to `INTERACTION_KINDS` and a source that yields
-`Interactable`s. `closestPointOnSegment`/`distanceToSegment` are ready for linear objects such as
-fences; there are no fences or vault mechanic in the world yet, so no `vault` source is registered.
+- **Слева вверху** `?` (`#help-toggle`, клавиша `H`): управление, тема, качество графики, звук,
+  диагностика, «На старт», «Выйти». Первая подсказка хранится под ключом `su:help-tip:v1`.
+- **Справа вверху** часы (солнце при `h > 0`, иначе луна) и число игроков. Щелчок по числу открывает
+  список «знак · имя». Клиент видит игроков только в своей области интереса, поэтому общее число
+  берётся из `occupancy` комнаты, а список подписан, если показаны не все.
+- **Наверху по центру** (`#hud-top`) уведомление `#notice`, плашка размещения, загрузка области и
+  пауза хранилища.
+- **Слева внизу** лента чата (до пяти строк, старые бледнеют), окна реакций и анимаций и ряд кнопок:
+  чат `T`, реакции `R`, анимации `F`.
+- **Справа внизу** док: вид от первого лица `V`, рюкзак `X` со счётчиком предметов.
+
+### Чат
+
+Поле ввода по умолчанию свёрнуто в кнопку. `T` (или `/` — сразу с командой) и кнопка чата раскрывают
+его и ставят фокус. После отправки поле остаётся раскрытым, пустым и в фокусе. `Esc`, щелчок по миру
+или кнопка чата сворачивают поле; несохранённый текст при этом сохраняется. Пока фокус в поле, клавиши
+не доходят до мира; при раскрытом поле и фокусе вне него движение работает. Открытие реакций,
+анимаций и рюкзака не меняет состояние чата. От первого лица раскрытое поле освобождает курсор.
+
+Лента собирается на клиенте из реплицируемых `chatText` / `chatSequence` игроков (`ChatHistory`):
+каждая новая последовательность попадает в ленту один раз. Протокол не менялся; истории нет.
+
+### Реакции и анимации
+
+Одно окно над рядом кнопок: фильтр «Все» и категории каталога, прокручиваемый список высотой 9,6em.
+У реакций при фильтре «Все» сверху строка «Недавние» (четыре последние, ключ `su:recent-reactions:v1`).
+Клавиши 1–9 выбирают первые девять пунктов **показанного** списка (после фильтра). Состояния ожидания
+и перезарядки показываются строкой внизу окна; недоступные пункты приглушены.
+
+### Рюкзак
+
+Лоток над доком: одна плитка на тип предмета с суммарным количеством (`groupInventory`). Предметы с
+разными `properties` не сливаются. Щелчок по плитке или клавиша с номером закрывает лоток и включает
+размещение; наверху появляется плашка с «Поставить» и отменой. Поворот — `W S`, `A D`, `Q E` по 15°.
+«Поставить» берёт любой экземпляр типа и отправляет прежнее действие `place`. Действия `split`,
+`merge`, `move` остаются на сервере, интерфейс их не вызывает.
+
+Гость видит кнопку рюкзака и подсказку «Войдите через Telegram». В режиме касаний рюкзак открывается
+касанием, плитки только для просмотра, подбор — касанием подсказки; клавиши-ярлыки там не работают.
+Размещение касанием — отдельная задача.
+
+### Над головой
+
+Подпись — полупрозрачная «таблетка» со знаком и именем; своя подпись показывает «Вы» (полное имя —
+в `data-name`). Пузырь чата — панель с рамкой. Стикер реакции — 60px без подложки. Подписи мест —
+та же «таблетка» без знака.
+
+## Знак игрока
+
+Девять фигур: круг, скруглённый квадрат, треугольник, ромб, пятиугольник, шестиугольник, звезда,
+клевер, арка. `signIndex(name, color)` выбирает фигуру от имени и цвета: протокол не менялся, а эти поля
+реплицируются. Знак стабилен между входами и меняется при переименовании или смене цвета. Фигура
+залита цветом игрока и обведена `--ln`, чтобы светлые цвета читались на бумаге.
+
+## Лобби
+
+Шапка со значком «Трудовой славы» и чипом состояния мира; слева живой предпросмотр персонажа на
+постаменте, справа карточка-пропуск с полем имени, выбором цвета, знаком и главной кнопкой «Войти в
+мир»; внизу полоса персонажей и одна строка о будущих. Пока мир не загружен, фон — небо и земля ровным
+цветом с бледным орнаментом. На узких экранах всё в одну колонку.
+
+Цвет: двенадцать предустановленных `PROFILE_COLORS` круглыми образцами (радиокнопки
+`input[name="profile-color"]`) и «свой цвет» с ползунками оттенка и тона: насыщенность 68%, светлота
+38–74%. Значение по-прежнему — id цвета или `#RRGGBB`; `resolveProfileColor()` в `@su/contracts` — единый
+разбор. Сохранение происходит при входе в мир.
+
+## Первое лицо
+
+`V` и кнопка в доке переключают обзор и вид от первого лица. `input/first-person.ts` ждёт подтверждения
+Pointer Lock браузера, поглощает щелчки входа и возобновления и отпускает отменённые запросы. Текстовые
+поля сохраняют `V` как букву. Выбранный вид не зависит от захвата мыши: чат, панель управления, `Esc`,
+потеря фокуса, ожидание сессии и потеря WebGL оставляют первое лицо выбранным с нейтральным вводом и
+свободным курсором. Щелчок по холсту возобновляет захват. Плашка «Обзор · V» внизу по центру доступна и
+со свободным курсором. Касание возвращает обзор.
+
+От первого лица доступны ходьба и чат. Рюкзак, подсказки подбора, размещение, новые реакции и анимации
+отключены. Подробности — [отчёт](../reports/first-person-mode.md).
+
+## Подсказки действия
+
+`interaction/interactable.ts` описывает тип и `INTERACTION_KINDS` (клавиша, подпись, радиус,
+приоритет). `InteractionSystem` (`interaction/prompt.ts`) раз в 100 мс выбирает ближайший объект в
+радиусе, держит подсказку 150 мс после выхода из радиуса и передаёт клавишу или щелчок в
+`onActivate`. Плашка: красная клавиша, действие, название предмета мелко. `PickupSource` превращает
+реплицируемые предметы в подбираемые объекты. Хост может запретить клавиши (`keys()`), оставив
+щелчок, — так работает режим касаний.
+
+## Доступность
+
+Сохранены `aria-*`, возврат фокуса в мир после закрытия окон, кольцо фокуса 3px `--amber`,
+`prefers-reduced-motion` (переходы и появления отключаются), `forced-colors` (панели и кнопки получают
+системные цвета) и цели не меньше 44px в режиме касаний. Пружинные переходы — только на `transform`,
+`border-radius` и `opacity`.

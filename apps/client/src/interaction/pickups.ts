@@ -18,7 +18,7 @@ export class PickupSource {
     private readonly session: GameSession,
     private readonly view: () => WorldView | undefined,
     private readonly accent: () => string,
-    private readonly pickup: (itemId: string, name: string) => void,
+    private readonly pickup: (itemId: string, name: string, typeId: string) => void,
   ) {}
 
   candidates(): Iterable<Interactable> {
@@ -53,7 +53,7 @@ export class PickupSource {
       },
       getDistance: (player: Vec3) =>
         Math.hypot(item.x - player.x, item.y - player.y, item.z - player.z),
-      onActivate: () => this.pickup(item.entityId, name()),
+      onActivate: () => this.pickup(item.entityId, name(), item.typeId),
       setHighlighted: (on: boolean) =>
         this.view()?.setItemRing(on ? item.entityId : undefined, this.accent()),
     };

@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Макет-образец для docs/plans/ui-rework. Открывается двойным щелчком; стикеры берутся из apps/client/public/reactions. -->
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Syktyvkar UI Proposal 2</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Golos+Text:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one column. Two live mocks (world HUD, lobby) on one clock, then decisions, research and palette. */
+:root {
+  --bg: #f0efea; --surface: #fbfaf6; --fg: #1f2420; --muted: #5c655f; --line: #d6d4c8; --accent: #b22d28; --accent-soft: #f3dcd6;
+  --body: 'Golos Text', 'Segoe UI', system-ui, sans-serif;
+  --display: 'Rubik', 'Golos Text', system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #12161f; --surface: #1a2030; --fg: #ecebe4; --muted: #a4abba; --line: #2c3448; --accent: #f0736a; --accent-soft: #3a2126; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #12161f; --surface: #1a2030; --fg: #ecebe4; --muted: #a4abba; --line: #2c3448; --accent: #f0736a; --accent-soft: #3a2126; color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 46px; }
+header.top, section { display: flex; flex-direction: column; gap: 16px; }
+.kicker { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(19px, 2.6vw, 25px); line-height: 1.2; margin: 0; text-wrap: balance; }
+h3 { font-size: 16px; font-weight: 700; margin: 0; }
+p { margin: 0; }
+.lede { max-width: 66ch; color: var(--muted); font-size: 17px; }
+.prose { max-width: 70ch; }
+.note { font-size: 14px; color: var(--muted); max-width: 74ch; }
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: .86em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0 32px; }
+.card { padding: 15px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card p { color: var(--muted); font-size: 15px; }
+.tag { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+ul.tight { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 7px; max-width: 74ch; }
+ul.tight li::marker { color: var(--accent); }
+.pal { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.sw-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px; color: var(--muted); }
+.sw-card i { display: block; height: 54px; border-radius: 10px; border: 1px solid var(--line); }
+.sw-card b { color: var(--fg); font-size: 14px; }
+.sw-card span { font-family: var(--mono); font-size: 12px; }
+
+/* ---------- controls ---------- */
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.ctl { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ctl > label, .ctl > .lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.ctl output { color: var(--fg); font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.controls input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; align-self: flex-start; }
+.seg button, .plain-b { font: inherit; font-size: 14px; font-weight: 600; padding: 7px 12px; border: 0; background: transparent; color: var(--fg); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+.plain-b { border: 1px solid var(--line); border-radius: 9px; }
+.seg button:focus-visible, .plain-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- shared mock language: printed paper, ink outline, hard shadow. Two fixed themes, switched instantly. ---------- */
+.mock {
+  --p: #f3ead8; --p2: #e7dcc6; --ink: #1f2420; --mut: #6a685c; --ln: #2b2f2a; --hard: #8a8170;
+  --me: var(--m-me, #6EE0C4); --pri: #c8342f; --pri-ink: #fff4e6; --amber: #e8a33a;
+  --spring: cubic-bezier(.3, 1.55, .5, 1);
+  --orn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='10' viewBox='0 0 16 10'%3E%3Cpath d='M0 5L4 1L8 5L4 9ZM8 5L12 1L16 5L12 9Z' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3Crect x='3' y='4' width='2' height='2'/%3E%3Crect x='11' y='4' width='2' height='2'/%3E%3C/svg%3E");
+  font-family: 'Golos Text', system-ui, sans-serif; font-weight: 600; color: var(--ink);
+}
+.mock[data-th="night"] { --p: #18213f; --p2: #232d52; --ink: #f1ecdf; --mut: #a3abc6; --ln: #5d6a99; --hard: #0a0e1f; }
+.mock .disp { font-family: 'Rubik', 'Golos Text', system-ui, sans-serif; font-weight: 800; }
+.pnl { background: var(--p); color: var(--ink); border: 2px solid var(--ln); border-radius: .9em; box-shadow: 0 .24em 0 var(--hard); }
+.orn { height: 10px; background: var(--pri); -webkit-mask: var(--orn) repeat-x center / auto 10px; mask: var(--orn) repeat-x center / auto 10px; }
+.btn {
+  font: inherit; color: var(--ink); background: var(--p2); border: 2px solid var(--ln); border-radius: .75em; margin: 0;
+  box-shadow: 0 .2em 0 var(--hard); cursor: pointer; display: inline-grid; place-items: center; position: relative;
+  transition: transform .28s var(--spring), border-radius .4s var(--spring), box-shadow .1s;
+}
+.btn:hover { transform: translateY(-.08em); }
+.btn:active { transform: translateY(.16em) scale(.95); box-shadow: 0 .04em 0 var(--hard); }
+.btn[aria-pressed="true"], .btn[aria-expanded="true"] { border-radius: 1.35em; background: var(--ink); color: var(--p); }
+.btn.pri { background: var(--pri); color: var(--pri-ink); }
+.btn:focus-visible, .mock input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.btn > svg { width: 1.25em; height: 1.25em; display: block; }
+.k { font-size: .6em; font-weight: 700; position: absolute; right: .65em; bottom: .45em; opacity: .42; line-height: 1; }
+.shp { width: 1.1em; height: 1.1em; vertical-align: -.2em; flex: none; }
+.mock input[type="text"] { font: inherit; font-weight: 500; color: var(--ink); background: var(--p2); border: 2px solid var(--ln); border-radius: .7em; padding: .55em .8em; min-width: 0; }
+.mock input::placeholder { color: var(--mut); }
+
+/* ---------- world stage ---------- */
+.stage { position: relative; container-type: inline-size; aspect-ratio: 16 / 10; width: 100%; border-radius: 14px; overflow: hidden; background: #a4b94a; isolation: isolate; outline: none; }
+.stage:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
+.stage svg.scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+.stage[data-placing] svg.scene { cursor: crosshair; }
+.hud { position: absolute; inset: 0; font-size: clamp(10px, 1.32cqw, 15px); pointer-events: none; }
+.hud > * { pointer-events: auto; position: absolute; }
+.h-help { left: 1.2em; top: 1.2em; width: 3.4em; height: 3.4em; padding: 0; font-size: 1em; }
+.h-help span { font-size: 1.3em; }
+.h-chips { right: 1.2em; top: 1.2em; display: flex; gap: .5em; }
+.chip { display: flex; align-items: center; gap: .5em; padding: .55em .95em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chip svg { width: 1.15em; height: 1.15em; flex: none; }
+button.chip { font: inherit; cursor: pointer; margin: 0; transition: border-radius .4s var(--spring); }
+button.chip[aria-expanded="true"] { background: var(--ink); color: var(--p); }
+.h-players { right: 1.2em; top: 4.9em; width: 14em; transform-origin: top right; }
+.plist { display: flex; flex-direction: column; gap: .15em; font-weight: 500; }
+.plist div { display: flex; align-items: center; gap: .6em; padding: .35em .2em; }
+.plist small { margin-left: auto; color: var(--mut); }
+.h-top { left: 50%; top: 1.3em; transform: translateX(-50%); display: flex; flex-direction: column; gap: .5em; align-items: center; max-width: 50%; }
+.pill { padding: .55em 1.1em; font-size: .9em; display: flex; gap: .6em; align-items: center; text-align: center; }
+.pill svg { width: 1.6em; height: 1.6em; flex: none; }
+.h-prompt { transform: translate(-50%, -100%); display: flex; align-items: center; gap: .7em; padding: .45em 1em .45em .45em; font: inherit; cursor: pointer; text-align: left; animation: pop .3s var(--spring) both; }
+.h-prompt .key { width: 2.2em; height: 2.2em; border-radius: .6em; background: var(--pri); color: var(--pri-ink); display: grid; place-items: center; font-weight: 700; box-shadow: 0 .18em 0 var(--hard); }
+.h-prompt b { display: block; line-height: 1.2; }
+.h-prompt small { display: block; font-weight: 500; color: var(--mut); line-height: 1.2; }
+.h-chat { left: 1.2em; bottom: 1.2em; width: min(25em, 58%); display: flex; flex-direction: column; gap: .5em; }
+.log { display: flex; flex-direction: column; align-items: flex-start; gap: .22em; font-size: .9em; font-weight: 500; }
+.log div { background: color-mix(in srgb, var(--p) 84%, transparent); padding: .22em .65em; border-radius: .5em; max-width: 100%; overflow-wrap: anywhere; }
+.log div:nth-last-child(n+4) { opacity: .55; }
+.log div:nth-last-child(n+5) { opacity: .3; }
+.log b { font-weight: 700; }
+.log .shp { margin-right: .35em; }
+.log .sys { color: var(--mut); font-style: italic; }
+.chatrow { display: flex; gap: .45em; padding: .45em; align-items: center; }
+.chatrow input { flex: 1; width: 4em; }
+.chatrow .btn { width: 3em; height: 3em; padding: 0; flex: none; }
+.pop { padding: 0 .9em .9em; overflow: hidden; transform-origin: bottom left; animation: pop .32s var(--spring) both; }
+.pop .orn { margin: .5em -0.9em .6em; }
+.pop h4 { margin: 0 0 .55em; font-size: .95em; display: flex; justify-content: space-between; gap: 1em; align-items: baseline; }
+.pop h4 small, .pop .sub { font-family: 'Golos Text', system-ui, sans-serif; font-weight: 500; color: var(--mut); font-size: .78em; }
+.pop .sub { display: block; margin: .5em 0 .35em; }
+.filters { display: flex; gap: .35em; overflow-x: auto; padding: .1em .1em .5em; scrollbar-width: none; }
+.filters::-webkit-scrollbar { display: none; }
+.filters .btn { font-size: .78em; padding: .35em .8em; white-space: nowrap; box-shadow: 0 .15em 0 var(--hard); flex: none; }
+.scroll { max-height: 9.6em; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--mut) transparent; padding: .1em .35em .4em .1em; margin-right: -.35em; }
+.rgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .45em; }
+.rgrid .btn { padding: .45em .2em .3em; gap: .1em; }
+.rgrid img { width: 2.1em; height: 2.1em; display: block; }
+.rgrid span { font-size: .66em; font-weight: 500; line-height: 1.2; }
+.elist { display: grid; grid-template-columns: 1fr 1fr; gap: .45em; }
+.elist .btn { padding: .55em .7em; font-size: .86em; justify-items: start; text-align: left; }
+@keyframes pop { from { opacity: 0; scale: .9; } to { opacity: 1; scale: 1; } }
+.h-dock { right: 1.2em; bottom: 1.2em; display: flex; gap: .55em; align-items: flex-end; }
+.h-dock > .btn { width: 3.8em; height: 3.8em; padding: 0; }
+.badge { position: absolute; left: -.6em; top: -.6em; min-width: 2em; height: 2em; padding: 0 .5em; border-radius: 1em; background: var(--pri); color: var(--pri-ink); font-size: .7em; display: grid; place-items: center; border: 2px solid var(--ln); font-variant-numeric: tabular-nums; line-height: 1; }
+.h-tray { right: 1.2em; bottom: 5.9em; width: 20em; max-width: calc(100% - 2.4em); transform-origin: bottom right; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5em; }
+.tile { aspect-ratio: 1; padding: 0; }
+.tile svg { width: 58%; height: 58%; }
+.tile .n { position: absolute; right: .55em; bottom: .35em; font-size: .78em; font-variant-numeric: tabular-nums; line-height: 1; }
+.tile .k { right: auto; bottom: auto; left: .7em; top: .55em; }
+.tray-note { font-size: .85em; font-weight: 500; color: var(--mut); line-height: 1.35; }
+@container (max-width: 560px) {
+  .hud { font-size: 11px; }
+  .h-help { left: .7em; top: .7em; } .h-chips { right: .7em; top: .7em; } .h-players { right: .7em; }
+  .h-chat { left: .7em; bottom: .7em; width: 68%; } .h-dock { right: .7em; bottom: .7em; flex-direction: column; }
+  .h-tray { right: .7em; bottom: 9.6em; } .h-top { top: 4.9em; max-width: 92%; }
+  .k, .opt { display: none; }
+  .rgrid { grid-template-columns: repeat(3, 1fr); } .elist { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) { .stage { aspect-ratio: 4 / 5; } }
+
+/* ---------- lobby mock ---------- */
+.lobby { border-radius: 14px; overflow: hidden; position: relative; isolation: isolate; background: linear-gradient(var(--m-sky, #a9cfe6) 0 62%, var(--m-ground, #a4b94a) 62%); padding: clamp(14px, 2.4vw, 28px); display: grid; gap: clamp(12px, 2vw, 22px); grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "head head" "fig card" "roster roster"; font-size: clamp(13px, 1.35vw, 15px); }
+.lobby::before { content: ''; position: absolute; inset: 0 0 38% 0; z-index: -1; background: var(--ink); opacity: .07; -webkit-mask: var(--orn) repeat center / 64px 40px; mask: var(--orn) repeat center / 64px 40px; }
+.l-head { grid-area: head; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.l-head .right { display: flex; gap: .6em; align-items: center; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: .6em; padding: .45em 1em .45em .6em; }
+.brand svg { width: 2.6em; height: 2.6em; color: var(--pri); --cut: var(--p); flex: none; }
+.brand .w1 { display: block; font-size: 1.15em; line-height: 1; letter-spacing: .02em; }
+.brand .w2 { display: block; font-size: .72em; letter-spacing: .28em; text-transform: uppercase; color: var(--mut); margin-top: .3em; }
+.lang { display: flex; gap: .3em; }
+.lang .btn { padding: .5em .8em; font-size: .85em; }
+.l-fig { grid-area: fig; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: .6em; min-width: 0; }
+.l-fig svg.figure { width: min(100%, 250px); height: auto; filter: drop-shadow(0 .5em .3em rgba(0,0,0,.2)); }
+.fig-row { display: flex; align-items: center; gap: .7em; }
+.fig-row .btn { width: 3em; height: 3em; padding: 0; }
+.plate { padding: .4em 1em; text-align: center; min-width: 9em; }
+.plate small { display: block; font-weight: 500; color: var(--mut); font-size: .8em; }
+.l-card { grid-area: card; align-self: center; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.l-card .in { padding: 1em 1.2em 1.2em; display: flex; flex-direction: column; gap: 1em; }
+.pass-head { display: flex; justify-content: space-between; gap: 1em; font-size: .72em; letter-spacing: .14em; text-transform: uppercase; color: var(--mut); }
+.l-card h3 { font-size: 1.9em; line-height: 1.05; margin: 0; }
+.l-card h3 + p { font-weight: 500; color: var(--mut); margin-top: -.6em; }
+.fld { display: flex; flex-direction: column; gap: .4em; min-width: 0; }
+.fld > label, .fld > .lb { font-size: .8em; color: var(--mut); display: flex; justify-content: space-between; gap: 1em; }
+.fld > .lb b { color: var(--ink); }
+.sign { display: flex; align-items: center; gap: .7em; font-weight: 500; font-size: .88em; color: var(--mut); }
+.sign .shp { width: 2em; height: 2em; }
+.dots { display: flex; flex-wrap: wrap; gap: .55em; }
+.dot-b { width: 2.4em; height: 2.4em; border-radius: 50%; padding: 0; background: var(--c); }
+.dot-b[aria-pressed="true"] { background: var(--c); border-radius: 32%; box-shadow: 0 .2em 0 var(--hard), 0 0 0 3px var(--p), 0 0 0 5px var(--ln); }
+.dot-b.own { background: conic-gradient(from 90deg, #e8a33a, #c8342f, #c95c9a, #8fa0e0, #2e6fa8, #2f7d55, #e8a33a); color: #fff; }
+.dot-b.own svg { width: 1em; height: 1em; filter: drop-shadow(0 1px 1px #0008); }
+.own-box { display: flex; flex-direction: column; gap: .7em; padding: .8em; background: var(--p2); border: 2px dashed var(--ln); border-radius: .7em; }
+.own-box label { font-size: .78em; color: var(--mut); display: flex; flex-direction: column; gap: .3em; }
+.track { -webkit-appearance: none; appearance: none; width: 100%; height: 1.3em; border-radius: 1em; border: 2px solid var(--ln); margin: 0; background: var(--tr); }
+.track::-webkit-slider-thumb { -webkit-appearance: none; width: 1.5em; height: 1.9em; border-radius: .5em; background: var(--p); border: 2px solid var(--ln); box-shadow: 0 .15em 0 var(--hard); cursor: grab; }
+.track::-moz-range-thumb { width: 1.2em; height: 1.6em; border-radius: .5em; background: var(--p); border: 2px solid var(--ln); cursor: grab; }
+.enter { font-size: 1.15em; padding: .8em 1em; border-radius: .9em; }
+.l-roster { grid-area: roster; display: flex; gap: .6em; align-items: stretch; flex-wrap: wrap; }
+.r-card { padding: .55em 1.1em .55em .6em; display: flex; align-items: center; gap: .6em; text-align: left; border-radius: .9em; }
+.r-card svg { width: 2.2em; height: 2.6em; }
+.r-card small { display: block; font-weight: 500; opacity: .75; font-size: .8em; }
+.r-more { padding: .5em 1em; display: flex; align-items: center; font-weight: 500; color: var(--mut); border-style: dashed; box-shadow: none; }
+@media (max-width: 640px) { .lobby { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "fig" "card" "roster"; } }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: .001ms !important; animation-duration: .001ms !important; } }
+</style>
+
+<div class="wrap" lang="ru">
+  <header class="top">
+    <span class="kicker">Syktyvkar Underground · предложение по интерфейсу, третий раунд</span>
+    <h1>Печатная бумага, брусничный красный и «Трудовая слава»</h1>
+    <p class="lede">Оба макета ниже живые: мир и лобби работают от одних часов. В этом раунде добавлены список игроков, подсказка подбора, каталоги реакций и анимаций в полном объёме, знак игрока и переключатель языка. Тема теперь меняется резко, шрифты остались одни: Rubik и Golos Text.</p>
+  </header>
+
+  <section aria-label="Макет мира">
+    <h2>В мире</h2>
+    <div class="controls">
+      <div class="ctl">
+        <label for="hour">Время в мире <output id="hour-out" for="hour">14:30</output></label>
+        <div class="row"><input id="hour" type="range" min="0" max="24" step="0.1" value="14.5"><button class="plain-b" id="play" type="button" aria-pressed="false">Прогнать сутки</button></div>
+      </div>
+      <div class="ctl">
+        <span class="lbl">Настройка темы интерфейса</span>
+        <div class="seg" id="mode" role="group" aria-label="Тема интерфейса">
+          <button type="button" data-mode="auto" aria-pressed="true">Авто</button>
+          <button type="button" data-mode="day" aria-pressed="false">День</button>
+          <button type="button" data-mode="night" aria-pressed="false">Ночь</button>
+        </div>
+      </div>
+    </div>
+    <div class="stage mock" id="stage" tabindex="0" data-th="day" aria-label="Интерактивный макет интерфейса в мире">
+      <svg class="scene" id="scene" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Низкополигональная площадь с памятником, кустами и оранжевым домом">
+        <rect width="1600" height="1000" fill="#a4b94a"/>
+        <polygon points="0,0 330,0 150,180 100,330 140,470 260,600 420,700 700,800 1100,860 1600,850 1600,1000 0,1000" fill="#6f6a62" stroke="#d8cfba" stroke-width="30" stroke-linejoin="round"/>
+        <g stroke="#f1ece0" stroke-width="5" stroke-linecap="round" opacity=".75"><line x1="0" y1="110" x2="18" y2="80"/><line x1="0" y1="540" x2="34" y2="584"/><line x1="120" y1="670" x2="174" y2="710"/><line x1="296" y1="782" x2="366" y2="814"/><line x1="516" y1="868" x2="598" y2="890"/><line x1="800" y1="915" x2="900" y2="925"/></g>
+        <polygon points="1105,300 1140,320 1430,175 1390,148" fill="#3d5216" opacity=".3"/>
+        <polygon points="770,318 955,306 957,338 772,350" fill="#d9d0bd"/><polygon points="1030,378 1090,378 1090,490 1030,490" fill="#d9d0bd"/><polygon points="1160,306 1310,315 1310,347 1160,338" fill="#d9d0bd"/>
+        <polygon points="980,300 1040,278 1140,320 1080,345" fill="#ddd5c0"/><polygon points="980,300 1080,345 1080,365 980,320" fill="#c2b9a3"/><polygon points="1080,345 1140,320 1140,340 1080,365" fill="#a9a08a"/>
+        <polygon points="1010,0 1050,0 1050,330 1010,310" fill="#cfc6b0"/><polygon points="1050,0 1105,0 1105,305 1050,330" fill="#b3aa94"/>
+        <g id="bushes"></g>
+        <polygon points="1308,305 1600,270 1600,400 1440,450" fill="#5a5560"/><polygon points="1308,305 1440,450 1440,1000 1308,1000" fill="#cf6d31"/><polygon points="1440,450 1600,400 1600,1000 1440,1000" fill="#b55a27"/>
+        <g id="windows" fill="#1c2530"></g>
+        <g id="items"></g>
+        <g id="npc-body" transform="translate(585,600)"></g>
+        <g id="me-body" transform="translate(720,432)"></g>
+        <rect id="tint" width="1600" height="1000" fill="#ffffff" style="mix-blend-mode:multiply" pointer-events="none"/>
+        <g id="lit" fill="#ffd27a" opacity="0" pointer-events="none"></g>
+        <g id="npc-plate" transform="translate(585,552)" pointer-events="none"></g>
+        <g id="me-over" transform="translate(720,432)" pointer-events="none">
+          <g id="me-plate" transform="translate(0,-48)"></g>
+          <image id="sticker" href="../../../apps/client/public/reactions/hello.svg" x="-30" y="-134" width="60" height="60" visibility="hidden"/>
+          <g id="bubble" visibility="hidden" font-weight="500">
+            <rect id="bubble-box" x="-80" y="-128" width="160" height="42" rx="14" fill="var(--p)" stroke="var(--ln)" stroke-width="2"/>
+            <text id="bubble-text" x="0" y="-101" font-size="17" text-anchor="middle" fill="var(--ink)"></text>
+          </g>
+        </g>
+      </svg>
+      <div class="hud">
+        <button class="h-help btn disp" id="help" type="button" aria-label="Управление и настройки"><span>?</span></button>
+        <div class="h-chips">
+          <div class="chip pnl"><span id="clock-icon" style="display:contents"></span><span id="clock-text">14:30</span></div>
+          <button class="chip pnl" id="players-b" type="button" aria-label="Игроки в сети: 3" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20c0-4 3-6.5 6.5-6.5s6.5 2.5 6.5 6.5Z"/><circle cx="17" cy="9" r="2.6" opacity=".6"/><path d="M16.5 13.2c3 0 5 2 5 5.3h-4.3c-.2-2.2-.9-3.9-2.2-5Z" opacity=".6"/></svg><span>3</span></button>
+        </div>
+        <div class="h-players pop pnl" id="players" hidden></div>
+        <div class="h-top">
+          <div class="pill pnl" id="toast" role="status" hidden></div>
+          <div class="pill pnl" id="place-hint" hidden></div>
+        </div>
+        <button class="h-prompt pnl" id="prompt" type="button" hidden></button>
+        <div class="h-chat">
+          <div class="log" id="log" aria-label="Чат"></div>
+          <div class="pop pnl" id="pop" hidden></div>
+          <form class="chatrow pnl" id="chat-form">
+            <input id="chat-input" type="text" maxlength="40" placeholder="Enter — написать" autocomplete="off" aria-label="Сообщение">
+            <button class="btn" type="button" data-pop="react" aria-label="Реакции" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14c1 1.6 2.2 2.3 3.5 2.3s2.5-.7 3.5-2.3M9 9.5v.5M15 9.5v.5"/></svg><span class="k">R</span></button>
+            <button class="btn" type="button" data-pop="emote" aria-label="Анимации" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M5 8l7 3 7-5M12 11v5l-4 5M12 16l4 5"/></svg><span class="k">F</span></button>
+          </form>
+        </div>
+        <div class="h-tray pop pnl" id="tray" hidden></div>
+        <div class="h-dock">
+          <button class="btn" id="view" type="button" aria-label="Вид от первого лица"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg><span class="k">V</span></button>
+          <button class="btn" id="pack" type="button" aria-label="Рюкзак" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"/><path d="M9.5 5V3.5h5V5M9 14h6v3H9Z"/></svg><span class="k">X</span><span class="badge" id="pack-n">24</span></button>
+        </div>
+      </div>
+    </div>
+    <p class="note">Что попробовать. Щёлкните по газону, и персонаж туда дойдёт; рядом с предметом появится подсказка <code>Z</code>. Откройте рюкзак, выберите плитку и щёлкните по миру, чтобы поставить предмет. Нажмите на счётчик игроков. Откройте реакции и анимации: там фильтры и прокрутка. После щелчка по сцене работают клавиши <code>Z</code>, <code>X</code>, <code>R</code>, <code>F</code>, <code>Enter</code>, <code>1</code>–<code>4</code> и <code>Esc</code>. Сцена нарисована вручную и только изображает вид из Babylon.</p>
+  </section>
+
+  <section aria-label="Макет лобби">
+    <h2>Лобби</h2>
+    <div class="lobby mock" id="lobby" data-th="day">
+      <div class="l-head">
+        <div class="brand pnl"><svg viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="Памятник «Трудовая слава»"><rect x="6" y="21.3" width="12" height="1.7" rx=".4"/><rect x="9.7" y="11" width="1.5" height="10.5"/><rect x="12.8" y="11" width="1.5" height="10.5"/><rect x="8.3" y="8.6" width="7.4" height="3.6" rx=".4"/><circle cx="12" cy="10.4" r="1.25" fill="var(--cut)"/><rect x="10.5" y="1.4" width="1.2" height="7.6"/><rect x="12.3" y="1.9" width="1.2" height="7.1"/><rect x="8.6" y="2.7" width="1.2" height="6.3"/><rect x="14.2" y="3.2" width="1.2" height="5.8"/><rect x="6.7" y="4.3" width="1.2" height="4.7"/><rect x="16.1" y="4.8" width="1.2" height="4.2"/></svg><span><span class="w1 disp">СЫКТЫВКАР</span><span class="w2">Underground</span></span></div>
+        <div class="right">
+          <div class="chip pnl"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20c0-4 3-6.5 6.5-6.5s6.5 2.5 6.5 6.5Z"/><circle cx="17" cy="9" r="2.6" opacity=".6"/><path d="M16.5 13.2c3 0 5 2 5 5.3h-4.3c-.2-2.2-.9-3.9-2.2-5Z" opacity=".6"/></svg><span data-i18n="status">2 из 8 · мир доступен</span></div>
+          <div class="lang" id="lang" role="group" aria-label="Язык"><button class="btn" type="button" data-lang="ru" aria-pressed="true">RU</button><button class="btn" type="button" data-lang="en" aria-pressed="false">EN</button></div>
+        </div>
+      </div>
+      <div class="l-fig">
+        <svg class="figure" viewBox="0 0 200 284" role="img" aria-label="Предпросмотр персонажа">
+          <polygon points="30,240 100,265 100,280 30,255" fill="var(--p2)" stroke="var(--ln)" stroke-width="2" stroke-linejoin="round"/>
+          <polygon points="100,265 170,240 170,255 100,280" fill="var(--p2)" stroke="var(--ln)" stroke-width="2" stroke-linejoin="round"/>
+          <polygon points="100,215 170,240 100,265 30,240" fill="var(--p)" stroke="var(--ln)" stroke-width="2" stroke-linejoin="round"/>
+          <polygon points="78,150 100,158 100,238 78,230" fill="var(--me)"/><polygon points="100,158 122,150 122,230 100,238" fill="var(--me)"/><polygon points="100,158 122,150 122,230 100,238" fill="#000" opacity=".18"/>
+          <polygon points="58,84 70,80 70,130 58,134" fill="var(--me)"/><polygon points="130,80 142,84 142,134 130,130" fill="var(--me)"/><polygon points="130,80 142,84 142,134 130,130" fill="#000" opacity=".25"/>
+          <polygon points="70,78 100,88 100,160 70,150" fill="var(--me)"/><polygon points="100,88 130,78 130,150 100,160" fill="var(--me)"/><polygon points="100,88 130,78 130,150 100,160" fill="#000" opacity=".18"/>
+          <g id="head-mini"><polygon points="84,40 100,46 100,84 84,78" fill="#f2c94c"/><polygon points="100,46 116,40 116,78 100,84" fill="#d9ad30"/><polygon points="84,40 100,34 116,40 100,46" fill="#ffe07a"/></g>
+          <g id="head-std" visibility="hidden"><polygon points="100,34 116,40 123,57 116,74 100,82 84,74 77,57 84,40" fill="var(--me)"/><polygon points="100,34 116,40 123,57 116,74 100,82" fill="#000" opacity=".15"/><polygon points="84,52 118,52 118,63 84,63" fill="#1c2530"/></g>
+        </svg>
+        <div class="fig-row">
+          <button class="btn" type="button" data-skin-step="-1" aria-label="Предыдущий персонаж"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <div class="plate pnl"><span id="plate-name">Игрок</span><small id="plate-skin">Минифигурка</small></div>
+          <button class="btn" type="button" data-skin-step="1" aria-label="Следующий персонаж"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+      <div class="l-card pnl">
+        <div class="orn"></div>
+        <div class="in">
+          <div class="pass-head"><span data-i18n="pass">Пропуск · Полигон 01</span><span>Tech demo</span></div>
+          <h3 class="disp">Видза оланныд!</h3>
+          <p data-i18n="sub">Встретимся на полигоне.</p>
+          <div class="fld"><label for="name" data-i18n="name">Имя в игре</label><input id="name" type="text" maxlength="18" value="Игрок"></div>
+          <div class="fld">
+            <span class="lb"><span data-i18n="color">Цвет</span><b id="color-name">Мята</b></span>
+            <div class="dots" id="dots" role="group" aria-label="Цвет персонажа"></div>
+            <div class="own-box" id="own-box" hidden>
+              <label for="hue"><span data-i18n="hue">Оттенок</span><input class="track" id="hue" type="range" min="0" max="359" value="20" style="--tr:linear-gradient(90deg,hsl(0 72% 55%),hsl(60 72% 55%),hsl(120 72% 55%),hsl(180 72% 55%),hsl(240 72% 55%),hsl(300 72% 55%),hsl(359 72% 55%))"></label>
+              <label for="tone"><span data-i18n="tone">Тон</span><input class="track" id="tone" type="range" min="0" max="100" value="50"></label>
+            </div>
+          </div>
+          <div class="fld"><span class="lb"><span data-i18n="sign">Ваш знак</span></span><div class="sign"><span id="sign-shape" style="display:contents"></span><span data-i18n="signNote">Выдаётся случайно. Виден в чате и над головой.</span></div></div>
+          <button class="btn pri enter disp" id="enter" type="button" data-i18n="enter">Войти в мир</button>
+        </div>
+      </div>
+      <div class="l-roster" id="roster"></div>
+    </div>
+    <p class="note">Значок слева вверху повторяет «Трудовую славу» с кольца: два пилона, плита с тёмным медальоном и веер пластин разной высоты. Кнопка RU / EN в макете переводит только лобби. Знак в макете считается от имени, поэтому меняется, пока вы печатаете; в игре его стоит один раз выдать аккаунту.</p>
+  </section>
+
+  <section>
+    <h2>Решения этого раунда</h2>
+    <div class="cards">
+      <div class="card"><span class="tag">Реакции и анимации</span><h3>Прокрутка с фильтром, без страниц</h3><p>В игре 20 реакций и 15 анимаций. Окно остаётся небольшим: сверху фильтры по категориям из каталога, ниже прокручиваемый список. У реакций есть строка «Недавние», и клавиши 1–9 разумно привязать к ней. Страницы хуже: нужная реакция оказывается за лишним щелчком.</p></div>
+      <div class="card"><span class="tag">Игроки</span><h3>Счётчик открывает список</h3><p>Иконка людей и число вверху справа. По щелчку раскрывается список со знаком, цветом и именем каждого.</p></div>
+      <div class="card"><span class="tag">Подбор</span><h3>Подсказка у предмета</h3><p>Когда персонаж рядом, над предметом появляется плашка с красной клавишей <code>Z</code>, действием и названием. По ней можно щёлкнуть мышью или коснуться пальцем.</p></div>
+      <div class="card"><span class="tag">Знак игрока</span><h3>Случайная фигура вместо кружка</h3><p>Девять простых фигур в духе библиотеки форм M3 Expressive: круг, квадрат, треугольник, ромб, пятиугольник, шестиугольник, звезда, клевер, арка. Фигура не уникальна, но вместе с цветом хорошо различает людей в чате, над головой и в списке.</p></div>
+      <div class="card"><span class="tag">День и ночь</span><h3>Резкая смена темы</h3><p>Две темы: берёста днём, полночь ночью. Переключение мгновенное, на восходе и закате, около 07:00 и 19:00. Ночная рамка приглушённо-синяя, а не белая. Свет в мире по-прежнему меняется плавно.</p></div>
+      <div class="card"><span class="tag">Кнопки</span><h3>Крупнее, спокойнее</h3><p>Кнопки стали больше, иконки внутри меньше. Выбранная кнопка скругляется сильнее, но не до круга, поэтому подписи клавиш и счётчики не упираются в край. Подписи клавиш бледнее иконок.</p></div>
+      <div class="card"><span class="tag">Подпись над головой</span><h3>Тише</h3><p>Без рамки, полупрозрачная подложка, обычное начертание, знак игрока вместо точки. В макете рядом стоит второй игрок для сравнения.</p></div>
+      <div class="card"><span class="tag">Шрифты</span><h3>Rubik и Golos Text</h3><p>Rubik для заголовков и кнопок, Golos Text для всего остального. Оба содержат буквы коми Ӧ и І.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>На чём основан стиль</h2>
+    <div class="cards">
+      <div class="card"><span class="tag">Орнамент</span><h3>Геометрия на сетке вязания</h3><p>В коми вязании, ткачестве и меховой мозаике узор строится из ромбов, зигзагов и ступенчатых диагоналей. Семьи метили имущество знаками <em>пас</em>, которые служили и оберегами. В макете лента из ромбов идёт по краю окон и фоном в лобби.</p></div>
+      <div class="card"><span class="tag">Цвет</span><h3>Красный оберегает</h3><p>Этнографы описывают красный у коми как защитный цвет. Флаг республики синий, зелёный и белый, герб: золотая птица на красном в пермском зверином стиле. Поэтому красный отдан действиям, золото отдано выделению, синий и зелёный остаются в мире.</p></div>
+      <div class="card"><span class="tag">Материал</span><h3>Бумага и берёста</h3><p>Город известен бумажным комбинатом, а берёста входит в число коми ремёсел. Тёплые бумажные панели с чернильной рамкой подходят к обоим и дешевле в отрисовке, чем размытие.</p></div>
+      <div class="card"><span class="tag">Пермский звериный стиль</span><h3>Литые бронзовые силуэты</h3><p>Плоские бляхи с птицами, лосями и медведями VI–XIV веков. Хороший образец для будущих значков предметов и достижений вместо эмодзи.</p></div>
+    </div>
+    <h3>Палитра</h3>
+    <div class="pal">
+      <div class="sw-card"><i style="background:#f3ead8"></i><b>Берёста</b>дневные панели<span>#F3EAD8</span></div>
+      <div class="sw-card"><i style="background:#1f2420"></i><b>Сажа</b>текст и рамки днём<span>#1F2420</span></div>
+      <div class="sw-card"><i style="background:#c8342f"></i><b>Брусника</b>главные действия, орнамент<span>#C8342F</span></div>
+      <div class="sw-card"><i style="background:#e8a33a"></i><b>Морошка</b>фокус, выделение, окна ночью<span>#E8A33A</span></div>
+      <div class="sw-card"><i style="background:#18213f"></i><b>Полночь</b>ночные панели<span>#18213F</span></div>
+      <div class="sw-card"><i style="background:#5d6a99"></i><b>Белая ночь</b>рамки ночью<span>#5D6A99</span></div>
+      <div class="sw-card"><i style="background:#2f7d55"></i><b>Тайга</b>успех, акценты мира<span>#2F7D55</span></div>
+      <div class="sw-card"><i style="background:#2e6fa8"></i><b>Вычегда</b>ссылки, справка<span>#2E6FA8</span></div>
+    </div>
+    <p class="note">Названия и точные значения цветов предложены мной. Источники подтверждают только мотивы и сами семейства цветов.</p>
+  </section>
+
+  <section>
+    <h2>Источники</h2>
+    <ul class="tight">
+      <li><a href="https://crwflags.com/FoTW/FLAGS/ru-11syk.html">Flags of the World: Сыктывкар</a>, герб с елью, медведем и звездой-шондiбан.</li>
+      <li><a href="https://gramota.net/eng/materials/3/2009/3/12.html">Грамота: орнамент «птичья лапка» у коми-зырян</a>, знаки пас в вязании, керамике и меховой мозаике.</li>
+      <li><a href="https://archaeology.nsc.ru/en/publications/jr-aeae-en/25-53-4/annot-12/">Символика синего цвета в культуре обских коми</a>, красный как защитный.</li>
+      <li><a href="https://www.folklore.ee/Folklore/vol18/permian.pdf">Autio, The Permian Animal Style</a>.</li>
+      <li><a href="https://www.androidauthority.com/google-material-3-expressive-features-changes-availability-devices-3556392">Android Authority</a> и <a href="https://9to5google.com/?p=671907">9to5Google</a> о Material 3 Expressive.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const NS = 'http://www.w3.org/2000/svg';
+  const root = document.documentElement, stage = $('stage'), scene = $('scene');
+  const TYPES = {
+    crate: { name: 'Деревянный ящик', svg: '<polygon points="20,6 34,13 20,20 6,13" fill="#e6b877"/><polygon points="6,13 20,20 20,35 6,28" fill="#c98f4a"/><polygon points="20,20 34,13 34,28 20,35" fill="#a8733a"/><polygon points="11,15.5 15,17.5 15,32.5 11,30.5" fill="#7a4f22"/>' },
+    monument: { name: 'Памятник уверенности', svg: '<polygon points="20,2 27,5.5 20,9 13,5.5" fill="#596070"/><polygon points="13,5.5 20,9 20,38 13,34.5" fill="#343944"/><polygon points="20,9 27,5.5 27,34.5 20,38" fill="#1d2027"/>' },
+    soap: { name: 'Гигантское мыло', svg: '<polygon points="20,14 35,21 20,28 5,21" fill="#ffc7e0"/><polygon points="5,21 20,28 20,33 5,26" fill="#f08fbd"/><polygon points="20,28 35,21 35,26 20,33" fill="#d96fa2"/>' },
+    melon: { name: 'Арбуз', svg: '<polygon points="20,7 30,11 34,21 30,31 20,35 10,31 6,21 10,11" fill="#3f9a4a"/><polygon points="20,7 23,21 20,35 17,21" fill="#2a6e36"/><polygon points="10,11 14,21 10,31 8,21" fill="#2a6e36"/><polygon points="30,11 32,21 30,31 26,21" fill="#2a6e36"/><polygon points="20,7 30,11 23,13" fill="#ffffff" opacity=".25"/>' },
+  };
+  const ORDER = ['crate', 'monument', 'soap', 'melon'];
+  // Same ids, labels and categories as packages/contracts reactions.ts and animations.ts.
+  const REACTIONS = [['hello','Привет','Общение'],['like','Класс','Общение'],['laugh','Смешно','Эмоции'],['love','Любовь','Эмоции'],['question','Вопрос','Общение'],['work','Работаю','Занятия'],['sleep','Сплю','Занятия'],['eat','Кушаю','Занятия'],['coffee','Кофе','Занятия'],['away','Отошёл','Статус'],['busy','Занят','Статус'],['music','Музыка','Занятия'],['game','Играю','Занятия'],['read','Читаю','Занятия'],['think','Думаю','Эмоции'],['sad','Грущу','Эмоции'],['angry','Злюсь','Эмоции'],['surprise','Ого!','Эмоции'],['celebrate','Ура!','Эмоции'],['thanks','Спасибо','Общение']];
+  const EMOTES = [['Помахать рукой','Общение'],['Хлопать','Общение'],['Танцевать','Развлечения'],['Указать','Общение'],['Радоваться','Эмоции'],['Пожать плечами','Эмоции'],['Поклониться','Общение'],['Потянуться','Разминка'],['Маршировать','Разминка'],['Держать баланс','Разминка'],['Боксировать','Разминка'],['Диско','Танцы'],['Робот','Танцы'],['Покачиваться','Танцы'],['Дирижировать','Развлечения']];
+  const PRESETS = [['Мята','Mint','#6EE0C4'],['Морошка','Cloudberry','#E8A33A'],['Брусника','Lingonberry','#D5443E'],['Иван-чай','Fireweed','#C95C9A'],['Белая ночь','White night','#8FA0E0'],['Вычегда','Vychegda','#2E6FA8'],['Тайга','Taiga','#2F7D55'],['Мох','Moss','#8FA84A']];
+  const SKINS = [['mini','Минифигурка','Minifigure'],['std','Стандартный','Standard']];
+  const I18N = {
+    ru: { status: '2 из 8 · мир доступен', pass: 'Пропуск · Полигон 01', sub: 'Встретимся на полигоне.', name: 'Имя в игре', color: 'Цвет', hue: 'Оттенок', tone: 'Тон', sign: 'Ваш знак', signNote: 'Выдаётся случайно. Виден в чате и над головой.', enter: 'Войти в мир', picked: 'Выбран', free: 'Доступен', more: 'Ещё 10 персонажей появятся с обновлениями', player: 'Игрок' },
+    en: { status: '2 of 8 · world is open', pass: 'Pass · Test ground 01', sub: 'See you at the test ground.', name: 'Name in game', color: 'Colour', hue: 'Hue', tone: 'Tone', sign: 'Your sign', signNote: 'Assigned at random. Shown in chat and above your head.', enter: 'Enter the world', picked: 'Selected', free: 'Available', more: '10 more characters will arrive with updates', player: 'Player' },
+  };
+  const SHAPES = [
+    '<circle cx="12" cy="12" r="8.5"/>', '<rect x="4.5" y="4.5" width="15" height="15" rx="4"/>', '<path d="M12 4.5 20 18.5H4Z"/>',
+    '<path d="M12 3 21 12 12 21 3 12Z"/>', '<path d="M12 3.5 20.6 9.8 17.3 19.8H6.7L3.4 9.8Z"/>', '<path d="M12 3 19.8 7.5V16.5L12 21 4.2 16.5V7.5Z"/>',
+    '<rect x="5.5" y="5.5" width="13" height="13"/><rect x="5.5" y="5.5" width="13" height="13" transform="rotate(45 12 12)"/>',
+    '<circle cx="8" cy="8" r="4.6"/><circle cx="16" cy="8" r="4.6"/><circle cx="8" cy="16" r="4.6"/><circle cx="16" cy="16" r="4.6"/>',
+    '<path d="M5 20.5V11a7 7 0 0 1 14 0v9.5Z"/>',
+  ];
+  const state = { hour: 14.5, mode: 'auto', theme: 'day', lang: 'ru', placing: null, open: null, skin: 0, color: PRESETS[0][2], preset: 0, name: 'Игрок',
+    filter: { react: 'Все', emote: 'Все' }, recent: ['hello', 'like', 'laugh', 'thanks'],
+    me: { x: 720, y: 432 }, target: null, items: [], inv: { crate: 12, monument: 1, soap: 4, melon: 7 },
+    log: [{ sys: 'Гость 2 вошёл в мир' }, { who: 'Аня', c: '#E8A33A', text: 'кто передвинул памятник?' }, { who: 'Гость 2', c: '#8FA0E0', text: 'это не я' }, { who: 'Аня', c: '#E8A33A', text: 'ящики у фонтана, забирайте' }] };
+  const T = (key) => I18N[state.lang][key];
+
+  // --- shapes and figures ---
+  const shapeOf = (name) => { let h = 7; for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 9973; return h % SHAPES.length; };
+  const shapeInner = (i, c) => `<g stroke="var(--ln)" stroke-width="3.4" stroke-linejoin="round" fill="var(--ln)">${SHAPES[i]}</g><g fill="${c}" stroke="${c}" stroke-width=".6" stroke-linejoin="round">${SHAPES[i]}</g>`;
+  const shape = (name, c) => `<svg class="shp" viewBox="0 0 24 24" aria-hidden="true">${shapeInner(shapeOf(name), c)}</svg>`;
+  const figure = (c) => `<polygon points="0,26 16,18 0,10 -16,18" fill="${c}" opacity=".55"/><polygon points="-7,-4 0,-1 0,20 -7,17" fill="${c}"/><polygon points="0,-1 7,-4 7,17 0,20" fill="${c}" opacity=".8"/><polygon points="-8,-22 0,-19 0,-2 -8,-5" fill="${c}"/><polygon points="0,-19 8,-22 8,-5 0,-2" fill="${c}" opacity=".8"/><polygon points="-5,-32 0,-30 0,-21 -5,-23" fill="#f2c94c"/><polygon points="0,-30 5,-32 5,-23 0,-21" fill="#d9ad30"/><polygon points="-5,-32 0,-34 5,-32 0,-30" fill="#ffe07a"/>`;
+  const plate = (label, name, c) => { const w = 40 + label.length * 7.4; return `<rect x="${-w / 2}" y="-12" width="${w}" height="24" rx="12" fill="var(--p)" opacity=".72"/><svg x="${-w / 2 + 8}" y="-8" width="16" height="16" viewBox="0 0 24 24">${shapeInner(shapeOf(name), c)}</svg><text x="${-w / 2 + 29}" y="4.5" font-size="13" font-weight="500" fill="var(--ink)">${label}</text>`; };
+  const players = () => [{ name: state.name, c: state.color, me: true }, { name: 'Аня', c: '#E8A33A' }, { name: 'Гость 2', c: '#8FA0E0' }];
+  function renderPeople() {
+    $('me-body').innerHTML = figure('var(--me)'); $('npc-body').innerHTML = figure('#E8A33A');
+    $('me-plate').innerHTML = plate('Вы', state.name, state.color); $('npc-plate').innerHTML = plate('Аня', 'Аня', '#E8A33A');
+    $('sign-shape').innerHTML = shape(state.name, state.color);
+    $('players').innerHTML = '<div class="orn"></div><h4 class="disp"><span>В сети</span><small>3 из 8</small></h4><div class="plist">' + players().map((p) => `<div>${shape(p.name, p.c)}<span>${esc(p.name)}</span>${p.me ? '<small>вы</small>' : ''}</div>`).join('') + '</div>';
+    renderLog();
+  }
+
+  // --- time: world light is continuous, UI theme flips ---
+  const rgb = (hex) => { const v = parseInt(hex.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
+  const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  const css = (c) => `rgb(${c.map(Math.round).join(',')})`;
+  const smooth = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const SKY = { day: rgb('#a9cfe6'), dusk: rgb('#e09a78'), night: rgb('#131a36') };
+  const GROUND = { day: rgb('#a4b94a'), dusk: rgb('#8a7a4c'), night: rgb('#263a34') };
+  const TINT = { day: [255, 255, 255], dusk: [255, 180, 128], night: [72, 86, 152] };
+  const fmt = (h) => { const m = Math.round(h * 60) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+  const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>';
+  const MOON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>';
+  function applyTime() {
+    const h = Math.cos(((state.hour - 13) / 12) * Math.PI) * 0.78;
+    const three = (set) => mix(mix(set.night, set.dusk, smooth(-0.18, 0, h)), set.day, smooth(0.04, 0.34, h));
+    // Hysteresis keeps the theme from flickering right at the horizon.
+    const auto = state.theme === 'day' ? h > -0.02 : h > 0.02;
+    state.theme = state.mode === 'auto' ? (auto ? 'day' : 'night') : state.mode;
+    stage.dataset.th = $('lobby').dataset.th = state.theme;
+    root.style.setProperty('--m-sky', css(three(SKY))); root.style.setProperty('--m-ground', css(three(GROUND)));
+    $('tint').setAttribute('fill', css(three(TINT)));
+    $('lit').setAttribute('opacity', (1 - smooth(-0.1, 0.12, h)).toFixed(2));
+    $('clock-text').textContent = fmt(state.hour); $('hour-out').textContent = fmt(state.hour);
+    $('clock-icon').innerHTML = h > 0 ? SUN : MOON;
+  }
+
+  // --- scene details ---
+  $('bushes').innerHTML = [[870,245],[925,215],[950,250],[875,390],[945,370],[925,420],[1170,250],[1190,215],[1245,245],[1170,370],[1245,390],[1195,420]].map(([x, y], i) =>
+    `<g transform="translate(${x},${y})"><polygon points="-28,6 -18,-16 8,-22 28,-6 22,16 -10,20" fill="#557f33"/><polygon points="-18,-16 8,-22 4,-4 -14,0" fill="#79a64a"/><polygon points="-22,10 -8,6 -6,18 -18,18" fill="${i % 2 ? '#f3f0ea' : '#e58ab4'}"/></g>`).join('');
+  let win = '', lit = '';
+  for (let row = 0; row < 6; row++) for (const x of [1330, 1385]) {
+    const y = 372 + row * 108 + (x - 1308) * 1.1;
+    const p = `<polygon points="${x},${y} ${x + 22},${y + 24} ${x + 22},${y + 74} ${x},${y + 50}"/>`;
+    win += p; if ((row * 2 + (x > 1340 ? 1 : 0)) % 3 !== 1) lit += p;
+  }
+  $('windows').innerHTML = win; $('lit').innerHTML = lit;
+  const iconSvg = (type) => `<svg viewBox="0 0 40 40" aria-hidden="true">${TYPES[type].svg}</svg>`;
+  function addWorldItem(type, x, y) {
+    const el = document.createElementNS(NS, 'g');
+    el.setAttribute('transform', `translate(${x - 30},${y - 44}) scale(1.5)`);
+    el.innerHTML = '<ellipse cx="22" cy="34" rx="16" ry="5" fill="#000" opacity=".18"/>' + TYPES[type].svg;
+    $('items').append(el); state.items.push({ type, x, y, el });
+  }
+
+  // --- walking and the pickup prompt ---
+  const toScene = (event) => { const p = scene.createSVGPoint(); p.x = event.clientX; p.y = event.clientY; return p.matrixTransform(scene.getScreenCTM().inverse()); };
+  const nearest = () => state.items.reduce((best, item) => { const d = Math.hypot(item.x - state.me.x, item.y - 8 - state.me.y); return d < 135 && (!best || d < best.d) ? { item, d } : best; }, null)?.item;
+  function updatePrompt() {
+    const item = state.placing ? undefined : nearest(), prompt = $('prompt');
+    if (!item) { prompt.hidden = true; prompt.dataset.for = ''; return; }
+    const key = `${item.type}:${item.x}:${item.y}`;
+    if (prompt.dataset.for !== key) { prompt.dataset.for = key; prompt.innerHTML = `<span class="key">Z</span><span><b>Подобрать</b><small>${TYPES[item.type].name}</small></span>`; }
+    const p = scene.createSVGPoint(); p.x = item.x; p.y = item.y - 62;
+    const at = p.matrixTransform(scene.getScreenCTM()), box = stage.getBoundingClientRect();
+    prompt.style.left = `${at.x - box.left}px`; prompt.style.top = `${at.y - box.top}px`; prompt.hidden = false;
+  }
+  function moveMe() {
+    const t = `translate(${state.me.x},${state.me.y})`;
+    $('me-body').setAttribute('transform', t); $('me-over').setAttribute('transform', t); updatePrompt();
+  }
+  let walking = 0, last = 0;
+  function step(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const dx = state.target.x - state.me.x, dy = state.target.y - state.me.y, dist = Math.hypot(dx, dy), go = 300 * dt;
+    if (dist <= go) { state.me = { ...state.target }; state.target = null; walking = 0; moveMe(); return; }
+    state.me.x += (dx / dist) * go; state.me.y += (dy / dist) * go; moveMe(); walking = requestAnimationFrame(step);
+  }
+  function walkTo(x, y) {
+    state.target = { x, y };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { state.me = { x, y }; state.target = null; moveMe(); return; }
+    if (!walking) { last = performance.now(); walking = requestAnimationFrame(step); }
+  }
+  function pickup() {
+    const item = state.placing ? undefined : nearest(); if (!item) return;
+    state.items.splice(state.items.indexOf(item), 1); item.el.remove(); state.inv[item.type]++; $('pack-n').textContent = total(); updatePrompt();
+    toast(`${iconSvg(item.type)}<span>${TYPES[item.type].name} — в рюкзаке</span>`);
+  }
+  $('prompt').addEventListener('click', pickup);
+  window.addEventListener('resize', updatePrompt);
+
+  // --- toast, backpack, placement ---
+  let toastTimer;
+  function toast(html) { const t = $('toast'); t.innerHTML = html; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2400); }
+  const total = () => ORDER.reduce((n, type) => n + state.inv[type], 0);
+  function closeAll() {
+    state.open = null; $('pop').hidden = true; $('tray').hidden = true; $('players').hidden = true;
+    for (const b of stage.querySelectorAll('[aria-expanded]')) b.setAttribute('aria-expanded', 'false');
+  }
+  function setPlacing(type) {
+    state.placing = type && state.inv[type] > 0 ? type : null;
+    if (state.placing) stage.dataset.placing = '1'; else delete stage.dataset.placing;
+    const hint = $('place-hint'); hint.hidden = !state.placing;
+    if (state.placing) hint.innerHTML = `${iconSvg(state.placing)}<span><b>${TYPES[state.placing].name}</b> · щёлкните по миру<span class="opt"> · Esc — отмена</span></span>`;
+    $('pack-n').textContent = total(); updatePrompt();
+  }
+  function openTray() {
+    const was = state.open === 'tray'; closeAll(); if (was) return;
+    setPlacing(null); state.open = 'tray'; $('pack').setAttribute('aria-expanded', 'true');
+    const have = ORDER.filter((type) => state.inv[type] > 0);
+    $('tray').innerHTML = `<div class="orn"></div><h4 class="disp"><span>Рюкзак</span><small>${total()} шт.</small></h4>` + (have.length
+      ? '<div class="tiles">' + have.map((type, i) => `<button class="btn tile" type="button" data-type="${type}" aria-label="${TYPES[type].name}, ${state.inv[type]} шт."><span class="k">${i + 1}</span>${iconSvg(type)}<span class="n">${state.inv[type]}</span></button>`).join('') + '</div>'
+      : '<p class="tray-note">Пусто. Подойдите к предмету и нажмите Z.</p>');
+    $('tray').hidden = false;
+  }
+  $('pack').addEventListener('click', openTray);
+  $('tray').addEventListener('click', (event) => { const tile = event.target.closest('[data-type]'); if (tile) { closeAll(); setPlacing(tile.dataset.type); } });
+  $('players-b').addEventListener('click', () => { const was = state.open === 'players'; closeAll(); if (was) return; state.open = 'players'; $('players-b').setAttribute('aria-expanded', 'true'); $('players').hidden = false; });
+  $('view').addEventListener('click', () => toast('Вид от первого лица'));
+  $('help').addEventListener('click', () => toast('Управление и настройки'));
+  scene.addEventListener('click', (event) => {
+    const at = toScene(event);
+    if (state.placing) { const type = state.placing; addWorldItem(type, at.x, at.y); state.inv[type]--; setPlacing(null); return; }
+    if (state.open) { closeAll(); return; }
+    walkTo(at.x, at.y);
+  });
+
+  // --- chat, reactions, animations ---
+  let stickerTimer, bubbleTimer;
+  const esc = (s) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  function renderLog() {
+    $('log').innerHTML = state.log.slice(-5).map((l) => l.sys ? `<div class="sys">${esc(l.sys)}</div>` : `<div>${shape(l.me ? state.name : l.who, l.me ? state.color : l.c)}<b>${esc(l.who)}:</b> ${esc(l.text)}</div>`).join('');
+  }
+  const reactBtn = ([id, label]) => `<button class="btn" type="button" data-react="${id}"><img src="../../../apps/client/public/reactions/${id}.svg" alt=""><span>${label}</span></button>`;
+  function renderPop() {
+    const kind = state.open, list = kind === 'react' ? REACTIONS : EMOTES, catAt = kind === 'react' ? 2 : 1, f = state.filter[kind];
+    const cats = ['Все', ...new Set(list.map((entry) => entry[catAt]))];
+    const shown = list.filter((entry) => f === 'Все' || entry[catAt] === f);
+    const filters = '<div class="filters" role="group" aria-label="Категория">' + cats.map((c) => `<button class="btn" type="button" data-filter="${c}" aria-pressed="${c === f}">${c}</button>`).join('') + '</div>';
+    $('pop').innerHTML = '<div class="orn"></div>' + (kind === 'react'
+      ? `<h4 class="disp"><span>Реакции</span><small>${shown.length} из ${list.length}</small></h4>${filters}<div class="scroll">`
+        + (f === 'Все' ? `<span class="sub">Недавние · клавиши 1–4</span><div class="rgrid">${state.recent.map((id) => reactBtn(REACTIONS.find((r) => r[0] === id))).join('')}</div><span class="sub">Все</span>` : '')
+        + `<div class="rgrid">${shown.map(reactBtn).join('')}</div></div>`
+      : `<h4 class="disp"><span>Анимации</span><small>${shown.length} из ${list.length}</small></h4>${filters}<div class="scroll"><div class="elist">${shown.map(([label]) => `<button class="btn" type="button" data-emote="${label}">${label}</button>`).join('')}</div></div>`);
+  }
+  function openPop(kind) {
+    const was = state.open === kind; closeAll(); if (was) return;
+    setPlacing(null); state.open = kind;
+    stage.querySelector(`[data-pop="${kind}"]`).setAttribute('aria-expanded', 'true');
+    renderPop(); $('pop').hidden = false;
+  }
+  $('chat-form').addEventListener('click', (event) => { const b = event.target.closest('[data-pop]'); if (b) openPop(b.dataset.pop); });
+  $('pop').addEventListener('click', (event) => {
+    const fl = event.target.closest('[data-filter]'), r = event.target.closest('[data-react]'), e = event.target.closest('[data-emote]');
+    if (fl) { state.filter[state.open] = fl.dataset.filter; renderPop(); }
+    else if (r) {
+      const id = r.dataset.react, s = $('sticker');
+      state.recent = [id, ...state.recent.filter((x) => x !== id)].slice(0, 4);
+      s.setAttribute('href', `../../../apps/client/public/reactions/${id}.svg`); s.setAttribute('visibility', 'visible'); $('bubble').setAttribute('visibility', 'hidden');
+      clearTimeout(stickerTimer); stickerTimer = setTimeout(() => s.setAttribute('visibility', 'hidden'), 3500); closeAll();
+    } else if (e) { state.log.push({ sys: `Вы: ${e.dataset.emote.toLowerCase()}` }); renderLog(); closeAll(); }
+  });
+  $('chat-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const text = $('chat-input').value.trim(); $('chat-input').value = ''; closeAll();
+    if (!text) { stage.focus({ preventScroll: true }); return; }
+    state.log.push({ who: 'Вы', me: true, text }); renderLog();
+    const width = Math.max(90, text.length * 10 + 36);
+    $('bubble-box').setAttribute('x', -width / 2); $('bubble-box').setAttribute('width', width);
+    $('bubble-text').textContent = text; $('bubble').setAttribute('visibility', 'visible'); $('sticker').setAttribute('visibility', 'hidden');
+    clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => $('bubble').setAttribute('visibility', 'hidden'), 4500);
+  });
+  stage.addEventListener('keydown', (event) => {
+    if (event.target.matches('input')) { if (event.key === 'Escape') { closeAll(); stage.focus({ preventScroll: true }); } return; }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const have = ORDER.filter((type) => state.inv[type] > 0);
+    if (/^Digit[1-4]$/.test(event.code)) { const type = have[Number(event.code.slice(5)) - 1]; if (type) { closeAll(); setPlacing(type); } }
+    else if (event.code === 'Escape') { setPlacing(null); closeAll(); }
+    else if (event.code === 'Enter' || event.code === 'KeyT') { event.preventDefault(); closeAll(); $('chat-input').focus({ preventScroll: true }); }
+    else if (event.code === 'KeyR') openPop('react');
+    else if (event.code === 'KeyF') openPop('emote');
+    else if (event.code === 'KeyX') openTray();
+    else if (event.code === 'KeyZ') pickup();
+  });
+
+  // --- lobby ---
+  const hsl = (h, s, l) => { s /= 100; l /= 100; const a = s * Math.min(l, 1 - l); const f = (n) => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0'); }; return `#${f(0)}${f(8)}${f(4)}`.toUpperCase(); };
+  function setColor(hex, preset) {
+    state.color = hex; state.preset = preset; root.style.setProperty('--m-me', hex);
+    $('color-name').textContent = preset === undefined ? hex : PRESETS[preset][state.lang === 'ru' ? 0 : 1];
+    [...$('dots').children].forEach((b, i) => b.setAttribute('aria-pressed', String(preset === undefined ? b.dataset.own === '1' : i === preset)));
+    renderPeople();
+  }
+  function ownColor() {
+    const h = Number($('hue').value), tone = Number($('tone').value);
+    $('tone').style.setProperty('--tr', `linear-gradient(90deg,${hsl(h, 68, 38)},${hsl(h, 68, 56)},${hsl(h, 68, 74)})`);
+    setColor(hsl(h, 68, 38 + tone * 0.36));
+  }
+  $('dots').innerHTML = PRESETS.map(([ru, , hex], i) => `<button class="btn dot-b" type="button" data-i="${i}" style="--c:${hex}" aria-label="${ru}" aria-pressed="false"></button>`).join('')
+    + '<button class="btn dot-b own" type="button" data-own="1" aria-label="Свой цвет" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>';
+  $('dots').addEventListener('click', (event) => {
+    const b = event.target.closest('button'); if (!b) return;
+    $('own-box').hidden = b.dataset.own !== '1';
+    if (b.dataset.own === '1') ownColor(); else setColor(PRESETS[b.dataset.i][2], Number(b.dataset.i));
+  });
+  $('hue').addEventListener('input', ownColor); $('tone').addEventListener('input', ownColor);
+  function setSkin(index) {
+    state.skin = (index + SKINS.length) % SKINS.length;
+    const nameAt = state.lang === 'ru' ? 1 : 2;
+    $('head-mini').setAttribute('visibility', state.skin === 0 ? 'visible' : 'hidden');
+    $('head-std').setAttribute('visibility', state.skin === 1 ? 'visible' : 'hidden');
+    $('plate-skin').textContent = SKINS[state.skin][nameAt];
+    $('roster').innerHTML = SKINS.map((skin, i) => `<button class="btn r-card" type="button" data-skin="${i}" aria-pressed="${i === state.skin}"><svg viewBox="70 28 60 62" aria-hidden="true">${skin[0] === 'mini' ? '<polygon points="84,40 100,46 100,84 84,78" fill="#f2c94c"/><polygon points="100,46 116,40 116,78 100,84" fill="#d9ad30"/><polygon points="84,40 100,34 116,40 100,46" fill="#ffe07a"/>' : '<polygon points="100,34 116,40 123,57 116,74 100,82 84,74 77,57 84,40" fill="var(--me)"/><polygon points="84,52 118,52 118,63 84,63" fill="#1c2530"/>'}</svg><span>${skin[nameAt]}<small>${i === state.skin ? T('picked') : T('free')}</small></span></button>`).join('')
+      + `<div class="pnl r-more">${T('more')}</div>`;
+  }
+  $('roster').addEventListener('click', (event) => { const b = event.target.closest('[data-skin]'); if (b) setSkin(Number(b.dataset.skin)); });
+  $('lobby').addEventListener('click', (event) => { const b = event.target.closest('[data-skin-step]'); if (b) setSkin(state.skin + Number(b.dataset.skinStep)); });
+  $('name').addEventListener('input', () => { state.name = $('name').value.trim() || T('player'); $('plate-name').textContent = state.name; renderPeople(); });
+  $('enter').addEventListener('click', () => { stage.scrollIntoView({ behavior: 'smooth', block: 'center' }); stage.focus({ preventScroll: true }); });
+  $('lang').addEventListener('click', (event) => {
+    const b = event.target.closest('[data-lang]'); if (!b) return;
+    state.lang = b.dataset.lang;
+    for (const other of $('lang').children) other.setAttribute('aria-pressed', String(other === b));
+    for (const el of $('lobby').querySelectorAll('[data-i18n]')) el.textContent = T(el.dataset.i18n);
+    if (['Игрок', 'Player'].includes($('name').value.trim())) { $('name').value = state.name = T('player'); $('plate-name').textContent = state.name; }
+    setSkin(state.skin); setColor(state.color, state.preset);
+  });
+
+  // --- page controls ---
+  $('mode').addEventListener('click', (event) => {
+    const b = event.target.closest('button'); if (!b) return;
+    for (const other of $('mode').children) other.setAttribute('aria-pressed', String(other === b));
+    state.mode = b.dataset.mode; applyTime();
+  });
+  $('hour').addEventListener('input', () => { state.hour = Number($('hour').value) % 24; applyTime(); });
+  let timer;
+  $('play').addEventListener('click', () => {
+    const on = !timer; $('play').setAttribute('aria-pressed', String(on)); $('play').textContent = on ? 'Пауза' : 'Прогнать сутки';
+    if (on) timer = setInterval(() => { state.hour = (state.hour + 0.05) % 24; $('hour').value = state.hour; applyTime(); }, 60);
+    else { clearInterval(timer); timer = undefined; }
+  });
+
+  addWorldItem('crate', 815, 478); addWorldItem('soap', 1070, 560);
+  setColor(PRESETS[0][2], 0); setSkin(0); applyTime(); $('pack-n').textContent = total();
+  requestAnimationFrame(updatePrompt);
+})();
+</script>

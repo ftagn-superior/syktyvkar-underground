@@ -78,14 +78,14 @@ try {
   assert.equal(app.room.state.items.size, 0);
   await page.keyboard.press('x');
   assert.equal(await page.locator('.inventory-choice:focus').count(), 1);
-  await page.getByRole('button', { name: 'Разделить пополам', exact: true }).click();
-  await page.waitForFunction(
-    () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 2,
+  // One tile per item type: three crates are one tile with a count, and the dock shows the total.
+  assert.equal(await page.locator('.inventory-choice').count(), 1);
+  assert.equal(
+    await page.locator('.inventory-choice').getAttribute('aria-label'),
+    'Деревянный ящик, 3 шт.',
   );
-  await page.locator('.inventory-choice').first().click();
-  await page.getByRole('button', { name: 'Переместить / объединить' }).click();
-  assert.equal(await page.locator('.inventory-slot:last-child .inventory-choice:focus').count(), 1);
-  // Preparing a return preserves the open inventory and selected move source.
+  assert.equal(await page.locator('#inventory-count').textContent(), '3');
+  // Preparing a return preserves the open backpack.
   const beforeReturn = await page.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
   );
@@ -98,25 +98,12 @@ try {
     return state.connection === 'playing' && state.authoritative.revision > revision;
   }, beforeReturn);
   assert.equal(await page.locator('.inventory-panel').isVisible(), true);
-  await page.locator('.inventory-choice').last().click();
-  await page.getByRole('button', { name: 'Поменять местами' }).click();
-  await page.waitForFunction(
-    () => (window as any).__SU_DEBUG__.snapshot().inventory.slots[0].items.length === 1,
-  );
-  await page.locator('.inventory-choice').first().click();
-  await page.getByRole('button', { name: 'Переместить / объединить' }).click();
-  await page.locator('.inventory-choice').last().click();
-  await page.getByRole('button', { name: 'Объединить сюда' }).click();
-  await page.waitForFunction(
-    () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 1,
-  );
+  await page.keyboard.press('Escape');
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/items-inventory.png' });
   const chosenId = await page.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots[0].items[0].itemId,
   );
-  await page.getByRole('button', { name: '📦 Деревянный ящик × 3', exact: true }).click();
-  assert.equal(await page.locator('#inventory-panel').isVisible(), true);
   const controls = () =>
     page.evaluate(() => ({
       position: (window as any).__SU_DEBUG__.snapshot().authoritative.position,
@@ -126,7 +113,9 @@ try {
     Math.hypot(a.x - b.x, a.z - b.z);
   // A key held before placement must not resume movement when placement ends.
   await page.keyboard.down('ArrowUp');
-  await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
+  await page.locator('#inventory-toggle').click();
+  await page.locator('.inventory-choice').first().click();
+  assert.equal(await page.locator('#inventory-panel').isVisible(), false);
   assert.equal(await page.locator('#item-placement button').count(), 2);
   await page.waitForTimeout(200);
   const beforeCancel = await controls();
@@ -147,7 +136,9 @@ try {
   await rotateCamera(page, -0.39);
 
   await page.keyboard.press('x');
-  await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
+  // Number keys pick a tile in the open backpack.
+  await page.keyboard.press('1');
+  await page.locator('#item-placement').waitFor({ state: 'visible' });
   const beforeRotation = await controls();
   await rotateCamera(page, 0.5);
   assert.ok(Math.abs((await controls()).camera - beforeRotation.camera) < 0.001);
@@ -157,7 +148,7 @@ try {
   const afterRotation = await controls();
   assert.ok(distance(afterRotation.position, beforeRotation.position) < 0.03);
   assert.ok(Math.abs(afterRotation.camera - beforeRotation.camera) < 0.001);
-  const confirm = page.getByRole('button', { name: 'Разместить', exact: true });
+  const confirm = page.getByRole('button', { name: 'Поставить', exact: true });
   let found = false;
   for (const y of [420, 400, 440, 460, 480]) {
     for (const x of [580, 600, 620, 660, 680, 700]) {

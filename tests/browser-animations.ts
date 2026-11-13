@@ -5,7 +5,7 @@ import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
 import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
-import { hudClick } from './helpers/hud.js';
+import { chatSent, hudClick } from './helpers/hud.js';
 
 const output = 'output/playwright/animations';
 const app = await createGameServer({ port: 0 });
@@ -86,17 +86,27 @@ try {
     );
     for (let choice = 1; choice < ANIMATIONS.length; choice++) await sender.keyboard.press('Tab');
     assert.equal(await sender.locator('.animation-choice:last-child:focus').count(), 1);
-    assert.ok(await sender.locator('#animations-panel').evaluate((panel) => panel.scrollTop > 0));
+    assert.ok(
+      await sender
+        .locator('#animations-panel .catalog-scroll')
+        .evaluate((panel) => panel.scrollTop > 0),
+    );
     await sender.keyboard.press('f');
     assert.equal(await sender.locator('#world:focus').count(), 1);
     await sender.keyboard.press('f');
-    assert.equal(await sender.locator('#animations-panel').evaluate((panel) => panel.scrollTop), 0);
+    assert.equal(
+      await sender
+        .locator('#animations-panel .catalog-scroll')
+        .evaluate((panel) => panel.scrollTop),
+      0,
+    );
     assert.equal(await sender.locator('.animation-choice:first-child:focus').count(), 1);
     await sender.keyboard.press('t');
     await sender.locator('#chat-input:focus').waitFor();
     assert.equal(await sender.locator('#animations-panel').isVisible(), false);
     await hudClick(sender, '#animations-toggle');
-    assert.equal(await sender.locator('#chat-console').isVisible(), false);
+    // Opening a catalog leaves the chat field as it is.
+    assert.equal(await sender.locator('#chat-console').isVisible(), true);
     assert.equal(await sender.locator('#animations-panel').isVisible(), true);
     await sender.keyboard.press('Escape');
     for (const [clipIndex, definition] of ANIMATIONS.entries()) {
@@ -105,7 +115,7 @@ try {
         await hudClick(sender, '#chat-toggle');
         await sender.locator('#chat-input').fill('Привет из меню анимаций!');
         await sender.locator('#chat-input').press('Enter');
-        await sender.locator('#chat-console').waitFor({ state: 'hidden' });
+        await chatSent(sender);
       }
       await hudClick(sender, '#animations-toggle');
       if (clipIndex < 9) await sender.keyboard.press(String(clipIndex + 1));
@@ -222,7 +232,7 @@ try {
     'Tab reaches the last choice and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges; Escape and successful selection close the menu',
   );
   checks.push(
-    'chat and animation panels close each other; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
+    'catalogs leave the chat field open; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
   );
   const sender = pages[0];
   await hudClick(sender, '#animations-toggle');
@@ -246,10 +256,11 @@ try {
         box.y + box.height <= size.height + 1,
     );
     if (size.width < 430) {
-      const actions = await sender.locator('.actions').boundingBox();
-      assert.ok(actions && box.y + box.height < actions.y);
+      const row = await sender.locator('#chat-row').boundingBox();
+      assert.ok(row && box.y + box.height < row.y);
     }
-    const panel = sender.locator('#animations-panel');
+    // The catalog scrolls inside a fixed-height list under the filters.
+    const panel = sender.locator('#animations-panel .catalog-scroll');
     const layout = await panel.evaluate((node) => ({
       scrollTop: node.scrollTop,
       scrollHeight: node.scrollHeight,
@@ -265,7 +276,7 @@ try {
     await sender.locator('.animation-choice:first-child').hover();
     await sender.mouse.wheel(0, layout.scrollHeight);
     await sender.waitForFunction(() => {
-      const panel = document.querySelector('#animations-panel')!;
+      const panel = document.querySelector('#animations-panel .catalog-scroll')!;
       const last = panel.querySelector('.animation-choice:last-child')!.getBoundingClientRect();
       const bounds = panel.getBoundingClientRect();
       const hit = document.elementFromPoint(last.x + last.width / 2, last.y + last.height / 2);
@@ -276,7 +287,7 @@ try {
         hit?.closest('.animation-choice') === panel.querySelector('.animation-choice:last-child')
       );
     });
-    for (const selector of ['#animations-toggle', '#respawn', '#leave']) {
+    for (const selector of ['#animations-toggle', '#reactions-toggle', '#help-toggle']) {
       assert.ok(
         await sender.locator(selector).evaluate((node) => {
           const rect = node.getBoundingClientRect();

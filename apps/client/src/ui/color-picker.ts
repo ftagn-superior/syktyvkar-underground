@@ -1,13 +1,22 @@
 import { CUSTOM_COLOR_LABEL, PROFILE_COLORS, resolveProfileColor } from '@su/contracts';
+import { ICONS } from './icons';
+import { customColor, customControls } from './theme';
 
 const DEFAULT_ID = PROFILE_COLORS[0].id;
+const CUSTOM = 'custom';
 
-/** Hexagonal swatches (real radios) plus a native colour input for a custom colour. */
+/**
+ * Круглые образцы (настоящие радиокнопки) и «свой цвет» с двумя ползунками: оттенок и тон.
+ * Значение — id предустановленного цвета или `#RRGGBB`, как и раньше.
+ */
 export class ColorPicker {
   private readonly radios: HTMLInputElement[] = [];
-  private readonly cells: HTMLElement[] = [];
-  private readonly wheel: HTMLLabelElement;
-  private readonly custom: HTMLInputElement;
+  private readonly dots: HTMLElement[] = [];
+  private readonly own: HTMLLabelElement;
+  private readonly ownRadio: HTMLInputElement;
+  private readonly box = document.getElementById('profile-own')!;
+  private readonly hue = document.getElementById('profile-hue') as HTMLInputElement;
+  private readonly tone = document.getElementById('profile-tone') as HTMLInputElement;
   private current: string = DEFAULT_ID;
 
   constructor(
@@ -16,39 +25,29 @@ export class ColorPicker {
     private readonly onChange: (colorId: string) => void,
   ) {
     for (const color of PROFILE_COLORS) {
-      const cell = document.createElement('label');
-      cell.className = 'su-swatch';
-      cell.style.setProperty('--sw', color.hex);
-      cell.title = color.label;
-      const input = document.createElement('input');
-      input.type = 'radio';
-      input.name = 'profile-color';
-      input.value = color.id;
+      const { dot, input } = swatch(color.id, color.label);
+      dot.style.setProperty('--c', color.hex);
+      dot.title = color.label;
       input.dataset.colorId = color.id;
-      input.setAttribute('aria-label', color.label);
-      input.addEventListener('change', () => this.select(color.id, true));
-      cell.append(input, hexagons('su-hx-i'));
-      this.container.append(cell);
+      input.addEventListener('change', () => input.checked && this.select(color.id, true));
+      this.container.append(dot);
       this.radios.push(input);
-      this.cells.push(cell);
+      this.dots.push(dot);
     }
-    this.wheel = document.createElement('label');
-    this.wheel.className = 'su-swatch su-wheel';
-    this.wheel.title = CUSTOM_COLOR_LABEL;
-    this.custom = document.createElement('input');
-    this.custom.type = 'color';
-    this.custom.id = 'profile-color-custom';
-    this.custom.setAttribute('aria-label', 'Свой цвет — открыть палитру');
-    this.custom.value = PROFILE_COLORS[0].hex.toLowerCase();
-    // `input` fires continuously while dragging inside the native picker: preview live.
-    this.custom.addEventListener('input', () => this.select(this.custom.value, true));
-    const centre = document.createElement('span');
-    centre.className = 'su-hx su-hx-c';
-    centre.append(document.createElement('span'));
-    const body = hexagons('su-hx-i');
-    body.querySelector('.su-hx-i')!.append(centre);
-    this.wheel.append(this.custom, body);
-    this.container.append(this.wheel);
+    const custom = swatch(CUSTOM, `${CUSTOM_COLOR_LABEL}: оттенок и тон`);
+    this.own = custom.dot;
+    this.ownRadio = custom.input;
+    this.own.classList.add('own');
+    this.own.title = CUSTOM_COLOR_LABEL;
+    this.own.insertAdjacentHTML('beforeend', ICONS.plus);
+    this.ownRadio.addEventListener(
+      'change',
+      () => this.ownRadio.checked && this.select(this.sliderColor(), true),
+    );
+    this.container.append(this.own);
+    const fromSliders = () => this.select(this.sliderColor(), true);
+    this.hue.addEventListener('input', fromSliders);
+    this.tone.addEventListener('input', fromSliders);
     this.select(DEFAULT_ID, false);
   }
   get value(): string {
@@ -64,7 +63,11 @@ export class ColorPicker {
     return resolveProfileColor(this.current)?.label ?? PROFILE_COLORS[0].label;
   }
   set disabled(value: boolean) {
-    for (const input of [...this.radios, this.custom]) input.disabled = value;
+    for (const input of [...this.radios, this.ownRadio, this.hue, this.tone])
+      input.disabled = value;
+  }
+  private sliderColor(): string {
+    return customColor(Number(this.hue.value), Number(this.tone.value));
   }
   private select(colorId: string, notify: boolean): void {
     const color = resolveProfileColor(colorId) ?? resolveProfileColor(DEFAULT_ID)!;
@@ -72,25 +75,38 @@ export class ColorPicker {
     this.radios.forEach((input, index) => {
       const on = !color.custom && input.value === color.id;
       input.checked = on;
-      this.cells[index].classList.toggle('is-on', on);
+      this.dots[index].classList.toggle('is-on', on);
     });
-    this.wheel.classList.toggle('is-on', color.custom);
-    this.wheel.style.setProperty('--sw', color.hex);
-    if (color.custom) this.custom.value = color.hex.toLowerCase();
+    this.ownRadio.checked = color.custom;
+    this.own.classList.toggle('is-on', color.custom);
+    this.own.style.setProperty('--c', color.hex);
+    this.box.hidden = !color.custom;
+    if (color.custom) {
+      const controls = customControls(color.hex);
+      // Keep the thumbs where the player left them while dragging.
+      if (customColor(Number(this.hue.value), Number(this.tone.value)) !== color.hex) {
+        this.hue.value = String(controls.hue);
+        this.tone.value = String(controls.tone);
+      }
+      const hue = Number(this.hue.value);
+      this.tone.style.setProperty(
+        '--tr',
+        `linear-gradient(90deg, ${customColor(hue, 0)}, ${customColor(hue, 50)}, ${customColor(hue, 100)})`,
+      );
+    }
     this.label.textContent = color.label;
     if (notify) this.onChange(this.current);
   }
 }
 
-/** Three nested hexagons give the selected ring (outer) and a dark gap (middle). */
-function hexagons(inner: string): HTMLElement {
-  const outer = document.createElement('span');
-  outer.className = 'su-hx su-hx-o';
-  const middle = document.createElement('span');
-  middle.className = 'su-hx su-hx-m';
-  const gem = document.createElement('span');
-  gem.className = `su-hx ${inner}`;
-  middle.append(gem);
-  outer.append(middle);
-  return outer;
+function swatch(value: string, label: string): { dot: HTMLLabelElement; input: HTMLInputElement } {
+  const dot = document.createElement('label');
+  dot.className = 'dot';
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = 'profile-color';
+  input.value = value;
+  input.setAttribute('aria-label', label);
+  dot.append(input);
+  return { dot, input };
 }

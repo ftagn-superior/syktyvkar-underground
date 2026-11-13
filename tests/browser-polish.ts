@@ -89,7 +89,7 @@ try {
   await page.locator('#join').click();
   await playing(page);
   await page.waitForFunction(
-    () => document.querySelector('#player-count')?.textContent === '1 / 8',
+    () => document.querySelector('#player-count')?.textContent === '1 из 8',
   );
   assert.equal(await page.locator('#diagnostics').isHidden(), true);
   checks.push('player count updates while the diagnostics panel is closed');

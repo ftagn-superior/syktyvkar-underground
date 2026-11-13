@@ -4,7 +4,7 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { hudClick } from './helpers/hud.js';
+import { chatSent, hudClick, openChat } from './helpers/hud.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('Use pnpm test:giveme:browser.');
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
@@ -26,7 +26,7 @@ async function inventoryCount(page: Page, expected: number) {
 }
 async function command(page: Page, text: string) {
   await page.bringToFront();
-  await hudClick(page, '#chat-toggle');
+  await openChat(page);
   await page.locator('#chat-input').fill(text);
   await page.locator('#chat-send:not([disabled])').click();
 }
@@ -64,7 +64,7 @@ try {
     .locator('#notice')
     .filter({ hasText: 'Получен предмет: Деревянный ящик ×1.' })
     .waitFor();
-  await owner.locator('#chat-console').waitFor({ state: 'hidden' });
+  await chatSent(owner);
   assert.equal(
     await observer.locator('#notice').textContent(),
     'Чтобы получить предмет, войдите через Telegram.',
@@ -85,7 +85,7 @@ try {
   await owner.waitForTimeout(2100);
   await owner.locator('#chat-send:not([disabled])').click();
   await inventoryCount(owner, 2);
-  await owner.locator('#chat-console').waitFor({ state: 'hidden' });
+  await chatSent(owner);
   await command(owner, '/giveme missing');
   await owner
     .locator('#notice')
@@ -105,14 +105,17 @@ try {
     await owner.waitForTimeout(2100);
     await command(owner, `/giveme ${typeId}`);
     await inventoryCount(owner, 3 + index);
-    await owner.locator('#chat-console').waitFor({ state: 'hidden' });
-    await owner.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
-    await owner.getByRole('button', { name: `${label} × 1`, exact: true }).click();
-    await owner.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
+    await chatSent(owner);
+    await owner.locator('#inventory-toggle').click();
+    assert.equal(
+      await owner.locator(`.inventory-choice[data-type-id="${typeId}"]`).getAttribute('title'),
+      label.slice(label.indexOf(' ') + 1),
+    );
+    await owner.locator(`.inventory-choice[data-type-id="${typeId}"]`).click();
     // A rotated sphere must still sit on the ground, rather than hover on box half extents.
     if (typeId === 'watermelon-ball')
       for (let turn = 0; turn < 3; turn++) await owner.keyboard.press('s');
-    const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
+    const confirm = owner.getByRole('button', { name: 'Поставить', exact: true });
     let found = false;
     for (const y of [420, 400, 440, 460, 480, 500, 380]) {
       for (const x of [580, 600, 620, 660, 680, 700, 540, 740]) {
@@ -145,13 +148,10 @@ try {
       .snapshot()
       .inventory.slots.flatMap((s: any) => s.items.map((i: any) => i.itemId)),
   );
-  await owner.getByRole('button', { name: 'Инвентарь · X', exact: true }).click();
+  await owner.locator('#inventory-toggle').click();
   // Keep the compound item placed across a full server restart.
-  await owner
-    .getByRole('button', { name: '🗿 Памятник уверенности · 4 м × 1', exact: true })
-    .click();
-  await owner.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
-  const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
+  await owner.locator('.inventory-choice[data-type-id="confidence-monument"]').click();
+  const confirm = owner.getByRole('button', { name: 'Поставить', exact: true });
   let found = false;
   for (const y of [420, 400, 440, 460, 480]) {
     for (const x of [580, 600, 620, 660, 680, 700]) {

@@ -45,6 +45,7 @@ import {
 } from './camera-controller';
 import type { DisplayEntity, DisplayPlayer } from '../presentation/display-state';
 import { ReactionSoundGate } from '../presentation/reaction-sounds';
+import { createSign } from '../ui/player-sign';
 import type { GameAudio } from '../audio/game-audio';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
@@ -94,6 +95,7 @@ export class WorldView {
   private readonly lightDirection = new Vector3();
   private fixedHour?: number;
   private dayClock: DayClock = DEFAULT_DAY_CLOCK;
+  private currentHour?: number;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
@@ -264,9 +266,8 @@ export class WorldView {
       const active = this.activeCamera;
       this.lighting.follow(this.ownPosition ?? this.target);
       const epochMs = Date.now();
-      const sky = this.lighting.setTimeOfDay(
-        this.fixedHour ?? dayClockHour(this.dayClock, epochMs),
-      );
+      this.currentHour = this.fixedHour ?? dayClockHour(this.dayClock, epochMs);
+      const sky = this.lighting.setTimeOfDay(this.currentHour);
       this.clouds.update({
         epochMs,
         lightDirection: this.lightDirection.set(
@@ -338,6 +339,10 @@ export class WorldView {
   /** Holds the world at one game hour (0..24); `undefined` returns to the running clock. */
   setTimeOfDay(hour?: number): void {
     this.fixedHour = hour === undefined ? undefined : ((hour % 24) + 24) % 24;
+  }
+  /** Игровой час последнего кадра (0..24): по нему интерфейс выбирает тему и показывает часы. */
+  get hour(): number {
+    return this.currentHour ?? this.fixedHour ?? dayClockHour(this.dayClock, Date.now());
   }
   /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
   setDayClock(clock: DayClock): void {
@@ -712,21 +717,19 @@ export class WorldView {
         const offline = entity.connected === false;
         const key = `${name}|${own}|${offline}|${entity.color ?? ''}`;
         if (key !== view.labelText) {
-          // Each tag carries the player's own colour as its gem; own tag adds "· Вы".
-          const gem = document.createElement('span');
-          gem.className = 'su-gem sm';
-          if (entity.color) gem.style.setProperty('--gem', entity.color);
+          // Знак игрока и имя; своя подпись показывает «Вы».
           const text = document.createElement('span');
-          text.textContent = name;
-          const suffixes = [...(own ? ['· Вы'] : []), ...(offline ? ['· нет связи'] : [])].map(
-            (suffix) => {
-              const node = document.createElement('span');
-              node.className = 'you';
-              node.textContent = suffix;
-              return node;
-            },
-          );
-          view.label.replaceChildren(gem, text, ...suffixes);
+          text.textContent = own ? 'Вы' : name;
+          const suffixes = offline
+            ? [
+                Object.assign(document.createElement('span'), {
+                  className: 'note',
+                  textContent: '· нет связи',
+                }),
+              ]
+            : [];
+          view.label.replaceChildren(createSign(name, entity.color ?? ''), text, ...suffixes);
+          view.label.dataset.name = name;
           view.labelText = key;
         }
       }

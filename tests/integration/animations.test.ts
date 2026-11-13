@@ -5,6 +5,7 @@ import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/in
 import {
   WORLD_ACTIVITY_MOVE_DURATION_MS,
   TICK_RATE,
+  millisecondsToTicks,
   type ActionResult,
   type WorldInfo,
 } from '../../packages/contracts/src/index.js';
@@ -288,6 +289,16 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
 
   it('cancels on support loss, successful respawn, short reservations and disconnect; rejected respawn keeps the show', async () => {
     const { room, results, player } = await join();
+    const waitForAnimationCooldown = async (requestId: number) => {
+      await until(() => results.some((result) => result.requestId === requestId));
+      const accepted = results.find((result) => result.requestId === requestId)!;
+      expect(accepted.ok).toBe(true);
+      expect(accepted.retryAfterMs).toBeGreaterThan(0);
+      // Cancellation ends playback but preserves the session's accepted flood cooldown.
+      const availableAt =
+        player().animationStartedAtTick + millisecondsToTicks(accepted.retryAfterMs!);
+      await until(() => app.room.state.serverTick >= availableAt);
+    };
     request(room, 1);
     await until(() => player().animationId === 'wave');
     const world = internals().world;
@@ -300,6 +311,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     });
     await until(() => player().animationId === '');
     await until(() => player().grounded);
+    await waitForAnimationCooldown(1);
     request(room, 2, 'clap');
     await until(() => player().animationId === 'clap');
     const failed = vi.spyOn(world, 'respawnPlayerAtPosition').mockReturnValueOnce(false);
@@ -310,6 +322,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     room.send('requestRespawn', { requestId: 4, worldEpoch: info.worldEpoch });
     await until(() => results.length === 4 && player().animationId === '');
     await until(() => player().revision > actual.revision && player().grounded);
+    await waitForAnimationCooldown(2);
     request(room, 5);
     await until(() => player().animationId === 'wave');
     const runtime = internals().items;
@@ -342,6 +355,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     operation.mockRestore();
     await until(() => !app.room.state.paused);
     expect(player().animationSequence).toBe(sequence);
+    await waitForAnimationCooldown(5);
     request(room, 7);
     await until(() => player().animationId === 'wave');
     const token = room.reconnectionToken;

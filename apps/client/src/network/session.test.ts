@@ -318,6 +318,22 @@ describe('saved spawn resource preparation', () => {
     expect(v.room.send).not.toHaveBeenCalledWith('areaReady', expect.anything());
   });
 
+  it('keeps background failures diagnostic while exposing current critical failures to input gating', async () => {
+    const v = await joined();
+    v.streamer.backgroundProblem = 'Previous saved-area resource failed';
+    expect(v.instance.areaProblem).toBe(v.streamer.backgroundProblem);
+    expect(v.instance.criticalAreaProblem).toBeUndefined();
+
+    v.streamer.problem = 'Current critical-area resource failed';
+    expect(v.instance.criticalAreaProblem).toBe(v.streamer.problem);
+    expect(v.instance.areaProblem).toBe(v.streamer.problem);
+
+    // A successful fallback clears its critical failure, retaining diagnostic background evidence.
+    v.streamer.problem = undefined;
+    expect(v.instance.criticalAreaProblem).toBeUndefined();
+    expect(v.instance.areaProblem).toBe(v.streamer.backgroundProblem);
+  });
+
   it('replaces failed saved preparation, keeps the fallback notice across PLAN_REPLACED and ignores late results', async () => {
     const v = await joined();
     const saved = v.plan('saved', 'saved');

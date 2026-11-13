@@ -149,6 +149,13 @@ describe('time of day', () => {
 
       const night = lighting.setTimeOfDay(1);
       expect(sun.intensity).toBe(night.lightIntensity);
+      // The backdrop and the grade follow the hour without switching shader features.
+      const backdrop = scene.clearColor;
+      expect([backdrop.r, backdrop.g, backdrop.b]).toEqual([...night.backdrop]);
+      const imageProcessing = scene.imageProcessingConfiguration;
+      expect(imageProcessing.vignetteEnabled).toBe(true);
+      expect(imageProcessing.vignetteWeight).toBeCloseTo(night.grade.vignette, 1);
+      expect(imageProcessing.colorCurves?.shadowsDensity).toBe(night.grade.shadows);
       expect(sun.intensity).toBeLessThan(1);
       expect(sun.diffuse.b).toBeGreaterThan(sun.diffuse.r);
       expect(sun.direction.y).toBeLessThan(0);
@@ -180,6 +187,53 @@ describe('time of day', () => {
       lighting.follow(target);
       const ideal = target.subtract(sun.direction.normalizeToNew().scale(150));
       expect(Vector3.Distance(sun.position, ideal)).toBeLessThan(5);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+});
+
+describe('night bloom', () => {
+  it('glows only in the dark, grows with darkness and survives quality switches', () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
+    const lighting = new WorldLighting(scene, camera);
+    try {
+      lighting.setQuality('standard');
+      lighting.setTimeOfDay(12);
+      expect(lighting.bloomDiagnostics()).toMatchObject({
+        enabled: false,
+        weight: 0,
+        glowMask: false,
+      });
+
+      lighting.setTimeOfDay(1);
+      const night = lighting.bloomDiagnostics();
+      expect(night.enabled).toBe(true);
+      expect(night.weight).toBeGreaterThan(0);
+      // Only the night lights bloom: they mark themselves while bloom is on.
+      expect(night.glowMask).toBe(true);
+
+      // Economy has no post-processing; returning at night restores the glow.
+      lighting.setQuality('economy');
+      expect(lighting.bloomDiagnostics()).toMatchObject({
+        enabled: false,
+        weight: 0,
+        glowMask: false,
+      });
+      lighting.setQuality('standard');
+      expect(lighting.bloomDiagnostics()).toEqual(night);
+
+      // Dawn fades it out before the day switches it off.
+      const weights = [4, 5, 5.5, 6, 6.5, 7, 8, 9].map((hour) => {
+        lighting.setTimeOfDay(hour);
+        return lighting.bloomDiagnostics().weight;
+      });
+      for (let i = 1; i < weights.length; i++)
+        expect(weights[i]).toBeLessThanOrEqual(weights[i - 1]);
+      expect(weights.at(-1)).toBe(0);
     } finally {
       scene.dispose();
       engine.dispose();

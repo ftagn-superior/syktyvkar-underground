@@ -111,7 +111,7 @@ export class GameHud {
   }): void {
     this.mode = mode;
     const placing = !!placement;
-    this.element('overview-camera-controls').hidden = firstPerson;
+    this.element('overview-camera-controls').hidden = firstPerson || mode === 'gamepad';
     this.element('first-person-camera-controls').hidden = !firstPerson;
     this.element('controls-title').textContent = placing
       ? placement === 'removal'
@@ -130,9 +130,11 @@ export class GameHud {
           : 'W / S — наклон · A / D — поворот · Q / E — крен'
       : firstPerson
         ? 'WASD / стрелки — ходьба и боковые шаги · мышь — взгляд · Shift — бег · T — чат · V — обзор'
-        : mode === 'touch'
-          ? 'Стик слева — ходьба · свайп справа — камера'
-          : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
+        : mode === 'gamepad'
+          ? 'Левый стик — ходьба · правый — камера · RT — бег · Y — меню'
+          : mode === 'touch'
+            ? 'Стик слева — ходьба · свайп справа — камера'
+            : 'WASD / стрелки · Shift — быстрый бег · удерживайте Q / E или тяните ПКМ — камера';
   }
   renderFirstPerson({
     selected,

@@ -1,7 +1,10 @@
 import {
+  CHAT_COOLDOWN_MS,
+  COLD_FLOOD_HEAT,
   REACTION_COOLDOWN_MS,
+  TICK_RATE,
   WORLD_ACTIVITY_MOVE_DURATION_MS,
-  chatCooldownMs,
+  floodCooldown,
   findAnimation,
   findAvatarSkin,
   findReaction,
@@ -10,12 +13,14 @@ import {
   ticksToMilliseconds,
   type ActionResult,
   type ErrorCode,
+  type FloodHeat,
   type MoveInput,
   type PlayerState,
 } from '@su/contracts';
 import type { PlayerSchema } from '@su/protocol';
 
 type ActivityResult = Omit<ActionResult, 'requestId'>;
+const tickMs = (tick: number) => (tick * 1000) / TICK_RATE;
 
 function result(code?: ErrorCode, retryAfterMs?: number): ActivityResult {
   return {
@@ -70,10 +75,18 @@ export function updatePlayerActivities(
   }
 }
 
-/** Per-session cooldowns; playback itself lives in the replicated player state. */
+/**
+ * Per-session cooldowns; playback itself lives in the replicated player state. A new reaction,
+ * animation or message replaces the current one: only the short cooldown limits the rate, and it
+ * grows for a session that keeps spamming (see `floodCooldown`).
+ */
 export class PlayerActivities {
   private reactionAvailableAtTick = 0;
   private chatAvailableAtTick = 0;
+  private animationAvailableAtTick = 0;
+  private reactionHeat: FloodHeat = COLD_FLOOD_HEAT;
+  private chatHeat: FloodHeat = COLD_FLOOD_HEAT;
+  private animationHeat: FloodHeat = COLD_FLOOD_HEAT;
 
   react(
     player: PlayerSchema | undefined,
@@ -82,11 +95,7 @@ export class PlayerActivities {
     code?: ErrorCode,
   ): ActivityResult {
     const reaction = findReaction(reactionId);
-    const remainingTicks = Math.max(
-      0,
-      this.reactionAvailableAtTick - tick,
-      (player?.reactionExpiresAtTick ?? 0) - tick,
-    );
+    const remainingTicks = Math.max(0, this.reactionAvailableAtTick - tick);
     code ??= player ? undefined : 'WORLD_NOT_READY';
     if (!code) {
       if (!reaction) code = 'INVALID_INPUT';
@@ -95,17 +104,13 @@ export class PlayerActivities {
         player!.reactionId = reaction.id;
         player!.reactionSequence++;
         player!.reactionExpiresAtTick = 0;
-        this.reactionAvailableAtTick = tick + millisecondsToTicks(REACTION_COOLDOWN_MS);
+        const next = floodCooldown(this.reactionHeat, tickMs(tick), REACTION_COOLDOWN_MS);
+        this.reactionHeat = next.heat;
+        this.reactionAvailableAtTick = tick + millisecondsToTicks(next.cooldownMs);
+        return result(undefined, next.cooldownMs);
       }
     }
-    return result(
-      code,
-      code === undefined
-        ? REACTION_COOLDOWN_MS
-        : code === 'RATE_LIMITED'
-          ? ticksToMilliseconds(remainingTicks)
-          : undefined,
-    );
+    return result(code, code === 'RATE_LIMITED' ? ticksToMilliseconds(remainingTicks) : undefined);
   }
 
   animate(
@@ -118,15 +123,15 @@ export class PlayerActivities {
   ): ActivityResult {
     const animation = findAnimation(animationId);
     if (player) expireAnimation(player, tick);
-    const remainingTicks = player?.animationId
-      ? Math.max(
-          0,
-          player.animationStartedAtTick +
+    const remainingTicks = Math.max(
+      0,
+      this.animationAvailableAtTick - tick,
+      player?.animationId
+        ? player.animationStartedAtTick +
             millisecondsToTicks(findAnimation(player.animationId)?.cooldownMs ?? 0) -
-            tick,
-          player.animationEndsAtTick - tick,
-        )
-      : 0;
+            tick
+        : 0,
+    );
     code ??= player ? undefined : 'WORLD_NOT_READY';
     if (!code) {
       if (!animation) code = 'INVALID_INPUT';
@@ -143,6 +148,10 @@ export class PlayerActivities {
         player!.animationId = animation.id;
         player!.animationStartedAtTick = player!.animationChangedAtTick = tick;
         player!.animationEndsAtTick = 0;
+        const next = floodCooldown(this.animationHeat, tickMs(tick), animation.cooldownMs);
+        this.animationHeat = next.heat;
+        this.animationAvailableAtTick = tick + millisecondsToTicks(next.cooldownMs);
+        return result(undefined, next.cooldownMs);
       }
     }
     return result(code, code === 'RATE_LIMITED' ? ticksToMilliseconds(remainingTicks) : undefined);
@@ -155,11 +164,7 @@ export class PlayerActivities {
     tick: number,
     code?: ErrorCode,
   ): ActivityResult {
-    const remainingTicks = Math.max(
-      0,
-      this.chatAvailableAtTick - tick,
-      (player?.chatExpiresAtTick ?? 0) - tick,
-    );
+    const remainingTicks = Math.max(0, this.chatAvailableAtTick - tick);
     code ??= player ? undefined : 'WORLD_NOT_READY';
     if (!code) {
       if (!text) code = 'INVALID_INPUT';
@@ -168,17 +173,13 @@ export class PlayerActivities {
         player!.chatText = text;
         player!.chatSequence++;
         player!.chatExpiresAtTick = 0;
-        this.chatAvailableAtTick = tick + millisecondsToTicks(chatCooldownMs(text));
+        const next = floodCooldown(this.chatHeat, tickMs(tick), CHAT_COOLDOWN_MS);
+        this.chatHeat = next.heat;
+        this.chatAvailableAtTick = tick + millisecondsToTicks(next.cooldownMs);
+        // Acknowledgements contain neither message bodies nor a chat history.
+        return result(undefined, next.cooldownMs);
       }
     }
-    // Acknowledgements contain neither message bodies nor a chat history.
-    return result(
-      code,
-      code === undefined
-        ? chatCooldownMs(text!)
-        : code === 'RATE_LIMITED'
-          ? ticksToMilliseconds(remainingTicks)
-          : undefined,
-    );
+    return result(code, code === 'RATE_LIMITED' ? ticksToMilliseconds(remainingTicks) : undefined);
   }
 }

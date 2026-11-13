@@ -143,6 +143,110 @@ async function newContext() {
   await context.addInitScript(() => localStorage.setItem('su:render-quality:v1', 'economy'));
   return context;
 }
+async function installGamepadBoundary(context: BrowserContext) {
+  // Exercise the browser Gamepad API boundary, without invoking game input handlers.
+  await context.addInitScript({
+    content: `
+      const state = { pad: null, reads: 0 };
+      window.__positionGamepad = state;
+      Object.defineProperty(navigator, 'getGamepads', {
+        configurable: true,
+        value: () => {
+          state.reads++;
+          return state.pad ? [{
+            ...state.pad,
+            axes: [...state.pad.axes],
+            buttons: state.pad.buttons.map(button => ({ ...button })),
+            timestamp: performance.now(),
+          }] : [];
+        },
+      });
+    `,
+  });
+}
+async function gamepadAfterFallback(page: Page) {
+  const initial = await healthy(page);
+  assert.ok(initial.areaProblem, 'the rejected saved cell remains a background failure');
+  assert.equal(initial.streaming.error, undefined, 'the new critical region is healthy');
+  await page.locator('#world').focus();
+  await page.evaluate(() => {
+    const state = (window as any).__positionGamepad;
+    state.pad = {
+      index: 0,
+      id: 'Xbox Wireless Controller (API fixture)',
+      connected: true,
+      mapping: 'standard',
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+    };
+    const event = new Event('gamepadconnected');
+    Object.defineProperty(event, 'gamepad', { value: state.pad });
+    window.dispatchEvent(event);
+  });
+  await page.waitForFunction(
+    () => (window as any).__SU_DEBUG__.controls().gamepad.supportedCount === 1,
+  );
+  for (const value of [1, 0]) {
+    const reads = await page.evaluate((value) => {
+      const state = (window as any).__positionGamepad;
+      state.pad.buttons[0] = { pressed: value === 1, touched: value === 1, value };
+      return state.reads;
+    }, value);
+    await page.waitForFunction((reads) => (window as any).__positionGamepad.reads > reads, reads);
+    await page.waitForTimeout(40);
+  }
+  // Selection A is consumed; normal movement requires a fresh 100ms neutral period.
+  await page.waitForFunction(() => {
+    const controls = (window as any).__SU_DEBUG__.controls();
+    return controls.mode === 'gamepad' && controls.gamepad.ready && controls.gamepadAvailable;
+  });
+  const angle = await page.evaluate(
+    () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+  );
+  await page.evaluate(() => {
+    (window as any).__positionGamepad.pad.axes = [0, -0.65, 0.7, 0];
+  });
+  await page.waitForFunction(
+    ({ origin, angle }) => {
+      const debug = (window as any).__SU_DEBUG__;
+      const state = debug.snapshot();
+      const controls = debug.controls();
+      const p = state.authoritative?.position;
+      return (
+        state.connection === 'playing' &&
+        state.areaProblem &&
+        !state.streaming.error &&
+        controls.gamepadContext === 'walk' &&
+        controls.gamepadAvailable &&
+        !controls.gamepadBlocked &&
+        Math.hypot(controls.input.moveX, controls.input.moveZ) > 0.4 &&
+        p &&
+        Math.hypot(p.x - origin.x, p.z - origin.z) > 0.35 &&
+        Math.abs(debug.report().rendering.camera.azimuth - angle) > 0.1
+      );
+    },
+    { origin: initial.authoritative.position, angle },
+    { timeout: 5000 },
+  );
+  await page.evaluate(() => {
+    (window as any).__positionGamepad.pad.axes = [0, 0, 0, 0];
+  });
+  await page.waitForFunction(() => {
+    const input = (window as any).__SU_DEBUG__.controls().input;
+    return Math.hypot(input.moveX, input.moveZ) === 0;
+  });
+  const result = await page.evaluate(() => ({
+    position: (window as any).__SU_DEBUG__.snapshot().authoritative.position,
+    areaProblem: (window as any).__SU_DEBUG__.snapshot().areaProblem,
+    controls: (window as any).__SU_DEBUG__.controls(),
+    angle: (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
+  }));
+  await page.screenshot({ path: `${output}/fallback-gamepad.png` });
+  // A keyboard activation returns control to the existing desktop respawn/exit scenario.
+  await page.keyboard.press('w');
+  await page.waitForFunction(() => (window as any).__SU_DEBUG__.controls().mode === 'desktop');
+  return result;
+}
 async function firstPerson(page: Page) {
   await page.locator('#world').focus();
   await page.waitForFunction(() => (window as any).__SU_DEBUG__.controls().firstPersonAvailable);
@@ -315,6 +419,7 @@ try {
     manifest.cells.filter((cell) => savedCells.includes(cell.cellId)).map((cell) => cell.file),
   );
   const fallbackContext = await newContext();
+  await installGamepadBoundary(fallbackContext);
   let failedRequests = 0;
   await fallbackContext.route('**/worlds/player-position-browser/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -349,6 +454,7 @@ try {
     Math.hypot(afterFallback.x - startPosition.x, afterFallback.z - startPosition.z) > 0.25,
   );
   await fallback.page.screenshot({ path: `${output}/fallback-playing.png` });
+  const fallbackGamepad = await gamepadAfterFallback(fallback.page);
   await hudClick(fallback.page, '#respawn');
   await playing(fallback.page);
   await fallback.page.waitForFunction(
@@ -360,9 +466,16 @@ try {
   const savedDefault = await enter(fallback.page);
   samePosition(savedDefault.authoritative.position, startPosition);
   await leave(fallback.page);
-  measurements.push({ savedCells, startCells, failedRequests, fallbackPlans, afterFallback });
+  measurements.push({
+    savedCells,
+    startCells,
+    failedRequests,
+    fallbackPlans,
+    afterFallback,
+    fallbackGamepad,
+  });
   record(
-    'only saved-region resources fail integrity checks; one automatic fallback reaches a playable default area',
+    'only saved-region resources fail integrity checks; one automatic fallback reaches a playable default area with keyboard and gamepad movement and camera',
   );
   record(
     'the UI respawn action uses the ordinary start and immediately becomes the next saved position',

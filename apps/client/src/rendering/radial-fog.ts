@@ -38,8 +38,10 @@ export class RadialFog extends MaterialPluginBase {
         { name: 'suRadial', size: 4, type: 'vec4' },
         { name: 'suAppearance', size: 1, type: 'float' },
         { name: 'suDynamic', size: 1, type: 'float' },
+        { name: 'suFogColor', size: 3, type: 'vec3' },
       ],
-      fragment: 'uniform vec4 suRadial;\nuniform float suAppearance;\nuniform float suDynamic;',
+      fragment:
+        'uniform vec4 suRadial;\nuniform float suAppearance;\nuniform float suDynamic;\nuniform vec3 suFogColor;',
     };
   }
   override hardBindForSubMesh(
@@ -58,6 +60,9 @@ export class RadialFog extends MaterialPluginBase {
       75,
     );
     buffer.updateFloat('suDynamic', this.state.dynamic ? 1 : 0);
+    // Край города растворяется в пустоте вокруг него, какого бы цвета она ни была в этот час.
+    const backdrop = this._material.getScene().clearColor;
+    buffer.updateFloat3('suFogColor', backdrop.r, backdrop.g, backdrop.b);
     buffer.updateFloat(
       'suAppearance',
       Math.min(1, Math.max(0, (this.state.time - born) / this.state.appearMs)),
@@ -82,7 +87,7 @@ export class RadialFog extends MaterialPluginBase {
           float suCoverage = fract(dot(floor(gl_FragCoord.xy), vec2(0.754877666, 0.569840296)));
           if (suVisibility <= suCoverage) discard;
         } else {
-          ${output}.rgb = mix(vec3(0.0627451, 0.0941176, 0.1254902), ${output}.rgb, suVisibility);
+          ${output}.rgb = mix(suFogColor, ${output}.rgb, suVisibility);
         }
       `,
     };

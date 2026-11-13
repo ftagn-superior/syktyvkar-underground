@@ -24,6 +24,120 @@ make run
 остаётся v4. Все 829 деревьев используют только instancing; резервные GLB и поддержка
 профилей без актуального AO удалены. Расстановка и физические формы не меняются.
 
+## Компактная библиотека статических объектов
+
+Выпуск `static-library-v1` заменяет повторяющиеся деревья, кусты, скамейки, фонари,
+светофоры, столбики и заборы на 22 типовых ассета. Старые заборы преобразуются в
+самостоятельные секции длиной 0,5 и 4 м. Обычный `world:migrate` не переписывает
+старые ссылки: для этого перехода нужен отдельный `--asset-remap`. Клиент, сервер,
+типовая библиотека и правила миграции поставляются вместе; формат размещения и схема
+БД не меняются.
+
+Остановите игровой сервер и дождитесь финального сохранения. До сборки сохраните
+старый `dist`, экспорт всех размещений и полную резервную копию PostgreSQL. Следующий
+пример запускается из корня проекта; `pg_dump` получает соединение из `DATABASE_URL`
+или `.env`, без вывода реквизитов в терминал:
+
+```sh
+SU_STATIC_BACKUP="output/static-library-backup-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$SU_STATIC_BACKUP"
+cp -a dist "$SU_STATIC_BACKUP/dist"
+git rev-parse HEAD > "$SU_STATIC_BACKUP/code-revision.txt"
+pnpm world:layout:export -- --file "$SU_STATIC_BACKUP/layout-before.json"
+node --env-file-if-exists=.env --input-type=module -e 'import { spawnSync } from "node:child_process"; const r=spawnSync("pg_dump",["--format=custom","--file",process.argv[1]],{stdio:"inherit",env:{...process.env,PGDATABASE:process.env.DATABASE_URL}}); if(r.error) throw r.error; process.exit(r.status ?? 1)' "$SU_STATIC_BACKUP/world.dump"
+```
+
+Сохраните резервную копию вместе с соответствующим исходным выпуском кода; один
+экспорт размещений не восстанавливает аккаунты, инвентари и историю. Затем соберите
+новый выпуск и выполните проверку без записи:
+
+```sh
+pnpm build
+pnpm db:migrate
+pnpm world:migrate -- --asset-remap content/migrations/ring-block/static-library-v1.json --dry-run --report output/static-library-v1/db-dry-run.json
+```
+
+Для собранной поставки используется тот же алгоритм:
+
+```sh
+pnpm world:migrate:built -- --asset-remap content/migrations/ring-block/static-library-v1.json --dry-run --report output/static-library-v1/db-dry-run.json
+# Эквивалент без pnpm:
+node dist/server/migrate-world.mjs --asset-remap content/migrations/ring-block/static-library-v1.json --dry-run --report output/static-library-v1/db-dry-run.json
+```
+
+Успешный JSON-отчёт имеет `status: "valid"`, исходную ревизию и хеш полного снимка,
+хеш правил и библиотеки, количества активных/отключённых объектов по категориям,
+полный diff и соответствие каждого исходного забора его секциям. Проверяются все
+строки, включая отключённые, реальные bounds типовых растений и физические профили
+секций, точки появления и сохранённые предметы. Позиции читаются из текущей БД.
+Dry-run не пишет строки, историю, ревизии, каталог, хеш совместимости или файловую
+публикацию; локальный отчёт создаётся только при явном `--report`.
+
+Отказ имеет `status: "rejected"`, этап и `issues`; для неизвестных ссылок и выходов
+за bounds перечисляются все обнаруженные экземпляры. Доступная к этому моменту
+информация об исходном снимке и рассчитанном преобразовании также сохраняется.
+Устраните причину и выполните новый dry-run. Сохранённые предметы автоматически не
+перемещаются и не удаляются. Геометрические проверки проходов и контрольных маршрутов
+выпуска описаны в [отчёте поставки](static-asset-library-report.md).
+
+После проверки отчёта примените именно этот план. Выберите команду из исходников
+или её собранный эквивалент:
+
+```sh
+pnpm world:migrate -- --asset-remap content/migrations/ring-block/static-library-v1.json --plan output/static-library-v1/db-dry-run.json
+# Собранный эквивалент:
+pnpm world:migrate:built -- --asset-remap content/migrations/ring-block/static-library-v1.json --plan output/static-library-v1/db-dry-run.json
+```
+
+`--plan` обязателен при первом применении к существующему миру. Изменение ревизии,
+любого размещения, правил или целевой библиотеки делает прежний отчёт непригодным.
+Одна транзакция на сессии владельца мира обновляет каталог, размещения, историю с
+общим `operation_id` и `source='migration'`, ревизии, проверенный layout hash и хеш
+совместимости физики. Ресурсы и manifest записываются до COMMIT; ошибка SQL,
+геометрии, предмета или публикации откатывает изменения БД. Незавершённые неизменяемые
+файлы не активируют публикацию. Исходный `seed_version` и прежние игровые операции
+сохраняются. Намеренно пустая раскладка остаётся пустой; удалённые объекты не
+восстанавливаются из seed.
+
+Повтор уже завершённого remap распознаётся по целевому выпуску и не меняет строки,
+историю и число секций; `--plan` при таком повторе не требуется. Новый мир не
+наполняется во время миграции: при запуске он получает только новый seed. Для
+старого persistent world без layout инициализируется новый seed размещений, без
+повторного создания предметов.
+
+Проверьте экспорт, затем запустите собранный сервер и готовность:
+
+```sh
+pnpm world:layout:export -- --file output/static-library-v1/layout-after.json
+pnpm world:layout:validate -- --file output/static-library-v1/layout-after.json
+# Собранные эквиваленты:
+pnpm world:layout:export:built -- --file output/static-library-v1/layout-after.json
+pnpm world:layout:validate:built -- --file output/static-library-v1/layout-after.json
+pnpm start
+# В другой консоли:
+curl -fsS http://127.0.0.1:2567/health/ready
+```
+
+Ожидается `{"ready":true}`. Обновите вкладки клиентов. Обычные файловые патчи после
+миграции работают внутри нового выпуска; старый экспорт нельзя превратить в новый
+изменением заголовка `assetReleaseVersion`.
+
+Для восстановления снова остановите сервер. Восстановите **полную** резервную копию
+в отдельную пустую БД, проверьте её и выберите её через `DATABASE_URL`; не накатывайте
+dump поверх частично заполненной БД. При настроенном административном соединении
+PostgreSQL пример восстановления выглядит так:
+
+```sh
+createdb su_static_restore
+pg_restore --exit-on-error --dbname=su_static_restore "$SU_STATIC_BACKUP/world.dump"
+```
+
+Верните сохранённый код и соответствующий `dist` из `$SU_STATIC_BACKUP`, настройте
+`DATABASE_URL` восстановленной БД, проверьте экспорт старого layout и запустите
+старый выпуск. Не запускайте старый сервер на преобразованных строках и не удаляйте
+вручную журнал операций. Откат backup после новых игровых операций теряет эти
+операции, поэтому решение о таком восстановлении принимается отдельно.
+
 ## Размещение статических объектов в БД
 
 Схема PostgreSQL v4 добавляет `world_layouts`, `world_static_instances` и `world_static_operations`. Идентичность — `(world_id, entity_id)`; `asset_id` ссылается на проверенный выпуск каталога. В строке хранятся `position_x/y/z`, нормализованный `rotation_x/y/z/w`, `enabled` и автоматически увеличиваемая `instance_revision`. Отключение сохраняет строку и убирает объект из графики и физики. Плитки основания и граничные препятствия остаются фиксированным слоем выпуска; в редактируемый seed они не входят.

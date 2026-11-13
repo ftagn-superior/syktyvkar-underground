@@ -227,6 +227,17 @@ export function validateBuildingParts(value: unknown): BuildingParts {
     Array.isArray(value.parts) && value.parts.length > 0 && value.parts.length <= 4096,
     'parts',
   );
+  requireValue(
+    value.renderMode === undefined || value.renderMode === 'thin-instance',
+    'parts render mode',
+  );
+  if (value.renderMode === 'thin-instance') {
+    requireValue(value.tree === undefined, 'GLB render mode cannot contain a tree recipe');
+    requireValue(
+      value.parts.every((part: unknown) => object(part) && part.occlusionGroup === null),
+      'thin-instance parts cannot require individual occlusion',
+    );
+  }
   const ids = new Set<string>();
   for (const part of value.parts) {
     requireValue(

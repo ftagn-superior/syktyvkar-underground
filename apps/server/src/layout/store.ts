@@ -152,6 +152,95 @@ export class StaticLayoutStore {
     candidate.previousRelease = snapshot.assetReleaseVersion;
   }
 
+  /** Catalog cutover, inside ItemStore.migrateGeometry's transaction and owner session. */
+  async applyAssetRemap(
+    before: Awaited<ReturnType<StaticLayoutStore['readCandidate']>>,
+    snapshot: WorldLayoutSnapshot,
+    validatedHash: string,
+    operationId: string,
+  ) {
+    await this.db.query('SELECT world_id FROM world_layouts WHERE world_id=$1 FOR UPDATE', [
+      snapshot.worldId,
+    ]);
+    const current = await this.readCandidate(true);
+    if (canonicalJson(current) !== canonicalJson(before))
+      throw new Error('Static placement changed since the asset-remap dry-run');
+    if (!before.initialized) {
+      await this.commit({ ...before, snapshot }, validatedHash);
+      return snapshot;
+    }
+    if (before.previousRelease === snapshot.assetReleaseVersion)
+      throw new Error('Asset remap has already been applied');
+    const fixed = [
+      ...this.release.metadata.fixedInstanceIds,
+      ...this.release.definition.entities.map((i) => i.entityId),
+    ].sort();
+    // The new catalog must be registered before the row triggers validate new references.
+    // Old references exist only inside this transaction, never in the committed layout.
+    await this.db.query(
+      'UPDATE world_layouts SET asset_release_version=$2,asset_ids=$3,fixed_entity_ids=$4 WHERE world_id=$1',
+      [snapshot.worldId, snapshot.assetReleaseVersion, editableStaticAssetIds(this.release), fixed],
+    );
+    await this.db.query(
+      "SELECT set_config('su.layout_operation',$1,true),set_config('su.layout_source','migration',true)",
+      [operationId],
+    );
+    const previous = new Map(before.snapshot.instances.map((i) => [i.entityId, i]));
+    const state = ({ instanceRevision: _revision, ...instance }: StaticObjectInstance) => instance;
+    for (const instance of snapshot.instances) {
+      const old = previous.get(instance.entityId);
+      if (old && canonicalJson(state(old)) === canonicalJson(state(instance))) continue;
+      const values = [
+        snapshot.worldId,
+        instance.entityId,
+        instance.assetId,
+        instance.position.x,
+        instance.position.y,
+        instance.position.z,
+        instance.rotation.x,
+        instance.rotation.y,
+        instance.rotation.z,
+        instance.rotation.w,
+        instance.enabled,
+        instance.sourceRef ?? null,
+      ];
+      const changed = old
+        ? await this.db.query(
+            `UPDATE world_static_instances SET asset_id=$3,position_x=$4,position_y=$5,position_z=$6,
+            rotation_x=$7,rotation_y=$8,rotation_z=$9,rotation_w=$10,enabled=$11,source_ref=$12
+            WHERE world_id=$1 AND entity_id=$2 AND instance_revision=$13`,
+            [...values, old.instanceRevision],
+          )
+        : await this.db.query(
+            `INSERT INTO world_static_instances(world_id,entity_id,asset_id,position_x,position_y,position_z,
+            rotation_x,rotation_y,rotation_z,rotation_w,enabled,source_ref)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+            values,
+          );
+      if (changed.rowCount !== 1) throw new Error('Static placement changed during asset remap');
+    }
+    const after = await this.readCandidate();
+    const comparable = (value: WorldLayoutSnapshot) => ({
+      ...value,
+      revision: 0,
+      instances: value.instances.map(state).sort((a, b) => a.entityId.localeCompare(b.entityId)),
+    });
+    if (canonicalJson(comparable(after.snapshot)) !== canonicalJson(comparable(snapshot)))
+      throw new Error('Stored asset remap differs from the validated candidate');
+    await this.db.query(
+      `INSERT INTO world_static_operations(world_id,operation_id,entity_id,source,before_state,after_state,layout_revision)
+      SELECT world_id,$2,'__asset-release','migration',$3::jsonb,$4::jsonb,revision FROM world_layouts WHERE world_id=$1`,
+      [
+        snapshot.worldId,
+        operationId,
+        JSON.stringify({ assetReleaseVersion: before.previousRelease }),
+        JSON.stringify({ assetReleaseVersion: snapshot.assetReleaseVersion }),
+      ],
+    );
+    await this.commit(after, validatedHash);
+    return after.snapshot;
+  }
+
   /** History and instance must both exist. Headers are not part of replay identity. */
   async replayGame(
     accountId: string,

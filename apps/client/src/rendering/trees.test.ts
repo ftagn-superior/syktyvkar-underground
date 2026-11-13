@@ -21,7 +21,7 @@ import { BuildingViews } from './buildings';
 import type { RadialState } from './radial-fog';
 
 const directory = 'content/buildings/ring-block/objects';
-const sampleId = 'tree-f1aeb38d13795ef3';
+const sampleId = 'tree-leaf-medium';
 const source = async (id = sampleId): Promise<KitRecipe> =>
   JSON.parse(await readFile(`${directory}/${id}/source.json`, 'utf8'));
 
@@ -36,9 +36,9 @@ describe('tree instancing', () => {
     }
   });
 
-  it('reconstructs positions, normals and colors of all 829 authored trees without quantization', async () => {
+  it('reconstructs positions, normals and colors of all nine canonical tree recipes', async () => {
     const ids = (await readdir(directory)).filter((id) => id.startsWith('tree-'));
-    expect(ids).toHaveLength(829);
+    expect(ids).toHaveLength(9);
     for (const id of ids) {
       const recipe = await source(id);
       const tree = treeRenderRecipe(id, recipe)!;

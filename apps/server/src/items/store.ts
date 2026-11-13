@@ -145,7 +145,11 @@ export class ItemStore {
     return this.worldItems();
   }
   /** Explicit offline upgrade: preserve every item and accept only poses valid in the new map. */
-  async migrateGeometry(afterValidation?: () => Promise<void>, dryRun = false) {
+  async migrateGeometry(
+    afterValidation?: () => Promise<void>,
+    dryRun = false,
+    validateUnchangedGeometry = false,
+  ) {
     if (this.started) throw new Error('Stop the world before migrating its geometry.');
     await this.connect();
     return this.transaction(async () => {
@@ -157,7 +161,7 @@ export class ItemStore {
       // A fresh database is populated once by initialize(), after all startup checks pass.
       if (!found.rowCount) return { from: null, to, changed: false };
       const from = found.rows[0].compatibility_hash;
-      if (from === to) {
+      if (from === to && !validateUnchangedGeometry) {
         if (!dryRun) await afterValidation?.();
         return { from, to, changed: false };
       }
@@ -188,13 +192,14 @@ export class ItemStore {
         world.dispose();
       }
       if (!dryRun) {
-        await this.db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
-          this.definition.worldId,
-          to,
-        ]);
+        if (from !== to)
+          await this.db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
+            this.definition.worldId,
+            to,
+          ]);
         await afterValidation?.();
       }
-      return { from, to, changed: true };
+      return { from, to, changed: from !== to };
     });
   }
   private async transaction<T>(run: () => Promise<T>): Promise<T> {

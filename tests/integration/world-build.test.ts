@@ -309,4 +309,76 @@ describe('world v5 release', () => {
       }),
     ).toThrow('parts');
   });
+  it('checks the marked static GLB profile, including materials and node transforms', () => {
+    const part = meshPart('detail', 'detail', '#728994');
+    part.occlusionGroup = null;
+    addBox(part, { x: 0, y: 0.5, z: 0 }, { x: 1, y: 1, z: 1 });
+    const model = encodeStaticGlb([part]);
+    const inspect = (mutate: (document: any) => void) =>
+      inspectStaticGlb(rewriteGlbDocument(model, mutate), 'detail', 'thin-instance');
+    const transformed = inspect((document) => {
+      document.nodes[0].translation = [2, 3, 4];
+      document.nodes[0].rotation = [0, Math.SQRT1_2, 0, Math.SQRT1_2];
+      document.nodes[0].scale = [2, 2, 2];
+    });
+    expect(transformed.parts.renderMode).toBe('thin-instance');
+    expect(transformed.bounds.min.x).toBeCloseTo(1);
+    expect(transformed.bounds.max.y).toBeCloseTo(5);
+    expect(() =>
+      inspect((document) => {
+        document.materials[0].alphaMode = 'BLEND';
+      }),
+    ).toThrow('opaque PBR');
+    expect(() =>
+      inspect((document) => {
+        document.nodes[0].scale = [0, 1, 1];
+      }),
+    ).toThrow('preserve orientation');
+    expect(() =>
+      inspect((document) => {
+        document.nodes[0].matrix = [1, 0, 0, 0, 0.5, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+      }),
+    ).toThrow('cannot contain shear');
+    expect(() =>
+      inspect((document) => {
+        document.nodes[0].extras.su.occlusionGroup = 'shell';
+      }),
+    ).toThrow('individual occlusion');
+    expect(() =>
+      inspect((document) => {
+        delete document.meshes[0].primitives[0].attributes.NORMAL;
+      }),
+    ).toThrow('requires normals');
+  });
+  it('versions and packs the optional instancing contract without changing model or collision bytes', async () =>
+    withContent(async (root, source) => {
+      const id = 'bench-0152a250d22ef0a9';
+      const descriptorPath = join(root, `content/buildings/ring-block/objects/${id}/asset.json`);
+      const descriptor = await readJson(descriptorPath);
+      expect(descriptor.renderMode).toBe('thin-instance');
+      await writeJson(join(root, 'content/buildings/catalog.json'), {
+        formatVersion: 1,
+        assets: { [id]: `ring-block/objects/${id}/asset.json` },
+      });
+      const cellPath = join(root, 'content/worlds/physics-lab/cells/0_0.json');
+      const cell = await readJson(cellPath);
+      cell.buildings = cell.buildings.map((instance: object) => ({ ...instance, assetId: id }));
+      await writeJson(cellPath, cell);
+      const firstDirectory = join(root, 'marked');
+      const first = await buildWorld(source, firstDirectory);
+      const parts = await readJson(join(firstDirectory, first.assets[id].partsFile));
+      expect(parts.renderMode).toBe('thin-instance');
+      delete descriptor.renderMode;
+      await writeJson(descriptorPath, descriptor);
+      const secondDirectory = join(root, 'ordinary');
+      const second = await buildWorld(source, secondDirectory);
+      expect(first.assets[id].version).not.toBe(second.assets[id].version);
+      expect(await readFile(join(firstDirectory, first.assets[id].modelFile!))).toEqual(
+        await readFile(join(secondDirectory, second.assets[id].modelFile!)),
+      );
+      expect(await readFile(join(firstDirectory, first.assets[id].collisionFile))).toEqual(
+        await readFile(join(secondDirectory, second.assets[id].collisionFile)),
+      );
+      expect(first.simulationConfigHash).toBe(second.simulationConfigHash);
+    }));
 });

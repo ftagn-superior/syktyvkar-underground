@@ -181,6 +181,7 @@ function matrix(node: any): number[] {
 export function inspectStaticGlb(
   bytes: Uint8Array,
   assetId: string,
+  renderMode?: BuildingParts['renderMode'],
 ): { parts: BuildingParts; bounds: Bounds; document: any } {
   const data = Buffer.from(bytes);
   invariant(
@@ -229,10 +230,25 @@ export function inspectStaticGlb(
   const parts = validateBuildingParts({
     formatVersion: 1,
     assetId,
+    ...(renderMode === undefined ? {} : { renderMode }),
     parts: (document.nodes ?? []).flatMap((node: any, nodeIndex: number) =>
       node.extras?.su ? [{ ...node.extras.su, nodeIndex }] : [],
     ),
   });
+  if (renderMode === 'thin-instance') {
+    invariant(
+      !(document.extensionsUsed ?? []).length,
+      'thin-instance GLBs cannot require material or geometry extensions',
+    );
+    for (const material of document.materials ?? []) {
+      invariant(
+        (material.alphaMode ?? 'OPAQUE') === 'OPAQUE' &&
+          (material.pbrMetallicRoughness?.baseColorFactor?.[3] ?? 1) === 1,
+        'thin-instance GLBs require opaque PBR materials',
+      );
+      invariant(!material.extensions, 'thin-instance material extensions are unsupported');
+    }
+  }
   const positions: number[] = [];
   const visited = new Set<number>();
   const renderedParts = new Set<string>();
@@ -246,6 +262,29 @@ export function inspectStaticGlb(
     invariant(node.weights === undefined, 'morph weights are outside the static building profile');
     const world = multiply(parent, matrix(node));
     invariant(world.length === 16 && world.every(Number.isFinite), 'finite node transform');
+    if (renderMode === 'thin-instance') {
+      invariant(
+        Math.abs(world[3]) + Math.abs(world[7]) + Math.abs(world[11]) < 1e-8 &&
+          Math.abs(world[15] - 1) < 1e-8,
+        'thin-instance node transform must be affine',
+      );
+      const determinant =
+        world[0] * (world[5] * world[10] - world[6] * world[9]) -
+        world[4] * (world[1] * world[10] - world[2] * world[9]) +
+        world[8] * (world[1] * world[6] - world[2] * world[5]);
+      invariant(determinant > 1e-12, 'thin-instance node transform must preserve orientation');
+      const columns = [0, 4, 8].map((offset) => world.slice(offset, offset + 3));
+      for (const [a, b] of [
+        [0, 1],
+        [0, 2],
+        [1, 2],
+      ])
+        invariant(
+          Math.abs(columns[a].reduce((sum, n, i) => sum + n * columns[b][i], 0)) <=
+            1e-6 * Math.hypot(...columns[a]) * Math.hypot(...columns[b]),
+          'thin-instance node transform cannot contain shear',
+        );
+    }
     const partId = node.extras?.su?.partId ?? inheritedPart;
     if (node.mesh !== undefined) {
       invariant(partId !== undefined, 'every mesh must belong to a semantic part');
@@ -257,6 +296,16 @@ export function inspectStaticGlb(
       );
       renderedParts.add(partId);
       for (const primitive of mesh.primitives) {
+        if (renderMode === 'thin-instance') {
+          invariant(
+            primitive.attributes?.NORMAL !== undefined,
+            'thin-instance geometry requires normals',
+          );
+          invariant(
+            primitive.material === undefined || document.materials?.[primitive.material],
+            'thin-instance primitive material',
+          );
+        }
         invariant(
           primitive.targets === undefined,
           'morph targets are outside the static building profile',

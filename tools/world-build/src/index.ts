@@ -73,6 +73,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   const descriptor = await readJson(descriptorPath);
   if (descriptor.formatVersion !== 1 || (!groundRecipe && descriptor.assetId !== assetId))
     throw new Error(`Invalid asset descriptor: ${assetId}`);
+  if (descriptor.renderMode !== undefined && descriptor.renderMode !== 'thin-instance')
+    throw new Error(`Unsupported asset render mode: ${assetId}`);
   const directory = dirname(descriptorPath);
   let model: Uint8Array | undefined, physics: BuildingPhysicsAsset;
   let treeParts: BuildingParts | undefined;
@@ -122,9 +124,11 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
           .map((m) => m.message)
           .join('; ')}`,
       );
-    inspected = inspectStaticGlb(model, assetId);
+    inspected = inspectStaticGlb(model, assetId, descriptor.renderMode);
   } else {
     if (!treeParts) throw new Error(`Missing tree representation: ${assetId}`);
+    if (descriptor.renderMode !== undefined)
+      throw new Error(`GLB render mode cannot contain a tree recipe: ${assetId}`);
     inspected = { parts: treeParts, bounds: physics.bounds };
   }
   // Imported proxies may simplify the silhouette, but must share the visual asset coordinate space.

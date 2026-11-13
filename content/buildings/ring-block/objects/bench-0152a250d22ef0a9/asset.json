@@ -1,6 +1,7 @@
 {
   "formatVersion": 1,
   "assetId": "bench-0152a250d22ef0a9",
+  "renderMode": "thin-instance",
   "source": {
     "kind": "kit",
     "file": "source.json"

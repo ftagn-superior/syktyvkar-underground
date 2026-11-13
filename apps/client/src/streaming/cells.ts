@@ -61,7 +61,10 @@ export const STREAMING_LIMITS = {
   cacheBytes: 64 * 1024 * 1024,
   // The manifest validates the finite grid; even the entire 256-cell reference is legal.
   requiredCells: 10_000,
-  staticEntities: 2048,
+  // Modular fences increase the full ring-block to ~3,750 unique objects. Keep a
+  // bounded budget that also permits previewing a valid 10,000-placement layout
+  // plus its fixed ground tiles and boundary primitives.
+  staticEntities: 16_384,
 } as const;
 export function cellNeighborhood(manifest: WorldManifest, position: Vec3): string[] {
   return worldNeighborhood(manifest.bounds, manifest.grid, position);

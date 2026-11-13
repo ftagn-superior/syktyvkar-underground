@@ -78,6 +78,24 @@ const manifest: WorldManifest = {
 };
 
 describe('world bundle validation', () => {
+  it('validates the optional GLB instancing contract without changing ordinary parts', () => {
+    expect(validateBuildingParts(parts)).toBe(parts);
+    const instanced = {
+      ...parts,
+      renderMode: 'thin-instance',
+      parts: parts.parts.map((part) => ({ ...part, occlusionGroup: null })),
+    };
+    expect(validateBuildingParts(instanced)).toBe(instanced);
+    expect(() => validateBuildingParts({ ...instanced, renderMode: 'auto' })).toThrow(
+      'render mode',
+    );
+    expect(() => validateBuildingParts({ ...instanced, parts: parts.parts })).toThrow(
+      'individual occlusion',
+    );
+    expect(() => validateBuildingParts({ ...instanced, tree: {} })).toThrow(
+      'cannot contain a tree recipe',
+    );
+  });
   it('rejects releases from before the instancing-only format', () => {
     expect(() => validateWorldManifest({ ...manifest, formatVersion: 4 })).toThrow(
       'manifest version',

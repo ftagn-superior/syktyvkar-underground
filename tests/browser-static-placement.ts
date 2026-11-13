@@ -50,6 +50,10 @@ try {
   let navigations = 0;
   for (const page of [owner, observer]) {
     page.setDefaultTimeout(45000);
+    page.on('console', (message) => {
+      if (['error', 'warning'].includes(message.type()))
+        console.error('Browser console:', message.text());
+    });
     page.on('pageerror', (e) => {
       errors.push(e.message);
       console.error('Page error:', e.message);
@@ -288,6 +292,7 @@ try {
     Math.hypot(sent.position.x - self.x, sent.position.z - self.z) > 3,
     'placement exceeds item reach',
   );
+  const confirmedRendering = [];
   for (const page of [owner, observer]) {
     await page.waitForFunction(
       (map) => (window as any).__SU_DEBUG__.snapshot().publication.mapVersion !== map,
@@ -298,6 +303,15 @@ try {
         (window as any).__SU_DEBUG__.buildings().buildings.some((b: any) => b.entityId === id),
       row.entity_id,
     );
+    const rendering = await page.evaluate(
+      () => (window as any).__SU_DEBUG__.report().rendering.buildings,
+    );
+    assert.ok(
+      rendering.glbInstances >= 1,
+      'confirmed bench uses the GLB thin-instance path on both clients',
+    );
+    if (!city) assert.equal(rendering.glbInstances, 1);
+    confirmedRendering.push(rendering);
   }
   assert.equal(navigations, beforeNav, 'successful live placement does not navigate');
   assert.equal(app.room.state.paused, false);
@@ -435,6 +449,14 @@ try {
     ).rows[0].n,
     1,
   );
+  const renderingAfterRestart = await fresh.evaluate(
+    () => (window as any).__SU_DEBUG__.report().rendering.buildings,
+  );
+  assert.ok(
+    renderingAfterRestart.glbInstances >= 1,
+    'persisted bench rejoins instancing after restart',
+  );
+  if (!city) assert.equal(renderingAfterRestart.glbInstances, 1);
   const result = {
     ok: true,
     entityId: row.entity_id,
@@ -444,6 +466,8 @@ try {
     refusals,
     metrics: liveMetrics,
     preparations: snapshot.preparations,
+    confirmedRendering,
+    renderingAfterRestart,
   };
   await writeFile(
     `output/playwright/static-placement${city ? '-city' : ''}.json`,

@@ -7,7 +7,12 @@ import { buildWorld, WORLDS } from '../../tools/world-build/src/index.js';
 import { encodeStaticGlb } from '../../tools/world-build/src/glb.js';
 import { generateKit } from '../../tools/world-build/src/kit.js';
 import { mergeParts } from '../../tools/world-build/src/merge.js';
-import { canonicalJson } from '../../packages/contracts/src/index.js';
+import { canonicalJson, type WorldDefinition } from '../../packages/contracts/src/index.js';
+import {
+  staticAssetLibraryHash,
+  validateStaticAssetRemapRules,
+  type StaticAssetRemapRules,
+} from '../../packages/world-release/src/index.js';
 import {
   readAuthoringRelease,
   createLayoutPublication,
@@ -26,6 +31,16 @@ import {
 } from '../helpers/static-extraction.js';
 
 const plantingCategories = new Set(['tree', 'bush']);
+const remappedCategories = new Set([
+  'tree',
+  'bush',
+  'bench',
+  'lamp',
+  'traffic-light',
+  'bollard',
+  'fence',
+]);
+const libraryFixture = 'tests/fixtures/static-library-v1';
 const artFixture = 'tests/fixtures/art-refresh/authoring-invariants.json';
 const minimumAmbientFactor = 0.7;
 
@@ -76,11 +91,16 @@ describe('independent static-object extraction evidence', () => {
   let baseline: any;
   let registry: any;
   let art: any;
+  let library: any;
+  let remap: StaticAssetRemapRules;
   beforeAll(async () => {
     temporary = await mkdtemp(join(tmpdir(), 'su-extraction-proof-'));
     baseline = await json(`${extractionFixture}/baseline.json`);
     registry = await json('content/worlds/ring-block/extraction.json');
     art = await json(artFixture);
+    library = await json(`${libraryFixture}/invariants.json`);
+    remap = await json('content/migrations/ring-block/static-library-v1.json');
+    validateStaticAssetRemapRules(remap);
     await buildWorld('content/worlds/ring-block/world.json', join(temporary, 'release'));
     release = await readRelease(join(temporary, 'release'));
   });
@@ -88,7 +108,7 @@ describe('independent static-object extraction evidence', () => {
     if (temporary) await rm(temporary, { recursive: true, force: true });
   });
 
-  it('publishes and republishes all 829 trees without GLBs or changes to placement and physics', async () => {
+  it('publishes 829 tree placements using nine procedural resources and republishes the compact release', async () => {
     const authored = await readAuthoringRelease(join(temporary, 'release'));
     const { publication } = await createLayoutPublication(authored, {
       formatVersion: 1,
@@ -102,7 +122,8 @@ describe('independent static-object extraction evidence', () => {
     const trees = Object.values(publication.manifest.assets).filter((asset) =>
       asset.assetId.startsWith('tree-'),
     );
-    expect(trees).toHaveLength(829);
+    expect(trees).toHaveLength(9);
+    expect(release.world.buildings.filter((b) => b.assetId.startsWith('tree-'))).toHaveLength(829);
     for (const tree of trees) {
       expect(tree.modelFile).toBeUndefined();
       expect(
@@ -112,119 +133,142 @@ describe('independent static-object extraction evidence', () => {
     }
     expect(
       Object.keys(publication.manifest.files).filter((path) => path.endsWith('.glb')),
-    ).toHaveLength(886);
+    ).toHaveLength(252);
   });
 
-  it('preserves every non-planting triangle, winding and fade, allowing only bounded neutral AO', async () => {
+  it('preserves the independent historical triangles of every category outside the approved remap', async () => {
     for (const [path, hash] of Object.entries(baseline.fixtureHashes))
       expect(sha256(await readFile(`${extractionFixture}/${path}`))).toBe(hash);
     expect(registry.baseline.id).toBe(baseline.mapVersion);
     expect(registry.baseline.fixtureSha256).toBe(
       sha256(await readFile(`${extractionFixture}/baseline.json`)),
     );
-    const before = JSON.parse(
-      gunzipSync(await readFile(`${extractionFixture}/triangles.json.gz`)).toString(),
-    );
-    // The immutable pre-extraction triangle stream has no object IDs. Its six
-    // planting colors are disjoint from every retained category; exact counts
-    // below prevent accidentally discarding any additional historical geometry.
-    const plantingColors = art.originalVegetationColors.map((hex: string) =>
-      [1, 3, 5].map((offset) => {
-        const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
-        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-      }),
-    );
-    const isOldPlanting = (triangle: any) =>
-      plantingColors.some((color: number[]) =>
-        triangle.vertices.every((vertex: number[]) =>
-          color.every((channel, i) => Math.abs(channel - vertex[i + 3]) < 1e-6),
-        ),
-      );
-    expect(before).toHaveLength(99_484);
-    expect(before.filter(isOldPlanting)).toHaveLength(art.originalVegetationTriangles);
-    const ids = new Set(
+    const originalBytes = await readFile(`${extractionFixture}/triangles.json.gz`);
+    expect(sha256(originalBytes)).toBe(library.originalTriangleFixtureSha256);
+    const original = JSON.parse(gunzipSync(originalBytes).toString());
+    expect(original).toHaveLength(99_484);
+    const subsetBytes = await readFile(`${libraryFixture}/unchanged-triangles.json.gz`);
+    expect(sha256(subsetBytes)).toBe(library.unchangedTriangleFixtureSha256);
+    const before = JSON.parse(gunzipSync(subsetBytes).toString());
+    // The new subset contains exact original records, with multiplicity. It was
+    // selected from the immutable stream, never regenerated from current models.
+    const originalCounts = new Map<string, number>();
+    for (const triangle of original) {
+      const key = canonicalJson(triangle);
+      originalCounts.set(key, (originalCounts.get(key) ?? 0) + 1);
+    }
+    for (const triangle of before) {
+      const key = canonicalJson(triangle),
+        count = originalCounts.get(key) ?? 0;
+      expect(count).toBeGreaterThan(0);
+      originalCounts.set(key, count - 1);
+    }
+    const ids = new Set<string>(
       registry.objects
-        .filter((o: any) => o.status === 'extracted' && !plantingCategories.has(o.category))
+        .filter((o: any) => o.status === 'extracted' && !remappedCategories.has(o.category))
         .map((o: any) => o.entityId),
     );
+    expect([...ids].sort()).toEqual(library.unchangedObjectIds);
+    expect(ids.size).toBe(66);
     const after = await releaseTriangles(
       join(temporary, 'release'),
       release.manifest,
       release.world.buildings.filter((b) => ids.has(b.entityId)),
     );
-    const result = compareTriangles(
-      before.filter((triangle: any) => !isOldPlanting(triangle)),
-      after,
-      0.001,
-      minimumAmbientFactor,
-    );
-    expect(result.triangles).toBe(art.unchangedTriangles);
+    const result = compareTriangles(before, after, 0.001, minimumAmbientFactor);
+    expect(result.triangles).toBe(1680);
+    expect(result.triangles).toBe(library.unchangedTriangleCount);
     expect(result.maxVertexDelta).toBeLessThan(0.001);
     expect(result.minColorFactor).toBeGreaterThanOrEqual(minimumAmbientFactor);
     expect(result.shadedVertices).toBeGreaterThan(0);
   });
 
-  it('confines refreshed planting to original envelopes, fade groups and collider recipes', async () => {
+  it('enforces the explicit vegetation transformation budget against generated visual bounds', async () => {
     const planting = registry.objects.filter(
-      (object: any) => object.status === 'extracted' && plantingCategories.has(object.category),
+      (o: any) => o.status === 'extracted' && plantingCategories.has(o.category),
     );
-    expect(planting.filter((object: any) => object.category === 'tree')).toHaveLength(829);
-    expect(planting.filter((object: any) => object.category === 'bush')).toHaveLength(277);
-    const recipes: [string, unknown][] = [];
-    for (const id of [
-      ...new Set(planting.map((object: any) => object.assetId)),
-    ].sort() as string[]) {
+    expect(planting.filter((o: any) => o.category === 'tree')).toHaveLength(829);
+    expect(planting.filter((o: any) => o.category === 'bush')).toHaveLength(277);
+    expect(remap.sourceDescriptionHash).toBe(library.sourceDescriptionHash);
+    expect(staticAssetLibraryHash(remap, release.manifest.assets)).toBe(library.targetLibraryHash);
+    const targets = new Set(Object.values(remap.assetMap));
+    expect([...targets].filter((id) => id.startsWith('tree-'))).toHaveLength(9);
+    expect([...targets].filter((id) => id.startsWith('bush-'))).toHaveLength(6);
+    const bounds = new Map();
+    for (const id of [...targets].filter((id) => /^(tree|bush)-/.test(id))) {
       const path = `content/buildings/ring-block/objects/${id}/source.json`;
       const recipe = await json(path);
-      recipes.push([path, visualInvariant(recipe, path)]);
-      const descriptor = release.manifest.assets[id];
-      const triangles = glbTriangles(
-        descriptor.modelFile
-          ? await readFile(join(temporary, 'release', descriptor.modelFile))
-          : encodeStaticGlb(generateKit(id, recipe).parts),
-        {
-          assetId: id,
-          entityId: id,
-          position: { x: 0, y: 0, z: 0 },
-          rotation: { x: 0, y: 0, z: 0, w: 1 },
-        },
-      );
-      const tree = id.startsWith('tree-');
-      expect(new Set(triangles.map((triangle) => triangle.fade))).toEqual(new Set([tree]));
-      const crowns = tree
-        ? recipe.parts
-            .find((part: any) => part.id.startsWith('crown-'))
-            .shapes.map((shape: any) => shape.cone)
-        : recipe.parts[0].shapes.map((shape: any) => shape.foliage);
-      const radius = Math.max(
-        ...crowns.map((c: any) => c.radius ?? Math.max(c.radiusBottom, c.radiusTop)),
-      );
-      const top = Math.max(...crowns.map((c: any) => c.center[1] + c.height));
-      const bottom = Math.min(
-        ...crowns.map((c: any) => c.center[1]),
-        ...recipe.parts.flatMap((part: any) =>
-          part.shapes.flatMap((shape: any) =>
-            shape.box ? [shape.box.center[1] - shape.box.size[1] / 2] : [],
-          ),
-        ),
-      );
-      for (const triangle of triangles)
-        for (const [x, y, z] of triangle.vertices) {
-          expect(Math.max(Math.abs(x), Math.abs(z)), id).toBeLessThanOrEqual(radius + 1e-5);
-          expect(y, id).toBeGreaterThanOrEqual(bottom - 1e-5);
-          expect(y, id).toBeLessThanOrEqual(top + 1e-5);
-        }
+      expect(sha256(canonicalJson(recipe))).toBe(library.recipeHashes[path]);
+      const generated = generateKit(id, recipe);
+      bounds.set(id, generated.physics.bounds);
+      for (const edge of ['min', 'max'] as const)
+        for (const axis of ['x', 'y', 'z'] as const)
+          expect(release.manifest.assets[id].bounds[edge][axis]).toBeCloseTo(
+            generated.physics.bounds[edge][axis],
+            5,
+          );
+      const triangles = glbTriangles(encodeStaticGlb(generated.parts), {
+        assetId: id,
+        entityId: id,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+      });
+      expect(new Set(triangles.map((t) => t.fade))).toEqual(new Set([id.startsWith('tree-')]));
     }
-    // This original structure hash also includes every collider, source pivot,
-    // trunk, crown envelope and fade flag; only the permitted art fields differ.
-    expect(recipes).toHaveLength(art.vegetationAssets);
-    expect(sha256(canonicalJson(recipes))).toBe(art.vegetationGeometryHash);
+    for (const object of planting) {
+      const previous = remap.vegetation[object.assetId];
+      const current = bounds.get(remap.assetMap[object.assetId]);
+      expect(current).toEqual(previous.targetBounds);
+      for (const axis of ['x', 'y', 'z'] as const) {
+        const oldSize = previous.bounds.max[axis] - previous.bounds.min[axis];
+        const newSize = current.max[axis] - current.min[axis];
+        expect(Math.abs(newSize / oldSize - 1), `${object.assetId}/${axis}`).toBeLessThanOrEqual(
+          0.1,
+        );
+      }
+    }
   });
 
-  it('preserves all physical shapes, materials and world transforms independently of body IDs', async () => {
+  it('preserves physical shapes and transforms outside the explicit remap independently of body IDs', async () => {
     const old = await oldExtractionWorld();
-    const result = compareColliders(worldColliders(old), worldColliders(release.world));
-    expect(result.colliders).toBe(1888);
+    const removed = new Map<string, Set<string>>();
+    for (const object of registry.objects.filter(
+      (o: any) => o.status === 'extracted' && remappedCategories.has(o.category),
+    )) {
+      const ids = removed.get(object.previous.entityId) ?? new Set<string>();
+      for (const id of object.previous.colliderIds) ids.add(id);
+      removed.set(object.previous.entityId, ids);
+    }
+    const unchangedOld: WorldDefinition = {
+      ...old,
+      buildingAssets: Object.fromEntries(
+        Object.entries(old.buildingAssets).map(([id, asset]) => {
+          const instance = old.buildings.find((b) => b.assetId === id);
+          const ids = instance ? removed.get(instance.entityId) : undefined;
+          return [
+            id,
+            ids ? { ...asset, colliders: asset.colliders.filter((c) => !ids.has(c.id)) } : asset,
+          ];
+        }),
+      ),
+    };
+    const remappedIds = new Set(
+      registry.objects
+        .filter((o: any) => o.status === 'extracted' && remappedCategories.has(o.category))
+        .map((o: any) => o.entityId),
+    );
+    for (const { instance } of baseline.preserved)
+      if (remap.assetMap[instance.assetId]) remappedIds.add(instance.entityId);
+    const retainedOld = unchangedOld.buildings.filter((b) => !remappedIds.has(b.entityId));
+    const retainedNew = release.world.buildings.filter(
+      (b) => !remappedIds.has(b.entityId) && !b.assetId.startsWith('fence-'),
+    );
+    const result = compareColliders(
+      worldColliders(unchangedOld, retainedOld),
+      worldColliders(release.world, retainedNew),
+    );
+    // 1,536 of the 1,888 old shapes belong to the explicitly remapped categories.
+    expect(result.colliders).toBe(352);
     expect(result.maxNumericDelta).toBeLessThan(1e-6);
     expect(result.maxRotationRadians).toBeLessThan(1e-6);
     expect(release.world.entities).toEqual(old.entities);
@@ -239,6 +283,13 @@ describe('independent static-object extraction evidence', () => {
       Object.keys(art.sourceGeometryHashes).map((path) => path.split('/').at(-2)!),
     );
     for (const { instance, asset } of baseline.preserved) {
+      if (remap.assetMap[instance.assetId]) {
+        expect(current.get(instance.entityId)).toEqual({
+          ...instance,
+          assetId: remap.assetMap[instance.assetId],
+        });
+        continue;
+      }
       expect(current.get(instance.entityId)).toEqual(instance);
       const ground = instance.assetId.startsWith('ring-block-ground-');
       const updated = release.manifest.assets[instance.assetId];
@@ -288,13 +339,14 @@ describe('independent static-object extraction evidence', () => {
         }
       }
     }
-    expect(checkedAmbientAssets.size).toBe(5);
+    expect(checkedAmbientAssets.size).toBe(4);
     const unchanged = Object.entries(baseline.sourceHashes).filter(
       ([path]) =>
         !path.includes('/details-') &&
         !path.endsWith('/import.json') &&
         !path.endsWith('/catalog.json') &&
-        !path.endsWith('/cells/0_0.json'),
+        !path.endsWith('/cells/0_0.json') &&
+        !path.includes('/manual/lamp-five-globe/'),
     );
     expect(Object.keys(art.sourceGeometryHashes)).toHaveLength(138);
     for (const [path, hash] of unchanged) {
@@ -361,8 +413,14 @@ describe('independent static-object extraction evidence', () => {
     ).toBe(false);
     const authored = await json('content/worlds/ring-block/cells/0_0.json');
     const authoredMap = new Map(authored.buildings.map((b: any) => [b.entityId, b.assetId]));
-    for (const object of registry.objects)
-      expect(authoredMap.get(object.entityId)).toBe(object.assetId);
+    for (const object of registry.objects) {
+      if (object.category === 'fence')
+        expect(['fence-short', 'fence-long']).toContain(authoredMap.get(object.entityId));
+      else
+        expect(authoredMap.get(object.entityId)).toBe(
+          remap.assetMap[object.assetId] ?? object.assetId,
+        );
+    }
     expect(
       new Set(
         extracted.filter((o: any) => o.category === 'traffic-light').map((o: any) => o.assetId),
@@ -371,7 +429,9 @@ describe('independent static-object extraction evidence', () => {
     const catalog = await json('content/buildings/ring-block/catalog.json');
     expect(Object.keys(catalog.assets).some((id) => id.startsWith('details-'))).toBe(false);
     const recipes = new Map<string, string>();
-    for (const id of new Set(extracted.map((o: any) => o.assetId)) as Set<string>) {
+    for (const id of new Set(
+      extracted.map((o: any) => authoredMap.get(o.entityId)),
+    ) as Set<string>) {
       const descriptor = await json(`content/buildings/ring-block/${catalog.assets[id]}`);
       expect(descriptor.source.kind).toBe('kit');
       const path = `content/buildings/ring-block/${catalog.assets[id].replace(/asset\.json$/, descriptor.source.file)}`;

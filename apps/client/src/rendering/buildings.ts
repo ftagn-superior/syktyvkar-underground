@@ -25,6 +25,7 @@ import {
 import { SpatialIndex } from './spatial-index';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
+import { GlbInstances } from './glb-instances';
 import { applyRadialFog, type RadialState } from './radial-fog';
 
 type Asset = {
@@ -91,6 +92,7 @@ export class BuildingViews {
   private disposed = false;
   private prepared = false;
   private readonly trees: TreeViews;
+  private readonly glbs: GlbInstances;
   private lastOcclusionTest = -Infinity;
   private opaque = false;
   private minimumVisibleSize = 0;
@@ -102,6 +104,7 @@ export class BuildingViews {
     private readonly radial?: RadialState,
   ) {
     this.trees = new TreeViews(scene, shadow, radial);
+    this.glbs = new GlbInstances(scene, shadow, radial);
   }
 
   async prepare(
@@ -175,6 +178,13 @@ export class BuildingViews {
                   this.assets.delete(descriptor.version);
                 throw new DOMException('Preparation cancelled', 'AbortError');
               }
+              try {
+                if (asset.parts.renderMode === 'thin-instance')
+                  this.glbs.prepare(descriptor, asset.parts, asset.container!);
+              } catch (error) {
+                asset.container?.dispose();
+                throw error;
+              }
               entry.value = asset;
               this.assets.set(descriptor.version, asset);
               return asset;
@@ -187,6 +197,7 @@ export class BuildingViews {
             entry.controller.abort();
             if (this.cache.get(descriptor.version) === entry) this.cache.delete(descriptor.version);
             if (entry.value) {
+              this.glbs.release(descriptor.version);
               entry.value.container?.dispose();
               if (this.assets.get(descriptor.version) === entry.value)
                 this.assets.delete(descriptor.version);
@@ -234,10 +245,18 @@ export class BuildingViews {
     if (!asset || asset.descriptor.assetId !== definition.assetId)
       throw new Error('Model is not prepared');
     if (!asset.container && asset.parts.tree) {
+      if (this.glbs.has(definition.entityId))
+        throw new Error(`Conflicting building/version: ${definition.entityId}`);
       this.trees.add(definition, asset.descriptor, asset.parts.tree, signature);
       return;
     }
     if (this.trees.has(definition.entityId))
+      throw new Error(`Conflicting building/version: ${definition.entityId}`);
+    if (asset.parts.renderMode === 'thin-instance') {
+      this.glbs.add(definition, version, signature);
+      return;
+    }
+    if (this.glbs.has(definition.entityId))
       throw new Error(`Conflicting building/version: ${definition.entityId}`);
     const view = this.instantiate(definition, asset);
     if (view.size < this.minimumVisibleSize) view.root.setEnabled(false);
@@ -248,6 +267,10 @@ export class BuildingViews {
     return view.root;
   }
   remove(id: string): void {
+    if (this.glbs.has(id)) {
+      this.glbs.remove(id);
+      return;
+    }
     if (this.trees.has(id)) {
       this.trees.remove(id);
       return;
@@ -270,6 +293,7 @@ export class BuildingViews {
     const minimum = metresPerPixel * MIN_VISIBLE_PIXELS;
     if (minimum === this.minimumVisibleSize) return;
     this.minimumVisibleSize = minimum;
+    this.glbs.setDetailScale(minimum);
     let changed = false;
     for (const view of this.instances) {
       const enabled = view.size >= minimum;
@@ -340,8 +364,7 @@ export class BuildingViews {
       container.dispose();
       throw new Error('Building preparation was cancelled');
     }
-    const asset = { descriptor, container, parts };
-    return asset;
+    return { descriptor, container, parts };
   }
 
   private instantiate(definition: BuildingInstance, asset: Asset): BuildingView {
@@ -467,6 +490,7 @@ export class BuildingViews {
       }
     }
     this.trees.update(rays, shadowCenter, visibleRadius, now, seconds, opaque);
+    this.glbs.update(shadowCenter, visibleRadius);
     const selected = new Set(this.fading);
     for (const ray of rays) {
       const end = ray.origin.add(ray.direction.scale(ray.length));
@@ -559,8 +583,9 @@ export class BuildingViews {
 
   aggregateDiagnostics() {
     const trees = this.trees.aggregateDiagnostics();
+    const glbs = this.glbs.aggregateDiagnostics();
     return {
-      instances: this.instances.length + trees.treeInstances,
+      instances: this.instances.length + trees.treeInstances + glbs.glbInstances,
       assets: this.assets.size,
       modelLoads: [...this.assets.values()].filter((asset) => asset.container).length,
       fadedBuildings:
@@ -568,10 +593,11 @@ export class BuildingViews {
           instance.groups.some((group) => group.fade.opacity < 0.99),
         ).length + trees.fadedTrees,
       ...trees,
+      ...glbs,
     };
   }
   diagnostics() {
-    const trees = this.trees.diagnostics();
+    const trees = [...this.trees.diagnostics(), ...this.glbs.diagnostics()];
     const counts = new Map<string, number>();
     for (const definition of [...this.instances.map((view) => view.definition), ...trees])
       counts.set(definition.assetId, (counts.get(definition.assetId) ?? 0) + 1);
@@ -606,6 +632,7 @@ export class BuildingViews {
     if (this.disposed) return;
     this.disposed = true;
     this.trees.dispose();
+    this.glbs.dispose();
     for (const [id, entry] of this.references) {
       entry.count = 1;
       this.remove(id);

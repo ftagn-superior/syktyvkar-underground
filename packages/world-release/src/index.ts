@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+export * from './static-asset-remap.js';
 import { mkdir, writeFile, rename, readFile, readdir, unlink, rmdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
@@ -92,7 +93,10 @@ export function createWorldPublication(
   )) {
     const prefix = `assets/${asset.version}`;
     const parts = JSON.parse(new TextDecoder().decode(asset.parts));
-    if (parts.tree) validateBuildingParts(parts);
+    if (parts.tree || parts.renderMode !== undefined) {
+      validateBuildingParts(parts);
+      if (parts.assetId !== assetId) throw new Error(`Parts asset ID mismatch: ${assetId}`);
+    }
     if (!!parts.tree !== (asset.model === undefined))
       throw new Error(`Asset must contain either an instanced tree or a GLB: ${assetId}`);
     assets[assetId] = {

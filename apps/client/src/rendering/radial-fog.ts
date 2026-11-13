@@ -72,8 +72,8 @@ export class RadialFog extends MaterialPluginBase {
     return {
       CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
         float suDistance = length(vPositionW.xz - suRadial.xy);
-        #ifdef SU_TREE_INSTANCES
-          float suAppear = vSuTreeAppearance;
+        #ifdef SU_INSTANCE_STATE
+          float suAppear = vSuInstanceAppearance;
         #else
           float suAppear = suAppearance;
         #endif

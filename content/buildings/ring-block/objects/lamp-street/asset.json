@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "assetId": "lamp-street",
+  "renderMode": "thin-instance",
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  }
+}

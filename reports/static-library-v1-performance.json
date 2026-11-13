@@ -1,0 +1,1878 @@
+{
+  "formatVersion": 1,
+  "measuredAt": "2026-11-13T11:22:30.104Z",
+  "baseCodeRevision": "d44b7ae20228442a5b3c54ee3222f212dc5af98a",
+  "codeState": "working tree implementing static-library-v1",
+  "physics": {
+    "description": "Same-process Babylon NullEngine + Havok full static ring-block, eight moving controllers and current initial items. PhysicsWorld.advance only; excludes server AOI, encoding, database and networking. No target-hardware acceptance claim.",
+    "environment": {
+      "node": "v26.10.0",
+      "babylon": "9.35.0",
+      "havok": "1.3.14",
+      "platform": "linux",
+      "arch": "x64",
+      "cpu": "AMD EPYC-Rome-v4 Processor (no XSAVES)",
+      "logicalCpus": 8
+    },
+    "warmupTicks": 600,
+    "sampleTicks": 1800,
+    "tickRate": 60,
+    "fixtureSha256": "e550e99cdb8c3084a0d8c47d5b2155421c85c081662598f46781123b3b74acd4",
+    "resources": {
+      "before": {
+        "mapVersion": "59d35a5994fa94866cd5e1b86f45b611137ebd4133af40092bc773a50401ce53",
+        "models": 1715,
+        "files": 4463,
+        "resourceBodyBytes": 34661050,
+        "modelBytes": 16186520,
+        "glbFiles": 886,
+        "graphicsPacks": 106,
+        "graphicsPackBytes": 16845771,
+        "collisionBytes": 746874,
+        "partsBytes": 421062,
+        "maximumCellBytes": 31090
+      },
+      "after": {
+        "mapVersion": "cfd51f479770b837615ed9cd5d053ab46552cf9795447404239e1dbd3e75e65b",
+        "models": 261,
+        "files": 921,
+        "resourceBodyBytes": 20262404,
+        "modelBytes": 9453264,
+        "glbFiles": 252,
+        "graphicsPacks": 106,
+        "graphicsPackBytes": 9540433,
+        "collisionBytes": 209160,
+        "partsBytes": 39376,
+        "maximumCellBytes": 84211
+      }
+    },
+    "runs": [
+      {
+        "world": "before",
+        "constructionMs": 401.92103,
+        "memory": {
+          "before": {
+            "rss": 199364608,
+            "heapTotal": 102658048,
+            "heapUsed": 57550760,
+            "external": 8761749,
+            "arrayBuffers": 4338798
+          },
+          "afterConstruction": {
+            "rss": 223023104,
+            "heapTotal": 107900928,
+            "heapUsed": 57160280,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "afterSampling": {
+            "rss": 246460416,
+            "heapTotal": 129134592,
+            "heapUsed": 75777848,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "wasmReservedBytes": 16908288
+        },
+        "statics": {
+          "entities": 1788,
+          "references": 1788,
+          "buildings": {
+            "instances": 1784,
+            "assets": 1715,
+            "shapes": 3533,
+            "references": 1784
+          },
+          "bodies": 1797,
+          "items": 1,
+          "remotePlayers": 0
+        },
+        "stepMs": {
+          "mean": 0.24748755277777515,
+          "p50": 0.20356000000037966,
+          "p95": 0.3605290000000423,
+          "p99": 1.1781849999997576,
+          "max": 4.06465100000014
+        },
+        "finalPositions": [
+          {
+            "x": -3.0000000000000004,
+            "y": 0.92,
+            "z": 15.345081764302385
+          },
+          {
+            "x": 3.1302553279128342,
+            "y": 0.9647171169026294,
+            "z": -13.601390052812727
+          },
+          {
+            "x": -5.017608468310437,
+            "y": 0.955882868888093,
+            "z": 15.022938846417563
+          },
+          {
+            "x": 5.100158182458139,
+            "y": 0.9545682735680353,
+            "z": 15.076957757637505
+          },
+          {
+            "x": -6.981494792001268,
+            "y": 0.92,
+            "z": 12.938941800633067
+          },
+          {
+            "x": 6.999999999999998,
+            "y": 0.92,
+            "z": 13.000000000000002
+          },
+          {
+            "x": -3.032866015206085,
+            "y": 0.9612041482185429,
+            "z": 14.704587306270827
+          },
+          {
+            "x": 2.6132505520842173,
+            "y": 0.92,
+            "z": 43.1716297498169
+          }
+        ]
+      },
+      {
+        "world": "after",
+        "constructionMs": 218.23630999999978,
+        "memory": {
+          "before": {
+            "rss": 247115776,
+            "heapTotal": 129658880,
+            "heapUsed": 79928408,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "afterConstruction": {
+            "rss": 269922304,
+            "heapTotal": 151584768,
+            "heapUsed": 102475768,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "afterSampling": {
+            "rss": 293253120,
+            "heapTotal": 172294144,
+            "heapUsed": 127829952,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "wasmReservedBytes": 16908288
+        },
+        "statics": {
+          "entities": 3750,
+          "references": 3750,
+          "buildings": {
+            "instances": 3746,
+            "assets": 261,
+            "shapes": 625,
+            "references": 3746
+          },
+          "bodies": 3759,
+          "items": 1,
+          "remotePlayers": 0
+        },
+        "stepMs": {
+          "mean": 0.36624973388888343,
+          "p50": 0.2807980000002317,
+          "p95": 0.5447400000002744,
+          "p99": 3.444915999999921,
+          "max": 5.394053999999869
+        },
+        "finalPositions": [
+          {
+            "x": -3.0000000000000004,
+            "y": 0.92,
+            "z": 15.345081764302385
+          },
+          {
+            "x": 3.1302553279128342,
+            "y": 0.9647171169026294,
+            "z": -13.601390052812727
+          },
+          {
+            "x": -5.017608468310437,
+            "y": 0.955882868888093,
+            "z": 15.022938846417563
+          },
+          {
+            "x": 5.100158182458139,
+            "y": 0.9545682735680353,
+            "z": 15.076957757637505
+          },
+          {
+            "x": -6.981494792001268,
+            "y": 0.92,
+            "z": 12.938941800633067
+          },
+          {
+            "x": 6.999999999999998,
+            "y": 0.92,
+            "z": 13.000000000000002
+          },
+          {
+            "x": -3.032866015206085,
+            "y": 0.9612041482185429,
+            "z": 14.704587306270827
+          },
+          {
+            "x": 2.6132505520842173,
+            "y": 0.92,
+            "z": 43.1716297498169
+          }
+        ]
+      },
+      {
+        "world": "after",
+        "constructionMs": 240.19681400000036,
+        "memory": {
+          "before": {
+            "rss": 293515264,
+            "heapTotal": 172556288,
+            "heapUsed": 134216328,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "afterConstruction": {
+            "rss": 308678656,
+            "heapTotal": 177975296,
+            "heapUsed": 125954152,
+            "external": 10923337,
+            "arrayBuffers": 6433365
+          },
+          "afterSampling": {
+            "rss": 310120448,
+            "heapTotal": 184266752,
+            "heapUsed": 137835496,
+            "external": 9278894,
+            "arrayBuffers": 6433365
+          },
+          "wasmReservedBytes": 16908288
+        },
+        "statics": {
+          "entities": 3750,
+          "references": 3750,
+          "buildings": {
+            "instances": 3746,
+            "assets": 261,
+            "shapes": 625,
+            "references": 3746
+          },
+          "bodies": 3759,
+          "items": 1,
+          "remotePlayers": 0
+        },
+        "stepMs": {
+          "mean": 0.37905099166666484,
+          "p50": 0.29983699999957025,
+          "p95": 0.46615899999960675,
+          "p99": 2.6124889999991865,
+          "max": 14.362001999999848
+        },
+        "finalPositions": [
+          {
+            "x": -3.0000000000000004,
+            "y": 0.92,
+            "z": 15.345081764302385
+          },
+          {
+            "x": 3.1302553279128342,
+            "y": 0.9647171169026294,
+            "z": -13.601390052812727
+          },
+          {
+            "x": -5.017608468310437,
+            "y": 0.955882868888093,
+            "z": 15.022938846417563
+          },
+          {
+            "x": 5.100158182458139,
+            "y": 0.9545682735680353,
+            "z": 15.076957757637505
+          },
+          {
+            "x": -6.981494792001268,
+            "y": 0.92,
+            "z": 12.938941800633067
+          },
+          {
+            "x": 6.999999999999998,
+            "y": 0.92,
+            "z": 13.000000000000002
+          },
+          {
+            "x": -3.032866015206085,
+            "y": 0.9612041482185429,
+            "z": 14.704587306270827
+          },
+          {
+            "x": 2.6132505520842173,
+            "y": 0.92,
+            "z": 43.1716297498169
+          }
+        ]
+      },
+      {
+        "world": "before",
+        "constructionMs": 155.75560599999972,
+        "memory": {
+          "before": {
+            "rss": 310120448,
+            "heapTotal": 184791040,
+            "heapUsed": 144349800,
+            "external": 9278894,
+            "arrayBuffers": 6433365
+          },
+          "afterConstruction": {
+            "rss": 317984768,
+            "heapTotal": 194228224,
+            "heapUsed": 136813432,
+            "external": 9278894,
+            "arrayBuffers": 6433365
+          },
+          "afterSampling": {
+            "rss": 336859136,
+            "heapTotal": 213102592,
+            "heapUsed": 170907840,
+            "external": 9278894,
+            "arrayBuffers": 6433365
+          },
+          "wasmReservedBytes": 16908288
+        },
+        "statics": {
+          "entities": 1788,
+          "references": 1788,
+          "buildings": {
+            "instances": 1784,
+            "assets": 1715,
+            "shapes": 3533,
+            "references": 1784
+          },
+          "bodies": 1797,
+          "items": 1,
+          "remotePlayers": 0
+        },
+        "stepMs": {
+          "mean": 0.32551776555554623,
+          "p50": 0.2614979999998468,
+          "p95": 0.4354240000002392,
+          "p99": 2.2168259999998554,
+          "max": 13.878665999999612
+        },
+        "finalPositions": [
+          {
+            "x": -3.0000000000000004,
+            "y": 0.92,
+            "z": 15.345081764302385
+          },
+          {
+            "x": 3.1302553279128342,
+            "y": 0.9647171169026294,
+            "z": -13.601390052812727
+          },
+          {
+            "x": -5.017608468310437,
+            "y": 0.955882868888093,
+            "z": 15.022938846417563
+          },
+          {
+            "x": 5.100158182458139,
+            "y": 0.9545682735680353,
+            "z": 15.076957757637505
+          },
+          {
+            "x": -6.981494792001268,
+            "y": 0.92,
+            "z": 12.938941800633067
+          },
+          {
+            "x": 6.999999999999998,
+            "y": 0.92,
+            "z": 13.000000000000002
+          },
+          {
+            "x": -3.032866015206085,
+            "y": 0.9612041482185429,
+            "z": 14.704587306270827
+          },
+          {
+            "x": 2.6132505520842173,
+            "y": 0.92,
+            "z": 43.1716297498169
+          }
+        ]
+      }
+    ]
+  },
+  "loading": {
+    "conditions": {
+      "renderer": "SwiftShader",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "deviceScaleFactor": 1
+      },
+      "quality": "economy",
+      "coldRuns": 1,
+      "previewOnly": true,
+      "sampling": "includes loading; not steady frame timing"
+    },
+    "before": {
+      "date": "2026-11-13T11:06:44.621Z",
+      "mapVersion": "59d35a5994fa94866cd5e1b86f45b611137ebd4133af40092bc773a50401ce53",
+      "summaries": [
+        {
+          "label": "cold-cache-1",
+          "responseDelayMs": 0,
+          "marks": {
+            "domContentLoaded": 325.2999997138977,
+            "debugReady": 365.59999990463257,
+            "load": 380,
+            "previewReady": 752.5,
+            "firstPositiveRadius": 2885.2999997138977,
+            "visibleReady": 18768.799999713898,
+            "shownReady": 18768.799999713898,
+            "backgroundReady": 24707.900000095367
+          },
+          "worldRequests": 114,
+          "graphicsPackRequests": 82,
+          "worldCacheHits": 0,
+          "worldTransferBytes": 15583154,
+          "worldBodyBytes": 15548954,
+          "lastWorldResponseMs": 4591.099999904633,
+          "wasmRequests": 0,
+          "graphicsCells": 30,
+          "models": 1189,
+          "meshes": 1511,
+          "materials": 680,
+          "drawCalls": 36,
+          "frameMs": {
+            "count": 225,
+            "p50": 116.60000000000036,
+            "p95": 200,
+            "p99": 350
+          },
+          "longTasks": 8,
+          "errors": []
+        },
+        {
+          "label": "warm-cache",
+          "responseDelayMs": 0,
+          "marks": {
+            "domContentLoaded": 232.09999990463257,
+            "debugReady": 292,
+            "load": 307.2999997138977,
+            "previewReady": 653.7999997138977,
+            "firstPositiveRadius": 2474.9000000953674,
+            "visibleReady": 19759,
+            "shownReady": 19759,
+            "backgroundReady": 26214.299999713898
+          },
+          "worldRequests": 114,
+          "graphicsPackRequests": 82,
+          "worldCacheHits": 113,
+          "worldTransferBytes": 300,
+          "worldBodyBytes": 15548954,
+          "lastWorldResponseMs": 3967.7999997138977,
+          "wasmRequests": 0,
+          "graphicsCells": 30,
+          "models": 1189,
+          "meshes": 1511,
+          "materials": 680,
+          "drawCalls": 36,
+          "frameMs": {
+            "count": 231,
+            "p50": 116.70000000000073,
+            "p95": 233.29999999999927,
+            "p99": 333.39999999999964
+          },
+          "longTasks": 9,
+          "errors": []
+        },
+        {
+          "label": "cold-cache-delay20",
+          "responseDelayMs": 20,
+          "marks": {
+            "domContentLoaded": 329.40000009536743,
+            "debugReady": 337.2000002861023,
+            "load": 530.4000000953674,
+            "previewReady": 776.7000002861023,
+            "firstPositiveRadius": 2381.9000000953674,
+            "visibleReady": 28760.200000286102,
+            "shownReady": 28760.200000286102,
+            "backgroundReady": 33791
+          },
+          "worldRequests": 114,
+          "graphicsPackRequests": 82,
+          "worldCacheHits": 0,
+          "worldTransferBytes": 15583154,
+          "worldBodyBytes": 15548954,
+          "lastWorldResponseMs": 4352.700000286102,
+          "wasmRequests": 0,
+          "graphicsCells": 30,
+          "models": 1189,
+          "meshes": 1511,
+          "materials": 680,
+          "drawCalls": 36,
+          "frameMs": {
+            "count": 248,
+            "p50": 133.3000000000029,
+            "p95": 316.7000000000007,
+            "p99": 483.4000000000001
+          },
+          "longTasks": 9,
+          "errors": []
+        }
+      ]
+    },
+    "after": {
+      "date": "2026-11-13T11:13:20.996Z",
+      "mapVersion": "96b174a5713a1c636610c9bf416f806e57932a483a4c919d96eb0030bf4cc2b6",
+      "summaries": [
+        {
+          "label": "cold-cache-1",
+          "responseDelayMs": 0,
+          "marks": {
+            "domContentLoaded": 295.09999990463257,
+            "debugReady": 322.09999990463257,
+            "load": 425.5,
+            "previewReady": 677.7999997138977,
+            "firstPositiveRadius": 2729.4000000953674,
+            "visibleReady": 10780.5,
+            "shownReady": 10780.5,
+            "backgroundReady": 13686.099999904633
+          },
+          "worldRequests": 117,
+          "graphicsPackRequests": 85,
+          "worldCacheHits": 0,
+          "worldTransferBytes": 8896522,
+          "worldBodyBytes": 8861422,
+          "lastWorldResponseMs": 3924.9000000953674,
+          "wasmRequests": 0,
+          "graphicsCells": 30,
+          "models": 191,
+          "meshes": 559,
+          "materials": 196,
+          "drawCalls": 44,
+          "frameMs": {
+            "count": 112,
+            "p50": 133.30000000000018,
+            "p95": 266.60000000000036,
+            "p99": 666.7
+          },
+          "longTasks": 7,
+          "errors": []
+        },
+        {
+          "label": "warm-cache",
+          "responseDelayMs": 0,
+          "marks": {
+            "domContentLoaded": 203.30000019073486,
+            "debugReady": 208.09999990463257,
+            "load": 293.90000009536743,
+            "previewReady": 607,
+            "firstPositiveRadius": 2291.2000002861023,
+            "visibleReady": 17379.099999904633,
+            "shownReady": 17379.099999904633,
+            "backgroundReady": 23558.400000095367
+          },
+          "worldRequests": 117,
+          "graphicsPackRequests": 85,
+          "worldCacheHits": 116,
+          "worldTransferBytes": 300,
+          "worldBodyBytes": 8861422,
+          "lastWorldResponseMs": 3196.5999999046326,
+          "wasmRequests": 0,
+          "graphicsCells": 30,
+          "models": 191,
+          "meshes": 559,
+          "materials": 196,
+          "drawCalls": 44,
+          "frameMs": {
+            "count": 138,
+            "p50": 183.30000000000018,
+            "p95": 383.3000000000002,
+            "p99": 683.3000000000029
+          },
+          "longTasks": 8,
+          "errors": []
+        },
+        {
+          "label": "cold-cache-delay20",
+          "responseDelayMs": 20,
+          "marks": {
+            "domContentLoaded": 383.8999996185303,
+            "debugReady": 391.3999996185303,
+            "load": 532,
+            "previewReady": 873,
+            "firstPositiveRadius": 3167,
+            "visibleReady": 11677.599999904633,
+            "shownReady": 11677.599999904633,
+            "backgroundReady": 14528.599999904633
+          },
+          "worldRequests": 117,
+          "graphicsPackRequests": 85,
+          "worldCacheHits": 0,
+          "worldTransferBytes": 8896522,
+          "worldBodyBytes": 8861422,
+          "lastWorldResponseMs": 4709.89999961853,
+          "wasmRequests": 0,
+          "graphicsCells": 30,
+          "models": 191,
+          "meshes": 559,
+          "materials": 196,
+          "drawCalls": 44,
+          "frameMs": {
+            "count": 138,
+            "p50": 100,
+            "p95": 283.3000000000002,
+            "p99": 433.3000000000002
+          },
+          "longTasks": 10,
+          "errors": []
+        }
+      ]
+    },
+    "limitation": "Loading after measurement predates the final 25mm fence center correction; model bytes/materials/counts are unchanged. Different concurrent host loads make frame timing unsuitable for FPS claims."
+  },
+  "instancing": {
+    "conditions": {
+      "viewport": [
+        800,
+        600
+      ],
+      "warmupFrames": 20,
+      "samples": 60,
+      "chunkMetres": 125,
+      "world": "canonical-library-control-scene",
+      "codeRevision": "working-tree",
+      "quality": "1024 blur exponential shadow map",
+      "assets": [
+        "bench-0152a250d22ef0a9",
+        "bollard-a5341277dcd4ed93",
+        "bush-large-high",
+        "bush-large-low",
+        "bush-medium-high",
+        "bush-medium-low",
+        "bush-small-high",
+        "bush-small-low",
+        "fence-long",
+        "fence-short",
+        "lamp-five-globe",
+        "lamp-street",
+        "traffic-light-standard"
+      ],
+      "bytes": 114884
+    },
+    "results": [
+      {
+        "scenario": {
+          "shadows": false
+        },
+        "before": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 0,
+          "glbBatches": 0,
+          "glbTemplates": 0,
+          "glbInstanceBufferBytes": 0,
+          "meshes": 433,
+          "transformNodes": 208,
+          "geometries": 15,
+          "materials": 15,
+          "setupMs": 303.6000003814697,
+          "drawCalls": 225,
+          "shadowDrawCalls": 0,
+          "mainDrawCalls": 225,
+          "frameCpuMedianMs": 4.199999809265137,
+          "frameCpuP95Ms": 7.800000190734863,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "after": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 208,
+          "glbBatches": 14,
+          "glbTemplates": 14,
+          "glbInstanceBufferBytes": 17920,
+          "meshes": 15,
+          "transformNodes": 0,
+          "geometries": 29,
+          "materials": 1,
+          "setupMs": 126.19999980926514,
+          "drawCalls": 15,
+          "shadowDrawCalls": 0,
+          "mainDrawCalls": 15,
+          "frameCpuMedianMs": 0.8000001907348633,
+          "frameCpuP95Ms": 4.799999713897705,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "comparison": {
+          "changed": 0,
+          "meanError": 0,
+          "maxError": 0
+        }
+      },
+      {
+        "scenario": {
+          "shadows": true
+        },
+        "before": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 0,
+          "glbBatches": 0,
+          "glbTemplates": 0,
+          "glbInstanceBufferBytes": 0,
+          "meshes": 433,
+          "transformNodes": 208,
+          "geometries": 15,
+          "materials": 15,
+          "setupMs": 452,
+          "drawCalls": 450,
+          "shadowDrawCalls": 224,
+          "mainDrawCalls": 226,
+          "frameCpuMedianMs": 10.900000095367432,
+          "frameCpuP95Ms": 20,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "after": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 208,
+          "glbBatches": 14,
+          "glbTemplates": 14,
+          "glbInstanceBufferBytes": 17920,
+          "meshes": 15,
+          "transformNodes": 0,
+          "geometries": 29,
+          "materials": 1,
+          "setupMs": 94.39999961853027,
+          "drawCalls": 30,
+          "shadowDrawCalls": 14,
+          "mainDrawCalls": 16,
+          "frameCpuMedianMs": 1.5,
+          "frameCpuP95Ms": 8,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "comparison": {
+          "changed": 0,
+          "meanError": 0.0369,
+          "maxError": 6
+        }
+      },
+      {
+        "scenario": {
+          "shadows": true,
+          "perspective": true
+        },
+        "before": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 0,
+          "glbBatches": 0,
+          "glbTemplates": 0,
+          "glbInstanceBufferBytes": 0,
+          "meshes": 433,
+          "transformNodes": 208,
+          "geometries": 15,
+          "materials": 15,
+          "setupMs": 351.19999980926514,
+          "drawCalls": 444,
+          "shadowDrawCalls": 224,
+          "mainDrawCalls": 220,
+          "frameCpuMedianMs": 9.599999904632568,
+          "frameCpuP95Ms": 21.700000286102295,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              81.39803340587048,
+              36.42398667528399,
+              -32.7898099987173
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 0
+          },
+          "ready": true
+        },
+        "after": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 208,
+          "glbBatches": 14,
+          "glbTemplates": 14,
+          "glbInstanceBufferBytes": 17920,
+          "meshes": 15,
+          "transformNodes": 0,
+          "geometries": 29,
+          "materials": 1,
+          "setupMs": 130.40000009536743,
+          "drawCalls": 30,
+          "shadowDrawCalls": 14,
+          "mainDrawCalls": 16,
+          "frameCpuMedianMs": 1.200000286102295,
+          "frameCpuP95Ms": 5.199999809265137,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              81.39803340587048,
+              36.42398667528399,
+              -32.7898099987173
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 0
+          },
+          "ready": true
+        },
+        "comparison": {
+          "changed": 0,
+          "meanError": 0.056927083333333336,
+          "maxError": 6
+        }
+      },
+      {
+        "scenario": {
+          "shadows": true,
+          "night": true
+        },
+        "before": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 0,
+          "glbBatches": 0,
+          "glbTemplates": 0,
+          "glbInstanceBufferBytes": 0,
+          "meshes": 433,
+          "transformNodes": 208,
+          "geometries": 15,
+          "materials": 15,
+          "setupMs": 386.5,
+          "drawCalls": 450,
+          "shadowDrawCalls": 224,
+          "mainDrawCalls": 226,
+          "frameCpuMedianMs": 9.600000381469727,
+          "frameCpuP95Ms": 19,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "after": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 208,
+          "glbBatches": 14,
+          "glbTemplates": 14,
+          "glbInstanceBufferBytes": 17920,
+          "meshes": 15,
+          "transformNodes": 0,
+          "geometries": 29,
+          "materials": 1,
+          "setupMs": 114.59999990463257,
+          "drawCalls": 30,
+          "shadowDrawCalls": 14,
+          "mainDrawCalls": 16,
+          "frameCpuMedianMs": 1.1999998092651367,
+          "frameCpuP95Ms": 3.0999999046325684,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "comparison": {
+          "changed": 0,
+          "meanError": 0.014185416666666667,
+          "maxError": 3
+        }
+      },
+      {
+        "scenario": {
+          "shadows": true,
+          "fog": true
+        },
+        "before": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 0,
+          "glbBatches": 0,
+          "glbTemplates": 0,
+          "glbInstanceBufferBytes": 0,
+          "meshes": 433,
+          "transformNodes": 208,
+          "geometries": 15,
+          "materials": 15,
+          "setupMs": 309.40000009536743,
+          "drawCalls": 450,
+          "shadowDrawCalls": 224,
+          "mainDrawCalls": 226,
+          "frameCpuMedianMs": 8.5,
+          "frameCpuP95Ms": 17.200000286102295,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "after": {
+          "instances": 208,
+          "assets": 13,
+          "modelLoads": 13,
+          "fadedBuildings": 0,
+          "treeInstances": 0,
+          "treeBatches": 0,
+          "treeTemplates": 0,
+          "fadedTrees": 0,
+          "glbInstances": 208,
+          "glbBatches": 14,
+          "glbTemplates": 14,
+          "glbInstanceBufferBytes": 17920,
+          "meshes": 15,
+          "transformNodes": 0,
+          "geometries": 29,
+          "materials": 1,
+          "setupMs": 128.90000009536743,
+          "drawCalls": 30,
+          "shadowDrawCalls": 14,
+          "mainDrawCalls": 16,
+          "frameCpuMedianMs": 1.1999998092651367,
+          "frameCpuP95Ms": 3.1000003814697266,
+          "frameSamples": 60,
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "camera": {
+            "position": [
+              94.44344804893319,
+              101.4575949233063,
+              -67.18774141348271
+            ],
+            "target": [
+              50,
+              2,
+              50
+            ],
+            "mode": 1
+          },
+          "ready": true
+        },
+        "comparison": {
+          "changed": 0,
+          "meanError": 0.036727083333333334,
+          "maxError": 6
+        }
+      }
+    ],
+    "errors": []
+  },
+  "database": {
+    "unchangedTables": [
+      "account_identities",
+      "accounts",
+      "auth_sessions",
+      "inventory_slots",
+      "item_instances",
+      "item_operations",
+      "item_types",
+      "player_profiles",
+      "su_schema_migrations"
+    ],
+    "priorHistoryPreserved": true,
+    "priorHistoryRows": 1749,
+    "migrationOperation": "46f95acf-4f96-4e28-8cfd-926ca53594f5",
+    "changes": [
+      {
+        "source": "migration",
+        "count": "3464",
+        "operation_ids": "1"
+      }
+    ],
+    "layout": {
+      "asset_release_version": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+      "seed_version": "7ad10571b13b707cac54bde162317ecde5561f3f3dcf8b0aed648d769c60061d",
+      "revision": 5214,
+      "validated_revision": 5214,
+      "validated_hash": "1b2049230dc806c8cbc0e2801e1aaced11531bac33fdbbaa1c7caad88ad6f40c"
+    },
+    "idempotentAllTablesUnchanged": true
+  },
+  "verification": {
+    "build": "pass",
+    "check": "pass",
+    "vitest": {
+      "files": 97,
+      "tests": 645,
+      "skipped": 0,
+      "result": "pass",
+      "log": "output/static-library-v1/full-tests-verified.log"
+    },
+    "browsers": {
+      "trees": "pass",
+      "staticGlb": "pass",
+      "staticPlacement": "pass",
+      "loading": "pass",
+      "steadyRender": "pass"
+    }
+  },
+  "artifactHashes": {
+    "content/migrations/ring-block/static-library-v1.json": "9b65d7e035676298ff7e44ef5adb653594931bd1351764400fcc443abd237967",
+    "reports/static-library-v1.json": "a0e453156a6b51e3aed61f6319fb5a62b8acb45b273f7fabef5e4f79ec8b95a5",
+    "tests/fixtures/static-library-v1/passages.json.gz": "ac133cebffb0d53bd6ba84bf31c455cfe52ca6355638df5ff90b1687f4c8fbd0",
+    "tests/fixtures/static-library-v1/unchanged-triangles.json.gz": "6e7ebe1211aa8f41e4c842ea9988c89b1caad6e4645dca2c879f6a31d11b58d5"
+  },
+  "build": {
+    "seedMapVersion": "cfd51f479770b837615ed9cd5d053ab46552cf9795447404239e1dbd3e75e65b",
+    "assetReleaseVersion": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+    "validatedLayoutHash": "1b2049230dc806c8cbc0e2801e1aaced11531bac33fdbbaa1c7caad88ad6f40c"
+  },
+  "steadyAfter": {
+    "date": "2026-11-13T11:32:45.667Z",
+    "experiment": "stationary one-client comparative render profile; not full T04 acceptance",
+    "browser": "158.0.8127.18",
+    "requestedRenderer": "SwiftShader",
+    "fixedHour": 10,
+    "viewport": {
+      "width": 1280,
+      "height": 720,
+      "deviceScaleFactor": 1
+    },
+    "host": {
+      "platform": "linux",
+      "cpus": 8,
+      "model": "AMD EPYC-Rome-v4 Processor (no XSAVES)",
+      "totalmem": 16768638976
+    },
+    "profiles": [
+      {
+        "quality": "standard",
+        "warmupMs": 10000,
+        "elapsedMs": 15178.00000028609,
+        "sampleCount": 35,
+        "frameMs": {
+          "median": 399.8999999999942,
+          "p95": 799.8999999999942,
+          "p99": 883.3999999999942,
+          "max": 883.3999999999942
+        },
+        "rendering": {
+          "quality": "standard",
+          "canvasSize": {
+            "width": 1280,
+            "height": 720
+          },
+          "renderSize": {
+            "width": 1280,
+            "height": 720
+          },
+          "pixelRatio": 1,
+          "hardwareScaling": 1,
+          "shadows": true,
+          "hour": 10,
+          "lights": [
+            {
+              "name": "sky",
+              "type": "HemisphericLight",
+              "intensity": 0.45,
+              "diffuse": {
+                "r": 0.8392156862745098,
+                "g": 0.9058823529411765,
+                "b": 0.9568627450980393
+              }
+            },
+            {
+              "name": "sun",
+              "type": "DirectionalLight",
+              "intensity": 3,
+              "diffuse": {
+                "r": 1,
+                "g": 0.9019607843137255,
+                "b": 0.7411764705882353
+              }
+            }
+          ],
+          "dynamicEntities": [
+            {
+              "entityId": "player-b52d4ade-1643-4a3b-9c3e-2df4fdff3eac",
+              "position": {
+                "x": -3,
+                "y": 0.9200000166893005,
+                "z": 13
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "visible": true,
+              "overlayBlocked": false,
+              "overlayVisible": true
+            },
+            {
+              "entityId": "8a6fe8a2-91b2-41f3-b5ba-f22f934d220a",
+              "position": {
+                "x": 9.500260353088379,
+                "y": 0.4999617636203766,
+                "z": 9.000567436218262
+              },
+              "rotation": {
+                "x": -0.000057635068395505696,
+                "y": 9.626176458178524e-8,
+                "z": 0.00002876885622242555,
+                "w": 0.9999999979252714
+              },
+              "visible": true,
+              "overlayBlocked": false,
+              "overlayVisible": false
+            }
+          ],
+          "geometries": 397,
+          "nodes": 185,
+          "textures": 4,
+          "shadowCasters": 70,
+          "shadowMaps": {
+            "staticCasters": 62,
+            "dynamicCasters": 8,
+            "staticRefreshes": 190
+          },
+          "streaming": {
+            "drawRadius": 336.61995336747543,
+            "readyRadius": 336.61995336747543,
+            "shownRadius": 336.61995336747543
+          },
+          "meshes": 568,
+          "transformNodes": 185,
+          "materials": 199,
+          "pipelines": [
+            {
+              "name": "lighting",
+              "cameras": [
+                "isometric",
+                "first-person"
+              ]
+            }
+          ],
+          "drawCalls": 60,
+          "renderer": {
+            "vendor": "Google Inc. (Google)",
+            "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+          },
+          "camera": {
+            "mode": "overview",
+            "yaw": 0,
+            "pitch": 0,
+            "position": {
+              "x": 68.27856319588801,
+              "y": 65.10555166389113,
+              "z": 84.278563195888
+            },
+            "fov": 0.8,
+            "minZ": 0.1,
+            "maxZ": 300,
+            "cameras": 2,
+            "azimuth": 0.7853981633974483,
+            "turning": false,
+            "halfWidth": 26.666666666666664,
+            "halfHeight": 15,
+            "beta": 0.9973310011396169,
+            "zoom": 1
+          },
+          "buildings": {
+            "instances": 2485,
+            "assets": 191,
+            "modelLoads": 182,
+            "fadedBuildings": 0,
+            "treeInstances": 537,
+            "treeBatches": 51,
+            "treeTemplates": 3,
+            "fadedTrees": 0,
+            "glbInstances": 1772,
+            "glbBatches": 126,
+            "glbTemplates": 14,
+            "glbInstanceBufferBytes": 142720
+          }
+        },
+        "build": {
+          "version": "0.1.0",
+          "builtAt": "2026-11-13T11:23:24.992Z",
+          "mode": "production"
+        },
+        "playerCount": 1,
+        "rttMs": 75.1882505531969,
+        "serverStepMs": 0.6738070249557495,
+        "mapVersion": "cfd51f479770b837615ed9cd5d053ab46552cf9795447404239e1dbd3e75e65b",
+        "simulationConfigHash": "003a61dd33f705dc1490c40879fc86eb1d28e022b357768edf7bf733d5500b94",
+        "loadedCells": [
+          "0_2",
+          "0_3",
+          "0_4",
+          "0_5",
+          "0_6",
+          "0_7",
+          "1_2",
+          "1_3",
+          "1_4",
+          "1_5",
+          "1_6",
+          "1_7",
+          "2_2",
+          "2_3",
+          "2_4",
+          "2_5",
+          "2_6",
+          "2_7",
+          "3_2",
+          "3_3",
+          "3_4",
+          "3_5",
+          "3_6",
+          "3_7",
+          "4_2",
+          "4_3",
+          "4_4",
+          "4_5",
+          "4_6",
+          "4_7"
+        ],
+        "physicsCells": [
+          "1_3",
+          "2_3",
+          "0_4",
+          "1_4",
+          "2_4",
+          "3_4",
+          "0_5",
+          "1_5",
+          "2_5",
+          "3_5",
+          "4_5",
+          "0_6",
+          "1_6",
+          "2_6",
+          "3_6",
+          "4_6",
+          "0_7",
+          "1_7",
+          "2_7",
+          "3_7",
+          "0_2",
+          "1_2",
+          "2_2",
+          "3_2",
+          "4_2",
+          "0_3",
+          "3_3",
+          "4_3",
+          "4_4",
+          "4_7"
+        ],
+        "backgroundReady": true,
+        "samplesMs": [
+          400,
+          399.8999999999942,
+          366.6999999999971,
+          349.90000000000873,
+          366.6999999999971,
+          366.6999999999971,
+          383.3000000000029,
+          116.59999999999127,
+          233.40000000000873,
+          799.8999999999942,
+          433.40000000000873,
+          766.5999999999913,
+          399.90000000000873,
+          150,
+          683.3999999999942,
+          383.3000000000029,
+          416.59999999999127,
+          433.40000000000873,
+          433.1999999999971,
+          383.3999999999942,
+          400,
+          399.8999999999942,
+          416.70000000001164,
+          400,
+          449.8999999999942,
+          883.3999999999942,
+          366.70000000001164,
+          716.5,
+          366.70000000001164,
+          516.6999999999825,
+          266.6000000000058,
+          350,
+          116.60000000000582,
+          683.2999999999884,
+          383.3999999999942
+        ]
+      },
+      {
+        "quality": "economy",
+        "warmupMs": 10000,
+        "elapsedMs": 15078.399999999994,
+        "sampleCount": 185,
+        "frameMs": {
+          "median": 83.30000000001746,
+          "p95": 100,
+          "p99": 183.29999999998836,
+          "max": 183.39999999999418
+        },
+        "rendering": {
+          "quality": "economy",
+          "canvasSize": {
+            "width": 1280,
+            "height": 720
+          },
+          "renderSize": {
+            "width": 853,
+            "height": 480
+          },
+          "pixelRatio": 1,
+          "hardwareScaling": 1.5,
+          "shadows": false,
+          "hour": 10,
+          "lights": [
+            {
+              "name": "sky",
+              "type": "HemisphericLight",
+              "intensity": 0.45,
+              "diffuse": {
+                "r": 0.8392156862745098,
+                "g": 0.9058823529411765,
+                "b": 0.9568627450980393
+              }
+            },
+            {
+              "name": "sun",
+              "type": "DirectionalLight",
+              "intensity": 3,
+              "diffuse": {
+                "r": 1,
+                "g": 0.9019607843137255,
+                "b": 0.7411764705882353
+              }
+            }
+          ],
+          "dynamicEntities": [
+            {
+              "entityId": "player-b52d4ade-1643-4a3b-9c3e-2df4fdff3eac",
+              "position": {
+                "x": -3,
+                "y": 0.9200000166893005,
+                "z": 13
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "visible": true,
+              "overlayBlocked": false,
+              "overlayVisible": true
+            },
+            {
+              "entityId": "8a6fe8a2-91b2-41f3-b5ba-f22f934d220a",
+              "position": {
+                "x": 9.500260353088379,
+                "y": 0.4999617636203766,
+                "z": 9.000567436218262
+              },
+              "rotation": {
+                "x": -0.000057635068395505696,
+                "y": 9.626176458178524e-8,
+                "z": 0.00002876885622242555,
+                "w": 0.9999999979252714
+              },
+              "visible": true,
+              "overlayBlocked": false,
+              "overlayVisible": false
+            }
+          ],
+          "geometries": 397,
+          "nodes": 185,
+          "textures": 4,
+          "shadowCasters": 70,
+          "shadowMaps": {
+            "staticCasters": 62,
+            "dynamicCasters": 8,
+            "staticRefreshes": 190
+          },
+          "streaming": {
+            "drawRadius": 336.61995336747543,
+            "readyRadius": 336.61995336747543,
+            "shownRadius": 336.61995336747543
+          },
+          "meshes": 568,
+          "transformNodes": 185,
+          "materials": 199,
+          "pipelines": [],
+          "drawCalls": 51,
+          "renderer": {
+            "vendor": "Google Inc. (Google)",
+            "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+          },
+          "camera": {
+            "mode": "overview",
+            "yaw": 0,
+            "pitch": 0,
+            "position": {
+              "x": 68.27856319588801,
+              "y": 65.10555166389113,
+              "z": 84.278563195888
+            },
+            "fov": 0.8,
+            "minZ": 0.1,
+            "maxZ": 300,
+            "cameras": 2,
+            "azimuth": 0.7853981633974483,
+            "turning": false,
+            "halfWidth": 26.666666666666664,
+            "halfHeight": 15,
+            "beta": 0.9973310011396169,
+            "zoom": 1
+          },
+          "buildings": {
+            "instances": 2485,
+            "assets": 191,
+            "modelLoads": 182,
+            "fadedBuildings": 0,
+            "treeInstances": 537,
+            "treeBatches": 51,
+            "treeTemplates": 3,
+            "fadedTrees": 0,
+            "glbInstances": 1772,
+            "glbBatches": 126,
+            "glbTemplates": 14,
+            "glbInstanceBufferBytes": 142720
+          }
+        },
+        "build": {
+          "version": "0.1.0",
+          "builtAt": "2026-11-13T11:23:24.992Z",
+          "mode": "production"
+        },
+        "playerCount": 1,
+        "rttMs": 59.682431481399675,
+        "serverStepMs": 0.9270420074462891,
+        "mapVersion": "cfd51f479770b837615ed9cd5d053ab46552cf9795447404239e1dbd3e75e65b",
+        "simulationConfigHash": "003a61dd33f705dc1490c40879fc86eb1d28e022b357768edf7bf733d5500b94",
+        "loadedCells": [
+          "0_2",
+          "0_3",
+          "0_4",
+          "0_5",
+          "0_6",
+          "0_7",
+          "1_2",
+          "1_3",
+          "1_4",
+          "1_5",
+          "1_6",
+          "1_7",
+          "2_2",
+          "2_3",
+          "2_4",
+          "2_5",
+          "2_6",
+          "2_7",
+          "3_2",
+          "3_3",
+          "3_4",
+          "3_5",
+          "3_6",
+          "3_7",
+          "4_2",
+          "4_3",
+          "4_4",
+          "4_5",
+          "4_6",
+          "4_7"
+        ],
+        "physicsCells": [
+          "1_3",
+          "2_3",
+          "0_4",
+          "1_4",
+          "2_4",
+          "3_4",
+          "0_5",
+          "1_5",
+          "2_5",
+          "3_5",
+          "4_5",
+          "0_6",
+          "1_6",
+          "2_6",
+          "3_6",
+          "4_6",
+          "0_7",
+          "1_7",
+          "2_7",
+          "3_7",
+          "0_2",
+          "1_2",
+          "2_2",
+          "3_2",
+          "4_2",
+          "0_3",
+          "3_3",
+          "4_3",
+          "4_4",
+          "4_7"
+        ],
+        "backgroundReady": true,
+        "samplesMs": [
+          83.29999999998836,
+          83.39999999999418,
+          66.70000000001164,
+          66.69999999998254,
+          83.30000000001746,
+          83.29999999998836,
+          83.39999999999418,
+          66.60000000000582,
+          83.30000000001746,
+          66.69999999998254,
+          83.30000000001746,
+          83.39999999999418,
+          83.29999999998836,
+          83.30000000001746,
+          83.29999999998836,
+          66.70000000001164,
+          33.29999999998836,
+          50.10000000000582,
+          83.19999999998254,
+          133.30000000001746,
+          83.39999999999418,
+          83.29999999998836,
+          83.40000000002328,
+          16.699999999982538,
+          49.89999999999418,
+          83.40000000002328,
+          66.59999999997672,
+          66.70000000001164,
+          83.29999999998836,
+          83.40000000002328,
+          100,
+          83.29999999998836,
+          183.29999999998836,
+          100,
+          83.30000000001746,
+          83.39999999999418,
+          83.29999999998836,
+          83.40000000002328,
+          66.59999999997672,
+          66.60000000000582,
+          83.30000000001746,
+          83.39999999999418,
+          83.29999999998836,
+          66.70000000001164,
+          83.29999999998836,
+          83.30000000001746,
+          66.69999999998254,
+          100,
+          83.39999999999418,
+          83.30000000001746,
+          83.29999999998836,
+          83.39999999999418,
+          83.30000000001746,
+          99.89999999999418,
+          83.39999999999418,
+          83.30000000001746,
+          83.39999999999418,
+          83.29999999998836,
+          83.30000000001746,
+          83.39999999999418,
+          99.89999999999418,
+          83.29999999998836,
+          83.40000000002328,
+          66.69999999998254,
+          66.60000000000582,
+          83.29999999998836,
+          83.40000000002328,
+          66.69999999998254,
+          83.30000000001746,
+          166.69999999998254,
+          83.30000000001746,
+          83.29999999998836,
+          83.29999999998836,
+          83.30000000001746,
+          66.69999999998254,
+          100.10000000000582,
+          66.60000000000582,
+          16.60000000000582,
+          66.69999999998254,
+          83.40000000002328,
+          83.29999999998836,
+          66.60000000000582,
+          133.39999999999418,
+          66.70000000001164,
+          83.29999999998836,
+          83.29999999998836,
+          66.60000000000582,
+          83.39999999999418,
+          66.60000000000582,
+          33.39999999999418,
+          50,
+          66.60000000000582,
+          83.39999999999418,
+          66.60000000000582,
+          66.70000000001164,
+          83.29999999998836,
+          66.70000000001164,
+          83.29999999998836,
+          83.30000000001746,
+          83.39999999999418,
+          83.39999999999418,
+          83.20000000001164,
+          83.29999999998836,
+          83.39999999999418,
+          100.10000000000582,
+          83.20000000001164,
+          16.699999999982538,
+          83.30000000001746,
+          83.29999999998836,
+          83.39999999999418,
+          66.70000000001164,
+          83.29999999998836,
+          83.30000000001746,
+          66.69999999998254,
+          83.30000000001746,
+          66.69999999998254,
+          83.30000000001746,
+          83.39999999999418,
+          83.29999999998836,
+          66.60000000000582,
+          83.39999999999418,
+          83.30000000001746,
+          83.29999999998836,
+          83.39999999999418,
+          66.60000000000582,
+          100,
+          83.29999999998836,
+          83.40000000002328,
+          99.89999999999418,
+          100,
+          83.39999999999418,
+          100,
+          83.29999999998836,
+          83.30000000001746,
+          183.39999999999418,
+          83.29999999998836,
+          83.40000000002328,
+          83.19999999998254,
+          83.39999999999418,
+          83.30000000001746,
+          83.29999999998836,
+          100,
+          83.30000000001746,
+          100.09999999997672,
+          83.30000000001746,
+          83.29999999998836,
+          66.70000000001164,
+          83.39999999999418,
+          66.60000000000582,
+          83.29999999998836,
+          83.39999999999418,
+          83.30000000001746,
+          83.29999999998836,
+          83.39999999999418,
+          100,
+          83.20000000001164,
+          83.39999999999418,
+          83.30000000001746,
+          33.29999999998836,
+          66.70000000001164,
+          83.39999999999418,
+          83.29999999998836,
+          66.70000000001164,
+          100,
+          83.19999999998254,
+          100,
+          83.40000000002328,
+          83.39999999999418,
+          83.19999999998254,
+          83.40000000002328,
+          66.69999999998254,
+          83.30000000001746,
+          83.29999999998836,
+          83.29999999998836,
+          100,
+          66.70000000001164,
+          100,
+          83.29999999998836,
+          116.70000000001164,
+          83.39999999999418,
+          83.30000000001746,
+          83.29999999998836,
+          83.29999999998836,
+          83.30000000001746,
+          83.29999999998836
+        ]
+      }
+    ],
+    "browserErrors": []
+  }
+}

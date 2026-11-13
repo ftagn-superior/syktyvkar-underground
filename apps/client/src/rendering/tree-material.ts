@@ -21,7 +21,11 @@ export class TreeMaterial extends MaterialPluginBase {
       material,
       'TreeInstances',
       200,
-      { SU_TREE_INSTANCES: true, SU_TREE_BROADLEAF: foliage === 'broadleaf' },
+      {
+        SU_TREE_INSTANCES: true,
+        SU_INSTANCE_STATE: true,
+        SU_TREE_BROADLEAF: foliage === 'broadleaf',
+      },
       true,
       false,
     );
@@ -50,7 +54,7 @@ export class TreeMaterial extends MaterialPluginBase {
         attribute vec4 suTreeCrown1;
         attribute vec4 suTreeTrunk;
         attribute vec4 suTreeState;
-        varying float vSuTreeAppearance;
+        varying float vSuInstanceAppearance;
         varying float vSuTreeOpacity;
       `,
         CUSTOM_VERTEX_UPDATE_POSITION: `
@@ -77,14 +81,14 @@ export class TreeMaterial extends MaterialPluginBase {
           positionUpdated.y += suTreeState.z;
           normalUpdated.xz = mat2(c, -s, s, c) * normalUpdated.xz;
         }
-        vSuTreeAppearance = clamp((suTreeClock.x - suTreeState.x) / max(1.0, suTreeClock.y), 0.0, 1.0);
+        vSuInstanceAppearance = clamp((suTreeClock.x - suTreeState.x) / max(1.0, suTreeClock.y), 0.0, 1.0);
         vSuTreeOpacity = suTreeState.y;
       `,
       };
     if (shaderType === 'fragment')
       return {
         CUSTOM_FRAGMENT_DEFINITIONS:
-          'varying float vSuTreeAppearance;\nvarying float vSuTreeOpacity;',
+          'varying float vSuInstanceAppearance;\nvarying float vSuTreeOpacity;',
         CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: 'finalColor.a *= vSuTreeOpacity;',
       };
     return null;

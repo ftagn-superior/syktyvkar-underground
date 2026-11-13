@@ -46,6 +46,8 @@ export interface BuildingParts {
   formatVersion: 1;
   assetId: string;
   parts: BuildingPart[];
+  /** Validated static GLB profile, rendered in spatial thin-instance groups. */
+  renderMode?: 'thin-instance';
   /** The sole visual representation of an instanced tree; no GLB accompanies it. */
   tree?: TreeRenderRecipe;
 }

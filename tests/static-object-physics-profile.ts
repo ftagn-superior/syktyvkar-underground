@@ -20,9 +20,13 @@ const sampleTicks = 1800;
 const percentile = (values: number[], quantile: number) =>
   values[Math.floor((values.length - 1) * quantile)];
 async function measure(definition: WorldDefinition) {
+  const memoryBefore = process.memoryUsage();
   const started = performance.now();
   const world = await createPhysicsWorld(definition, wasm, false);
   const constructionMs = performance.now() - started;
+  const memoryAfterConstruction = process.memoryUsage();
+  // Reserved linear memory is observable; it is not a count of live Havok allocations.
+  const wasmReservedBytes = world.plugin._hknp.HEAPU8.byteLength as number;
   try {
     for (let i = 0; i < 8; i++) {
       const position = world.findSpawn(undefined, definition.spawnPoints[i]);
@@ -46,6 +50,12 @@ async function measure(definition: WorldDefinition) {
     samples.sort((a, b) => a - b);
     return {
       constructionMs,
+      memory: {
+        before: memoryBefore,
+        afterConstruction: memoryAfterConstruction,
+        afterSampling: process.memoryUsage(),
+        wasmReservedBytes,
+      },
       statics: world.staticDiagnostics(),
       stepMs: {
         mean: samples.reduce((sum, value) => sum + value, 0) / samples.length,
@@ -83,6 +93,9 @@ async function resources(directory: string) {
     files: files.length,
     resourceBodyBytes: files.reduce((total, file) => total + file.bytes, 0),
     modelBytes: sum('/model.glb'),
+    glbFiles: files.filter((file) => file.path.endsWith('/model.glb')).length,
+    graphicsPacks: files.filter((file) => file.path.endsWith('.pack')).length,
+    graphicsPackBytes: sum('.pack'),
     collisionBytes: sum('/colliders.json'),
     partsBytes: sum('/parts.json'),
     maximumCellBytes: Math.max(

@@ -488,6 +488,13 @@ export class WorldView {
       pixelRatio: window.devicePixelRatio,
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
+      hour: this.environment.hour,
+      lights: this.scene.lights.map((light) => ({
+        name: light.name,
+        type: light.getClassName(),
+        intensity: light.intensity,
+        diffuse: { r: light.diffuse.r, g: light.diffuse.g, b: light.diffuse.b },
+      })),
       dynamicEntities: [...this.entities].map(([entityId, view]) => ({
         entityId,
         position: { x: view.root.position.x, y: view.root.position.y, z: view.root.position.z },

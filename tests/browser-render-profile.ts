@@ -14,6 +14,8 @@ const warmupMs = Number(process.env.SU_PROFILE_WARMUP_MS ?? 10_000);
 const sampleMs = Number(process.env.SU_PROFILE_SAMPLE_MS ?? 15_000);
 assert.ok(Number.isFinite(warmupMs) && warmupMs >= 1000);
 assert.ok(Number.isFinite(sampleMs) && sampleMs >= 1000);
+const hour = Number(process.env.SU_PROFILE_HOUR ?? 10);
+assert.ok(Number.isFinite(hour) && hour >= 0 && hour < 24);
 const software = process.env.SU_TEST_RENDERER !== 'hardware';
 const browser = await launchTestBrowser({ renderer: software ? 'software' : 'default' });
 const errors: string[] = [];
@@ -23,20 +25,32 @@ try {
     deviceScaleFactor: 1,
   });
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`${url}/?diagnostics=1`);
+  await page.goto(`${url}/?diagnostics=1&time=${hour}`);
   await page.locator('#join:not([disabled])').click();
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
     undefined,
     { timeout: 30_000 },
   );
+  // Compare quality profiles only after the same required static cells are ready.
+  // Entering the room can finish before distant graphics; ten seconds of warmup
+  // alone used to mix asset preparation into the frame sample.
+  await page.waitForFunction(
+    () => (window as any).__SU_DEBUG__?.snapshot().streaming?.backgroundReady === true,
+    undefined,
+    { timeout: Number(process.env.SU_PROFILE_READY_TIMEOUT_MS ?? 300_000) },
+  );
   const profiles = [];
+  let steadyCells: string[] | undefined;
   for (const quality of qualities) {
     const qualitySelect = page.locator('#quality');
     if (await qualitySelect.count()) {
       await setRenderQuality(page, quality);
     } else assert.equal(quality, 'standard', 'baseline only supports the standard profile');
     await page.waitForTimeout(warmupMs);
+    const sampleStartCells = await page.evaluate(() =>
+      [...(window as any).__SU_DEBUG__.snapshot().streaming.graphicsActive].sort(),
+    );
     // Raw browser code avoids tsx's function-name helper leaking into the page.
     // sampleMs is validated as a finite positive number above.
     const timing = await page.evaluate<{
@@ -74,8 +88,25 @@ try {
         rttMs: snapshot.rttMs,
         serverStepMs: snapshot.serverStepMs,
         mapVersion: snapshot.mapVersion,
+        simulationConfigHash: snapshot.simulationConfigHash,
+        loadedCells: [...(snapshot.streaming?.graphicsActive ?? [])].sort(),
+        physicsCells: snapshot.streaming?.physicsActive,
+        backgroundReady: snapshot.streaming?.backgroundReady,
       };
     });
+    assert.equal(details.backgroundReady, true, 'required static cells remain ready');
+    assert.deepEqual(
+      details.loadedCells,
+      sampleStartCells,
+      'loaded graphics are stable during sampling',
+    );
+    if (steadyCells)
+      assert.deepEqual(
+        details.loadedCells,
+        steadyCells,
+        'quality profiles use the same graphics cells',
+      );
+    else steadyCells = details.loadedCells;
     profiles.push({
       quality,
       warmupMs,
@@ -99,6 +130,7 @@ try {
     experiment: 'stationary one-client comparative render profile; not full T04 acceptance',
     browser: browser.version(),
     requestedRenderer: software ? 'SwiftShader' : 'default hardware path',
+    fixedHour: hour,
     viewport: { width: 1280, height: 720, deviceScaleFactor: 1 },
     host: {
       platform: platform(),

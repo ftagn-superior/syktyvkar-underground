@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "assetId": "fence-long",
+  "renderMode": "thin-instance",
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  }
+}

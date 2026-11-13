@@ -7,6 +7,9 @@ import { buildStreamingFixture, seedStreamingItemProfile } from '../helpers/stre
 import { createDatabaseFixture } from '../helpers/database-fixture.js';
 
 const directories: string[] = [];
+// Each city profile compiles the complete world twice. Spread also traverses
+// eight routes with the real capsule controller across the modular fence bodies.
+const cityFixtureTimeout = 120_000;
 async function directory() {
   const path = await mkdtemp('/tmp/su-streaming-profile-test-');
   directories.push(path);
@@ -31,22 +34,26 @@ it('keeps the existing synthetic profile reproducible and records its real item 
   });
 });
 
-it('creates eight dispersed city seam routes after testing their complete capsule traversal', async () => {
-  const fixture = await buildStreamingFixture(await directory(), 'spread', {
-    content: 'ring-block',
-  });
-  expect(fixture.header.spawnPoints).toHaveLength(8);
-  expect(Object.keys(fixture.profile.routes)).toHaveLength(8);
-  expect(fixture.profile.cityRouteSamples).toBe(8 * 4 * 33);
-  expect(fixture.profile.routeValidation).toContain('complete authoritative capsule traversal');
-  for (const route of Object.values(fixture.profile.routes)) {
-    const cells = new Set(
-      route.map((point) => worldCellAt(fixture.manifest.bounds, fixture.manifest.grid, point)),
-    );
-    expect(cells.has(undefined)).toBe(false);
-    expect(cells.size).toBeGreaterThanOrEqual(2);
-  }
-});
+it(
+  'creates eight dispersed city seam routes after testing their complete capsule traversal',
+  async () => {
+    const fixture = await buildStreamingFixture(await directory(), 'spread', {
+      content: 'ring-block',
+    });
+    expect(fixture.header.spawnPoints).toHaveLength(8);
+    expect(Object.keys(fixture.profile.routes)).toHaveLength(8);
+    expect(fixture.profile.cityRouteSamples).toBe(8 * 4 * 33);
+    expect(fixture.profile.routeValidation).toContain('complete authoritative capsule traversal');
+    for (const route of Object.values(fixture.profile.routes)) {
+      const cells = new Set(
+        route.map((point) => worldCellAt(fixture.manifest.bounds, fixture.manifest.grid, point)),
+      );
+      expect(cells.has(undefined)).toBe(false);
+      expect(cells.size).toBeGreaterThanOrEqual(2);
+    }
+  },
+  cityFixtureTimeout,
+);
 
 it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
   'restores all city item types and several simultaneous moving snapshots from an isolated persistent store',
@@ -82,4 +89,5 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       await database.close();
     }
   },
+  cityFixtureTimeout,
 );

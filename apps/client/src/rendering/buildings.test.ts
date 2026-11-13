@@ -103,6 +103,10 @@ describe('building rendering from the real world bundle', () => {
         treeBatches: 0,
         treeTemplates: 0,
         fadedTrees: 0,
+        glbInstances: 0,
+        glbBatches: 0,
+        glbTemplates: 0,
+        glbInstanceBufferBytes: 0,
       });
       const wall = (id: string) =>
         view.scene

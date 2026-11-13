@@ -116,7 +116,11 @@ describe('safe player body-center spawns', () => {
       expect(world.findDefaultPlayerSpawn()).toBeUndefined();
       expect(world.checkPlayerSpawnPosition(center)).toEqual({ ok: false, reason: 'NO_SUPPORT' });
       expect(world.addPlayerAtPosition('new', center)).toBeUndefined();
+      expect(world.findSpawn()).toBeUndefined(); // Terrain/layout validation remains strict.
       expect(world.addPlayer('legacy')).toBeDefined();
+      expect(world.addPlayer('overlapping-legacy', definition.spawnPoints[0])).toBeUndefined();
+      expect(world.respawnPlayer('legacy')).toBe(true);
+      expect(world.respawnPlayerAtPosition('legacy', center)).toBe(false);
     } finally {
       world.dispose();
     }

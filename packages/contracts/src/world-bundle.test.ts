@@ -8,6 +8,7 @@ import {
   validateWorldCell,
   validateWorldManifest,
   worldPublicationBaseIdentity,
+  changedWorldPublicationCells,
   type BuildingPhysicsAsset,
   type WorldManifest,
 } from './index.js';
@@ -79,12 +80,52 @@ const manifest: WorldManifest = {
 };
 
 describe('world bundle validation', () => {
+  it('tracks registered support geometry even when its cell and stable instance ID are unchanged', () => {
+    const before = structuredClone(manifest);
+    const id = `support-${'f'.repeat(64)}`;
+    before.assets[id] = {
+      ...before.assets['house-a'],
+      assetId: id,
+      modelFile: 'support.glb',
+      collisionFile: 'support.json',
+      partsFile: 'support-parts.json',
+    };
+    for (const file of ['support.glb', 'support.json', 'support-parts.json'])
+      before.files[file] = hash;
+    before.cells[0].assetIds = ['house-a', id];
+    before.generatedSupports = { [id]: { ownerId: 'building-a', role: 'foundation' } };
+    validateWorldManifest(before);
+    const next = structuredClone(before);
+    next.files['support.json'] = 'b'.repeat(64);
+    expect(worldPublicationBaseIdentity(next)).toEqual(worldPublicationBaseIdentity(before));
+    expect(changedWorldPublicationCells(before, next)).toEqual(['0_0']);
+    const authored = structuredClone(next);
+    delete authored.generatedSupports;
+    expect(worldPublicationBaseIdentity(authored)).not.toEqual(worldPublicationBaseIdentity(next));
+    expect(() =>
+      validateWorldManifest({
+        ...before,
+        generatedSupports: { 'house-a': { ownerId: 'building-a', role: 'foundation' } },
+      }),
+    ).toThrow('generated support identity');
+    expect(() =>
+      validateWorldManifest({
+        ...before,
+        generatedSupports: { [id]: { ownerId: 'building-a', role: 'other' } },
+      }),
+    ).toThrow('generated support identity');
+  });
   it('separates layout changes from changes to static dependency bytes', () => {
     const changed = structuredClone(manifest);
     changed.mapVersion = 'b'.repeat(64);
     changed.simulationConfigHash = 'c'.repeat(64);
     changed.files['cell.json'] = 'd'.repeat(64);
     expect(worldPublicationBaseIdentity(changed)).toEqual(worldPublicationBaseIdentity(manifest));
+    const repacked = structuredClone(manifest);
+    repacked.files['transport.pack'] = hash;
+    repacked.cells[0].graphicsPacks = ['transport.pack'];
+    repacked.cells[0].physicsPacks = ['transport.pack'];
+    expect(changedWorldPublicationCells(manifest, repacked)).toEqual([]);
     for (const file of ['world.json', 'model.glb', 'colliders.json', 'parts.json']) {
       const incompatible = structuredClone(changed);
       incompatible.files[file] = 'e'.repeat(64);
@@ -116,19 +157,22 @@ describe('world bundle validation', () => {
       'manifest version',
     );
   });
-  it('accepts optional graphics packs only when all unique paths are listed', () => {
-    expect(validateWorldManifest(manifest)).toBe(manifest);
-    const packed = structuredClone(manifest);
-    packed.files['graphics/a.pack'] = hash;
-    packed.cells[0].graphicsPacks = ['graphics/a.pack'];
-    expect(validateWorldManifest(packed)).toBe(packed);
-    packed.cells[0].graphicsPacks.push('graphics/a.pack');
-    expect(() => validateWorldManifest(packed)).toThrow('graphics packs');
-    packed.cells[0].graphicsPacks = ['graphics/missing.pack'];
-    expect(() => validateWorldManifest(packed)).toThrow('unlisted file');
-    packed.cells[0].graphicsPacks = ['../escape.pack'];
-    expect(() => validateWorldManifest(packed)).toThrow();
-  });
+  it.each(['graphicsPacks', 'physicsPacks'] as const)(
+    'accepts optional %s only when all unique paths are listed',
+    (kind) => {
+      expect(validateWorldManifest(manifest)).toBe(manifest);
+      const packed = structuredClone(manifest);
+      packed.files['graphics/a.pack'] = hash;
+      packed.cells[0][kind] = ['graphics/a.pack'];
+      expect(validateWorldManifest(packed)).toBe(packed);
+      packed.cells[0][kind]!.push('graphics/a.pack');
+      expect(() => validateWorldManifest(packed)).toThrow('packs');
+      packed.cells[0][kind] = ['graphics/missing.pack'];
+      expect(() => validateWorldManifest(packed)).toThrow('unlisted file');
+      packed.cells[0][kind] = ['../escape.pack'];
+      expect(() => validateWorldManifest(packed)).toThrow();
+    },
+  );
   it('requires strings for identifiers instead of coercing missing or numeric values', () => {
     for (const value of [undefined, null, 1, true]) {
       const checks: [string, () => unknown][] = [

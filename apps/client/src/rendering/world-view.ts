@@ -221,7 +221,6 @@ export class WorldView {
       definition.bounds.max.z >= 0
     )) {
       this.target.copyFrom(vector(definition.spawnPoints[0]));
-      this.target.y = 0;
       this.camera.setTarget(this.target);
     }
     for (const landmark of definition.landmarks ?? []) {
@@ -572,6 +571,7 @@ export class WorldView {
         halfHeight: this.camera.orthoTop!,
         beta: this.camera.beta,
         zoom: this.zoom,
+        target: { x: this.camera.target.x, y: this.camera.target.y, z: this.camera.target.z },
       },
       buildings: this.buildings.aggregateDiagnostics(),
     };
@@ -676,7 +676,6 @@ export class WorldView {
         this.target.setAll(0);
       else {
         this.target.copyFrom(vector(this.definition.spawnPoints[0]));
-        this.target.y = 0;
       }
     }
   }
@@ -790,7 +789,11 @@ export class WorldView {
       this.updateReaction(view, entity);
       this.updateChat(view, entity);
       if (entity.entityId === this.followed)
-        this.target.set(entity.position.x, 0, entity.position.z);
+        this.target.set(
+          entity.position.x,
+          entity.position.y - this.definition.simulation.character.height / 2,
+          entity.position.z,
+        );
     }
     if (this.firstPerson && physicalPosition) this.ownPosition = vector(physicalPosition);
   }

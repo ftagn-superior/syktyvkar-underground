@@ -1,0 +1,3676 @@
+{
+  "formatVersion": 1,
+  "status": "explicit-game-authoring-requires-world-validation",
+  "generator": {
+    "file": "tools/build-ring-kit-decisions.py",
+    "sha256": "d68dede9327d76f2422e778dd9b661676908cb939b3bd326f545761063c9672f",
+    "shapely": "2.2.0",
+    "precisionMetres": 0.0001
+  },
+  "modelClassificationSha256": "eb40bc5fe2d849f59b1fae93de131d2f5a5ee98339297e526424516a08ae9de3",
+  "candidateRulesSha256": "37cf1f0101fd220ac31ce4ad7b4c8923de0f2f1248c6853107312f28a5da9255",
+  "decisions": [
+    {
+      "assetId": "bench-0152a250d22ef0a9",
+      "sourceRecipeSha256": "0c7c940db34f1677dfccedb5ccce5741a603307bc2b4e18233237d58c99646b6",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bench-0152a250d22ef0a9",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.84,
+                -0.2
+              ],
+              [
+                -0.84,
+                0.2
+              ],
+              [
+                -0.76,
+                0.2
+              ],
+              [
+                -0.76,
+                -0.2
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.76,
+                -0.2
+              ],
+              [
+                0.76,
+                0.2
+              ],
+              [
+                0.84,
+                0.2
+              ],
+              [
+                0.84,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "bus-stop-32df9c483410f2a3",
+      "sourceRecipeSha256": "47e558a7b2054d629bb5570ba39682f929783338cf7a55a0741bebc1dd9b4964",
+      "authoringPrecisionMetres": 0.001,
+      "treatment": "shelter-wall-strips-and-sign-foot",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-32df9c483410f2a3",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.82,
+                -0.07
+              ],
+              [
+                -1.82,
+                1.5
+              ],
+              [
+                1.82,
+                1.5
+              ],
+              [
+                1.82,
+                -0.07
+              ],
+              [
+                1.72,
+                -0.07
+              ],
+              [
+                1.72,
+                1.4
+              ],
+              [
+                -1.72,
+                1.4
+              ],
+              [
+                -1.72,
+                -0.07
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                2.35,
+                -0.05
+              ],
+              [
+                2.35,
+                0.05
+              ],
+              [
+                2.45,
+                0.05
+              ],
+              [
+                2.45,
+                -0.05
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring.",
+        "Add narrow footing strips with an explicit 0.02 m rim around the three actual glass-wall footprints; keep the original 0.1 m gap above local Y=0. Do not fill the shelter interior."
+      ]
+    },
+    {
+      "assetId": "bus-stop-3fcaa09cb4e354d9",
+      "sourceRecipeSha256": "323097168453ec7d4460b42c8b117861cc317b6ee04f4c5382514c216ea58037",
+      "authoringPrecisionMetres": 0.001,
+      "treatment": "shelter-wall-strips-and-sign-foot",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-3fcaa09cb4e354d9",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.82,
+                -0.069
+              ],
+              [
+                -1.82,
+                1.5
+              ],
+              [
+                1.82,
+                1.5
+              ],
+              [
+                1.819,
+                -0.07
+              ],
+              [
+                1.719,
+                -0.07
+              ],
+              [
+                1.719,
+                1.4
+              ],
+              [
+                -1.72,
+                1.4
+              ],
+              [
+                -1.72,
+                -0.069
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                2.35,
+                -0.05
+              ],
+              [
+                2.35,
+                0.05
+              ],
+              [
+                2.45,
+                0.05
+              ],
+              [
+                2.45,
+                -0.05
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring.",
+        "Add narrow footing strips with an explicit 0.02 m rim around the three actual glass-wall footprints; keep the original 0.1 m gap above local Y=0. Do not fill the shelter interior."
+      ]
+    },
+    {
+      "assetId": "bus-stop-49b992f34893bfa4",
+      "sourceRecipeSha256": "185e261718da13568bfc3f6c460dc5df0f0c238ee848e303c038751938922bf6",
+      "authoringPrecisionMetres": 0.001,
+      "treatment": "shelter-wall-strips-and-sign-foot",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-49b992f34893bfa4",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.819,
+                -0.07
+              ],
+              [
+                -1.819,
+                1.5
+              ],
+              [
+                1.821,
+                1.5
+              ],
+              [
+                1.82,
+                -0.07
+              ],
+              [
+                1.72,
+                -0.07
+              ],
+              [
+                1.72,
+                1.4
+              ],
+              [
+                -1.719,
+                1.4
+              ],
+              [
+                -1.719,
+                -0.07
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                2.351,
+                -0.05
+              ],
+              [
+                2.351,
+                0.05
+              ],
+              [
+                2.451,
+                0.05
+              ],
+              [
+                2.451,
+                -0.05
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring.",
+        "Add narrow footing strips with an explicit 0.02 m rim around the three actual glass-wall footprints; keep the original 0.1 m gap above local Y=0. Do not fill the shelter interior."
+      ]
+    },
+    {
+      "assetId": "bus-stop-b1cdbe7df1c69e9e",
+      "sourceRecipeSha256": "5fa02db37860327e3aefe26979824a582767dd10b050cc00e992057c93e0cbfb",
+      "authoringPrecisionMetres": 0.001,
+      "treatment": "shelter-wall-strips-and-sign-foot",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-b1cdbe7df1c69e9e",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.821,
+                -0.07
+              ],
+              [
+                -1.82,
+                1.5
+              ],
+              [
+                1.82,
+                1.5
+              ],
+              [
+                1.82,
+                -0.07
+              ],
+              [
+                1.72,
+                -0.07
+              ],
+              [
+                1.72,
+                1.4
+              ],
+              [
+                -1.721,
+                1.4
+              ],
+              [
+                -1.721,
+                -0.07
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                2.35,
+                -0.05
+              ],
+              [
+                2.35,
+                0.05
+              ],
+              [
+                2.45,
+                0.05
+              ],
+              [
+                2.45,
+                -0.05
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring.",
+        "Add narrow footing strips with an explicit 0.02 m rim around the three actual glass-wall footprints; keep the original 0.1 m gap above local Y=0. Do not fill the shelter interior."
+      ]
+    },
+    {
+      "assetId": "bus-stop-ec57d7e82d8c32f8",
+      "sourceRecipeSha256": "25a671ae1d6cb9b239f92b9c49ac100b3e3ff0af51ec2c87b518ad01a82e4041",
+      "authoringPrecisionMetres": 0.001,
+      "treatment": "shelter-wall-strips-and-sign-foot",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-ec57d7e82d8c32f8",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.821,
+                -0.07
+              ],
+              [
+                -1.821,
+                1.5
+              ],
+              [
+                1.819,
+                1.5
+              ],
+              [
+                1.819,
+                -0.07
+              ],
+              [
+                1.719,
+                -0.07
+              ],
+              [
+                1.719,
+                1.4
+              ],
+              [
+                -1.721,
+                1.4
+              ],
+              [
+                -1.721,
+                -0.07
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                2.349,
+                -0.05
+              ],
+              [
+                2.349,
+                0.05
+              ],
+              [
+                2.449,
+                0.05
+              ],
+              [
+                2.449,
+                -0.05
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring.",
+        "Add narrow footing strips with an explicit 0.02 m rim around the three actual glass-wall footprints; keep the original 0.1 m gap above local Y=0. Do not fill the shelter interior."
+      ]
+    },
+    {
+      "assetId": "bus-stop-f7605a5e04c65979",
+      "sourceRecipeSha256": "69e5c0c8ac18899d9f6fd6c7d92efba860674a087590ed2da7c3df20e40fca28",
+      "authoringPrecisionMetres": 0.001,
+      "treatment": "shelter-wall-strips-and-sign-foot",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-f7605a5e04c65979",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.82,
+                -0.07
+              ],
+              [
+                -1.82,
+                1.5
+              ],
+              [
+                1.82,
+                1.5
+              ],
+              [
+                1.82,
+                -0.069
+              ],
+              [
+                1.72,
+                -0.069
+              ],
+              [
+                1.72,
+                1.4
+              ],
+              [
+                -1.72,
+                1.4
+              ],
+              [
+                -1.72,
+                -0.07
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                2.35,
+                -0.05
+              ],
+              [
+                2.35,
+                0.05
+              ],
+              [
+                2.45,
+                0.05
+              ],
+              [
+                2.45,
+                -0.05
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring.",
+        "Add narrow footing strips with an explicit 0.02 m rim around the three actual glass-wall footprints; keep the original 0.1 m gap above local Y=0. Do not fill the shelter interior."
+      ]
+    },
+    {
+      "assetId": "fence-long",
+      "sourceRecipeSha256": "e355c6f65ff8f01a57ee793bd615aff2629355af224d18b0e0dcd9ae0f400fbe",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "fence-long",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.0,
+                -0.06
+              ],
+              [
+                -2.0,
+                0.06
+              ],
+              [
+                -1.94,
+                0.06
+              ],
+              [
+                -1.94,
+                -0.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -0.06,
+                -0.06
+              ],
+              [
+                -0.06,
+                0.06
+              ],
+              [
+                0.06,
+                0.06
+              ],
+              [
+                0.06,
+                -0.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.94,
+                -0.06
+              ],
+              [
+                1.94,
+                0.06
+              ],
+              [
+                2.0,
+                0.06
+              ],
+              [
+                2.0,
+                -0.06
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "fence-short",
+      "sourceRecipeSha256": "f7593ba5a0e1b4ce437e8bd8c04234107624b3e272f98b599be7cfd2e7fb93e2",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "fence-short",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.25,
+                -0.06
+              ],
+              [
+                -0.25,
+                0.06
+              ],
+              [
+                -0.19,
+                0.06
+              ],
+              [
+                -0.19,
+                -0.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.19,
+                -0.06
+              ],
+              [
+                0.19,
+                0.06
+              ],
+              [
+                0.25,
+                0.06
+              ],
+              [
+                0.25,
+                -0.06
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "kuratov-monument",
+      "sourceRecipeSha256": "890ee924f348c7e23458f5cd9800fd8e7a43bff53837a85c0320dfd26a06db04",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "kuratov-monument",
+        "components": [
+          {
+            "outline": [
+              [
+                -12.3,
+                -18.65
+              ],
+              [
+                -12.3,
+                18.65
+              ],
+              [
+                12.3,
+                18.65
+              ],
+              [
+                12.3,
+                -18.65
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "playground-02bee7627a8c13ad",
+      "sourceRecipeSha256": "8932b1e62d49cf5f813171a9c6961438b3cfb6ce1511d6ed4f6f3b81496ab381",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-02bee7627a8c13ad",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0603,
+                0.9398
+              ],
+              [
+                -1.0603,
+                1.0598
+              ],
+              [
+                -0.9403,
+                1.0598
+              ],
+              [
+                -0.9403,
+                0.9398
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0598,
+                -1.0603
+              ],
+              [
+                -1.0598,
+                -0.9403
+              ],
+              [
+                -0.9398,
+                -0.9403
+              ],
+              [
+                -0.9398,
+                -1.0603
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9402,
+                0.9394
+              ],
+              [
+                0.9402,
+                1.0594
+              ],
+              [
+                1.0602,
+                1.0594
+              ],
+              [
+                1.0602,
+                0.9394
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9403,
+                -1.0598
+              ],
+              [
+                0.9403,
+                -0.9398
+              ],
+              [
+                1.0603,
+                -0.9398
+              ],
+              [
+                1.0603,
+                -1.0598
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1002,
+                -0.4003
+              ],
+              [
+                1.1002,
+                0.3997
+              ],
+              [
+                4.1002,
+                0.3997
+              ],
+              [
+                4.1002,
+                -0.4003
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "playground-38f532717d60e44d",
+      "sourceRecipeSha256": "c32b2b9ba56cf60f1f0fa00fb2909e0edd3a21c3c2376a349b413b5b94eb6611",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-38f532717d60e44d",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.06,
+                -1.0595
+              ],
+              [
+                -1.06,
+                -0.9395
+              ],
+              [
+                -0.94,
+                -0.9395
+              ],
+              [
+                -0.94,
+                -1.0595
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0595,
+                0.94
+              ],
+              [
+                -1.0595,
+                1.06
+              ],
+              [
+                -0.9395,
+                1.06
+              ],
+              [
+                -0.9395,
+                0.94
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9401,
+                -1.0593
+              ],
+              [
+                0.9401,
+                -0.9393
+              ],
+              [
+                1.0601,
+                -0.9393
+              ],
+              [
+                1.0601,
+                -1.0593
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9407,
+                0.9402
+              ],
+              [
+                0.9407,
+                1.0602
+              ],
+              [
+                1.0607,
+                1.0602
+              ],
+              [
+                1.0607,
+                0.9402
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1003,
+                -0.3992
+              ],
+              [
+                1.1003,
+                0.4008
+              ],
+              [
+                4.1003,
+                0.4008
+              ],
+              [
+                4.1003,
+                -0.3992
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "playground-4314b6d046eef599",
+      "sourceRecipeSha256": "6a6229b000f4daf2ee3af01ea302f46f75bc85b1683fc95a8dfe8319aa2cabde",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-4314b6d046eef599",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0594,
+                -1.06
+              ],
+              [
+                -1.0594,
+                -0.94
+              ],
+              [
+                -0.9394,
+                -0.94
+              ],
+              [
+                -0.9394,
+                -1.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0592,
+                0.94
+              ],
+              [
+                -1.0592,
+                1.06
+              ],
+              [
+                -0.9392,
+                1.06
+              ],
+              [
+                -0.9392,
+                0.94
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.94,
+                -1.0594
+              ],
+              [
+                0.94,
+                -0.9394
+              ],
+              [
+                1.06,
+                -0.9394
+              ],
+              [
+                1.06,
+                -1.0594
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9402,
+                0.9406
+              ],
+              [
+                0.9402,
+                1.0606
+              ],
+              [
+                1.0602,
+                1.0606
+              ],
+              [
+                1.0602,
+                0.9406
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1001,
+                -0.3998
+              ],
+              [
+                1.1001,
+                0.4002
+              ],
+              [
+                4.1001,
+                0.4002
+              ],
+              [
+                4.1001,
+                -0.3998
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "playground-449f220673cf2d98",
+      "sourceRecipeSha256": "2a1c5d61fb964592ee365126665d234d24375585ff07d48685bd0cef639c9e03",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-449f220673cf2d98",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0601,
+                0.9404
+              ],
+              [
+                -1.0601,
+                1.0604
+              ],
+              [
+                -0.9401,
+                1.0604
+              ],
+              [
+                -0.9401,
+                0.9404
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0595,
+                -1.0597
+              ],
+              [
+                -1.0595,
+                -0.9397
+              ],
+              [
+                -0.9395,
+                -0.9397
+              ],
+              [
+                -0.9395,
+                -1.0597
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9397,
+                -1.0595
+              ],
+              [
+                0.9397,
+                -0.9395
+              ],
+              [
+                1.0597,
+                -0.9395
+              ],
+              [
+                1.0597,
+                -1.0595
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9404,
+                0.9401
+              ],
+              [
+                0.9404,
+                1.0601
+              ],
+              [
+                1.0604,
+                1.0601
+              ],
+              [
+                1.0604,
+                0.9401
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.0999,
+                -0.3998
+              ],
+              [
+                1.0999,
+                0.4002
+              ],
+              [
+                4.0999,
+                0.4002
+              ],
+              [
+                4.0999,
+                -0.3998
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "playground-50e53e5c702173af",
+      "sourceRecipeSha256": "4abccd8de6eed3e63fd9dee54658f044dd9fb9aa0e57c8d6d5ac22b8dc905e7f",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-50e53e5c702173af",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0603,
+                0.9408
+              ],
+              [
+                -1.0603,
+                1.0608
+              ],
+              [
+                -0.9403,
+                1.0608
+              ],
+              [
+                -0.9403,
+                0.9408
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.06,
+                -1.0597
+              ],
+              [
+                -1.06,
+                -0.9397
+              ],
+              [
+                -0.94,
+                -0.9397
+              ],
+              [
+                -0.94,
+                -1.0597
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9394,
+                0.9405
+              ],
+              [
+                0.9394,
+                1.0605
+              ],
+              [
+                1.0594,
+                1.0605
+              ],
+              [
+                1.0594,
+                0.9405
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9397,
+                -1.06
+              ],
+              [
+                0.9397,
+                -0.94
+              ],
+              [
+                1.0597,
+                -0.94
+              ],
+              [
+                1.0597,
+                -1.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.0998,
+                -0.4002
+              ],
+              [
+                1.0998,
+                0.3998
+              ],
+              [
+                4.0998,
+                0.3998
+              ],
+              [
+                4.0998,
+                -0.4002
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "playground-72396bbdda254bd7",
+      "sourceRecipeSha256": "5344508e9569f6c63f915eefea832d8ae392b88eb5e9e311dd744cddee678bd7",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-72396bbdda254bd7",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0599,
+                -1.0599
+              ],
+              [
+                -1.0599,
+                -0.9399
+              ],
+              [
+                -0.9399,
+                -0.9399
+              ],
+              [
+                -0.9399,
+                -1.0599
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0599,
+                0.9399
+              ],
+              [
+                -1.0599,
+                1.0599
+              ],
+              [
+                -0.9399,
+                1.0599
+              ],
+              [
+                -0.9399,
+                0.9399
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9399,
+                0.9399
+              ],
+              [
+                0.9399,
+                1.0599
+              ],
+              [
+                1.0599,
+                1.0599
+              ],
+              [
+                1.0599,
+                0.9399
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9403,
+                -1.0608
+              ],
+              [
+                0.9403,
+                -0.9408
+              ],
+              [
+                1.0603,
+                -0.9408
+              ],
+              [
+                1.0603,
+                -1.0608
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1005,
+                -0.3999
+              ],
+              [
+                1.1005,
+                0.4001
+              ],
+              [
+                4.1005,
+                0.4001
+              ],
+              [
+                4.1005,
+                -0.3999
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "sorokin-monument",
+      "sourceRecipeSha256": "55c4fac5fb4fffeffc76fa573553b91f9f1b5663ce18ecf86bd3f019700a1dac",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "sorokin-monument",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.7,
+                -1.4
+              ],
+              [
+                -1.7,
+                1.4
+              ],
+              [
+                1.7,
+                1.4
+              ],
+              [
+                1.7,
+                -1.4
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "theatre-fountain",
+      "sourceRecipeSha256": "48d07c77f02d6af50767f184cb28d04263bcb53a1f315767cc1cb82e6c3a02bf",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "theatre-fountain",
+        "components": [
+          {
+            "outline": [
+              [
+                -5.4,
+                0.0
+              ],
+              [
+                -5.1357,
+                1.6687
+              ],
+              [
+                -4.3687,
+                3.174
+              ],
+              [
+                -3.174,
+                4.3687
+              ],
+              [
+                -1.6687,
+                5.1357
+              ],
+              [
+                0.0,
+                5.4
+              ],
+              [
+                1.6687,
+                5.1357
+              ],
+              [
+                3.174,
+                4.3687
+              ],
+              [
+                4.3687,
+                3.174
+              ],
+              [
+                5.1357,
+                1.6687
+              ],
+              [
+                5.4,
+                0.0
+              ],
+              [
+                5.1357,
+                -1.6687
+              ],
+              [
+                4.3687,
+                -3.174
+              ],
+              [
+                3.174,
+                -4.3687
+              ],
+              [
+                1.6687,
+                -5.1357
+              ],
+              [
+                -0.0,
+                -5.4
+              ],
+              [
+                -1.6687,
+                -5.1357
+              ],
+              [
+                -3.174,
+                -4.3687
+              ],
+              [
+                -4.3687,
+                -3.174
+              ],
+              [
+                -5.1357,
+                -1.6687
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "trudovaya-slava",
+      "sourceRecipeSha256": "91e72be5a5094c4207d8a1273d5bc0124bef544e076694de1740af1122b1dc37",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "trudovaya-slava",
+        "components": [
+          {
+            "outline": [
+              [
+                -9.5,
+                0.0
+              ],
+              [
+                -9.1763,
+                2.4588
+              ],
+              [
+                -8.2272,
+                4.75
+              ],
+              [
+                -7.3315,
+                5.9173
+              ],
+              [
+                -7.4991,
+                6.0849
+              ],
+              [
+                -6.0849,
+                7.4991
+              ],
+              [
+                -5.9173,
+                7.3315
+              ],
+              [
+                -4.75,
+                8.2272
+              ],
+              [
+                -2.4588,
+                9.1763
+              ],
+              [
+                0.0,
+                9.5
+              ],
+              [
+                2.4588,
+                9.1763
+              ],
+              [
+                4.75,
+                8.2272
+              ],
+              [
+                5.9173,
+                7.3315
+              ],
+              [
+                6.0849,
+                7.4991
+              ],
+              [
+                7.4991,
+                6.0849
+              ],
+              [
+                7.3315,
+                5.9173
+              ],
+              [
+                8.2272,
+                4.75
+              ],
+              [
+                9.1763,
+                2.4588
+              ],
+              [
+                9.5,
+                0.0
+              ],
+              [
+                9.1763,
+                -2.4588
+              ],
+              [
+                8.2272,
+                -4.75
+              ],
+              [
+                7.3315,
+                -5.9173
+              ],
+              [
+                7.4991,
+                -6.0849
+              ],
+              [
+                6.0849,
+                -7.4991
+              ],
+              [
+                5.9173,
+                -7.3315
+              ],
+              [
+                4.75,
+                -8.2272
+              ],
+              [
+                2.4588,
+                -9.1763
+              ],
+              [
+                -0.0,
+                -9.5
+              ],
+              [
+                -2.4588,
+                -9.1763
+              ],
+              [
+                -4.75,
+                -8.2272
+              ],
+              [
+                -5.9173,
+                -7.3315
+              ],
+              [
+                -6.0849,
+                -7.4991
+              ],
+              [
+                -7.4991,
+                -6.0849
+              ],
+              [
+                -7.3315,
+                -5.9173
+              ],
+              [
+                -8.2272,
+                -4.75
+              ],
+              [
+                -9.1763,
+                -2.4588
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-099af16b64bb72e2",
+      "sourceRecipeSha256": "3fc337efeefbcd726b6724bd1da8c50f65457fbe17d5b37510eaf769edf1aff5",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-099af16b64bb72e2",
+        "components": [
+          {
+            "outline": [
+              [
+                -3.9875,
+                -0.175
+              ],
+              [
+                -3.9875,
+                0.175
+              ],
+              [
+                3.9875,
+                0.175
+              ],
+              [
+                3.9875,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-131c74cb0805583c",
+      "sourceRecipeSha256": "3273bf4849454393671600b77c468f519da2fa85074ebfda5b9bcf1d4a664235",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-131c74cb0805583c",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.6795,
+                -0.175
+              ],
+              [
+                -6.6795,
+                0.175
+              ],
+              [
+                6.6795,
+                0.175
+              ],
+              [
+                6.6795,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-2217ff2b34fb28cd",
+      "sourceRecipeSha256": "b68fd98893393a4ff597acfa31b74656436ab85b27bda0d5fc0ab99dcda03ff4",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-2217ff2b34fb28cd",
+        "components": [
+          {
+            "outline": [
+              [
+                -21.809,
+                -0.175
+              ],
+              [
+                -21.809,
+                0.175
+              ],
+              [
+                21.809,
+                0.175
+              ],
+              [
+                21.809,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-2617e974dbc3454a",
+      "sourceRecipeSha256": "3fe6344fe14dff63e39bcf2464a4ae71c90f44b35358864989fb91cce4bd29e5",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-2617e974dbc3454a",
+        "components": [
+          {
+            "outline": [
+              [
+                -12.5515,
+                -0.175
+              ],
+              [
+                -12.5515,
+                0.175
+              ],
+              [
+                12.5515,
+                0.175
+              ],
+              [
+                12.5515,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-2984babf7df38428",
+      "sourceRecipeSha256": "8f29f1e2c1a3644697aadc7d26e01bb46eead8508d6153e01b29641845ba1cd2",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-2984babf7df38428",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.395,
+                -0.175
+              ],
+              [
+                -0.395,
+                0.175
+              ],
+              [
+                0.395,
+                0.175
+              ],
+              [
+                0.395,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-335e3c20fced95c6",
+      "sourceRecipeSha256": "a91deb443d8425d167ad1f5b2fe08f18901879de48a9b4f90206df9db2a8e1cf",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-335e3c20fced95c6",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.001,
+                -0.175
+              ],
+              [
+                -4.001,
+                0.175
+              ],
+              [
+                4.001,
+                0.175
+              ],
+              [
+                4.001,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-3b3f548354cc44a5",
+      "sourceRecipeSha256": "941b1c5e1ff4df98100083162065362fe72db80e0e77f66938426e0022507470",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-3b3f548354cc44a5",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.9,
+                -0.2
+              ],
+              [
+                -1.9,
+                0.2
+              ],
+              [
+                1.9,
+                0.2
+              ],
+              [
+                1.9,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-3d5e0d17a09f6ae8",
+      "sourceRecipeSha256": "5aa6eff6dae022b9e0fcf4d60330e0958dc4839e136c10ca58fb9d2a6c93654d",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-3d5e0d17a09f6ae8",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.961,
+                -0.175
+              ],
+              [
+                -1.961,
+                0.175
+              ],
+              [
+                1.961,
+                0.175
+              ],
+              [
+                1.961,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-3e76aad470cd519f",
+      "sourceRecipeSha256": "072b1bcc88f8435981bbf3e4852a26d7e43569bec4a502c58d14813caa4b5c79",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-3e76aad470cd519f",
+        "components": [
+          {
+            "outline": [
+              [
+                -49.6715,
+                -0.175
+              ],
+              [
+                -49.6715,
+                0.175
+              ],
+              [
+                49.6715,
+                0.175
+              ],
+              [
+                49.6715,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-4b2ac31288681f3c",
+      "sourceRecipeSha256": "a06d39853f1d45f35db687a3e402397821acd1503a86491830e78ac0463a9bb9",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-4b2ac31288681f3c",
+        "components": [
+          {
+            "outline": [
+              [
+                -17.423,
+                -0.175
+              ],
+              [
+                -17.423,
+                0.175
+              ],
+              [
+                17.423,
+                0.175
+              ],
+              [
+                17.423,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-5173f7fffa3553ab",
+      "sourceRecipeSha256": "1b2a039c2e8d452814183ed632b4bd736638863dd44da73eeeac4174a94d4490",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5173f7fffa3553ab",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.169,
+                -0.175
+              ],
+              [
+                -4.169,
+                0.175
+              ],
+              [
+                4.169,
+                0.175
+              ],
+              [
+                4.169,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-5694d737ade0d318",
+      "sourceRecipeSha256": "61a2349d7d467494ee8e83f747e92148c8a60ddf9060e4f0484f0119c17f5c78",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5694d737ade0d318",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.2065,
+                -0.175
+              ],
+              [
+                -4.2065,
+                0.175
+              ],
+              [
+                4.2065,
+                0.175
+              ],
+              [
+                4.2065,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-56e797f9f0f58b86",
+      "sourceRecipeSha256": "a7a3ba6ec5cd337b78206f4a47d67160a802872d9b7d25d252af3030d3bb763f",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-56e797f9f0f58b86",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.696,
+                -0.175
+              ],
+              [
+                -0.696,
+                0.175
+              ],
+              [
+                0.696,
+                0.175
+              ],
+              [
+                0.696,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-5adb725bc7bda324",
+      "sourceRecipeSha256": "d0fd0cabffbc05073f68d28d082bbc1a3eb984c1239916dad568df4ce9edc272",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5adb725bc7bda324",
+        "components": [
+          {
+            "outline": [
+              [
+                -16.558,
+                -0.175
+              ],
+              [
+                -16.558,
+                0.175
+              ],
+              [
+                16.558,
+                0.175
+              ],
+              [
+                16.558,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-5d7e0ba5aeab76f8",
+      "sourceRecipeSha256": "efcc14862912bf98e73b33b3cbbb3d117c7d156a48b5112a5902a8aaeed6a408",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5d7e0ba5aeab76f8",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.1995,
+                -0.175
+              ],
+              [
+                -2.1995,
+                0.175
+              ],
+              [
+                2.1995,
+                0.175
+              ],
+              [
+                2.1995,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-5f99452b08fd3816",
+      "sourceRecipeSha256": "85c497b7ae40cb85c228737278012d46842b748c3a90c44525acbac8934b3f07",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5f99452b08fd3816",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.81,
+                -0.175
+              ],
+              [
+                -4.81,
+                0.175
+              ],
+              [
+                4.81,
+                0.175
+              ],
+              [
+                4.81,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-637d0f64ba883ad8",
+      "sourceRecipeSha256": "8ae25e1ca3e688bf95fad299d1d1eead9ceb4481e5aa9fd39aaf63bd6fc229db",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-637d0f64ba883ad8",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.929,
+                -0.175
+              ],
+              [
+                -0.929,
+                0.175
+              ],
+              [
+                0.929,
+                0.175
+              ],
+              [
+                0.929,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-6554fcd6f5196079",
+      "sourceRecipeSha256": "754547e35c679530806ed6439b36be4c8688c6f4ea0a5e543604ca6381d30018",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-6554fcd6f5196079",
+        "components": [
+          {
+            "outline": [
+              [
+                -43.815,
+                -0.175
+              ],
+              [
+                -43.815,
+                0.175
+              ],
+              [
+                43.815,
+                0.175
+              ],
+              [
+                43.815,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-6d5da86ac031db6d",
+      "sourceRecipeSha256": "8490e7b890efcd8190f9231405607e7ec1316f7ecf466d7f830f596b267c09ff",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-6d5da86ac031db6d",
+        "components": [
+          {
+            "outline": [
+              [
+                -5.1735,
+                -0.175
+              ],
+              [
+                -5.1735,
+                0.175
+              ],
+              [
+                5.1735,
+                0.175
+              ],
+              [
+                5.1735,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-75773768f1d82877",
+      "sourceRecipeSha256": "f28f919bb41585934de1c36f050fc9a2bfedab8845d8d2ee1a36b734a7cb1182",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-75773768f1d82877",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.5335,
+                -0.175
+              ],
+              [
+                -2.5335,
+                0.175
+              ],
+              [
+                2.5335,
+                0.175
+              ],
+              [
+                2.5335,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-784f8223d30cd1b4",
+      "sourceRecipeSha256": "7d52bf9d78601633876546138735f5f1ac4eabcf875d971362e3226bb57ebcf5",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-784f8223d30cd1b4",
+        "components": [
+          {
+            "outline": [
+              [
+                -16.51,
+                -0.175
+              ],
+              [
+                -16.51,
+                0.175
+              ],
+              [
+                16.51,
+                0.175
+              ],
+              [
+                16.51,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-81be1cbdae1a70f1",
+      "sourceRecipeSha256": "95b3e3a177c45a982d67fac2bf63d3933f5a6bb64d028df8715aa2ccee4ea288",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-81be1cbdae1a70f1",
+        "components": [
+          {
+            "outline": [
+              [
+                -5.841,
+                -0.2
+              ],
+              [
+                -5.841,
+                0.2
+              ],
+              [
+                5.841,
+                0.2
+              ],
+              [
+                5.841,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-890194516c7097a0",
+      "sourceRecipeSha256": "0333b0e0f2aea1b0547fea35883ec812940117e59d48a140df63dc2b0f1bc191",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-890194516c7097a0",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.1825,
+                -0.2
+              ],
+              [
+                -6.1825,
+                0.2
+              ],
+              [
+                6.1825,
+                0.2
+              ],
+              [
+                6.1825,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-8e66fe4a88a61908",
+      "sourceRecipeSha256": "07c5a9cd99ffbd305e34302f4df879ecf1d9679f3259e3bc47dbc79e81f7c1de",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-8e66fe4a88a61908",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.3805,
+                -0.2
+              ],
+              [
+                -1.3805,
+                0.2
+              ],
+              [
+                1.3805,
+                0.2
+              ],
+              [
+                1.3805,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-8ea14f520ae5cbcd",
+      "sourceRecipeSha256": "9228885bfbfab6f2c031c0bf98597d5a0e8743b8064720b1748b356026d1571c",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-8ea14f520ae5cbcd",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.2325,
+                -0.175
+              ],
+              [
+                -0.2325,
+                0.175
+              ],
+              [
+                0.2325,
+                0.175
+              ],
+              [
+                0.2325,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-9368b355a5ffcf13",
+      "sourceRecipeSha256": "fc2bdbe7e634cf32b28bdffc6c8106adda07630003e9ee72f5d324497e13a79a",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9368b355a5ffcf13",
+        "components": [
+          {
+            "outline": [
+              [
+                -33.263,
+                -0.175
+              ],
+              [
+                -33.263,
+                0.175
+              ],
+              [
+                33.263,
+                0.175
+              ],
+              [
+                33.263,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-93ca921064bed340",
+      "sourceRecipeSha256": "5e38319983dd619c378ef6c24da37a255ca6cf70eb188a54cb033b77a174b661",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-93ca921064bed340",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.8245,
+                -0.175
+              ],
+              [
+                -6.8245,
+                0.175
+              ],
+              [
+                6.8245,
+                0.175
+              ],
+              [
+                6.8245,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-9c6bc239175a762b",
+      "sourceRecipeSha256": "d285a9302f8e7a03d1d250a2971489a02ff79baf456e6b7dfa6efaf15c998c42",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9c6bc239175a762b",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.1845,
+                -0.175
+              ],
+              [
+                -1.1845,
+                0.175
+              ],
+              [
+                1.1845,
+                0.175
+              ],
+              [
+                1.1845,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-9d662a3014714796",
+      "sourceRecipeSha256": "4abba001cc784310456aaeefaffb397274865ecba5fa8acf69425bd3efe77cb2",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9d662a3014714796",
+        "components": [
+          {
+            "outline": [
+              [
+                -13.9055,
+                -0.175
+              ],
+              [
+                -13.9055,
+                0.175
+              ],
+              [
+                13.9055,
+                0.175
+              ],
+              [
+                13.9055,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-9f1c9f7808e1b305",
+      "sourceRecipeSha256": "0eaea8aab15021ae29a7b8b2596dbfcd1d1b5123bc5343e9f6584b3fc487c1a2",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9f1c9f7808e1b305",
+        "components": [
+          {
+            "outline": [
+              [
+                -11.6615,
+                -0.175
+              ],
+              [
+                -11.6615,
+                0.175
+              ],
+              [
+                11.6615,
+                0.175
+              ],
+              [
+                11.6615,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-a1aef454a3398465",
+      "sourceRecipeSha256": "0e3ff86750c3a338815f0e7b2a6ae5318fd76a18cbb8e9dd4e165bebdbefd0ea",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-a1aef454a3398465",
+        "components": [
+          {
+            "outline": [
+              [
+                -27.287,
+                -0.175
+              ],
+              [
+                -27.287,
+                0.175
+              ],
+              [
+                27.287,
+                0.175
+              ],
+              [
+                27.287,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-a6ee3c6e69418bd6",
+      "sourceRecipeSha256": "c49c68ed4832540d059ad2ca845fecfb415385c0274a135f1ac3947c689a76b3",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-a6ee3c6e69418bd6",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.906,
+                -0.2
+              ],
+              [
+                -2.906,
+                0.2
+              ],
+              [
+                2.906,
+                0.2
+              ],
+              [
+                2.906,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-aa0bead65714868e",
+      "sourceRecipeSha256": "41521f99c4865a9e29e8da6cab2eec49264442b92aef385bcdb5101282688eea",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-aa0bead65714868e",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.3725,
+                -0.175
+              ],
+              [
+                -0.3725,
+                0.175
+              ],
+              [
+                0.3725,
+                0.175
+              ],
+              [
+                0.3725,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-ba3ba75528e1ed69",
+      "sourceRecipeSha256": "074ab82736dbeea7cf78c5f0b37815da60035ed4a7adf69a9a9876156249d280",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-ba3ba75528e1ed69",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.054,
+                -0.2
+              ],
+              [
+                -2.054,
+                0.2
+              ],
+              [
+                2.054,
+                0.2
+              ],
+              [
+                2.054,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-c05e0a7c2bfc1190",
+      "sourceRecipeSha256": "9c313daeee3c9a743ed0e8045d83798d374299653663b2d874ddf0fb8401b5ac",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c05e0a7c2bfc1190",
+        "components": [
+          {
+            "outline": [
+              [
+                -20.391,
+                -0.2
+              ],
+              [
+                -20.391,
+                0.2
+              ],
+              [
+                20.391,
+                0.2
+              ],
+              [
+                20.391,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-c1eae6ce2c50ab27",
+      "sourceRecipeSha256": "97bb4c096262e7fea9bd7a89409155b2c059202fa70c775a290ff9e55a06a839",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c1eae6ce2c50ab27",
+        "components": [
+          {
+            "outline": [
+              [
+                -3.9125,
+                -0.175
+              ],
+              [
+                -3.9125,
+                0.175
+              ],
+              [
+                3.9125,
+                0.175
+              ],
+              [
+                3.9125,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-c3fe7a1c5bc6a7bc",
+      "sourceRecipeSha256": "675fb7c7f7f51df78206424b99eb12b87412f43df98333e1ae793cf6d3299b35",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c3fe7a1c5bc6a7bc",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.0905,
+                -0.175
+              ],
+              [
+                -2.0905,
+                0.175
+              ],
+              [
+                2.0905,
+                0.175
+              ],
+              [
+                2.0905,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-c950b3ccb2cef770",
+      "sourceRecipeSha256": "53fed892c9dd6036d0601f9ab85ed28607f22b50590a7ba82677a12efca7db68",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c950b3ccb2cef770",
+        "components": [
+          {
+            "outline": [
+              [
+                -15.0385,
+                -0.175
+              ],
+              [
+                -15.0385,
+                0.175
+              ],
+              [
+                15.0385,
+                0.175
+              ],
+              [
+                15.0385,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-cdd89c4fe9cf2077",
+      "sourceRecipeSha256": "a030e0e44e94b3634f03c18cb7132239d12951d455ac46082cfda2e288a38c12",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-cdd89c4fe9cf2077",
+        "components": [
+          {
+            "outline": [
+              [
+                -9.064,
+                -0.2
+              ],
+              [
+                -9.064,
+                0.2
+              ],
+              [
+                9.064,
+                0.2
+              ],
+              [
+                9.064,
+                -0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-ce7ab008ea008e4f",
+      "sourceRecipeSha256": "5f48945e4351b36a5f02c5f6c6202519a826deebd814ee66a49dc8150de12bc1",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-ce7ab008ea008e4f",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.401,
+                -0.175
+              ],
+              [
+                -0.401,
+                0.175
+              ],
+              [
+                0.401,
+                0.175
+              ],
+              [
+                0.401,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-d0905ee9df8e3aa5",
+      "sourceRecipeSha256": "f26764e066ab75e2c88eb09cc1b975e6db11ed98f15f6129389f88e4494187ac",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-d0905ee9df8e3aa5",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.3765,
+                -0.175
+              ],
+              [
+                -6.3765,
+                0.175
+              ],
+              [
+                6.3765,
+                0.175
+              ],
+              [
+                6.3765,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-d0bcb88663242e34",
+      "sourceRecipeSha256": "289f76aade71445d6d1c61348f083f3e085a200b11aa1e7a049d0b47a40a4867",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-d0bcb88663242e34",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.781,
+                -0.175
+              ],
+              [
+                -1.781,
+                0.175
+              ],
+              [
+                1.781,
+                0.175
+              ],
+              [
+                1.781,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-d38ea743fe61ec46",
+      "sourceRecipeSha256": "f9cf94eaa61254ba0b166df3ddf960111e2c7cbce05ec2cf2bd37c725e3ac093",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-d38ea743fe61ec46",
+        "components": [
+          {
+            "outline": [
+              [
+                -16.773,
+                -0.175
+              ],
+              [
+                -16.773,
+                0.175
+              ],
+              [
+                16.773,
+                0.175
+              ],
+              [
+                16.773,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "wall-f3b140cb8595e57a",
+      "sourceRecipeSha256": "1b1489d0806d7e2042c8a12f83c292d0988e4a8fbe4a38efddc2c9adfb93aea6",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-f3b140cb8595e57a",
+        "components": [
+          {
+            "outline": [
+              [
+                -13.156,
+                -0.175
+              ],
+              [
+                -13.156,
+                0.175
+              ],
+              [
+                13.156,
+                0.175
+              ],
+              [
+                13.156,
+                -0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    },
+    {
+      "assetId": "water-kiosk",
+      "sourceRecipeSha256": "296c77dd8f89f7e37514bbc608962dcbcc4e61b56226a564ed4511ac2236095e",
+      "authoringPrecisionMetres": 0.0001,
+      "treatment": "individual-grounded-feet-or-existing-plinth",
+      "maximumVisibleHeight": 0.6,
+      "rule": {
+        "kind": "foundation-v2",
+        "assetId": "water-kiosk",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.2,
+                -0.9
+              ],
+              [
+                -1.2,
+                0.9
+              ],
+              [
+                1.2,
+                0.9
+              ],
+              [
+                1.2,
+                -0.9
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "rationale": [
+        "Keep the original model rigid and vertical, including designed clearances of raised parts.",
+        "Foundation occupies only reviewed contact regions; no bounding-box courtyard or bench infill.",
+        "Maximum visible foundation height 0.6 m; reject larger relief for individual authoring."
+      ]
+    }
+  ]
+}

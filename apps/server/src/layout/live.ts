@@ -4,6 +4,8 @@ import {
   MAX_EDITABLE_STATIC_INSTANCES,
   LEGACY_PLACEMENT_CATALOG_VERSION,
   placedStaticInstance,
+  type StaticObjectInstance,
+  type BuildingPhysicsAsset,
   type PlaceStaticRequest,
   type PlaceStaticResult,
   type StaticPlacementError,
@@ -18,9 +20,16 @@ import { createAuthoritativeWorld, type AuthoritativeWorld } from '@su/simulatio
 import type { ItemRuntime } from '../items/runtime.js';
 import { StaticLayoutStore } from './store.js';
 import type { prepareLayoutWorld } from './prepare.js';
+import { applyPreparedLayoutDelta } from './release.js';
+import { expectedStaticChange, staticChangeIds } from './static-change.js';
+import { resolveStaticPlacement, StaticPlacementRejected } from './placement-pose.js';
 import { LayoutPreparation, LayoutPreparationError } from './preparation.js';
 import type { PreparedLayout } from './preparation-types.js';
-import { hasPlacementGround, type ServerPlacementCatalog } from './placement-catalog.js';
+import {
+  hasPlacementGround,
+  hasTerrainPlacementGround,
+  type ServerPlacementCatalog,
+} from './placement-catalog.js';
 
 type Prepared = Awaited<ReturnType<typeof prepareLayoutWorld>>;
 type Publication = Pick<
@@ -35,10 +44,6 @@ function changeIdentity(change: StaticChange) {
       ? { kind: change.kind, instance: placedStaticInstance(change.request) }
       : { kind: change.kind, entityId: change.request.entityId },
   );
-}
-function placementBuilding(request: PlaceStaticRequest) {
-  const { instanceRevision: _r, enabled: _e, ...instance } = placedStaticInstance(request);
-  return instance;
 }
 /** Current and previous immutable publications share one pointer across HTTP and the room. */
 export class LayoutPublications {
@@ -197,7 +202,10 @@ export class LiveStaticPlacement {
   effect(): StaticPlacementEffect | undefined {
     if (
       !this.catalog ||
-      !hasPlacementGround(this.publications.current.definition, this.publications.current.manifest)
+      !(
+        hasTerrainPlacementGround(this.publications.prepared.release) ||
+        hasPlacementGround(this.publications.current.definition, this.publications.current.manifest)
+      )
     )
       return;
     return {
@@ -268,6 +276,9 @@ export class LiveStaticPlacement {
     let candidate: Publication | undefined;
     let applied = false;
     let probe: AuthoritativeWorld | undefined;
+    let acceptedInstance: StaticObjectInstance | undefined;
+    let physicsChange: ReturnType<AuthoritativeWorld['prepareStaticReplacement']> | undefined;
+    let changedIds = new Set<string>();
     let compatibilityHash: string;
     let committed = false;
     const replay = () =>
@@ -308,14 +319,7 @@ export class LiveStaticPlacement {
       try {
         const started = performance.now();
         if (!applied) {
-          if (operation.kind === 'place') {
-            const {
-              instanceRevision: _r,
-              enabled: _e,
-              ...instance
-            } = placedStaticInstance(operation.request);
-            this.world.addStatic(instance, candidate!.definition);
-          } else this.world.removeStatic(operation.request.entityId, candidate!.definition);
+          physicsChange!.commit();
           applied = true;
         }
         this.items.store.definition = candidate!.definition;
@@ -374,24 +378,32 @@ export class LiveStaticPlacement {
       const before = current.snapshot;
       if (operation.kind === 'place' && before.instances.length >= MAX_EDITABLE_STATIC_INSTANCES)
         return fail('CONTENT_LIMIT');
+      try {
+        if (operation.kind === 'place')
+          acceptedInstance = resolveStaticPlacement(
+            this.publications.prepared.release,
+            operation.request,
+          );
+      } catch (error) {
+        return fail(error instanceof StaticPlacementRejected ? error.code : 'INVALID_INPUT');
+      }
+      const owner =
+        acceptedInstance ??
+        before.instances.find(
+          (i) => operation.kind === 'remove' && i.entityId === operation.request.entityId,
+        )!;
+      changedIds = staticChangeIds(this.publications.prepared.release, owner);
       const snapshot = {
         ...before,
         revision: before.revision + 1,
         instances: (operation.kind === 'place'
-          ? [...before.instances, placedStaticInstance(operation.request)]
+          ? [...before.instances, acceptedInstance!]
           : before.instances.map((i) =>
               i.entityId === operation.request.entityId
                 ? { ...i, enabled: false, instanceRevision: i.instanceRevision + 1 }
                 : i,
             )
         ).sort((a, b) => a.entityId.localeCompare(b.entityId)),
-      };
-      const definition = {
-        ...current.definition,
-        buildings:
-          operation.kind === 'place'
-            ? [...current.definition.buildings, placementBuilding(operation.request)]
-            : current.definition.buildings.filter((i) => i.entityId !== operation.request.entityId),
       };
       const preparationStarted = performance.now();
       let preparedResult: PreparedLayout | undefined;
@@ -400,26 +412,43 @@ export class LiveStaticPlacement {
         preparationFinished = resolve;
       });
       try {
-        // This one-object probe loads no full city and is ready before the critical window.
-        const probePromise =
-          operation.kind === 'place'
-            ? createAuthoritativeWorld({
-                ...current.definition,
-                entities: [],
-                buildings: [placedStaticInstance(operation.request)],
-                initialItems: [],
-              }).then((value) => {
-                probe = value;
-              })
-            : Promise.resolve();
-        const [publicationResult, probeResult] = await Promise.allSettled([
-          this.preparation.prepare(snapshot, request.operationId, this.epoch),
-          probePromise,
-        ]);
-        if (publicationResult.status === 'fulfilled') preparedResult = publicationResult.value;
-        if (publicationResult.status === 'rejected') throw publicationResult.reason;
-        if (probeResult.status === 'rejected') throw probeResult.reason;
-        const publication = publicationResult.value;
+        const publication = await this.preparation.prepare(
+          snapshot,
+          request.operationId,
+          this.epoch,
+          {
+            beforeSnapshot: before,
+            beforeManifest: current.manifest,
+            owner,
+          },
+        );
+        preparedResult = publication;
+        if (!publication.geometryDelta) throw new Error('Missing prepared static geometry');
+        const definition = applyPreparedLayoutDelta(
+          this.publications.prepared.release,
+          snapshot,
+          current.definition,
+          publication.geometryDelta,
+        );
+        if (
+          !expectedStaticChange(
+            this.publications.prepared.release,
+            current,
+            { world: definition, publication: { manifest: publication.manifest } },
+            owner,
+          )
+        ) {
+          await rm(publication.stagingDirectory, { recursive: true, force: true });
+          return fail('COMMAND_DISABLED');
+        }
+        if (operation.kind === 'place') {
+          probe = await createAuthoritativeWorld({
+            ...definition,
+            entities: [],
+            buildings: publication.geometryDelta.buildings,
+            initialItems: [],
+          });
+        }
         if (this.closing || this.items.closing || this.publications.current !== current) {
           await rm(publication.stagingDirectory, { recursive: true, force: true });
           return fail('WORLD_NOT_READY');
@@ -473,6 +502,8 @@ export class LiveStaticPlacement {
           const auth = authorize();
           return auth ? fail(auth) : result;
         }
+        physicsChange?.dispose();
+        physicsChange = undefined;
         const error = prerequisites(true);
         if (error) {
           this.items.setLayoutPaused(false);
@@ -480,18 +511,62 @@ export class LiveStaticPlacement {
         }
         const validationStarted = performance.now();
         if (operation.kind === 'place') {
-          const instance = placedStaticInstance(operation.request);
-          const blocked = this.world.checkStaticPlacement(
-            instance,
-            current.definition.buildingAssets[instance.assetId],
+          const groundIds = new Set(
+            this.publications.prepared.release.terrain?.formatVersion === 2
+              ? (this.publications.prepared.release.terrain.placementGroundIds ?? [])
+              : [],
           );
+          const error = this.world.checkStaticPlacement(
+            acceptedInstance!,
+            current.definition.buildingAssets[acceptedInstance!.assetId],
+            groundIds,
+          );
+          if (error) {
+            this.items.setLayoutPaused(false);
+            return fail(error);
+          }
+          for (const derived of candidate!.definition.buildings) {
+            if (
+              !changedIds.has(derived.entityId) ||
+              derived.entityId === acceptedInstance!.entityId
+            )
+              continue;
+            const asset = candidate!.definition.buildingAssets[derived.assetId];
+            const { min, max } = asset.bounds;
+            const box: BuildingPhysicsAsset = {
+              ...asset,
+              colliders: [
+                {
+                  id: 'placement-bound',
+                  kind: 'box',
+                  position: {
+                    x: (min.x + max.x) / 2,
+                    y: (min.y + max.y) / 2,
+                    z: (min.z + max.z) / 2,
+                  },
+                  size: { x: max.x - min.x, y: max.y - min.y, z: max.z - min.z },
+                  rotation: { x: 0, y: 0, z: 0, w: 1 },
+                  friction: 0.6,
+                  restitution: 0,
+                },
+              ],
+            };
+            const blocked = this.world.checkStaticPlacement(derived, box, groundIds);
+            if (blocked) {
+              this.items.setLayoutPaused(false);
+              return fail(blocked);
+            }
+          }
+          const snapshot = this.world.getSnapshot();
           if (
-            blocked ||
-            current.definition.spawnPoints.some((p) => !probe!.findSpawn(undefined, [p])) ||
-            this.world.getSnapshot().items.some((i) => probe!.checkSavedItem(i))
+            current.definition.spawnPoints.some((p) =>
+              probe!.overlapsPlayer(this.world.getPlayerSpawnPosition(p)),
+            ) ||
+            snapshot.items.some((i) => probe!.checkSavedItem(i)) ||
+            snapshot.players.some((p) => probe!.overlapsPlayer(p.position))
           ) {
             this.items.setLayoutPaused(false);
-            return fail(blocked ?? 'BLOCKED');
+            return fail('BLOCKED');
           }
         }
         this.metrics!.validationMs = performance.now() - validationStarted;
@@ -503,6 +578,7 @@ export class LiveStaticPlacement {
           this.items.setLayoutPaused(false);
           return fail(writeAuth ?? 'WORLD_NOT_READY');
         }
+        physicsChange = this.world.prepareStaticReplacement(candidate!.definition, changedIds);
         const commitStarted = performance.now();
         const revision =
           operation.kind === 'place'
@@ -511,6 +587,7 @@ export class LiveStaticPlacement {
                 operation.request,
                 candidate!.layoutHash,
                 compatibilityHash,
+                acceptedInstance!,
               )
             : await this.layouts.removeGame(
                 accountId,
@@ -527,6 +604,7 @@ export class LiveStaticPlacement {
       });
     };
     const promise = run().finally(async () => {
+      physicsChange?.dispose();
       probe?.dispose();
       if (candidate && !committed && !this.fatal)
         await this.publications

@@ -4,13 +4,23 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { hudClick, setRenderQuality } from './helpers/hud.js';
+import { createSavedTerrainServer } from './helpers/saved-terrain-server.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('SU_TEST_DATABASE_URL is required.');
-const app = await createGameServer({
-  port: 0,
-  worldDirectory: process.env.SU_TEST_WORLD_DIRECTORY,
+const app = process.env.SU_TEST_WORLD_SNAPSHOT
+  ? await createSavedTerrainServer({
+      worldDirectory: process.env.SU_TEST_WORLD_DIRECTORY!,
+      snapshotFile: process.env.SU_TEST_WORLD_SNAPSHOT,
+      expectedMapVersion: process.env.SU_TEST_WORLD_MAP_VERSION!,
+    })
+  : await createGameServer({
+      port: 0,
+      worldDirectory: process.env.SU_TEST_WORLD_DIRECTORY,
+    });
+const browser = await launchTestBrowser({
+  channel: 'chromium',
+  renderer: process.env.SU_TEST_RENDERER === 'hardware' ? 'default' : 'software',
 });
-const browser = await launchTestBrowser({ channel: 'chromium' });
 const output = process.env.SU_FIRST_PERSON_OUTPUT ?? 'output/playwright/first-person';
 const errors: string[] = [];
 const checks: string[] = [];

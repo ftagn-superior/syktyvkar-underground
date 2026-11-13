@@ -1,0 +1,2795 @@
+{
+  "formatVersion": 1,
+  "status": "explicit-unapplied-placement-policies",
+  "notes": [
+    "Each model and recipe revision is explicitly listed. New or modified models require policy review.",
+    "Ground-anchor relief limits are candidate checks, not automatic permission to move an owner. Physical contact and full bounds remain planner responsibilities."
+  ],
+  "models": [
+    {
+      "assetId": "bench-0152a250d22ef0a9",
+      "recipeSha256": "0c7c940db34f1677dfccedb5ccce5741a603307bc2b4e18233237d58c99646b6",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Two separated feet need per-foot support or accepted embedding; a single sampled centre can leave a foot floating."
+      }
+    },
+    {
+      "assetId": "bollard-a5341277dcd4ed93",
+      "recipeSha256": "65d6b18d2534b0f22590568f7b2ba4aca6c7ba0f8c33ba8a42af2295a8607919",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.09899494936611666,
+        "maximumTerrainReliefMetres": 0.03,
+        "interpretation": "Reviewed single vertical post. Authored ground anchor is local Y=0; preserve XZ and yaw. Reject contact-area relief above 3 cm for a separate embedding/support decision."
+      }
+    },
+    {
+      "assetId": "bus-stop-32df9c483410f2a3",
+      "recipeSha256": "47e558a7b2054d629bb5570ba39682f929783338cf7a55a0741bebc1dd9b4964",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter."
+      }
+    },
+    {
+      "assetId": "bus-stop-3b2b648b8ebc6291",
+      "recipeSha256": "6843722c9639e34d8ac1b57cd8a30363f05cbd7ebb64682b435c68dae34ad86c",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 2.400213731828,
+          "y": 0,
+          "z": -0.00020381827
+        },
+        "vertical": true,
+        "contactRadius": 0.07071067811865475,
+        "maximumTerrainReliefMetres": 0.03,
+        "interpretation": "Reviewed single vertical post. Authored ground anchor is local Y=0; preserve XZ and yaw. Reject contact-area relief above 3 cm for a separate embedding/support decision."
+      }
+    },
+    {
+      "assetId": "bus-stop-3fcaa09cb4e354d9",
+      "recipeSha256": "323097168453ec7d4460b42c8b117861cc317b6ee04f4c5382514c216ea58037",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter."
+      }
+    },
+    {
+      "assetId": "bus-stop-49b992f34893bfa4",
+      "recipeSha256": "185e261718da13568bfc3f6c460dc5df0f0c238ee848e303c038751938922bf6",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter."
+      }
+    },
+    {
+      "assetId": "bus-stop-a7ca266ad2579543",
+      "recipeSha256": "224dbc6ebb569baa3b01cf93a28da65270b692d8a511ecf2997227bd19ded0e0",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 2.399405134609,
+          "y": 0,
+          "z": -3.735229e-06
+        },
+        "vertical": true,
+        "contactRadius": 0.07071067811865475,
+        "maximumTerrainReliefMetres": 0.03,
+        "interpretation": "Reviewed single vertical post. Authored ground anchor is local Y=0; preserve XZ and yaw. Reject contact-area relief above 3 cm for a separate embedding/support decision."
+      }
+    },
+    {
+      "assetId": "bus-stop-b1cdbe7df1c69e9e",
+      "recipeSha256": "5fa02db37860327e3aefe26979824a582767dd10b050cc00e992057c93e0cbfb",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter."
+      }
+    },
+    {
+      "assetId": "bus-stop-ec57d7e82d8c32f8",
+      "recipeSha256": "25a671ae1d6cb9b239f92b9c49ac100b3e3ff0af51ec2c87b518ad01a82e4041",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter."
+      }
+    },
+    {
+      "assetId": "bus-stop-f7605a5e04c65979",
+      "recipeSha256": "69e5c0c8ac18899d9f6fd6c7d92efba860674a087590ed2da7c3df20e40fca28",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter."
+      }
+    },
+    {
+      "assetId": "bush-large-high",
+      "recipeSha256": "4fd39bee055f451c7bf83bca44b357f4c9b0ac617d753dc70845f31d441d994a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 1.197412833,
+        "maximumTerrainReliefMetres": 0.3,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "bush-large-low",
+      "recipeSha256": "2290967f1f3a2d41c802069a7759c1923e1a2061e8cbcc8a731fbaf242e176e7",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 1.197412833,
+        "maximumTerrainReliefMetres": 0.3,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "bush-medium-high",
+      "recipeSha256": "d6d88b948d63b7467190e6ef66af34c2911a77eadc6bce1210b2af5a3ab2e5f6",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 1.019019136,
+        "maximumTerrainReliefMetres": 0.3,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "bush-medium-low",
+      "recipeSha256": "dfb04db8db9289fac287a7d16ba94e4a8e0cf40474add685fe31cdf1457671c3",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 1.019019136,
+        "maximumTerrainReliefMetres": 0.3,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "bush-small-high",
+      "recipeSha256": "9f2cdc076cdd9db1c18f66cbca0aed1f942b310829f37992f40131506f65f907",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.867202999,
+        "maximumTerrainReliefMetres": 0.3,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "bush-small-low",
+      "recipeSha256": "05ad4fffe4d1e20a320166cb753cc1edb240b88b14385ed74bd1ea7e06f86848",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.867202999,
+        "maximumTerrainReliefMetres": 0.3,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "fence-long",
+      "recipeSha256": "e355c6f65ff8f01a57ee793bd615aff2629355af224d18b0e0dcd9ae0f400fbe",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Three ground posts and connected rails: per-post support and neighbour continuity require review."
+      }
+    },
+    {
+      "assetId": "fence-short",
+      "recipeSha256": "f7593ba5a0e1b4ce437e8bd8c04234107624b3e272f98b599be7cfd2e7fb93e2",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Two ground posts and connected rails: per-post support and neighbour continuity require review."
+      }
+    },
+    {
+      "assetId": "kuratov-monument",
+      "recipeSha256": "890ee924f348c7e23458f5cd9800fd8e7a43bff53837a85c0320dfd26a06db04",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Large rigid platform requires explicit plaza/foundation/access treatment."
+      }
+    },
+    {
+      "assetId": "lamp-five-globe",
+      "recipeSha256": "ec2c2ea98c6bee3fc3d757e692c059cbb5be65d12a6487f00f300bdc0189981a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.1767766952966369,
+        "maximumTerrainReliefMetres": 0.03,
+        "interpretation": "Reviewed single vertical post. Authored ground anchor is local Y=0; preserve XZ and yaw. Reject contact-area relief above 3 cm for a separate embedding/support decision."
+      }
+    },
+    {
+      "assetId": "lamp-street",
+      "recipeSha256": "ba54da783c2aa7c796fa612755d8e21e55476637bc1b0a90969f6cdfd275e3d0",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.1131370849898476,
+        "maximumTerrainReliefMetres": 0.03,
+        "interpretation": "Reviewed single vertical post. Authored ground anchor is local Y=0; preserve XZ and yaw. Reject contact-area relief above 3 cm for a separate embedding/support decision."
+      }
+    },
+    {
+      "assetId": "osm-way-109234380",
+      "recipeSha256": "d7d573e4ae21e892afa75d9bc2daf36a1b3619ddf81930b634108e306bd32fbd",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234380",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-109234381",
+      "recipeSha256": "863ca73c996115c6eaa374da28dd0136e0f094d7d00de93211399fbc66656b16",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234381",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-109234382",
+      "recipeSha256": "a10b76b26b39553ef8629ef21927c9a2b3b2aac1152cf2dea66a00b21569a404",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234382",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-109234383",
+      "recipeSha256": "337a1f47eb8d54d98adde50c88f4590c1bd9ba38aa9039851a276eccc1157a4b",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234383",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-109234384",
+      "recipeSha256": "f3d2b91fd26bc11a2c63e5abaccef3488283938fdd8d183236ae0e96b1408abd",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234384",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-109234385",
+      "recipeSha256": "53eccf0a1784234e155087d31361e67df989b9124b8362e8d051f8e269118852",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234385",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-109234386",
+      "recipeSha256": "7c5d23eabb631bf6a66f0d143bc8903cf005c4d6527c127833986c7a66afa229",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-109234386",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110253707",
+      "recipeSha256": "d69a2e43925e185632b68480937918752dbee21fec54c9c6a8888ee80b26f501",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110253707",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110770955",
+      "recipeSha256": "84735833906451558e5e959e9b7946afcf74e6cb502956cb442c897e123246af",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110770955",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110770957",
+      "recipeSha256": "4f28d017aedf20636863f889720c2e718fd0bc89040352a5e704fe989234a19d",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110770957",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777684",
+      "recipeSha256": "db0c783c67e74f84c7954cd1120bedce9355458ff9a2146df2c324ce329249bc",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777684",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777686",
+      "recipeSha256": "52665c0087bf7b6e2359cf9ce0347a42789bbcb94de079ea6cb64b833a859731",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777686",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777687",
+      "recipeSha256": "bb4f74a161055ff3f4b4049ff5658968d0fcb6d9c01f6f0ce00b7b1e38d1ddea",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777687",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777688",
+      "recipeSha256": "d583147b345aadf0086d2d5abae3a3bbc1c2698febaae83e7ac66a0697363aef",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777688",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777689",
+      "recipeSha256": "f692a6fd80b295688d52ab2e0c012babfee9f8cd7cd0347f9cd8bbf5cdb111b9",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777689",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777690",
+      "recipeSha256": "5f308c17eaf5a325ad198cf0c0a228d6ab935fb5b9471c3d18755607489ed0b4",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777690",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777691",
+      "recipeSha256": "040fa227ed49ff8ea7315892b8a132d8e9e3faf0b687d34d32914b7c5a37a404",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777691",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777693",
+      "recipeSha256": "c9c0c28065e763932bac2d69903a1184d07e6009b411464e18530bebc7b6eadf",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777693",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777694",
+      "recipeSha256": "c1b7cd3f25bfe0a70169877567e9a147b2a38b3c1aa8c2acc4ce70918c4810a6",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777694",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110777695",
+      "recipeSha256": "fde0626cdeb6f163f25aac3fca93e2676c0847d7f81c749c9c31b81016f018f3",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110777695",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110778592",
+      "recipeSha256": "70bd9dfb4dabe3e4d61fb8c28fee4dc7e680b79e9ec2ad4648dccefd752588fa",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110778592",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110778594",
+      "recipeSha256": "dafaaf13ca857c7e5d3369d9611e13dc75926de1e293ba25d876f63e933de4f5",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110778594",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110778595",
+      "recipeSha256": "d225ed2bd81a1880d8fc9f4d375c5eec3527f3935b4f6ee7423057d04a115901",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110778595",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-110778598",
+      "recipeSha256": "d6b520d4f77b362b53f41adc9647bff93337d940578a74251ce777eb218bb181",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-110778598",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-111493596",
+      "recipeSha256": "05dd913b02defae8578018c10dc6bb5dcf787e79ace10e31b2f6b8d8770e5738",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-111493596",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-111536850",
+      "recipeSha256": "7f2119c28ce03e3e58bca037ac88f0940ff4af335dc6bd949ee91db37e8b5700",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-111536850",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-111538131",
+      "recipeSha256": "580c23231ec45be8c361e6fbdde9a9058af4167f0e952de89bca3f6e9381a36a",
+      "groundedSectionIds": [
+        "south",
+        "north",
+        "middle",
+        "west"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-111538131",
+        "entrances": "requires-review"
+      },
+      "sectioned": true
+    },
+    {
+      "assetId": "osm-way-111538132",
+      "recipeSha256": "4830dae72dfbdd56b2aef606f606a73024bd5382ca082b95f713b020bf5a0576",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-111538132",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-111538134",
+      "recipeSha256": "722fa109502859ff8390a215a4fdb164bd8e0e47f1d3d13907e971ce70342bf5",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-111538134",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-117389687",
+      "recipeSha256": "2a144038a12007c7f7952ca91e1a89ec034b2f666d8943c86b2c21d778c5dc37",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-117389687",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-117389693",
+      "recipeSha256": "7ce2e6937c7ae67660b1fb45203d6f7064837d599e80a7882f7ea27fcedd9366",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-117389693",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-117389703",
+      "recipeSha256": "46459c68ebf3c1af83bd0c7d9c1ddaa5a0ac182d1793a9554733d8fa5a4dda2f",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-117389703",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-117389706",
+      "recipeSha256": "8179d90e45261573744b7434fa6889f9b6ec051faaf7c6ef3567a591759c3c10",
+      "groundedSectionIds": [
+        "pier-north",
+        "pier-south"
+      ],
+      "excludedElevatedSectionIds": [
+        "upper"
+      ],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-117389706",
+        "entrances": "requires-review"
+      },
+      "sectioned": true
+    },
+    {
+      "assetId": "osm-way-118373015",
+      "recipeSha256": "700b8a00098e0dc4860cb8619469fb51a90960cd86de001e70c7f5b0bf3632af",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-118373015",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-118373017",
+      "recipeSha256": "10a19cf1bb4fdaf07f783b578a9facbf6d292ffe6785ea50661f92c117b05d8c",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-118373017",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1234256148",
+      "recipeSha256": "cc3fcb3faac211222b4ef729f1cbc36916207bd01e600a1cb3ad45351747aee2",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1234256148",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1234256201",
+      "recipeSha256": "4f236254a486fa2ed1e45f8420817b49420b70c8d3eab3f47750beda39a01066",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1234256201",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1234256334",
+      "recipeSha256": "8da59e24250f8d698fafc4024d8f68fb1075702e37f6316a7c8a7129e0208502",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1234256334",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1258973447",
+      "recipeSha256": "a150b4178482bc236c3c8649cff5e6308ff17823d4f8143ba4041cf0caca766e",
+      "groundedSectionIds": [
+        "admissions",
+        "spine-north",
+        "spine-recess",
+        "spine-middle",
+        "tower-north",
+        "entrance",
+        "tower-south",
+        "spine-south",
+        "wing-north",
+        "bump",
+        "wing-middle",
+        "wing-gym",
+        "wing-south",
+        "wing-south-end"
+      ],
+      "excludedElevatedSectionIds": [
+        "entrance-attic"
+      ],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1258973447",
+        "entrances": "pilot-approach"
+      },
+      "sectioned": true
+    },
+    {
+      "assetId": "osm-way-1277836302",
+      "recipeSha256": "27285f233192952692a61dc4d774aae58057f4ca32dad470e15d0adf72b46f4a",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1277836302",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1277840711",
+      "recipeSha256": "e37d26a892499a9450315950bbbc20e5016ac350ae59e3fdd8e1aca0cff98fcd",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1277840711",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1278422987",
+      "recipeSha256": "8bf066a1f2480df330596418699d375e928aabceeedca5ed45aa446f635cdb1e",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1278422987",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1278423824",
+      "recipeSha256": "8afaa544e65f3a2e05086da14e3329fce3403276a2118a7d10c481ec42230640",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1278423824",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1278428879",
+      "recipeSha256": "72633ed6d8027fb303fc31ecd76fef7c8ec49b70bb61fe8f7eeccf9e80e3dfba",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1278428879",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1280945083",
+      "recipeSha256": "a175c7a0105722fe10b66313638969771079a5bbe1248893785563f3f898b13d",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1280945083",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1281369739",
+      "recipeSha256": "7ab97378a9615cd8c59590d52acd806cda82a6f0c1fc077ae37585c4fd0bf6de",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1281369739",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1281375677",
+      "recipeSha256": "ee3c0020695f27fc09054b60bb756e04a295334b11600c0c9389d8dc082dd2dc",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1281375677",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1291799392",
+      "recipeSha256": "b33a23872cd9b8efd946b811ac394b290702d62c57574c9824f2da4b662a621e",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1291799392",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292020496",
+      "recipeSha256": "09e5033c19ce89a7ec940c7bf5967571cc079bf4fdab5f1a16f324f0d2ad3717",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292020496",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292020497",
+      "recipeSha256": "a9ed2cf3e7f01ecaf08938f55b4272ff4f1284db672b623b77d4e56d8980b598",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292020497",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292032997",
+      "recipeSha256": "b67d70833744c753ad9e12e151613a29278360eb95d42865e007a31aa0846e11",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292032997",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292032998",
+      "recipeSha256": "b3ebd67ea3d9dc1ae4fe709e4fc32e69be85ea07147604b3b1476c8ed4af5155",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292032998",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292032999",
+      "recipeSha256": "98833e287fc441173a51676eb419680dcd87c94e9e7c20bf8835aa8e85abdefc",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292032999",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292033000",
+      "recipeSha256": "65ec2b497e440e33754f01aae76bf3f41d39127bcfefffc1589d720c17a0c702",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292033000",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292842070",
+      "recipeSha256": "d0172122fa878873cbe8e9d6ce383c06bd4b42a139671490ea04484b0926709d",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292842070",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1292860413",
+      "recipeSha256": "e412019aabfe460f52871a7ad14233e448e532d1b8bb937096952c32c56fed3b",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1292860413",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1303691960",
+      "recipeSha256": "e3662b5486a0d26b4fa940921f9a3664b90ad58dcf0da0fe9a7f478cff8abef8",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1303691960",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1303693231",
+      "recipeSha256": "ddfe8a99b75ed7ce4921d158040e27ad17218dbba53ac39b4030f2bbebc75286",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1303693231",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1317421165",
+      "recipeSha256": "8bee02edfc41f746c7cc49f03d707ba07c471257a1f106c15ae4ce48f9752076",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1317421165",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1317422735",
+      "recipeSha256": "cb8e073bd0d5383d71b76873b782fb2f1aada3b42aa46b9774e0e47cd36fc627",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1317422735",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1317432069",
+      "recipeSha256": "fdca05630a34cdc9d4a70a687e4574de04bf4cc8a79db95a332db6e021e6ebd6",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1317432069",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1317554464",
+      "recipeSha256": "51d0a5630fc2fe5abfd4932dd18c812651552cc9b389b7271384ec4e0c230580",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1317554464",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1317556490",
+      "recipeSha256": "7b692d9a6cad85147d13774de0a3886c407185008f145d365362fef15b9197a5",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1317556490",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1349030676",
+      "recipeSha256": "f52593afead772d1d46d4fdfe54506c07de60c976a197347311dd3129380fa8c",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1349030676",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1349056254",
+      "recipeSha256": "b321389368e562c1e5bb15306d27e15871d03f0ab7c67dadb555103f82b84047",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1349056254",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-146724915",
+      "recipeSha256": "d8163671706fb6713cce503d4d250f24915867f237a251bd6f0fa50bf15d4802",
+      "groundedSectionIds": [
+        "lobby",
+        "body",
+        "stage"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-146724915",
+        "entrances": "requires-review"
+      },
+      "sectioned": true
+    },
+    {
+      "assetId": "osm-way-1532245447",
+      "recipeSha256": "6d40ece8ae96e8b62ea760ddbeb778972fc240ef85a4aaa0d92f939141d74731",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1532245447",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1532254465",
+      "recipeSha256": "8bb56f4c64524a4476658f0ded0641820e0adddb39e855332255715735b67603",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1532254465",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-1532257419",
+      "recipeSha256": "00997366e9fbb9a9202c9042ba8c954a1976d1a1032a0e3738c4f4ec139545d6",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-1532257419",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-413530668",
+      "recipeSha256": "c4f6d61c94c6a1d39398910a79734c37ec9ebae6cf688272c2018f53eb70146b",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-413530668",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-413530670",
+      "recipeSha256": "94b7ecd8c80b4c178f39117ed60d3e9c721cb3da182562f4bf0456575f095c59",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-413530670",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-55717715",
+      "recipeSha256": "87119a04174adc5d594f0b1cec36da574387da48964c813ff8b0c21f64bc71ac",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-55717715",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-55717726",
+      "recipeSha256": "1c048ad080b7c4ace5ab6548d1368175936a66a431b9625000e73cd0ce6e4896",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-55717726",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56433426",
+      "recipeSha256": "37dad79a069a96c2df086db1c5305f65e678c54c198412ace8741d6672e035b4",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56433426",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438149",
+      "recipeSha256": "2ddea8a06fa399f2ab587eb55a539bd944cca61ca0750136fd405421216d2796",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438149",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438150",
+      "recipeSha256": "bcd94f47bd6156258ca9b06291d93116bca5f4b006c864e3f7a4a7a1e27a9bdf",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438150",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438151",
+      "recipeSha256": "bf1e197b28cf6b092dcc2779a1a608d5ab5babf39acbc4e669893cd976ae5057",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438151",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438158",
+      "recipeSha256": "2488a218b6b2eafb78b0fc344837fd7cf1efcbcc5883638480c894c65cdaca72",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438158",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438161",
+      "recipeSha256": "8751b94646386a937b96e199c497b121bdd4b067938f379ce937598e77f24d8b",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438161",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438162",
+      "recipeSha256": "9e383478321bd63510b0252095023c1dae0ba3081af5df915cd3a498536826d3",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438162",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438169",
+      "recipeSha256": "b45335a798d3acb700aac640f6c55cd02f02e00b05a424a7b841cad12572729e",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438169",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56438179",
+      "recipeSha256": "5190daf5f91f7ea97295949e6337be4effb22fc4032c287caa4312a9aa37b2f2",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56438179",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-56724450",
+      "recipeSha256": "48bd1f3858ee2747eb1b0c5267a1b83ff9ffdc09d31a3a8d915c2e5b03e9c509",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-56724450",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-648612399",
+      "recipeSha256": "3a51237cb22b1d3b82d33b9d42a92cd994a5509830c9fefdb73da8896ab2c0fe",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-648612399",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-648842803",
+      "recipeSha256": "de37b076bf863527aeac29822e41d912e7a39f3bb1245ee360b4820ecec87018",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-648842803",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-649278785",
+      "recipeSha256": "90cc874b068fc0b9dafc6fa350957d782e10ecec3f321759714be74bc27648a2",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-649278785",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-649280473",
+      "recipeSha256": "f2f00fac87fc4989e844392cda6d5f0a7389f45389757294ae1f5139c88a28f0",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-649280473",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-651637284",
+      "recipeSha256": "3ac2c1ea099773dd14cd758c8f1982a003ceb5e4bcc6e0693dc869eb7c020dc3",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-651637284",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-662826329",
+      "recipeSha256": "6519f5e71c8e9e0a421d639220b4968ee532b753b0d60a2c2027d4feab935951",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-662826329",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-695880457",
+      "recipeSha256": "2e931c2162700320eecb94050d679c796d168dd9b95669827ed33c10d8a2bb96",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-695880457",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-696203946",
+      "recipeSha256": "7a3645a88cba944a268e42bc2f1136130b1bc324864b35f4c3f205a2594e9790",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-696203946",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-696916495",
+      "recipeSha256": "766466ec051af44593c0ea5241db5639966e70b95be2f4a45199e09f693d5130",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-696916495",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-696916923",
+      "recipeSha256": "afdc4a4256930ecb21f87af9b801db66bfdd90d5f905ddb1ae5dc12fc2d73917",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-696916923",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-696916924",
+      "recipeSha256": "bfc883833fd140f1afe1bb307f51c7c3ee0e164c70e5e92acf53d51bd6e482e1",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-696916924",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-696916926",
+      "recipeSha256": "2206dd4ae21aec647c5b79b734c736052b5120fb4f248b628d0cbcfc67670b33",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-696916926",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-696944805",
+      "recipeSha256": "b094aa7057981c6889ae20ee457b31ba76f3fe8e25ab6c4328bba6bb3325b333",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-696944805",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-708040941",
+      "recipeSha256": "a68f8e2af12ff94ef33f6cd34c1e100cd708876364f06924726356f8e8dcaa91",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-708040941",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-708040943",
+      "recipeSha256": "cc5d55f6528852df158f7376d4462e226ea6cb79ab85472893435aba6f7781de",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-708040943",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735797",
+      "recipeSha256": "90d2c3bdb9d2094697751d1f0248e21a018942e2c5e46af2f4c8944322073c00",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735797",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735798",
+      "recipeSha256": "a1cabc78c2b703c69fe8ada66e0c299103daca7cf16fa3d314dfb1d5bd718ae3",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735798",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735799",
+      "recipeSha256": "4964a919d4596ba59504493597bd608bfb602ca41deca810ccf512ae16ba14b7",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735799",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735800",
+      "recipeSha256": "abc839a07ced423f933891324f9546abdc1bcb87ee4462ba3ed378dc403e98e4",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735800",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735801",
+      "recipeSha256": "21e94152f4f48eacb4f38e9f639f7b49ff0bb22f4d8579d5978381c36a0ddf11",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735801",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735802",
+      "recipeSha256": "4887e51b81e075c0f30e76fd1103f897442b6483b6a3dc1757e816686738e2d0",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735802",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735803",
+      "recipeSha256": "eac4868126750c238b67029aa9d2cc42868951318073d94144b123c21d932e24",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735803",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-713735804",
+      "recipeSha256": "e1d6528a627cc2fc98a8a51ac40e6b7dfd12757a220753c6be6598fd23209ab1",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-713735804",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-770338789",
+      "recipeSha256": "504196e7f3fa3c428976a107fb7228c0bd8b13d012bffe251ca7b9769b2e8c46",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-770338789",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-771631571",
+      "recipeSha256": "8fd852cd7b8c652545056619cf204b743a298cbe1c4ede6e5bc48ffadef2efb5",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-771631571",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-771631572",
+      "recipeSha256": "0df3e53640f342f6c6c14826f6c2bd9b0ee0a2a856927eec123cbaa2225e6f8f",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-771631572",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-771631573",
+      "recipeSha256": "9534a2282f836769c3787f77718c5ce44fb0083d6897d74030e46cfbf4c9ccbf",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-771631573",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-771631574",
+      "recipeSha256": "364828496da828e2ded02b904c0bb103869ceb09da55f481115d4e60a2572895",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-771631574",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-773109147",
+      "recipeSha256": "e6d6d85377361e9461e66d05bc92707b2ffa9b64d441a50553a3319f03ce18b9",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-773109147",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-773109149",
+      "recipeSha256": "21149c3d67e99914bfd3bf043156a445ed18a39513a47bf01cfd8084fa5260a2",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-773109149",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585732",
+      "recipeSha256": "305304ab4d9730c4e9344dd116dbb2738b980bc3a41cac1c5a7fd10412dd59fa",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585732",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585733",
+      "recipeSha256": "c08e481782e1f28c70bfd3c4b26cdfd7408c9dcc55addb89e865f46eddb49363",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585733",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585744",
+      "recipeSha256": "c51f9013c06b4d4d7a33738097a6331923bac620f176098544a682972cfdcc0b",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585744",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585749",
+      "recipeSha256": "0080229e6313167a00b318669cf6cc80a0be1f0abbb3ebbc7745f405beed45e1",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585749",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585762",
+      "recipeSha256": "e9de0f628d0f3491c064d52421bd108c9afa1c6314fd22ae082d6e56dfc38b82",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585762",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585763",
+      "recipeSha256": "5b7ece4a896b4505fdf3f77ea96c080798a36ae3a23478477c13f143eaeb5b4c",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585763",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585785",
+      "recipeSha256": "0510d58325e2d5e8f1b8c9a0813cb6e1eed95ce1d4e1d950413bcdee5b118d6e",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585785",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585795",
+      "recipeSha256": "d15f010b4e453b43c4baa598787df2fe9d4d4a61d78b4196b3069ea92995cbf7",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585795",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585809",
+      "recipeSha256": "4b858a1467bfcac2f9cb9284a221817cad65bfc25d385d1fdc8028fd429c2ff2",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585809",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585813",
+      "recipeSha256": "0fb9da357a4cddc12ea53599ee1642453ea429adb5a45d252dc7dd4394089b9c",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585813",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585815",
+      "recipeSha256": "18168c0c14e0c61221a3a065075f64d255310b6fcfc531c06bd2884f64233529",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585815",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585817",
+      "recipeSha256": "62711d1381008a17a4935403d7ee4667e297c7ffd8de692eb12f2e6cf2443f59",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585817",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-85585819",
+      "recipeSha256": "f8ff89ac27315f4f374c8769e15cbc77e092d3fc7165faea46cd5b9b1f8fea01",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-85585819",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-89626599",
+      "recipeSha256": "39c2b33b38f818a227e37c44ad9d84d8dd382ef048c976acb00ac2288afcb7f7",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-89626599",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104475",
+      "recipeSha256": "a8f7157c32db3e0b4f69c010c336bff000587029485e23bb641a720a2c026c66",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104475",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104556",
+      "recipeSha256": "d3183c5a48bcece1d8a24218d8de864945218f68076b9e670175b837c1de00d7",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104556",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104623",
+      "recipeSha256": "f8a7c7e89dadb68231dc94243173d0e4def8ef540fbd59835e1033fc78569a2f",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104623",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104637",
+      "recipeSha256": "82ab1a20e36e23eb29e35c8e0a1e7c1785cefa3ecab7a0f6a712c6f3bf277828",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104637",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104657",
+      "recipeSha256": "1c95c4f9e99ebc8aa538707f5cd24bdae856fc8fedf52c3d7359a150b97125ed",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104657",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104661",
+      "recipeSha256": "f16d6b8febe51678c1e12247bdbd5baf6a35d0c8a57329dac3545c48a7b63c62",
+      "groundedSectionIds": [
+        "main"
+      ],
+      "excludedElevatedSectionIds": [
+        "machine-room"
+      ],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104661",
+        "entrances": "requires-review"
+      },
+      "sectioned": true
+    },
+    {
+      "assetId": "osm-way-92104707",
+      "recipeSha256": "ccda2007ac0fad89174157a975f15d974e480afa1ecf1b79a4b47540b58aec42",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104707",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-92104742",
+      "recipeSha256": "1ba66b10d7840e149b98c491aa0656f081235e299e5b8b0ec6a587fcc4f7b011",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-92104742",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "osm-way-988180511",
+      "recipeSha256": "c1e49588ccadfb1f145087b8c6e4bc36adec85484ea63a53d7302407bdfa2899",
+      "groundedSectionIds": [
+        "body"
+      ],
+      "excludedElevatedSectionIds": [],
+      "policy": {
+        "kind": "foundation",
+        "ruleAssetId": "osm-way-988180511",
+        "entrances": "requires-review"
+      },
+      "sectioned": false
+    },
+    {
+      "assetId": "playground-02bee7627a8c13ad",
+      "recipeSha256": "8932b1e62d49cf5f813171a9c6961438b3cfb6ce1511d6ed4f6f3b81496ab381",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Separated legs and slide: per-foot support and slide-end connection need individual review."
+      }
+    },
+    {
+      "assetId": "playground-38f532717d60e44d",
+      "recipeSha256": "c32b2b9ba56cf60f1f0fa00fb2909e0edd3a21c3c2376a349b413b5b94eb6611",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Separated legs and slide: per-foot support and slide-end connection need individual review."
+      }
+    },
+    {
+      "assetId": "playground-4314b6d046eef599",
+      "recipeSha256": "6a6229b000f4daf2ee3af01ea302f46f75bc85b1683fc95a8dfe8319aa2cabde",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Separated legs and slide: per-foot support and slide-end connection need individual review."
+      }
+    },
+    {
+      "assetId": "playground-449f220673cf2d98",
+      "recipeSha256": "2a1c5d61fb964592ee365126665d234d24375585ff07d48685bd0cef639c9e03",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Separated legs and slide: per-foot support and slide-end connection need individual review."
+      }
+    },
+    {
+      "assetId": "playground-50e53e5c702173af",
+      "recipeSha256": "4abccd8de6eed3e63fd9dee54658f044dd9fb9aa0e57c8d6d5ac22b8dc905e7f",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Separated legs and slide: per-foot support and slide-end connection need individual review."
+      }
+    },
+    {
+      "assetId": "playground-72396bbdda254bd7",
+      "recipeSha256": "5344508e9569f6c63f915eefea832d8ae392b88eb5e9e311dd744cddee678bd7",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Separated legs and slide: per-foot support and slide-end connection need individual review."
+      }
+    },
+    {
+      "assetId": "ring-block-ground",
+      "recipeSha256": "a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6",
+      "policy": {
+        "kind": "terrain-replacement",
+        "reason": "Fixed flat ground is replaced by the complete terrain grid and original covering contours, not migrated as an editable owner."
+      }
+    },
+    {
+      "assetId": "sorokin-monument",
+      "recipeSha256": "55c4fac5fb4fffeffc76fa573553b91f9f1b5663ce18ecf86bd3f019700a1dac",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid plinth requires explicit foundation height and pedestrian access review."
+      }
+    },
+    {
+      "assetId": "theatre-fountain",
+      "recipeSha256": "48d07c77f02d6af50767f184cb28d04263bcb53a1f315767cc1cb82e6c3a02bf",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Circular basin requires explicit foundation height and surrounding access review."
+      }
+    },
+    {
+      "assetId": "traffic-light-standard",
+      "recipeSha256": "6b5244cf1df0cb1be70e4b495ce99534391f13a260c6734e3374810fa6aa1d75",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.09899494936611666,
+        "maximumTerrainReliefMetres": 0.03,
+        "interpretation": "Reviewed single vertical post. Authored ground anchor is local Y=0; preserve XZ and yaw. Reject contact-area relief above 3 cm for a separate embedding/support decision."
+      }
+    },
+    {
+      "assetId": "tree-birch-large",
+      "recipeSha256": "f696b1f6229ab7d273c2d5b884e5aa3d4745a7dcdfa6e3cd12e5571a7de6e803",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-birch-medium",
+      "recipeSha256": "75eb07ca86ce50ead429dfa1f018688d097a7eb17f0febdfcc794c7a6d9e27c1",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-birch-small",
+      "recipeSha256": "81fabe46a134749d87dd00ffae79ae7f21f770f0ac703208ccbb6afbe9e9c61f",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-leaf-large",
+      "recipeSha256": "017478c6766fca19288f9b4bc3b37168a7a8d931e348de26b2333a07c4960e88",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-leaf-medium",
+      "recipeSha256": "5d701e2712256bb6fd137887a9bf6b8ada6f127eba0bc3d6e7c7bede9c83a61a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-leaf-small",
+      "recipeSha256": "a0b0d2da4b52e73663dd9bf428ee9a23cefd3de62f7eb3ea56b418bc62805cc7",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-spruce-large",
+      "recipeSha256": "9d90d6c9155eace40e93a22ff92b45b9595637f7ddf2d42c8f6ef0291f8320bc",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-spruce-medium",
+      "recipeSha256": "6e28e9ad39c4777e32bdc8cfef59526bd553c52d33d16bfe9e1feb40f70b15c2",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "tree-spruce-small",
+      "recipeSha256": "1a9480a679729184671c359a6372b20a4d451514fe88ee2282c354fd5522a81a",
+      "policy": {
+        "kind": "ground-anchor",
+        "anchor": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "vertical": true,
+        "contactRadius": 0.282842712474619,
+        "maximumTerrainReliefMetres": 0.05,
+        "interpretation": "Reviewed planting root at authored local Y=0, not the minimum of rendered geometry. Existing sub-ground trunk/foliage remains below this anchor. Check contact-area relief before accepting placement."
+      }
+    },
+    {
+      "assetId": "trudovaya-slava",
+      "recipeSha256": "91e72be5a5094c4207d8a1273d5bc0124bef544e076694de1740af1122b1dc37",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Mound, ramps and planting form one rigid object; ramp-to-ground connections need individual treatment."
+      }
+    },
+    {
+      "assetId": "wall-099af16b64bb72e2",
+      "recipeSha256": "3fc337efeefbcd726b6724bd1da8c50f65457fbe17d5b37510eaf769edf1aff5",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-131c74cb0805583c",
+      "recipeSha256": "3273bf4849454393671600b77c468f519da2fa85074ebfda5b9bcf1d4a664235",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-2217ff2b34fb28cd",
+      "recipeSha256": "b68fd98893393a4ff597acfa31b74656436ab85b27bda0d5fc0ab99dcda03ff4",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-2617e974dbc3454a",
+      "recipeSha256": "3fe6344fe14dff63e39bcf2464a4ae71c90f44b35358864989fb91cce4bd29e5",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-2984babf7df38428",
+      "recipeSha256": "8f29f1e2c1a3644697aadc7d26e01bb46eead8508d6153e01b29641845ba1cd2",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-335e3c20fced95c6",
+      "recipeSha256": "a91deb443d8425d167ad1f5b2fe08f18901879de48a9b4f90206df9db2a8e1cf",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-3b3f548354cc44a5",
+      "recipeSha256": "941b1c5e1ff4df98100083162065362fe72db80e0e77f66938426e0022507470",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-3d5e0d17a09f6ae8",
+      "recipeSha256": "5aa6eff6dae022b9e0fcf4d60330e0958dc4839e136c10ca58fb9d2a6c93654d",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-3e76aad470cd519f",
+      "recipeSha256": "072b1bcc88f8435981bbf3e4852a26d7e43569bec4a502c58d14813caa4b5c79",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-4b2ac31288681f3c",
+      "recipeSha256": "a06d39853f1d45f35db687a3e402397821acd1503a86491830e78ac0463a9bb9",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-5173f7fffa3553ab",
+      "recipeSha256": "1b2a039c2e8d452814183ed632b4bd736638863dd44da73eeeac4174a94d4490",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-5694d737ade0d318",
+      "recipeSha256": "61a2349d7d467494ee8e83f747e92148c8a60ddf9060e4f0484f0119c17f5c78",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-56e797f9f0f58b86",
+      "recipeSha256": "a7a3ba6ec5cd337b78206f4a47d67160a802872d9b7d25d252af3030d3bb763f",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-5adb725bc7bda324",
+      "recipeSha256": "d0fd0cabffbc05073f68d28d082bbc1a3eb984c1239916dad568df4ce9edc272",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-5d7e0ba5aeab76f8",
+      "recipeSha256": "efcc14862912bf98e73b33b3cbbb3d117c7d156a48b5112a5902a8aaeed6a408",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-5f99452b08fd3816",
+      "recipeSha256": "85c497b7ae40cb85c228737278012d46842b748c3a90c44525acbac8934b3f07",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-637d0f64ba883ad8",
+      "recipeSha256": "8ae25e1ca3e688bf95fad299d1d1eead9ceb4481e5aa9fd39aaf63bd6fc229db",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-6554fcd6f5196079",
+      "recipeSha256": "754547e35c679530806ed6439b36be4c8688c6f4ea0a5e543604ca6381d30018",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-6d5da86ac031db6d",
+      "recipeSha256": "8490e7b890efcd8190f9231405607e7ec1316f7ecf466d7f830f596b267c09ff",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-75773768f1d82877",
+      "recipeSha256": "f28f919bb41585934de1c36f050fc9a2bfedab8845d8d2ee1a36b734a7cb1182",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-784f8223d30cd1b4",
+      "recipeSha256": "7d52bf9d78601633876546138735f5f1ac4eabcf875d971362e3226bb57ebcf5",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-81be1cbdae1a70f1",
+      "recipeSha256": "95b3e3a177c45a982d67fac2bf63d3933f5a6bb64d028df8715aa2ccee4ea288",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-890194516c7097a0",
+      "recipeSha256": "0333b0e0f2aea1b0547fea35883ec812940117e59d48a140df63dc2b0f1bc191",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-8e66fe4a88a61908",
+      "recipeSha256": "07c5a9cd99ffbd305e34302f4df879ecf1d9679f3259e3bc47dbc79e81f7c1de",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-8ea14f520ae5cbcd",
+      "recipeSha256": "9228885bfbfab6f2c031c0bf98597d5a0e8743b8064720b1748b356026d1571c",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-9368b355a5ffcf13",
+      "recipeSha256": "fc2bdbe7e634cf32b28bdffc6c8106adda07630003e9ee72f5d324497e13a79a",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-93ca921064bed340",
+      "recipeSha256": "5e38319983dd619c378ef6c24da37a255ca6cf70eb188a54cb033b77a174b661",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-9c6bc239175a762b",
+      "recipeSha256": "d285a9302f8e7a03d1d250a2971489a02ff79baf456e6b7dfa6efaf15c998c42",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-9d662a3014714796",
+      "recipeSha256": "4abba001cc784310456aaeefaffb397274865ecba5fa8acf69425bd3efe77cb2",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-9f1c9f7808e1b305",
+      "recipeSha256": "0eaea8aab15021ae29a7b8b2596dbfcd1d1b5123bc5343e9f6584b3fc487c1a2",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-a1aef454a3398465",
+      "recipeSha256": "0e3ff86750c3a338815f0e7b2a6ae5318fd76a18cbb8e9dd4e165bebdbefd0ea",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-a6ee3c6e69418bd6",
+      "recipeSha256": "c49c68ed4832540d059ad2ca845fecfb415385c0274a135f1ac3947c689a76b3",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-aa0bead65714868e",
+      "recipeSha256": "41521f99c4865a9e29e8da6cab2eec49264442b92aef385bcdb5101282688eea",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-ba3ba75528e1ed69",
+      "recipeSha256": "074ab82736dbeea7cf78c5f0b37815da60035ed4a7adf69a9a9876156249d280",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-c05e0a7c2bfc1190",
+      "recipeSha256": "9c313daeee3c9a743ed0e8045d83798d374299653663b2d874ddf0fb8401b5ac",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-c1eae6ce2c50ab27",
+      "recipeSha256": "97bb4c096262e7fea9bd7a89409155b2c059202fa70c775a290ff9e55a06a839",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-c3fe7a1c5bc6a7bc",
+      "recipeSha256": "675fb7c7f7f51df78206424b99eb12b87412f43df98333e1ae793cf6d3299b35",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-c950b3ccb2cef770",
+      "recipeSha256": "53fed892c9dd6036d0601f9ab85ed28607f22b50590a7ba82677a12efca7db68",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-cdd89c4fe9cf2077",
+      "recipeSha256": "a030e0e44e94b3634f03c18cb7132239d12951d455ac46082cfda2e288a38c12",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-ce7ab008ea008e4f",
+      "recipeSha256": "5f48945e4351b36a5f02c5f6c6202519a826deebd814ee66a49dc8150de12bc1",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-d0905ee9df8e3aa5",
+      "recipeSha256": "f26764e066ab75e2c88eb09cc1b975e6db11ed98f15f6129389f88e4494187ac",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-d0bcb88663242e34",
+      "recipeSha256": "289f76aade71445d6d1c61348f083f3e085a200b11aa1e7a049d0b47a40a4867",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-d38ea743fe61ec46",
+      "recipeSha256": "f9cf94eaa61254ba0b166df3ddf960111e2c7cbce05ec2cf2bd37c725e3ac093",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "wall-f3b140cb8595e57a",
+      "recipeSha256": "1b1489d0806d7e2042c8a12f83c292d0988e4a8fbe4a38efddc2c9adfb93aea6",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments."
+      }
+    },
+    {
+      "assetId": "water-kiosk",
+      "recipeSha256": "296c77dd8f89f7e37514bbc608962dcbcc4e61b56226a564ed4511ac2236095e",
+      "policy": {
+        "kind": "unsupported",
+        "reason": "Rigid booth requires a base and explicitly reviewed tap-side approach."
+      }
+    }
+  ]
+}

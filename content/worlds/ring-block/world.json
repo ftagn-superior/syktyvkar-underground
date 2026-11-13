@@ -205,6 +205,7 @@
   ],
   "assetCatalog": "../../buildings/ring-block/catalog.json",
   "placementPolicy": "placement.json",
+  "terrainRelease": "terrain-release.json",
   "itemCatalog": "../../items/catalog.json",
   "initialItems": [
     {

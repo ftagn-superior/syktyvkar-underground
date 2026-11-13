@@ -17,6 +17,8 @@ type Job = {
 export class VerifiedByteCache {
   private readonly entries = new Map<string, Uint8Array>();
   private bytes = 0;
+  private readonly packs = new Map<string, readonly (readonly [string, string])[]>();
+  private witnessedFiles = 0;
   private disposed = false;
   constructor(readonly limit = 64 * 1024 * 1024) {
     if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Invalid byte cache budget');
@@ -44,8 +46,42 @@ export class VerifiedByteCache {
     if (value) this.bytes -= value.byteLength;
     this.entries.delete(hash);
   }
+  hasVerifiedPack(hash: string, manifest: WorldManifest, allowed: ReadonlySet<string>): boolean {
+    const entries = this.packs.get(hash);
+    if (
+      !entries ||
+      !entries.every(
+        ([path, expected]) =>
+          allowed.has(path) &&
+          Object.hasOwn(manifest.files, path) &&
+          manifest.files[path] === expected &&
+          this.has(expected),
+      )
+    )
+      return false;
+    this.packs.delete(hash);
+    this.packs.set(hash, entries);
+    return true;
+  }
+  rememberVerifiedPack(hash: string, paths: Iterable<string>, manifest: WorldManifest): void {
+    const entries = [...paths].map((path) => [path, manifest.files[path]] as const);
+    if (this.disposed || entries.length > 4096) return;
+    this.witnessedFiles -= this.packs.get(hash)?.length ?? 0;
+    this.packs.delete(hash);
+    this.packs.set(hash, entries);
+    this.witnessedFiles += entries.length;
+    // Metadata is bounded independently, and a witness hits only while all bytes
+    // still exist in the same session LRU. Never retain old URL generations.
+    while (this.packs.size > 128 || this.witnessedFiles > 4096) {
+      const oldest = this.packs.keys().next().value!;
+      this.witnessedFiles -= this.packs.get(oldest)!.length;
+      this.packs.delete(oldest);
+    }
+  }
   clear(): void {
     this.entries.clear();
+    this.packs.clear();
+    this.witnessedFiles = 0;
     this.bytes = 0;
   }
   diagnostics() {
@@ -69,7 +105,6 @@ export class VerifiedResources {
   private readonly jobs = new Map<string, Job>();
   private readonly fetcher: typeof fetch;
   private readonly packPaths: Set<string>;
-  private readonly packEntries = new Map<string, string[]>();
   private running = 0;
   private peakRunning = 0;
   private disposed = false;
@@ -94,7 +129,12 @@ export class VerifiedResources {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.ownsCache = !options.cache;
     this.cache = options.cache ?? new VerifiedByteCache(options.cacheBytes);
-    this.packPaths = new Set((manifest.cells ?? []).flatMap((cell) => cell.graphicsPacks ?? []));
+    this.packPaths = new Set(
+      (manifest.cells ?? []).flatMap((cell) => [
+        ...(cell.graphicsPacks ?? []),
+        ...(cell.physicsPacks ?? []),
+      ]),
+    );
   }
   read(path: string, signal?: AbortSignal, priority = 0): Promise<Uint8Array> {
     if (this.disposed || signal?.aborted) return Promise.reject(aborted());
@@ -142,30 +182,46 @@ export class VerifiedResources {
   }
   /** Packs change transport only: callers can still read every original file after LRU eviction. */
   async prefetchGraphics(cellId: string, signal?: AbortSignal, priority = 0): Promise<void> {
+    return this.prefetchPack(cellId, 'graphics', signal, priority);
+  }
+  /** Original collision files remain the fallback for older manifests and LRU eviction. */
+  async prefetchPhysics(cellId: string, signal?: AbortSignal, priority = 0): Promise<void> {
+    return this.prefetchPack(cellId, 'physics', signal, priority);
+  }
+  private async prefetchPack(
+    cellId: string,
+    kind: 'graphics' | 'physics',
+    signal?: AbortSignal,
+    priority = 0,
+  ): Promise<void> {
     if (this.disposed || signal?.aborted) throw aborted();
     const cell = this.manifest.cells.find((entry) => entry.cellId === cellId);
-    if (!cell) throw new Error(`Unknown graphics cell: ${cellId}`);
-    if (!cell.graphicsPacks?.length) return;
+    if (!cell) throw new Error(`Unknown ${kind} cell: ${cellId}`);
+    const packs = kind === 'graphics' ? cell.graphicsPacks : cell.physicsPacks;
+    if (!packs?.length) return;
     const allowed = new Set(
       cell.assetIds.flatMap((id) => {
         const asset = this.manifest.assets[id];
-        return asset.modelFile ? [asset.modelFile, asset.partsFile] : [asset.partsFile];
+        return kind === 'physics'
+          ? [asset.collisionFile]
+          : asset.modelFile
+            ? [asset.modelFile, asset.partsFile]
+            : [asset.partsFile];
       }),
     );
-    for (const pack of cell.graphicsPacks) {
+    for (const pack of packs) {
       if ([...allowed].every((path) => this.cache.has(this.manifest.files[path]))) break;
-      if (this.packEntries.get(pack)?.every((path) => this.cache.has(this.manifest.files[path])))
-        continue;
+      if (this.cache.hasVerifiedPack(this.manifest.files[pack], this.manifest, allowed)) continue;
       const entries = decodeGraphicsPack(await this.read(pack, signal, priority));
       // Validate the entire envelope before adding anything to the asset cache.
       for (const [path, bytes] of entries) {
         if (this.disposed || signal?.aborted) throw aborted();
-        if (!allowed.has(path)) throw new Error(`Unexpected graphics pack entry: ${path}`);
+        if (!allowed.has(path)) throw new Error(`Unexpected ${kind} pack entry: ${path}`);
         if ((await this.digest(bytes)) !== this.manifest.files[path])
-          throw new Error(`Graphics pack entry SHA-256 mismatch: ${path}`);
+          throw new Error(`${kind} pack entry SHA-256 mismatch: ${path}`);
       }
       if (this.disposed || signal?.aborted) throw aborted();
-      this.packEntries.set(pack, [...entries.keys()]);
+      this.cache.rememberVerifiedPack(this.manifest.files[pack], entries.keys(), this.manifest);
       for (const [path, bytes] of entries) {
         this.cacheVerified(path, bytes.slice());
         // A neighboring cell may already be waiting for this same individual file.
@@ -296,6 +352,5 @@ export class VerifiedResources {
     }
     this.jobs.clear();
     if (this.ownsCache) this.cache.clear();
-    this.packEntries.clear();
   }
 }

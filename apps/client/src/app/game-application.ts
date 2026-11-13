@@ -1189,6 +1189,8 @@ export function startGame(): void {
     Object.defineProperty(window, '__SU_DEBUG__', {
       value: Object.freeze({
         snapshot: () => structuredClone(session.diagnostics()),
+        motion: () => session.motionSnapshot(),
+        frames: () => session.frameHistory(),
         placement: () => staticPlacement?.diagnostics(),
         removal: () => staticRemoval?.diagnostics(),
         project: (position: { x: number; y: number; z: number }) => {

@@ -48,6 +48,7 @@ for (const worldId of WORLDS) {
       Object.fromEntries(
         Object.entries(catalog.models).map(([id, model]) => [id, model.runtimeAssetIds]),
       ),
+      catalog.generatedAssetIds,
     );
     const policy = await readWorldPlacementPolicy(
       `dist/model-catalogs/${worldId}`,

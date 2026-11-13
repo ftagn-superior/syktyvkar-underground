@@ -1,5 +1,11 @@
-import type { WorldLayoutSnapshot, WorldManifest } from '@su/contracts';
+import type { StaticObjectInstance, WorldLayoutSnapshot, WorldManifest } from '@su/contracts';
 
+import type { StaticLayoutGeometryDelta } from './release.js';
+export interface StaticPreparationContext {
+  beforeSnapshot: WorldLayoutSnapshot;
+  beforeManifest: WorldManifest;
+  owner: StaticObjectInstance;
+}
 export interface PreparationJob {
   id: string;
   operationId: string;
@@ -8,6 +14,7 @@ export interface PreparationJob {
   assetReleaseVersion: string;
   snapshot: WorldLayoutSnapshot;
   stagingDirectory: string;
+  change?: StaticPreparationContext;
 }
 export interface WorkerPreparedLayout {
   id: string;
@@ -17,6 +24,7 @@ export interface WorkerPreparedLayout {
   manifest: WorldManifest;
   layoutHash: string;
   compatibilityHash: string;
+  geometryDelta?: StaticLayoutGeometryDelta;
   stagingDirectory: string;
   buildMs: number;
   writeMs: number;
@@ -30,4 +38,9 @@ export interface PreparedLayout extends WorkerPreparedLayout {
 }
 export type PreparationReply =
   | { ok: true; value: WorkerPreparedLayout }
-  | { ok: false; id: string; code: 'CONTENT_LIMIT' | 'STORAGE_UNAVAILABLE'; message: string };
+  | {
+      ok: false;
+      id: string;
+      code: 'CONTENT_LIMIT' | 'STORAGE_UNAVAILABLE' | 'COMMAND_DISABLED';
+      message: string;
+    };

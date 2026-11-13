@@ -5,6 +5,9 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   cellsIntersectingBounds,
+  canonicalJson,
+  changedWorldPublicationCells,
+  worldManifestIdentity,
   type WorldCell,
   type WorldManifest,
   type BuildingInstance,
@@ -15,9 +18,15 @@ import { CellStreamer, cellNeighborhood, circularCells, type CellGraphics } from
 import { VerifiedByteCache, VerifiedResources } from './resources';
 let directory: string;
 let manifest: WorldManifest;
+let packedManifest: WorldManifest;
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'su-dm-cells-'));
   manifest = await buildWorld(resolve('content/worlds/streaming-lab/world.json'), directory);
+  packedManifest = await buildWorld(
+    resolve('content/worlds/streaming-lab/world.json'),
+    join(directory, 'packed'),
+    { physicsPacks: true },
+  );
 });
 afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
@@ -32,16 +41,18 @@ async function until(stream: CellStreamer, predicate = () => stream.criticalRead
   }
   throw new Error(JSON.stringify(stream.diagnostics()));
 }
-function fixture(clockStep = 0) {
+function fixture(clockStep = 0, packed = false) {
+  const selectedManifest = packed ? packedManifest : manifest;
+  const selectedDirectory = packed ? join(directory, 'packed') : directory;
   let now = 0;
   const reads: string[] = [];
   const cache = new VerifiedByteCache();
-  const resources = new VerifiedResources(manifest, '/', {
+  const resources = new VerifiedResources(selectedManifest, '/', {
     cache,
     fetch: async (url) => {
       const path = String(url).slice(1);
       reads.push(path);
-      return new Response(await readFile(join(directory, path)));
+      return new Response(await readFile(join(selectedDirectory, path)));
     },
   });
   const physicsEvents: string[] = [],
@@ -74,7 +85,7 @@ function fixture(clockStep = 0) {
     },
   };
   const stream = new CellStreamer(
-    manifest,
+    selectedManifest,
     resources,
     {
       retainStatic: (item) => {
@@ -148,6 +159,73 @@ function liveResources(
       );
     },
   });
+}
+
+async function generatedSupportPublication(
+  base: WorldManifest,
+  previous: Map<string, Uint8Array>,
+  phase: 0 | 1 | 2,
+) {
+  const ownerId = 'live-support-owner',
+    role = 'foundation';
+  const assetId = `support-${contentHash(canonicalJson({ worldId: manifest.worldId, ownerId, role }))}`;
+  const source = Object.values(manifest.assets).find((asset) => asset.modelFile)!;
+  const affected = new Set(cellsIntersectingBounds(manifest.bounds, manifest.grid, source.bounds));
+  const instance: BuildingInstance = {
+    entityId: assetId,
+    assetId,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+  };
+  const publication = await livePublication(base, previous, (cell) => {
+    if (!affected.has(cell.cellId)) return;
+    if (!phase) cell.buildings = cell.buildings.filter((item) => item.entityId !== assetId);
+    else if (!cell.buildings.some((item) => item.entityId === assetId))
+      cell.buildings.push(instance);
+  });
+  if (phase) {
+    const prefix = `derived/support-${phase}`;
+    const parts = JSON.parse(await readFile(join(directory, source.partsFile), 'utf8'));
+    const collision = JSON.parse(await readFile(join(directory, source.collisionFile), 'utf8'));
+    parts.assetId = collision.assetId = assetId;
+    if (phase === 2 && collision.colliders.length) collision.colliders[0].friction += 0.01;
+    const descriptor = {
+      ...source,
+      assetId,
+      version: contentHash(`${assetId}:${phase}`),
+      modelFile: `${prefix}/model.glb`,
+      partsFile: `${prefix}/parts.json`,
+      collisionFile: `${prefix}/collision.json`,
+    };
+    const payloads: [string, Uint8Array][] = [
+      [descriptor.modelFile, await readFile(join(directory, source.modelFile!))],
+      [descriptor.partsFile, new TextEncoder().encode(JSON.stringify(parts))],
+      [descriptor.collisionFile, new TextEncoder().encode(JSON.stringify(collision))],
+    ];
+    publication.manifest.assets[assetId] = descriptor;
+    publication.manifest.generatedSupports = {
+      ...(publication.manifest.generatedSupports ?? {}),
+      [assetId]: { ownerId, role },
+    };
+    for (const [path, bytes] of payloads) {
+      publication.payloads.set(path, bytes);
+      publication.manifest.files[path] = contentHash(bytes);
+    }
+  } else {
+    delete publication.manifest.assets[assetId];
+    if (publication.manifest.generatedSupports)
+      delete publication.manifest.generatedSupports[assetId];
+  }
+  for (const cell of publication.manifest.cells) {
+    const value: WorldCell = JSON.parse(
+      new TextDecoder().decode(publication.payloads.get(cell.file)!),
+    );
+    cell.assetIds = [...new Set(value.buildings.map((item) => item.assetId))].sort();
+  }
+  publication.manifest.mapVersion = contentHash(
+    canonicalJson(worldManifestIdentity(publication.manifest)),
+  );
+  return { ...publication, assetId, affected };
 }
 
 describe('live publication ownership', () => {
@@ -668,6 +746,85 @@ describe('live publication ownership', () => {
     expect(v.pins()).toBe(0);
   });
 
+  it('replaces a stable generated support descriptor without rebuilding unchanged instances or requiring changed cell JSON', async () => {
+    const v = fixture();
+    const originalPrepare = v.graphics.prepareCellAssets;
+    v.graphics.prepareCellAssets = async (context, ids, read, signal) => {
+      for (const id of ids)
+        if (context.generatedSupports?.[id]) {
+          const descriptor = context.assets[id];
+          await read(descriptor.partsFile, signal);
+          if (descriptor.modelFile) await read(descriptor.modelFile, signal);
+        }
+      return originalPrepare(context, ids, read, signal);
+    };
+    try {
+      v.stream.setArea({ x: 0, y: 0, z: 0 });
+      await until(v.stream, () => v.stream.backgroundReady);
+      const initialPhysics = new Map(v.physics),
+        initialGraphics = new Map(v.graphical),
+        pins = v.pins();
+      const added = await generatedSupportPublication(manifest, new Map(), 1);
+      let applied = v.stream.transition(added.manifest, liveResources(added, v.cache, []));
+      await until(v.stream, () => !v.stream.transitioning && v.stream.backgroundReady);
+      await applied;
+      expect(v.physics.get(added.assetId)).toBe(added.affected.size);
+      v.physicsEvents.length = 0;
+      v.graphicsEvents.length = 0;
+      const updated = await generatedSupportPublication(added.manifest, added.payloads, 2);
+      for (const cell of updated.manifest.cells)
+        expect(updated.manifest.files[cell.file]).toBe(added.manifest.files[cell.file]);
+      expect(changedWorldPublicationCells(added.manifest, updated.manifest)).toEqual(
+        [...added.affected].sort(),
+      );
+      applied = v.stream.transition(updated.manifest, liveResources(updated, v.cache, []));
+      expect(v.stream.criticalReady).toBe(false);
+      await until(v.stream, () => !v.stream.transitioning && v.stream.backgroundReady);
+      await applied;
+      for (const events of [v.physicsEvents, v.graphicsEvents]) {
+        expect(events.filter((event) => event.startsWith('release:'))).toEqual(
+          Array(added.affected.size).fill(`release:${added.assetId}`),
+        );
+        expect(events.filter((event) => event.startsWith('retain:'))).toEqual(
+          Array(added.affected.size).fill(`retain:${added.assetId}`),
+        );
+      }
+      expect(v.physics.get(added.assetId)).toBe(added.affected.size);
+      expect(v.graphical.get(added.assetId)).toBe(added.affected.size);
+      expect(v.pins()).toBe(pins);
+      const removed = await generatedSupportPublication(updated.manifest, updated.payloads, 0);
+      applied = v.stream.transition(removed.manifest, liveResources(removed, v.cache, []));
+      await until(v.stream, () => !v.stream.transitioning && v.stream.backgroundReady);
+      await applied;
+      expect(v.physics).toEqual(initialPhysics);
+      expect(v.graphical).toEqual(initialGraphics);
+      expect(v.pins()).toBe(pins);
+    } finally {
+      v.stream.dispose();
+    }
+    expect(v.physics.size).toBe(0);
+    expect(v.graphical.size).toBe(0);
+    expect(v.pins()).toBe(0);
+  });
+
+  it('rejects an unregistered support dependency instead of silently relaxing the immutable base', async () => {
+    const v = fixture();
+    const publication = await generatedSupportPublication(manifest, new Map(), 1);
+    delete publication.manifest.generatedSupports;
+    const resources = liveResources(publication, v.cache, []);
+    try {
+      await expect(v.stream.transition(publication.manifest, resources)).rejects.toThrow(
+        'Incompatible',
+      );
+      expect(v.stream.manifest).toBe(manifest);
+      expect(v.physics.size).toBe(0);
+      expect(v.graphical.size).toBe(0);
+    } finally {
+      resources.dispose();
+      v.stream.dispose();
+    }
+  });
+
   it('updates an unloaded far cell without allocating it or stopping a ready local character', async () => {
     const v = fixture();
     try {
@@ -888,26 +1045,31 @@ describe('segmented world ownership', () => {
       v.stream.dispose();
     }
   });
-  it('holds shared seam instances once per cell and releases history after leaving both circles', async () => {
-    const v = fixture();
-    const start = { x: -125, y: 0, z: -312.5 },
-      far = { x: 950, y: 0, z: 950 };
-    try {
-      v.stream.setArea(start);
-      await until(v.stream, () => v.stream.backgroundReady);
-      expect(v.physics.get('house-6-5-0')).toBe(2);
-      v.stream.setArea(far, far, ['6_5']);
-      await until(v.stream, () => v.stream.backgroundReady);
-      v.advance();
-      expect(v.physics.get('house-6-5-0')).toBe(1);
-      v.stream.setArea(far);
-      v.advance();
-      expect(v.physics.has('house-6-5-0')).toBe(false);
-      expect(v.graphical.has('house-6-5-0')).toBe(false);
-    } finally {
-      v.stream.dispose();
-    }
-  });
+  it.each([false, true])(
+    'holds shared seam instances and prediction history with physics packs=%s',
+    async (packed) => {
+      const v = fixture(0, packed);
+      const start = { x: -125, y: 0, z: -312.5 },
+        far = { x: 950, y: 0, z: 950 };
+      try {
+        v.stream.setArea(start);
+        await until(v.stream, () => v.stream.backgroundReady);
+        expect(v.reads.some((path) => path.startsWith('physics/'))).toBe(packed);
+        if (packed) expect(v.reads.some((path) => path.endsWith('/colliders.json'))).toBe(false);
+        expect(v.physics.get('house-6-5-0')).toBe(2);
+        v.stream.setArea(far, far, ['6_5']);
+        await until(v.stream, () => v.stream.backgroundReady);
+        v.advance();
+        expect(v.physics.get('house-6-5-0')).toBe(1);
+        v.stream.setArea(far);
+        v.advance();
+        expect(v.physics.has('house-6-5-0')).toBe(false);
+        expect(v.graphical.has('house-6-5-0')).toBe(false);
+      } finally {
+        v.stream.dispose();
+      }
+    },
+  );
   it('keeps static preview without colliders or game readiness and reuses it on join/leave', async () => {
     const v = fixture();
     const p = { x: 0, y: 0, z: 0 };

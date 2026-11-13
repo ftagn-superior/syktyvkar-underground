@@ -5,11 +5,16 @@ import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { WorldLayoutSnapshot } from '@su/contracts';
-import type { PreparationJob, PreparationReply, PreparedLayout } from './preparation-types.js';
+import type {
+  PreparationJob,
+  PreparationReply,
+  PreparedLayout,
+  StaticPreparationContext,
+} from './preparation-types.js';
 
 export class LayoutPreparationError extends Error {
   constructor(
-    readonly code: 'CONTENT_LIMIT' | 'STORAGE_UNAVAILABLE',
+    readonly code: 'CONTENT_LIMIT' | 'STORAGE_UNAVAILABLE' | 'COMMAND_DISABLED',
     message: string,
   ) {
     super(message);
@@ -30,6 +35,7 @@ export class LayoutPreparation {
     snapshot: WorldLayoutSnapshot,
     operationId: string,
     worldEpoch: string,
+    change?: StaticPreparationContext,
   ): Promise<PreparedLayout> {
     if (this.closed || this.active)
       throw new LayoutPreparationError('STORAGE_UNAVAILABLE', 'Publisher is unavailable');
@@ -68,6 +74,7 @@ export class LayoutPreparation {
       assetReleaseVersion: this.assetReleaseVersion,
       snapshot,
       stagingDirectory,
+      change,
     };
     try {
       return await new Promise<PreparedLayout>((resolveJob, reject) => {

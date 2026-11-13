@@ -41,6 +41,7 @@ import {
   TICK_RATE,
   NEUTRAL_INPUT,
   worldNeighborhood,
+  changedWorldPublicationCells,
   type PrepareArea,
   type LayoutChanged,
   type LayoutApplied,
@@ -1261,14 +1262,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private layoutChanged(operationId: string) {
     const p = this.staticPlacement!.publications;
     const previous = p.previous!;
-    const oldHashes = new Map(
-      previous.manifest.cells.map((cell) => [cell.cellId, previous.manifest.files[cell.file]]),
-    );
-    const changed = new Set(
-      p.current.manifest.cells
-        .filter((cell) => oldHashes.get(cell.cellId) !== p.current.manifest.files[cell.file])
-        .map((cell) => cell.cellId),
-    );
+    const changed = new Set(changedWorldPublicationCells(previous.manifest, p.current.manifest));
     this.definition = p.current.definition;
     this.manifest = p.current.manifest;
     this.state.mapVersion = this.manifest.mapVersion;

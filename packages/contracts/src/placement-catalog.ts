@@ -6,6 +6,22 @@ import {
   type WorldModelMetadata,
 } from './world-model-catalog.js';
 import { validateBuildingParts, validateBuildingPhysicsAsset } from './world-bundle.js';
+import type { Vec3 } from './simulation.js';
+
+/** Preview data only. The server computes the accepted pose from its private terrain grid. */
+export type PlacementModelSupport =
+  | {
+      kind: 'ground-anchor';
+      anchor: Vec3;
+      contactRadius: number;
+      contactDatum: 'minimum' | 'anchor';
+      maximumTerrainReliefMetres: number;
+    }
+  | {
+      kind: 'foundation';
+      /** Local support/approach samples; owner Y is at least terrain Y + offsetY. */
+      heightSamples: Array<{ x: number; z: number; offsetY: number }>;
+    };
 
 export interface WorldPlacementPolicySource {
   formatVersion: 1;
@@ -27,10 +43,16 @@ export interface PlacementCatalog {
   assetReleaseVersion: string;
   modelCatalogVersion: string;
   placementCatalogVersion: string;
-  groundY: 0;
+  /** null selects the explicit terrain bodies and per-model preview policies. */
+  groundY: 0 | null;
+  terrain?: { groundEntityIds: string[] };
   yawSteps: 24;
   categories: Record<string, { name: string }>;
-  models: Array<{ assetId: string; metadata: WorldModelMetadata }>;
+  models: Array<{
+    assetId: string;
+    metadata: WorldModelMetadata;
+    placement?: PlacementModelSupport;
+  }>;
 }
 const id = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const hash = /^[a-f0-9]{64}$/;
@@ -46,6 +68,42 @@ function fields(value: unknown, names: string[]): asserts value is Record<string
     object(value) && Object.keys(value).sort().join(',') === names.sort().join(','),
     'fields',
   );
+}
+export function validatePlacementModelSupport(value: unknown): PlacementModelSupport {
+  requireValue(object(value), 'placement support');
+  const finite = (n: unknown) =>
+    typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 100_000;
+  if (value.kind === 'ground-anchor') {
+    fields(value, [
+      'kind',
+      'anchor',
+      'contactRadius',
+      'contactDatum',
+      'maximumTerrainReliefMetres',
+    ]);
+    fields(value.anchor, ['x', 'y', 'z']);
+    requireValue(Object.values(value.anchor).every(finite), 'placement anchor');
+    requireValue(finite(value.contactRadius) && value.contactRadius > 0, 'contact radius');
+    requireValue(['minimum', 'anchor'].includes(value.contactDatum), 'contact datum');
+    requireValue(
+      finite(value.maximumTerrainReliefMetres) && value.maximumTerrainReliefMetres > 0,
+      'terrain relief',
+    );
+  } else {
+    fields(value, ['kind', 'heightSamples']);
+    requireValue(value.kind === 'foundation', 'placement support kind');
+    requireValue(
+      Array.isArray(value.heightSamples) &&
+        value.heightSamples.length > 0 &&
+        value.heightSamples.length <= 16_384,
+      'foundation height samples',
+    );
+    for (const sample of value.heightSamples) {
+      fields(sample, ['x', 'z', 'offsetY']);
+      requireValue(Object.values(sample).every(finite), 'foundation height sample');
+    }
+  }
+  return value as PlacementModelSupport;
 }
 function checkPolicyIds(value: Record<string, any>) {
   requireValue(value.formatVersion === 1, 'policy format');
@@ -103,11 +161,28 @@ export function validatePlacementCatalog(
     'yawSteps',
     'categories',
     'models',
+    ...(object(value) && value.terrain !== undefined ? ['terrain'] : []),
   ]);
   requireValue(
-    value.formatVersion === 1 && value.groundY === 0 && value.yawSteps === 24,
+    value.formatVersion === 1 &&
+      (value.groundY === 0 || value.groundY === null) &&
+      value.yawSteps === 24,
     'format/placement parameters',
   );
+  if (value.groundY === null) {
+    fields(value.terrain, ['groundEntityIds']);
+    const ids = value.terrain.groundEntityIds;
+    requireValue(
+      Array.isArray(ids) &&
+        ids.length > 0 &&
+        ids.length <= 100_000 &&
+        ids.every(
+          (entry: unknown) => typeof entry === 'string' && entry.length > 0 && entry.length <= 128,
+        ) &&
+        new Set(ids).size === ids.length,
+      'terrain ground IDs',
+    );
+  } else requireValue(value.terrain === undefined, 'terrain requires null groundY');
   requireValue(typeof value.worldId === 'string' && id.test(value.worldId), 'worldId');
   for (const key of ['assetReleaseVersion', 'modelCatalogVersion', 'placementCatalogVersion'])
     requireValue(typeof value[key] === 'string' && hash.test(value[key]), key);
@@ -123,7 +198,13 @@ export function validatePlacementCatalog(
   const seen = new Set<string>(),
     usedCategories = new Set<string>();
   for (const model of value.models) {
-    fields(model, ['assetId', 'metadata']);
+    fields(model, [
+      'assetId',
+      'metadata',
+      ...(object(model) && model.placement !== undefined ? ['placement'] : []),
+    ]);
+    if (value.groundY === null || model.placement !== undefined)
+      validatePlacementModelSupport(model.placement);
     requireValue(
       typeof model.assetId === 'string' && id.test(model.assetId) && !seen.has(model.assetId),
       `duplicate/invalid model ${model.assetId}`,

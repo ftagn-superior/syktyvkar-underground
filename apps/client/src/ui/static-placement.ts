@@ -9,6 +9,7 @@ import type { GameSession } from '../network/session';
 import type { WorldView } from '../rendering/world-view';
 import { PlacementCatalogPanel } from './placement-catalog';
 import { ICONS } from './icons';
+import { staticPlacementPreviewPose } from './static-placement-pose';
 
 /** The local catalog/ghost is disposable; the durable operation belongs to GameSession. */
 export class StaticPlacement {
@@ -188,6 +189,8 @@ export class StaticPlacement {
       active: this.active,
       hasCatalog: !!this.catalog,
       hasGhost: !!this.ghost,
+      assetId: this.assetId,
+      pose: this.pose ? structuredClone(this.pose) : undefined,
       focused: this.focused,
       pending: this.session.staticPlacementPending,
       worldPaused: this.session.worldPaused,
@@ -386,34 +389,41 @@ export class StaticPlacement {
     }
     const view = this.view();
     if (!view || !this.ghost || !this.catalog || !this.assetId) return;
-    const ray = view.pointerRay(),
-      dy = ray.to.y - ray.from.y;
-    const t = dy === 0 ? -1 : (this.catalog.groundY - ray.from.y) / dy;
     this.pose = undefined;
-    if (t >= 0 && this.focused && !document.hidden) {
-      const position = {
-        x: ray.from.x + (ray.to.x - ray.from.x) * t,
-        y: this.catalog.groundY,
-        z: ray.from.z + (ray.to.z - ray.from.z) * t,
-      };
+    if (this.focused && !document.hidden) {
       const rotation = staticPlacementRotation(this.yawStep);
-      const bounds = buildingBounds(
-        { entityId: 'preview', assetId: this.assetId, position, rotation },
-        this.session.manifest.assets[this.assetId].bounds,
+      const preview = staticPlacementPreviewPose(
+        this.catalog,
+        this.assetId,
+        view.pointerRay(),
+        rotation,
+        this.session.definition.bounds,
+        (from, to) => this.session.staticPlacementSurface(from, to),
       );
-      const world = this.session.definition.bounds;
-      if (
-        ['x', 'y', 'z'].every((a) => {
-          const axis = a as keyof typeof position;
-          return bounds.min[axis] >= world.min[axis] && bounds.max[axis] <= world.max[axis];
-        })
-      )
-        this.pose = { position, rotation };
+      if (preview) {
+        const { position } = preview;
+        const bounds = buildingBounds(
+          { entityId: 'preview', assetId: this.assetId, position, rotation },
+          this.session.manifest.assets[this.assetId].bounds,
+        );
+        const world = this.session.definition.bounds;
+        if (
+          ['x', 'y', 'z'].every((a) => {
+            const axis = a as keyof typeof position;
+            return bounds.min[axis] >= world.min[axis] && bounds.max[axis] <= world.max[axis];
+          })
+        )
+          this.pose = { position, rotation };
+      }
     }
     this.ghost.show(this.pose);
     this.confirm.disabled = !this.pose || this.session.worldPaused;
     this.setStatus(
-      this.pose ? 'Проверка места — при размещении' : 'Укажите место целиком в границах мира',
+      this.pose
+        ? this.catalog.groundY === null
+          ? 'Высоту и опору уточнит сервер при размещении'
+          : 'Проверка места — при размещении'
+        : 'Укажите свободный участок загруженной земли в границах мира',
     );
   }
   dispose() {

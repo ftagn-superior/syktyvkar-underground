@@ -60,7 +60,7 @@ describe('live whole-instance removal', () => {
     ];
     const world = await createAuthoritativeWorld(definition);
     try {
-      expect(world.addPlayer('standing', { x: -2, y: 2.1, z: -2 })).toBeDefined();
+      expect(world.addPlayer('standing', { x: -2, y: 2, z: -2 })).toBeDefined();
       const item = initialItemState({
         seedId: 'resting',
         typeId: 'wooden-crate',

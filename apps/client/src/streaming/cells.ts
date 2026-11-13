@@ -1,6 +1,7 @@
 import {
   canonicalJson,
   worldPublicationBaseIdentity,
+  changedWorldPublicationCells,
   loadCellPhysics,
   loadWorldCell,
   worldNeighborhood,
@@ -171,14 +172,7 @@ export class CellStreamer {
       canonicalJson(worldPublicationBaseIdentity(this.manifest))
     )
       return Promise.reject(new Error('Incompatible live publication'));
-    const oldHashes = new Map(
-      this.manifest.cells.map((cell) => [cell.cellId, this.manifest.files[cell.file]]),
-    );
-    const changed = new Set(
-      manifest.cells
-        .filter((cell) => oldHashes.get(cell.cellId) !== manifest.files[cell.file])
-        .map((cell) => cell.cellId),
-    );
+    const changed = new Set(changedWorldPublicationCells(this.manifest, manifest));
     this.generation++;
     this.preparing = 0;
     // Every async continuation captures its immutable context and generation. Old partial
@@ -252,10 +246,12 @@ export class CellStreamer {
     const pending = [...this.cells.values()]
       .filter((cell) => !!cell.set)
       .sort((a, b) => this.priority(a) - this.priority(b));
-    const heldAssets = new Set(
+    const heldVersions = new Set(
       [...this.cells.values()].flatMap((cell) =>
         cell.releaseModels
-          ? this.manifest.cells.find((entry) => entry.cellId === cell.id)!.assetIds
+          ? this.manifest.cells
+              .find((entry) => entry.cellId === cell.id)!
+              .assetIds.map((id) => this.manifest.assets[id].version)
           : [],
       ),
     );
@@ -304,6 +300,7 @@ export class CellStreamer {
         const loaded = await loadWorldCell(manifest, old.id, (path) => read(path));
         cell.set = { cell: loaded, buildingAssets: {} };
         if (old.physicsLoaded || this.physicsWanted.has(old.id)) {
+          await resources.prefetchPhysics(old.id, signal, this.priority(old));
           const set = await loadCellPhysics(manifest, old.id, (path) => read(path), loaded);
           cell.set = set;
           cell.physicsLoaded = true;
@@ -319,17 +316,22 @@ export class CellStreamer {
           // Already pinned models have parsed/GPU resources even if their raw bytes left
           // the LRU. Retain them directly instead of downloading a changed pack for them.
           const descriptor = manifest.cells.find((entry) => entry.cellId === old.id)!;
-          if (descriptor.assetIds.some((id) => !heldAssets.has(id)))
+          if (descriptor.assetIds.some((id) => !heldVersions.has(manifest.assets[id].version)))
             await resources.prefetchGraphics(old.id, signal, this.priority(old));
           const release = await preparedModels(
             this.graphics.prepareCellAssets(
               manifest,
               manifest.cells.find((entry) => entry.cellId === old.id)!.assetIds,
-              // Static dependency hashes are invariant. A model entry may acquire an
-              // ordinary old-context consumer during staging, so its I/O belongs to
-              // the entry controller and the still-active context, not this consumer.
-              (path, modelSignal) =>
-                modelResources.read(path, modelSignal ?? signal, this.priority(old)),
+              // Base models can acquire an ordinary old-context consumer during
+              // staging. New/changed generated supports belong to the next context.
+              (path, modelSignal) => {
+                const owner =
+                  Object.hasOwn(modelResources.manifest.files, path) &&
+                  modelResources.manifest.files[path] === manifest.files[path]
+                    ? modelResources
+                    : resources;
+                return owner.read(path, modelSignal ?? signal, this.priority(old));
+              },
               signal,
             ),
             signal,
@@ -703,6 +705,7 @@ export class CellStreamer {
         cell.physicsController = controller;
         const physicsSignal = AbortSignal.any([signal, controller.signal]);
         try {
+          await context.resources.prefetchPhysics(cell.id, physicsSignal, this.priority(cell));
           const set = await loadCellPhysics(
             context.manifest,
             cell.id,

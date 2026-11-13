@@ -900,7 +900,7 @@ describe('мир ring-block', () => {
   beforeAll(async () => {
     temporary = await mkdtemp(join(tmpdir(), 'su-ring-block-'));
     release = join(temporary, 'release');
-    await buildWorld('content/worlds/ring-block/world.json', release);
+    await buildWorld('content/worlds/ring-block/world.json', release, { terrainRelease: false });
   }, 120_000);
   afterAll(async () => {
     await rm(temporary, { recursive: true, force: true });
@@ -993,7 +993,9 @@ describe('мир ring-block', () => {
     world.itemCatalog = join(process.cwd(), 'content/items/catalog.json');
     world.landmarks[0].name = 'Кольцо Коммунистической';
     await writeFile(worldPath, JSON.stringify(world));
-    const renamed = await buildWorld(worldPath, join(temporary, 'renamed'));
+    const renamed = await buildWorld(worldPath, join(temporary, 'renamed'), {
+      terrainRelease: false,
+    });
     const original = JSON.parse(await readFile(join(release, 'manifest.json'), 'utf8'));
     expect(renamed.simulationConfigHash).toBe(original.simulationConfigHash);
     expect(renamed.mapVersion).not.toBe(original.mapVersion);

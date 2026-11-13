@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "seat",
+      "role": "detail",
+      "fade": false,
+      "color": "#94714d",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 0.5, 0],
+            "size": [1.8, 0.12, 0.6]
+          }
+        }
+      ]
+    },
+    {
+      "id": "back",
+      "role": "detail",
+      "fade": false,
+      "color": "#94714d",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 0.85, 0.25],
+            "size": [1.8, 0.65, 0.1]
+          }
+        }
+      ]
+    },
+    {
+      "id": "leg-a",
+      "role": "detail",
+      "fade": false,
+      "color": "#94714d",
+      "shapes": [
+        {
+          "box": {
+            "center": [-0.65, 0.22, 0],
+            "size": [0.12, 0.44, 0.5]
+          }
+        }
+      ]
+    },
+    {
+      "id": "leg-b",
+      "role": "detail",
+      "fade": false,
+      "color": "#94714d",
+      "shapes": [
+        {
+          "box": {
+            "center": [0.65, 0.22, 0],
+            "size": [0.12, 0.44, 0.5]
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "seat",
+      "center": [0, 0.5, 0],
+      "size": [1.8, 0.12, 0.6]
+    },
+    {
+      "id": "back",
+      "center": [0, 0.85, 0.25],
+      "size": [1.8, 0.65, 0.1]
+    },
+    {
+      "id": "leg-a",
+      "center": [-0.65, 0.22, 0],
+      "size": [0.12, 0.44, 0.5]
+    },
+    {
+      "id": "leg-b",
+      "center": [0.65, 0.22, 0],
+      "size": [0.12, 0.44, 0.5]
+    }
+  ]
+}

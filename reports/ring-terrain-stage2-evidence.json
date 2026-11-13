@@ -1,0 +1,1551 @@
+{
+  "formatVersion": 1,
+  "stage": 2,
+  "date": "2026-11-13",
+  "stage1Commit": "b7f4e5a",
+  "status": "stage-2-completed-relative-budgets-passed-strict-frame-budget-open",
+  "builds": [
+    {
+      "spacing": 4,
+      "sourceManifestSha256": "a6bbd43177add9eb267c8ce61ffa3f2cfb2ef91a48367cca79ae762c25acf1a4",
+      "assetReleaseVersion": "d3ec18c0fbac911469ec29ca53327357e00183fbf6a9d7d68815900499e75f6f",
+      "privateTerrain": {
+        "file": "private/terrain.bdf962e1c3db898587ddbe8d8c30bd93bb5a8f5ea8c005a276950532abc37bf0.json",
+        "sha256": "bdf962e1c3db898587ddbe8d8c30bd93bb5a8f5ea8c005a276950532abc37bf0"
+      },
+      "mapVersion": "bdd223957c218f5383ed57d1b4ded9cf2dc85b8997ae2487f29592e265c9e4b3",
+      "simulationConfigHash": "8c2564c4541878a8941777dd4334028519f1fe1293f70a92fcde42aa27167245",
+      "sourceSha256": "a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6",
+      "grid": {
+        "columns": 151,
+        "rows": 220,
+        "spacing": 4
+      },
+      "cells": 40,
+      "assets": 261,
+      "publicFiles": 921,
+      "publicBytes": 78615634,
+      "buildMs": 20644.366333,
+      "cpuMs": 22320.579,
+      "maxRssBytes": 447201280,
+      "maxRssScope": "Process lifetime high-water mark, including conversion, build and post-build resource inspection",
+      "largestModel": {
+        "file": "assets/b7a04905f782b29fc06ca317d9d8069d67c4ee75997a809442e051a539e59548/model.glb",
+        "bytes": 1246744
+      },
+      "largestCollision": {
+        "file": "assets/c5cc25315424b6c2e2d7b7af3bea66ad733df36d0bf9f7374203d418da899108/colliders.json",
+        "bytes": 106402
+      },
+      "largestCell": {
+        "file": "cells/1_0.2d8c9134e522277c73a6f076bad9061710af1b921a36b7d9ee992b77e03b6e22.json",
+        "bytes": 84211
+      },
+      "conversion": {
+        "formatVersion": 1,
+        "spacing": 4,
+        "offsetScale": 0.9523809523809523,
+        "sourcePolygonCount": 2761,
+        "sourceHoleCount": 9,
+        "sourceVertexCount": 20436,
+        "surfaceCount": 2780,
+        "layers": [
+          {
+            "index": 0,
+            "id": "green",
+            "polygons": 390,
+            "holes": 1,
+            "sourceElevation": 0.006,
+            "offset": 0.005714285714285714,
+            "surfaces": 409
+          },
+          {
+            "index": 1,
+            "id": "park",
+            "polygons": 1,
+            "holes": 0,
+            "sourceElevation": 0.01,
+            "offset": 0.009523809523809523,
+            "surfaces": 1
+          },
+          {
+            "index": 2,
+            "id": "pitch",
+            "polygons": 4,
+            "holes": 0,
+            "sourceElevation": 0.014,
+            "offset": 0.013333333333333332,
+            "surfaces": 4
+          },
+          {
+            "index": 3,
+            "id": "playground",
+            "polygons": 6,
+            "holes": 0,
+            "sourceElevation": 0.018,
+            "offset": 0.01714285714285714,
+            "surfaces": 6
+          },
+          {
+            "index": 4,
+            "id": "footway",
+            "polygons": 427,
+            "holes": 7,
+            "sourceElevation": 0.022,
+            "offset": 0.02095238095238095,
+            "surfaces": 427
+          },
+          {
+            "index": 5,
+            "id": "parking",
+            "polygons": 20,
+            "holes": 0,
+            "sourceElevation": 0.026,
+            "offset": 0.02476190476190476,
+            "surfaces": 20
+          },
+          {
+            "index": 6,
+            "id": "service",
+            "polygons": 180,
+            "holes": 1,
+            "sourceElevation": 0.03,
+            "offset": 0.028571428571428567,
+            "surfaces": 180
+          },
+          {
+            "index": 7,
+            "id": "road",
+            "polygons": 49,
+            "holes": 0,
+            "sourceElevation": 0.034,
+            "offset": 0.03238095238095238,
+            "surfaces": 49
+          },
+          {
+            "index": 8,
+            "id": "islands",
+            "polygons": 4,
+            "holes": 0,
+            "sourceElevation": 0.038,
+            "offset": 0.03619047619047619,
+            "surfaces": 4
+          },
+          {
+            "index": 9,
+            "id": "markings",
+            "polygons": 1680,
+            "holes": 0,
+            "sourceElevation": 0.042,
+            "offset": 0.04,
+            "surfaces": 1680
+          }
+        ],
+        "cleanedRings": [
+          {
+            "layerId": "road",
+            "polygonIndex": 39,
+            "ringIndex": 0,
+            "sourceVertices": 71,
+            "cleanedVertices": 69
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1617,
+            "ringIndex": 0,
+            "sourceVertices": 6,
+            "cleanedVertices": 5
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1625,
+            "ringIndex": 0,
+            "sourceVertices": 7,
+            "cleanedVertices": 6
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1640,
+            "ringIndex": 0,
+            "sourceVertices": 8,
+            "cleanedVertices": 6
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1668,
+            "ringIndex": 0,
+            "sourceVertices": 84,
+            "cleanedVertices": 82
+          }
+        ],
+        "topologyNotes": [
+          {
+            "layerId": "green",
+            "polygonIndex": 245,
+            "notes": [
+              "ring 0 edges 4/16 touch",
+              "ring 0 edges 5/16 touch",
+              "ring 0 edges 6/16 touch"
+            ]
+          },
+          {
+            "layerId": "footway",
+            "polygonIndex": 79,
+            "notes": ["ring 0 edges 0/9 touch", "ring 0 edges 1/9 touch", "ring 0 edges 9/25 touch"]
+          },
+          {
+            "layerId": "footway",
+            "polygonIndex": 173,
+            "notes": ["rings 0/1 touch"]
+          },
+          {
+            "layerId": "service",
+            "polygonIndex": 4,
+            "notes": [
+              "ring 0 edges 7/30 touch",
+              "ring 0 edges 8/30 touch",
+              "ring 0 edges 9/30 touch"
+            ]
+          },
+          {
+            "layerId": "service",
+            "polygonIndex": 43,
+            "notes": [
+              "ring 0 edges 0/10 touch",
+              "ring 0 edges 1/10 touch",
+              "ring 0 edges 2/10 touch"
+            ]
+          }
+        ],
+        "exceptions": [
+          {
+            "strategy": "legacy-triangle-footprint",
+            "layerId": "green",
+            "polygonIndex": 290,
+            "sourceSha256": "96a441e43a8dad7dea32d9d81644f3f09da161e1698825be8246026b6018b999",
+            "triangleFootprintSha256": "b99fbffd2266235524fa60779967805b7466a0c55b46316deeb9d639cfae20dc",
+            "issues": [
+              "ring 0 edges 7/16 cross",
+              "ring 0 edges 7/17 cross",
+              "triangulation coverage 1.0068600963232681"
+            ],
+            "legacyCoverage": 1.0068600963232681,
+            "triangleCount": 20,
+            "outlineSignedAreaMagnitude": 425.65000000000146,
+            "triangleAreaSum": 428.5699999999997
+          }
+        ]
+      },
+      "groundTotals": {
+        "meshes": 40,
+        "modelBytes": 30129416,
+        "collisionBytes": 3332253,
+        "graphicTriangles": 883003,
+        "collisionTriangles": 171864
+      },
+      "acceptance": {
+        "status": "passed",
+        "geometry": {
+          "groundArea": 525600,
+          "graphicTriangles": 883003,
+          "collisionTriangles": 171864,
+          "maxColorError": 2.7672028779512914e-8,
+          "maxNormalError": 0,
+          "layers": [
+            {
+              "id": "green",
+              "color": [0.3419144249086609, 0.47353149614800955, 0.06301001765316767],
+              "y": 0.0057142856530845165,
+              "expectedArea": 152835.2425500002,
+              "actualArea": 152835.24335950203,
+              "triangles": 138141,
+              "spatialCoverage": {
+                "controls": 2490,
+                "positive": 2069,
+                "negative": 421,
+                "holeRings": 1,
+                "inspectedTriangles": 138141,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "park",
+              "color": [0.27467731206038465, 0.4019777798321958, 0.05126945837404324],
+              "y": 0.009523809887468815,
+              "expectedArea": 2918.3,
+              "actualArea": 2918.3000016747933,
+              "triangles": 3708,
+              "spatialCoverage": {
+                "controls": 614,
+                "positive": 38,
+                "negative": 576,
+                "holeRings": 0,
+                "inspectedTriangles": 3708,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "pitch",
+              "color": [0.2704977910130658, 0.38132601143253014, 0.0953074666309647],
+              "y": 0.013333333656191826,
+              "expectedArea": 9418.073000000004,
+              "actualArea": 9418.072987970636,
+              "triangles": 5122,
+              "spatialCoverage": {
+                "controls": 613,
+                "positive": 44,
+                "negative": 569,
+                "holeRings": 0,
+                "inspectedTriangles": 5122,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "playground",
+              "color": [0.7304607400903537, 0.5647115057049292, 0.29177064981753587],
+              "y": 0.017142856493592262,
+              "expectedArea": 1306.0641500000006,
+              "actualArea": 1306.064168927257,
+              "triangles": 947,
+              "spatialCoverage": {
+                "controls": 595,
+                "positive": 17,
+                "negative": 578,
+                "holeRings": 0,
+                "inspectedTriangles": 947,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "footway",
+              "color": [0.768151147247507, 0.6444796819705821, 0.4620769996544071],
+              "y": 0.020952381193637848,
+              "expectedArea": 30183.695999999658,
+              "actualArea": 30183.693399275926,
+              "triangles": 257558,
+              "spatialCoverage": {
+                "controls": 6302,
+                "positive": 5718,
+                "negative": 584,
+                "holeRings": 7,
+                "inspectedTriangles": 257558,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "parking",
+              "color": [0.184474994500441, 0.17464740365558504, 0.14995978981060856],
+              "y": 0.024761904031038284,
+              "expectedArea": 5417.647899999999,
+              "actualArea": 5417.647512098383,
+              "triangles": 4409,
+              "spatialCoverage": {
+                "controls": 627,
+                "positive": 55,
+                "negative": 572,
+                "holeRings": 0,
+                "inspectedTriangles": 4409,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "service",
+              "color": [0.24620132670783548, 0.2232279573168085, 0.18782077230067787],
+              "y": 0.02857142873108387,
+              "expectedArea": 48723.17199999997,
+              "actualArea": 48723.17180444146,
+              "triangles": 198356,
+              "spatialCoverage": {
+                "controls": 3308,
+                "positive": 2771,
+                "negative": 537,
+                "holeRings": 1,
+                "inspectedTriangles": 198356,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "road",
+              "color": [0.162029375639111, 0.15292615199615017, 0.13843161503245183],
+              "y": 0.032380953431129456,
+              "expectedArea": 64924.984350000035,
+              "actualArea": 64924.98432410829,
+              "triangles": 90937,
+              "spatialCoverage": {
+                "controls": 1347,
+                "positive": 812,
+                "negative": 535,
+                "holeRings": 0,
+                "inspectedTriangles": 90937,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "islands",
+              "color": [0.6938717612919899, 0.5972017883637634, 0.4396571738409188],
+              "y": 0.03619047626852989,
+              "expectedArea": 814.3211500000001,
+              "actualArea": 814.3211288153443,
+              "triangles": 2630,
+              "spatialCoverage": {
+                "controls": 676,
+                "positive": 97,
+                "negative": 579,
+                "holeRings": 0,
+                "inspectedTriangles": 2630,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "markings",
+              "color": [0.8962693533742664, 0.799102738014409, 0.6172065624196511],
+              "y": 0.03999999910593033,
+              "expectedArea": 944.6270999999941,
+              "actualArea": 944.627174964693,
+              "triangles": 23395,
+              "spatialCoverage": {
+                "controls": 4208,
+                "positive": 3631,
+                "negative": 577,
+                "holeRings": 0,
+                "inspectedTriangles": 23395,
+                "toleranceMetres": 0.0001
+              }
+            }
+          ]
+        },
+        "physics": {
+          "rays": 360,
+          "maxRayError": 0,
+          "outerBoundaryInsetMetres": 0.001,
+          "routes": [
+            {
+              "sprint": false,
+              "diagonal": false,
+              "direction": -1,
+              "maxVerticalDrift": 4.5106216939316823e-7,
+              "position": {
+                "x": -151.99999999999866,
+                "y": 0.9200004510621694,
+                "z": -99.99999999999909
+              }
+            },
+            {
+              "sprint": false,
+              "diagonal": false,
+              "direction": 1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -136.00000000000057,
+                "y": 0.92,
+                "z": -100
+              }
+            },
+            {
+              "sprint": false,
+              "diagonal": true,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -149.07106781186582,
+                "y": 0.92,
+                "z": -125.07106781186582
+              }
+            },
+            {
+              "sprint": false,
+              "diagonal": true,
+              "direction": 1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -138.92893218813418,
+                "y": 0.92,
+                "z": -114.92893218813418
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": false,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -152.4999999999994,
+                "y": 0.92,
+                "z": -100
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": false,
+              "direction": 1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -135.5000000000006,
+                "y": 0.92,
+                "z": -100
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": true,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -149.42462120245847,
+                "y": 0.92,
+                "z": -125.42462120245847
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": true,
+              "direction": 1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -138.57537879754153,
+                "y": 0.92,
+                "z": -114.57537879754153
+              }
+            }
+          ],
+          "supportedSpawns": 8
+        },
+        "layoutRevision": 5214,
+        "enabledInstances": 3709,
+        "instancesSha256": "9bac8a74a78c7a99ea8c58ee74a74a3ffdcf439b781a9ca9c21711e7b5dc91d6",
+        "unchangedAbsolutePoses": true,
+        "unchangedEditableAssets": true,
+        "unchangedHeaderAndStreamingGrid": true
+      }
+    },
+    {
+      "spacing": 2,
+      "sourceManifestSha256": "bc6ca9173652f77ca7c824eb195524697962ed76e5a8800db3aa21ba06d38687",
+      "assetReleaseVersion": "6bce0771b22461b8d90b5a2abecc4b86351f622f1dd3301c7f4032581a8eb073",
+      "privateTerrain": {
+        "file": "private/terrain.4fc09737f365a03b261d44b93e90368186df1abc6a6c2b25b7f93f506d515d94.json",
+        "sha256": "4fc09737f365a03b261d44b93e90368186df1abc6a6c2b25b7f93f506d515d94"
+      },
+      "mapVersion": "0086e0ea7821f0e77adedf9d74591025ba46a8ac6b8797caef4ac6301040bcb8",
+      "simulationConfigHash": "e1f34ee67dce32dd5b65652de498e72c1c04e02c235d8be24c3d294fd4dc3df8",
+      "sourceSha256": "a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6",
+      "grid": {
+        "columns": 301,
+        "rows": 439,
+        "spacing": 2
+      },
+      "cells": 40,
+      "assets": 261,
+      "publicFiles": 921,
+      "publicBytes": 167402024,
+      "buildMs": 57250.196749999996,
+      "cpuMs": 59102.752,
+      "maxRssBytes": 797736960,
+      "maxRssScope": "Process lifetime high-water mark, including conversion, build and post-build resource inspection",
+      "largestModel": {
+        "file": "assets/7a79aa3b68bfa47188f0820240c54dd08fb2b969534f2574bf21c3bc3095347b/model.glb",
+        "bytes": 2760908
+      },
+      "largestCollision": {
+        "file": "assets/3e716033ff1322e1be7356e7de9a8d4ceab98089fcac2ed19fea4bc75ed4359d/colliders.json",
+        "bytes": 364159
+      },
+      "largestCell": {
+        "file": "cells/1_0.2d8c9134e522277c73a6f076bad9061710af1b921a36b7d9ee992b77e03b6e22.json",
+        "bytes": 84211
+      },
+      "conversion": {
+        "formatVersion": 1,
+        "spacing": 2,
+        "offsetScale": 0.9523809523809523,
+        "sourcePolygonCount": 2761,
+        "sourceHoleCount": 9,
+        "sourceVertexCount": 20436,
+        "surfaceCount": 2780,
+        "layers": [
+          {
+            "index": 0,
+            "id": "green",
+            "polygons": 390,
+            "holes": 1,
+            "sourceElevation": 0.006,
+            "offset": 0.005714285714285714,
+            "surfaces": 409
+          },
+          {
+            "index": 1,
+            "id": "park",
+            "polygons": 1,
+            "holes": 0,
+            "sourceElevation": 0.01,
+            "offset": 0.009523809523809523,
+            "surfaces": 1
+          },
+          {
+            "index": 2,
+            "id": "pitch",
+            "polygons": 4,
+            "holes": 0,
+            "sourceElevation": 0.014,
+            "offset": 0.013333333333333332,
+            "surfaces": 4
+          },
+          {
+            "index": 3,
+            "id": "playground",
+            "polygons": 6,
+            "holes": 0,
+            "sourceElevation": 0.018,
+            "offset": 0.01714285714285714,
+            "surfaces": 6
+          },
+          {
+            "index": 4,
+            "id": "footway",
+            "polygons": 427,
+            "holes": 7,
+            "sourceElevation": 0.022,
+            "offset": 0.02095238095238095,
+            "surfaces": 427
+          },
+          {
+            "index": 5,
+            "id": "parking",
+            "polygons": 20,
+            "holes": 0,
+            "sourceElevation": 0.026,
+            "offset": 0.02476190476190476,
+            "surfaces": 20
+          },
+          {
+            "index": 6,
+            "id": "service",
+            "polygons": 180,
+            "holes": 1,
+            "sourceElevation": 0.03,
+            "offset": 0.028571428571428567,
+            "surfaces": 180
+          },
+          {
+            "index": 7,
+            "id": "road",
+            "polygons": 49,
+            "holes": 0,
+            "sourceElevation": 0.034,
+            "offset": 0.03238095238095238,
+            "surfaces": 49
+          },
+          {
+            "index": 8,
+            "id": "islands",
+            "polygons": 4,
+            "holes": 0,
+            "sourceElevation": 0.038,
+            "offset": 0.03619047619047619,
+            "surfaces": 4
+          },
+          {
+            "index": 9,
+            "id": "markings",
+            "polygons": 1680,
+            "holes": 0,
+            "sourceElevation": 0.042,
+            "offset": 0.04,
+            "surfaces": 1680
+          }
+        ],
+        "cleanedRings": [
+          {
+            "layerId": "road",
+            "polygonIndex": 39,
+            "ringIndex": 0,
+            "sourceVertices": 71,
+            "cleanedVertices": 69
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1617,
+            "ringIndex": 0,
+            "sourceVertices": 6,
+            "cleanedVertices": 5
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1625,
+            "ringIndex": 0,
+            "sourceVertices": 7,
+            "cleanedVertices": 6
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1640,
+            "ringIndex": 0,
+            "sourceVertices": 8,
+            "cleanedVertices": 6
+          },
+          {
+            "layerId": "markings",
+            "polygonIndex": 1668,
+            "ringIndex": 0,
+            "sourceVertices": 84,
+            "cleanedVertices": 82
+          }
+        ],
+        "topologyNotes": [
+          {
+            "layerId": "green",
+            "polygonIndex": 245,
+            "notes": [
+              "ring 0 edges 4/16 touch",
+              "ring 0 edges 5/16 touch",
+              "ring 0 edges 6/16 touch"
+            ]
+          },
+          {
+            "layerId": "footway",
+            "polygonIndex": 79,
+            "notes": ["ring 0 edges 0/9 touch", "ring 0 edges 1/9 touch", "ring 0 edges 9/25 touch"]
+          },
+          {
+            "layerId": "footway",
+            "polygonIndex": 173,
+            "notes": ["rings 0/1 touch"]
+          },
+          {
+            "layerId": "service",
+            "polygonIndex": 4,
+            "notes": [
+              "ring 0 edges 7/30 touch",
+              "ring 0 edges 8/30 touch",
+              "ring 0 edges 9/30 touch"
+            ]
+          },
+          {
+            "layerId": "service",
+            "polygonIndex": 43,
+            "notes": [
+              "ring 0 edges 0/10 touch",
+              "ring 0 edges 1/10 touch",
+              "ring 0 edges 2/10 touch"
+            ]
+          }
+        ],
+        "exceptions": [
+          {
+            "strategy": "legacy-triangle-footprint",
+            "layerId": "green",
+            "polygonIndex": 290,
+            "sourceSha256": "96a441e43a8dad7dea32d9d81644f3f09da161e1698825be8246026b6018b999",
+            "triangleFootprintSha256": "b99fbffd2266235524fa60779967805b7466a0c55b46316deeb9d639cfae20dc",
+            "issues": [
+              "ring 0 edges 7/16 cross",
+              "ring 0 edges 7/17 cross",
+              "triangulation coverage 1.0068600963232681"
+            ],
+            "legacyCoverage": 1.0068600963232681,
+            "triangleCount": 20,
+            "outlineSignedAreaMagnitude": 425.65000000000146,
+            "triangleAreaSum": 428.5699999999997
+          }
+        ]
+      },
+      "groundTotals": {
+        "meshes": 40,
+        "modelBytes": 70256672,
+        "collisionBytes": 11864105,
+        "graphicTriangles": 2052411,
+        "collisionTriangles": 585464
+      },
+      "acceptance": {
+        "status": "passed",
+        "geometry": {
+          "groundArea": 525600,
+          "graphicTriangles": 2052411,
+          "collisionTriangles": 585464,
+          "maxColorError": 2.7672028779512914e-8,
+          "maxNormalError": 0,
+          "layers": [
+            {
+              "id": "green",
+              "color": [0.3419144249086609, 0.47353149614800955, 0.06301001765316767],
+              "y": 0.0057142856530845165,
+              "expectedArea": 152835.2425500002,
+              "actualArea": 152835.24066864487,
+              "triangles": 312338,
+              "spatialCoverage": {
+                "controls": 2490,
+                "positive": 2069,
+                "negative": 421,
+                "holeRings": 1,
+                "inspectedTriangles": 312337,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "park",
+              "color": [0.27467731206038465, 0.4019777798321958, 0.05126945837404324],
+              "y": 0.009523809887468815,
+              "expectedArea": 2918.3,
+              "actualArea": 2918.300002413646,
+              "triangles": 7849,
+              "spatialCoverage": {
+                "controls": 614,
+                "positive": 38,
+                "negative": 576,
+                "holeRings": 0,
+                "inspectedTriangles": 7849,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "pitch",
+              "color": [0.2704977910130658, 0.38132601143253014, 0.0953074666309647],
+              "y": 0.013333333656191826,
+              "expectedArea": 9418.073000000004,
+              "actualArea": 9418.072969456696,
+              "triangles": 12553,
+              "spatialCoverage": {
+                "controls": 613,
+                "positive": 44,
+                "negative": 569,
+                "holeRings": 0,
+                "inspectedTriangles": 12553,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "playground",
+              "color": [0.7304607400903537, 0.5647115057049292, 0.29177064981753587],
+              "y": 0.017142856493592262,
+              "expectedArea": 1306.0641500000006,
+              "actualArea": 1306.0641414125712,
+              "triangles": 2141,
+              "spatialCoverage": {
+                "controls": 595,
+                "positive": 17,
+                "negative": 578,
+                "holeRings": 0,
+                "inspectedTriangles": 2141,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "footway",
+              "color": [0.768151147247507, 0.6444796819705821, 0.4620769996544071],
+              "y": 0.020952381193637848,
+              "expectedArea": 30183.695999999658,
+              "actualArea": 30183.69600050895,
+              "triangles": 504496,
+              "spatialCoverage": {
+                "controls": 6302,
+                "positive": 5718,
+                "negative": 584,
+                "holeRings": 7,
+                "inspectedTriangles": 504496,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "parking",
+              "color": [0.184474994500441, 0.17464740365558504, 0.14995978981060856],
+              "y": 0.024761904031038284,
+              "expectedArea": 5417.647899999999,
+              "actualArea": 5417.647581391246,
+              "triangles": 10348,
+              "spatialCoverage": {
+                "controls": 627,
+                "positive": 55,
+                "negative": 572,
+                "holeRings": 0,
+                "inspectedTriangles": 10348,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "service",
+              "color": [0.24620132670783548, 0.2232279573168085, 0.18782077230067787],
+              "y": 0.02857142873108387,
+              "expectedArea": 48723.17199999997,
+              "actualArea": 48723.171111140575,
+              "triangles": 397698,
+              "spatialCoverage": {
+                "controls": 3308,
+                "positive": 2771,
+                "negative": 537,
+                "holeRings": 1,
+                "inspectedTriangles": 397698,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "road",
+              "color": [0.162029375639111, 0.15292615199615017, 0.13843161503245183],
+              "y": 0.032380953431129456,
+              "expectedArea": 64924.984350000035,
+              "actualArea": 64924.98420192466,
+              "triangles": 195893,
+              "spatialCoverage": {
+                "controls": 1347,
+                "positive": 812,
+                "negative": 535,
+                "holeRings": 0,
+                "inspectedTriangles": 195893,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "islands",
+              "color": [0.6938717612919899, 0.5972017883637634, 0.4396571738409188],
+              "y": 0.03619047626852989,
+              "expectedArea": 814.3211500000001,
+              "actualArea": 814.3211422688082,
+              "triangles": 5375,
+              "spatialCoverage": {
+                "controls": 676,
+                "positive": 97,
+                "negative": 579,
+                "holeRings": 0,
+                "inspectedTriangles": 5375,
+                "toleranceMetres": 0.0001
+              }
+            },
+            {
+              "id": "markings",
+              "color": [0.8962693533742664, 0.799102738014409, 0.6172065624196511],
+              "y": 0.03999999910593033,
+              "expectedArea": 944.6270999999941,
+              "actualArea": 944.6274686212862,
+              "triangles": 42024,
+              "spatialCoverage": {
+                "controls": 4208,
+                "positive": 3631,
+                "negative": 577,
+                "holeRings": 0,
+                "inspectedTriangles": 42024,
+                "toleranceMetres": 0.0001
+              }
+            }
+          ]
+        },
+        "physics": {
+          "rays": 360,
+          "maxRayError": 0,
+          "outerBoundaryInsetMetres": 0.001,
+          "routes": [
+            {
+              "sprint": false,
+              "diagonal": false,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -151.99999999999943,
+                "y": 0.92,
+                "z": -100
+              }
+            },
+            {
+              "sprint": false,
+              "diagonal": false,
+              "direction": 1,
+              "maxVerticalDrift": 1.900904923468616e-6,
+              "position": {
+                "x": -136.00000000001413,
+                "y": 0.9200019009049235,
+                "z": -99.99999999999464
+              }
+            },
+            {
+              "sprint": false,
+              "diagonal": true,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -149.07106781186582,
+                "y": 0.92,
+                "z": -125.07106781186582
+              }
+            },
+            {
+              "sprint": false,
+              "diagonal": true,
+              "direction": 1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -138.92893218813418,
+                "y": 0.92,
+                "z": -114.92893218813418
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": false,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -152.4999999999994,
+                "y": 0.92,
+                "z": -100
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": false,
+              "direction": 1,
+              "maxVerticalDrift": 6.653167232251178e-6,
+              "position": {
+                "x": -135.500000000048,
+                "y": 0.9200066531672323,
+                "z": -99.99999999998124
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": true,
+              "direction": -1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -149.42462120245847,
+                "y": 0.92,
+                "z": -125.42462120245847
+              }
+            },
+            {
+              "sprint": true,
+              "diagonal": true,
+              "direction": 1,
+              "maxVerticalDrift": 0,
+              "position": {
+                "x": -138.57537879754153,
+                "y": 0.92,
+                "z": -114.57537879754153
+              }
+            }
+          ],
+          "supportedSpawns": 8
+        },
+        "layoutRevision": 5214,
+        "enabledInstances": 3709,
+        "instancesSha256": "9bac8a74a78c7a99ea8c58ee74a74a3ffdcf439b781a9ca9c21711e7b5dc91d6",
+        "unchangedAbsolutePoses": true,
+        "unchangedEditableAssets": true,
+        "unchangedHeaderAndStreamingGrid": true
+      }
+    }
+  ],
+  "checks": {
+    "typescript": "passed",
+    "packageBoundaries": "passed",
+    "formatting": "passed",
+    "applicationBuild": "passed",
+    "tests": {
+      "success": true,
+      "numTotalTests": 734,
+      "numPassedTests": 611,
+      "numFailedTests": 0,
+      "numPendingTests": 123
+    }
+  },
+  "limits": {
+    "modelBytes": 4194304,
+    "collisionBytes": 8388608,
+    "cellBytes": 524288
+  },
+  "fullGameplayAcceptance": {
+    "assessed": false,
+    "reason": "No database, room, network, saved items or player network traversal in this stage comparison."
+  },
+  "selectedSpacingMetres": 4,
+  "selectionReason": "Both candidates pass the relative frame/physics budgets; 4 m has lower public bytes, build cost, active triangles and memory. Height fidelity remains for the height pilot.",
+  "hardware": {
+    "date": "2026-11-13T14:47:43.242Z",
+    "status": "measured",
+    "scope": "Real WorldView, CellStreamer and browser Havok over the current exported static layout. Stationary local neutral controller, no visible avatars or items, no room/network/database. Camera route is not a verified walking route. Not full city gameplay acceptance.",
+    "host": {
+      "platform": "darwin",
+      "cpu": "Apple M3 Pro",
+      "logicalCpus": 12,
+      "memoryBytes": 38654705664,
+      "node": "v26.3.1"
+    },
+    "browser": "158.0.8127.18",
+    "renderer": {
+      "vendor": "Google Inc. (Apple)",
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "deviceScaleFactor": 1
+    },
+    "quality": "standard",
+    "fixedHour": 12,
+    "warmupMs": 60000,
+    "sampleMs": 60000,
+    "route": [
+      [0, 0],
+      [-33, -75],
+      [-68, -130],
+      [-100, -200],
+      [-141, -280],
+      [-100, -200],
+      [-93.0264, -120.1397],
+      [-68, -130],
+      [-33, -75],
+      [0, 0]
+    ],
+    "layoutSha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+    "layoutRevision": 5214,
+    "scripts": [
+      {
+        "sourcePath": "tests/ring-terrain-baseline.ts",
+        "archivePath": "/Users/ilia-may/Documents/local-repo/syktyvkar-underground/output/ring-terrain-stage2/hardware-profile/measured-benchmark.ts",
+        "sha256": "c77ebe15c409b18ed552cabe6afeff7b948e04fcb017b838f7f6f7f127f3dbb4"
+      },
+      {
+        "sourcePath": "tests/helpers/ring-terrain-profile.ts",
+        "archivePath": "/Users/ilia-may/Documents/local-repo/syktyvkar-underground/output/ring-terrain-stage2/hardware-profile/measured-profile-fixture.ts",
+        "sha256": "38a1be1708d5baa2af0f50d84385349fbac6919a1569854ff240319c1015e9ba"
+      },
+      {
+        "sourcePath": "tests/ring-terrain-stage2-profile.ts",
+        "archivePath": "/Users/ilia-may/Documents/local-repo/syktyvkar-underground/output/ring-terrain-stage2/hardware-profile/measured-profile-runner.ts",
+        "sha256": "73c60e04a0bf475b2c72718f5277c5e554acbd203dc23d0561676b27b6cdc469"
+      }
+    ],
+    "strictFrameP95BudgetMs": 16.7,
+    "relativeBudget": "max(1.2 * legacy p95, legacy p95 + 1 ms), separately for frame and physics",
+    "fullGameplayAcceptance": {
+      "assessed": false,
+      "passed": false
+    },
+    "sourceReport": "output/ring-terrain-stage2/hardware-profile/comparison.json",
+    "sourceReportSha256": "1a0a08ee441610398acd15f36a4ae09ede51e625adbcabcb3bd76e1f02f11984",
+    "variants": [
+      {
+        "kind": "legacy",
+        "mapVersion": "7e0e072b2aea003323fa50ab7b624e67b64876ffcb9668bde63a35a6957b5b52",
+        "assetReleaseVersion": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+        "world": {
+          "cells": 40,
+          "assets": 261,
+          "buildings": 3749
+        },
+        "preparationMs": 451.22966599999995,
+        "phases": [
+          {
+            "kind": "steady-ring",
+            "elapsedMs": 60002.09999999404,
+            "frameMs": {
+              "count": 3600,
+              "mean": 16.665888888893857,
+              "p50": 16.69999998807907,
+              "p95": 17.100000023841858,
+              "p99": 17.5,
+              "max": 17.80000001192093
+            },
+            "averageFps": 60.00280013065488,
+            "sceneRenderCpuMs": {
+              "count": 3600,
+              "mean": 3.0889166668388577,
+              "p50": 3.0999999940395355,
+              "p95": 3.899999976158142,
+              "p99": 4,
+              "max": 4.4000000059604645
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.3340833335287041,
+              "p50": 0.30000001192092896,
+              "p95": 0.5,
+              "p99": 0.5999999940395355,
+              "max": 0.7000000178813934
+            },
+            "drawCalls": {
+              "count": 234,
+              "mean": 48,
+              "p50": 48,
+              "p95": 48,
+              "p99": 48,
+              "max": 48
+            },
+            "framesAboveNominalBudget": 2010,
+            "framesAbove20Ms": 0,
+            "p95Within16_7Ms": false,
+            "p95Within20Ms": true,
+            "maxima": {
+              "bodies": 2492,
+              "meshes": 560,
+              "activeTriangles": 71177,
+              "jsHeapUsedBytes": 129945905,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 8567268,
+              "graphicsCells": 30,
+              "physicsCells": 30
+            },
+            "relativeGates": {
+              "frameP95LimitMs": 20.52000002861023,
+              "physicsP95LimitMs": 1.5,
+              "framePassed": true,
+              "physicsPassed": true
+            }
+          },
+          {
+            "kind": "camera-route",
+            "elapsedMs": 60001.19999998808,
+            "frameMs": {
+              "count": 3568,
+              "mean": 16.815554932737097,
+              "p50": 16.69999998807907,
+              "p95": 17.5,
+              "p99": 17.900000005960464,
+              "max": 88.2000000178814
+            },
+            "averageFps": 59.46874807284331,
+            "sceneRenderCpuMs": {
+              "count": 3568,
+              "mean": 3.2615470853989166,
+              "p50": 3,
+              "p95": 4,
+              "p99": 16.80000001192093,
+              "max": 76.90000000596046
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.31849999954303104,
+              "p50": 0.30000001192092896,
+              "p95": 0.5,
+              "p99": 0.5999999940395355,
+              "max": 0.7999999821186066
+            },
+            "drawCalls": {
+              "count": 233,
+              "mean": 33.566523605150216,
+              "p50": 27,
+              "p95": 73,
+              "p99": 98,
+              "max": 109
+            },
+            "framesAboveNominalBudget": 1922,
+            "framesAbove20Ms": 33,
+            "p95Within16_7Ms": false,
+            "p95Within20Ms": true,
+            "maxima": {
+              "bodies": 2492,
+              "meshes": 763,
+              "activeTriangles": 122910,
+              "jsHeapUsedBytes": 269445227,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 10668588,
+              "graphicsCells": 40,
+              "physicsCells": 30
+            },
+            "relativeGates": {
+              "frameP95LimitMs": 21,
+              "physicsP95LimitMs": 1.5,
+              "framePassed": true,
+              "physicsPassed": true
+            }
+          }
+        ],
+        "gates": {
+          "strictFrameP95Passed": false,
+          "existingFrameP95Passed": true,
+          "fullGameplayAssessed": false,
+          "fullGameplayPassed": false
+        },
+        "unchanged": {
+          "layout": true,
+          "oldDistManifest": true,
+          "benchmark": true,
+          "profileFixture": true
+        },
+        "reportSha256": "d4484477e50d273bd5d333d0f0146f0f8741cd77f3c8c7026579e9f1b60948f7"
+      },
+      {
+        "kind": "flat-2m",
+        "mapVersion": "f90b9e166e6f30bb9468b6ac7df2014a8c6344a46614026bd14f6e7cb0a9a12c",
+        "assetReleaseVersion": "6bce0771b22461b8d90b5a2abecc4b86351f622f1dd3301c7f4032581a8eb073",
+        "world": {
+          "cells": 40,
+          "assets": 261,
+          "buildings": 3749
+        },
+        "preparationMs": 4673.82325,
+        "phases": [
+          {
+            "kind": "steady-ring",
+            "elapsedMs": 60004.10000002384,
+            "frameMs": {
+              "count": 3601,
+              "mean": 16.66575951124853,
+              "p50": 16.69999998807907,
+              "p95": 17.5,
+              "p99": 17.69999998807907,
+              "max": 18.599999994039536
+            },
+            "averageFps": 60.00326593726805,
+            "sceneRenderCpuMs": {
+              "count": 3601,
+              "mean": 2.885087475590294,
+              "p50": 3.300000011920929,
+              "p95": 3.9000000059604645,
+              "p99": 4.0999999940395355,
+              "max": 4.399999976158142
+            },
+            "physicsStepMs": {
+              "count": 3601,
+              "mean": 0.32910302725807555,
+              "p50": 0.30000001192092896,
+              "p95": 0.5,
+              "p99": 0.6000000238418579,
+              "max": 0.800000011920929
+            },
+            "drawCalls": {
+              "count": 232,
+              "mean": 48,
+              "p50": 48,
+              "p95": 48,
+              "p99": 48,
+              "max": 48
+            },
+            "framesAboveNominalBudget": 1948,
+            "framesAbove20Ms": 0,
+            "p95Within16_7Ms": false,
+            "p95Within20Ms": true,
+            "maxima": {
+              "bodies": 2492,
+              "meshes": 560,
+              "activeTriangles": 558214,
+              "jsHeapUsedBytes": 243304186,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 64781400,
+              "graphicsCells": 30,
+              "physicsCells": 30
+            },
+            "relativeGates": {
+              "frameP95LimitMs": 20.52000002861023,
+              "physicsP95LimitMs": 1.5,
+              "framePassed": true,
+              "physicsPassed": true
+            }
+          },
+          {
+            "kind": "camera-route",
+            "elapsedMs": 60001.5,
+            "frameMs": {
+              "count": 3564,
+              "mean": 16.83453984287652,
+              "p50": 16.69999998807907,
+              "p95": 18,
+              "p99": 18.80000001192093,
+              "max": 80.5
+            },
+            "averageFps": 59.401683047674545,
+            "sceneRenderCpuMs": {
+              "count": 3564,
+              "mean": 3.3482603813227847,
+              "p50": 3.0999999940395355,
+              "p95": 4.0999999940395355,
+              "p99": 16.799999982118607,
+              "max": 73.7000000178814
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.3282777772843838,
+              "p50": 0.30000001192092896,
+              "p95": 0.5,
+              "p99": 0.5,
+              "max": 0.7999999821186066
+            },
+            "drawCalls": {
+              "count": 235,
+              "mean": 35.45106382978724,
+              "p50": 27,
+              "p95": 80,
+              "p99": 109,
+              "max": 112
+            },
+            "framesAboveNominalBudget": 2080,
+            "framesAbove20Ms": 34,
+            "p95Within16_7Ms": false,
+            "p95Within20Ms": true,
+            "maxima": {
+              "bodies": 2492,
+              "meshes": 763,
+              "activeTriangles": 1082231,
+              "jsHeapUsedBytes": 402845399,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 67087801,
+              "graphicsCells": 40,
+              "physicsCells": 30
+            },
+            "relativeGates": {
+              "frameP95LimitMs": 21,
+              "physicsP95LimitMs": 1.5,
+              "framePassed": true,
+              "physicsPassed": true
+            }
+          }
+        ],
+        "gates": {
+          "strictFrameP95Passed": false,
+          "existingFrameP95Passed": true,
+          "fullGameplayAssessed": false,
+          "fullGameplayPassed": false
+        },
+        "unchanged": {
+          "layout": true,
+          "oldDistManifest": true,
+          "benchmark": true,
+          "profileFixture": true
+        },
+        "reportSha256": "6fb6b263b4d8bf2fe0baac9627a1f19d04a8746cac031b196be2b7cace5797a8"
+      },
+      {
+        "kind": "flat-4m",
+        "mapVersion": "007b2e2edc036c69dd95ab772f48a89ce382ef6c6098dc187a9c027fa21a9411",
+        "assetReleaseVersion": "d3ec18c0fbac911469ec29ca53327357e00183fbf6a9d7d68815900499e75f6f",
+        "world": {
+          "cells": 40,
+          "assets": 261,
+          "buildings": 3749
+        },
+        "preparationMs": 1857.01975,
+        "phases": [
+          {
+            "kind": "steady-ring",
+            "elapsedMs": 60001.59999999404,
+            "frameMs": {
+              "count": 3600,
+              "mean": 16.66547222221891,
+              "p50": 16.69999998807907,
+              "p95": 18.200000017881393,
+              "p99": 18.599999994039536,
+              "max": 18.80000001192093
+            },
+            "averageFps": 60.004300308200676,
+            "sceneRenderCpuMs": {
+              "count": 3600,
+              "mean": 2.762916666575604,
+              "p50": 3,
+              "p95": 3.9000000059604645,
+              "p99": 4.199999988079071,
+              "max": 5.200000017881393
+            },
+            "physicsStepMs": {
+              "count": 3599,
+              "mean": 0.3265073630140039,
+              "p50": 0.30000001192092896,
+              "p95": 0.5,
+              "p99": 0.5999999940395355,
+              "max": 0.800000011920929
+            },
+            "drawCalls": {
+              "count": 232,
+              "mean": 48,
+              "p50": 48,
+              "p95": 48,
+              "p99": 48,
+              "max": 48
+            },
+            "framesAboveNominalBudget": 1954,
+            "framesAbove20Ms": 0,
+            "p95Within16_7Ms": false,
+            "p95Within20Ms": true,
+            "maxima": {
+              "bodies": 2492,
+              "meshes": 560,
+              "activeTriangles": 280739,
+              "jsHeapUsedBytes": 173827539,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 30304829,
+              "graphicsCells": 30,
+              "physicsCells": 30
+            },
+            "relativeGates": {
+              "frameP95LimitMs": 20.52000002861023,
+              "physicsP95LimitMs": 1.5,
+              "framePassed": true,
+              "physicsPassed": true
+            }
+          },
+          {
+            "kind": "camera-route",
+            "elapsedMs": 60000.89999997616,
+            "frameMs": {
+              "count": 3568,
+              "mean": 16.815610986553768,
+              "p50": 16.69999998807907,
+              "p95": 17.5,
+              "p99": 18.400000005960464,
+              "max": 80.7999999821186
+            },
+            "averageFps": 59.46854983738789,
+            "sceneRenderCpuMs": {
+              "count": 3568,
+              "mean": 3.208800448238382,
+              "p50": 3,
+              "p95": 4.399999976158142,
+              "p99": 15.699999988079071,
+              "max": 75.69999998807907
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.3208055556482739,
+              "p50": 0.30000001192092896,
+              "p95": 0.5999999940395355,
+              "p99": 0.800000011920929,
+              "max": 3.4000000059604645
+            },
+            "drawCalls": {
+              "count": 233,
+              "mean": 33.23605150214592,
+              "p50": 26,
+              "p95": 69,
+              "p99": 105,
+              "max": 110
+            },
+            "framesAboveNominalBudget": 1920,
+            "framesAbove20Ms": 31,
+            "p95Within16_7Ms": false,
+            "p95Within20Ms": true,
+            "maxima": {
+              "bodies": 2492,
+              "meshes": 763,
+              "activeTriangles": 516337,
+              "jsHeapUsedBytes": 311067101,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 40561489,
+              "graphicsCells": 40,
+              "physicsCells": 30
+            },
+            "relativeGates": {
+              "frameP95LimitMs": 21,
+              "physicsP95LimitMs": 1.5,
+              "framePassed": true,
+              "physicsPassed": true
+            }
+          }
+        ],
+        "gates": {
+          "strictFrameP95Passed": false,
+          "existingFrameP95Passed": true,
+          "fullGameplayAssessed": false,
+          "fullGameplayPassed": false
+        },
+        "unchanged": {
+          "layout": true,
+          "oldDistManifest": true,
+          "benchmark": true,
+          "profileFixture": true
+        },
+        "reportSha256": "8272344fa65b800ecf7c7f423a25d3e024042061ffffcf5ee6208a440cf8763c"
+      }
+    ]
+  },
+  "visualInspection": {
+    "views": ["legacy/steady-ring.png", "flat-2m/steady-ring.png", "flat-4m/steady-ring.png"],
+    "finding": "Ring view colors, visible surface outlines and object placements preserved; full map footprint checked by saved-geometry assertions."
+  }
+}

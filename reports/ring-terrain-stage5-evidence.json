@@ -1,0 +1,672 @@
+{
+  "formatVersion": 1,
+  "date": "2026-11-13T18:11:02.271Z",
+  "status": "stage5-candidate-verified-production-integration-required",
+  "sourceExportSha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+  "mapVersion": "2272cc0c306111c920026df5efa3be25dc8ca005b385daef1ab6fbb532587c51",
+  "assetReleaseVersion": "882e48b11e25666c56dea64d1b0fbf19f44c8816fb4eb52620d638f063990cbf",
+  "evidence": {
+    "source": {
+      "path": "output/ring-terrain-stage5/full-authoring/source-evidence.json",
+      "sha256": "3e8349c63f35d29360c5a775bfef26a0928553bdbf1382e80d83e6bdec4a0951"
+    },
+    "visual": {
+      "path": "output/ring-terrain-stage5/full-authoring/final-visual-review.json",
+      "sha256": "5f856b2c85eeb5eccb2905d5fe01e5da8a6316804eb7c3a068d51fc4c9eeb64b"
+    },
+    "physics": {
+      "path": "output/ring-terrain-stage5/acceptance/final-existing-controls.json",
+      "sha256": "53e4e46f526df85dd65f112813362aed0b4c4edbb31ad9a77e30a55445f75283"
+    },
+    "entrances": {
+      "path": "output/ring-terrain-stage5/entrance-approaches/full-city-entrance-probes.json",
+      "sha256": "3bd014fd70703b5975fc9888d23df86b0bbf6e6d7dc722aeb20a7f71d0130589"
+    },
+    "lowDoors": {
+      "path": "output/ring-terrain-stage5/entrance-approaches/low-door-volumes.json",
+      "sha256": "528ffdc5f0d642120753d87a190decc663ff29d5570d3726ab1b3c485d1f653b"
+    },
+    "strictBuild": {
+      "path": "output/ring-terrain-stage5/final-verified/physical-acceptance-stamp.json",
+      "sha256": "e59a587752c82d9230ee25d39226f409f81cf8940141795ca81509a84918521e"
+    },
+    "migration": {
+      "path": "output/ring-terrain-stage5/final/staging-migration/13f16549-356c-419e-90d6-34adbf0ff2bd/report.json",
+      "sha256": "c3a1a2fd3a99e5f44b506b41b04ec3030c6ae63dbca7346472f2c4f08480d38c"
+    },
+    "network": {
+      "path": "output/ring-terrain-stage5/full-final-gameplay/2026-11-13T17-25-05-185Z/results.json",
+      "sha256": "af5789ac9437348efc9e85c739b7cc3bf4445c4797b4b1856912f41168d93698"
+    },
+    "browser": {
+      "path": "output/ring-terrain-stage5/browser-regressions/summary.json",
+      "sha256": "67a5af55f8721e1e7d605d8c2410e400db2ded689c5ca612e7be06f27097e2ed"
+    },
+    "hardware": {
+      "path": "output/ring-terrain-stage5/hardware-profile/comparison.json",
+      "sha256": "5dc7822fb486b1a8f2e22a8d3a30e926ffa9b66c65738147d91e29538532889a"
+    },
+    "frameClock": {
+      "path": "output/ring-terrain-stage5/frame-clock/headless/report.json",
+      "sha256": "ecab800153d032dee02edd79134069163515fbc23436b70e2256b81561e8f97a"
+    },
+    "unitTests": {
+      "path": "output/ring-terrain-stage5/unit-tests.log",
+      "sha256": "c9a6e10072a65c4759b1f19913dd11c3520e70502420bc80e168d8318abc6cc0"
+    }
+  },
+  "source": {
+    "status": "full-candidate-static-physics-and-visual-checked",
+    "sourceExport": {
+      "file": "data/map-layout.json",
+      "sha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193"
+    },
+    "terrain": {
+      "grid": {
+        "file": "content/worlds/ring-block/terrain-candidate/full-grid-ready.json",
+        "sha256": "d6e9ceb11508a43d542f5a3f6517c86d176b8af924ba4c218ce277483e7f864f"
+      },
+      "canonicalSha256": "959e16bc87bc0f5a766730bba47612b178a3f5b58a4b4155944da729b796161d",
+      "sourceStatistics": {
+        "heightY": {
+          "count": 33220,
+          "min": -0.27638,
+          "p95": 13.5782775,
+          "max": 14.52129
+        },
+        "triangleSlopeDegrees": {
+          "count": 65700,
+          "min": 0.013982547261521587,
+          "p95": 3.9310353842752863,
+          "max": 4.703097727602485
+        },
+        "changedTriangles": 65700,
+        "boundary": {
+          "north": {
+            "count": 151,
+            "min": 3.26969,
+            "p95": 14.01656,
+            "max": 14.12002
+          },
+          "south": {
+            "count": 151,
+            "min": 0.0391,
+            "p95": 5.025055,
+            "max": 5.08131
+          },
+          "west": {
+            "count": 220,
+            "min": 1.68592,
+            "p95": 13.028666,
+            "max": 13.25413
+          },
+          "east": {
+            "count": 220,
+            "min": 4.35621,
+            "p95": 13.815573500000001,
+            "max": 13.90211
+          }
+        }
+      },
+      "finalStatistics": {
+        "heightY": {
+          "count": 33220,
+          "min": -0.20082829744448039,
+          "p95": 13.530607343557124,
+          "max": 14.52129
+        },
+        "triangleSlopeDegrees": {
+          "count": 65700,
+          "min": 0,
+          "p95": 4.516482122997143,
+          "max": 7.4698102308344625
+        },
+        "changedTriangles": 65700,
+        "boundary": {
+          "north": {
+            "count": 151,
+            "min": 3.26969,
+            "p95": 14.01656,
+            "max": 14.12002
+          },
+          "south": {
+            "count": 151,
+            "min": 0.0391,
+            "p95": 5.025055,
+            "max": 5.08131
+          },
+          "west": {
+            "count": 220,
+            "min": 1.68592,
+            "p95": 11.038442965217921,
+            "max": 11.803604245951075
+          },
+          "east": {
+            "count": 220,
+            "min": 4.35621,
+            "p95": 13.228744430644383,
+            "max": 13.584538522136876
+          }
+        }
+      },
+      "intervention": {
+        "changedNodes": 21250,
+        "totalNodes": 33220,
+        "changedTriangles": 43228,
+        "changedAreaM2": 345824,
+        "reviewedPilotBuildingOwners": 27,
+        "retiredPilotBuildingOwners": 13,
+        "fullPlatformBuildingOwners": 5,
+        "fullGradeBuildingOwners": 12,
+        "inheritedPublicOwners": 3,
+        "extraPadOwners": 37,
+        "sourceHeightsUnchangedOutsideExplicitPadInfluence": true
+      },
+      "absoluteDeltaY": {
+        "p50": 0.07278724354785093,
+        "p95": 3.324055728719662,
+        "max": 6.145358489076479
+      },
+      "checked": {
+        "actualOwners": 3709,
+        "buildingModels": 136,
+        "kitModels": 64,
+        "buildingOwners": 136,
+        "kitOwners": 2389,
+        "anchorOwners": 1184
+      },
+      "issues": [],
+      "maximumBuildingFoundation": 2.9557362028715453,
+      "maximumKitFoundation": 0.40856962459986335,
+      "minimumAnchorRemainingBudget": 0.0009469232986162868
+    },
+    "publication": {
+      "mapVersion": "2272cc0c306111c920026df5efa3be25dc8ca005b385daef1ab6fbb532587c51",
+      "targetAssetReleaseVersion": "882e48b11e25666c56dea64d1b0fbf19f44c8816fb4eb52620d638f063990cbf",
+      "changedStaticY": 3709,
+      "derivedCount": 2641,
+      "publicResourceBytes": 205209339
+    },
+    "publicationPins": {
+      "manifest": {
+        "file": "output/ring-terrain-stage5/final/export-world/manifest.json",
+        "sha256": "308333a027aefeccf44f8f8969c18e34d5ade4b6561bd6305d8321d9e0f697a9"
+      },
+      "targetSnapshot": {
+        "file": "output/ring-terrain-stage5/final/target-static-snapshot.json",
+        "sha256": "f5ce8d8412c57b9452e258a617cde74c47be7da289bf795222bf26197594c681"
+      },
+      "staticPreflight": {
+        "file": "output/ring-terrain-stage5/final/static-preflight.json",
+        "sha256": "03fbc17129bdf81962cf54b308a216ab4470253a1a6b7a8cda59728e6edaa2b6"
+      }
+    },
+    "physicsPacks": {
+      "cells": 40,
+      "uniquePacks": 117
+    },
+    "entrances": {
+      "catalog": {
+        "file": "content/worlds/ring-block/terrain-candidate/full-entrance-catalog.json",
+        "sha256": "b715cc20b9b14f186355758eb5cbc055960b1be41d142d1928dc88828b949a70"
+      },
+      "owners": 48,
+      "approaches": 115,
+      "status": "physics-checked-authoring-candidate",
+      "physicalMapVersion": "2272cc0c306111c920026df5efa3be25dc8ca005b385daef1ab6fbb532587c51",
+      "physicalEvidence": [
+        {
+          "file": "output/ring-terrain-stage5/entrance-approaches/full-city-entrance-probes.json",
+          "sha256": "3bd014fd70703b5975fc9888d23df86b0bbf6e6d7dc722aeb20a7f71d0130589"
+        },
+        {
+          "file": "output/ring-terrain-stage5/entrance-approaches/low-door-volumes.json",
+          "sha256": "528ffdc5f0d642120753d87a190decc663ff29d5570d3726ab1b3c485d1f653b"
+        }
+      ],
+      "physicalGateSummary": {
+        "authoredThresholds": 120,
+        "walkSprintRuns": 240,
+        "lowDoors": 26,
+        "lowDoorWalkSprintRuns": 52,
+        "status": "passed",
+        "failures": 0
+      },
+      "physicalRuntimePinCount": 40
+    },
+    "fixedPoses": {
+      "sourceSnapshot": {
+        "file": "output/ring-terrain-stage5/intermediate/target-static-snapshot.json",
+        "sha256": "988b0fa77c8a53bb85c562eebf170e9cb008c3409eb998f5a7cbe2896043d20f"
+      },
+      "owners": 3709,
+      "xzExact": true,
+      "rotationsExact": true,
+      "maximumDeltaY": 3.552713678800501e-15,
+      "ulpOnlyChangedOwners": 3
+    },
+    "physicalAcceptance": {
+      "report": {
+        "file": "output/ring-terrain-stage5/acceptance/final-existing-controls.json",
+        "sha256": "53e4e46f526df85dd65f112813362aed0b4c4edbb31ad9a77e30a55445f75283"
+      },
+      "status": "passed",
+      "issues": [],
+      "rays": 192,
+      "spawns": 8,
+      "routes": 8,
+      "rests": 3,
+      "boundaryRecords": 560,
+      "controlsChanged": false
+    },
+    "tests": {
+      "actualExportFocusedPassed": 11,
+      "cleanViewPassed": 3,
+      "cleanViewDatasetCasesSkipped": 6,
+      "cleanViewLog": {
+        "file": "output/ring-terrain-stage5/full-authoring/clean-export-test.log",
+        "sha256": "9a64887dbcbf93b185676ea97647687333599eacd72bd6836a5ae6ed90987c97"
+      },
+      "tsc": "passed"
+    },
+    "pilotCompatibility": {
+      "terrainTileNormalizationBuildMapVersion": "9e34f33dc4859ed26096101ed2a99b92300a765190666cfdcc424e8de260c104",
+      "latestSupportPairCancellationCheck": {
+        "status": "passed-exact-map",
+        "mapVersion": "9e34f33dc4859ed26096101ed2a99b92300a765190666cfdcc424e8de260c104",
+        "buildReport": {
+          "file": "output/ring-terrain-stage5/pilot-final-kernel-compatibility/build-report.json",
+          "sha256": "0efae914fafdb3e546466c1c3938bd90c109e979b65e6801c6b83a0a9f4f37b3"
+        }
+      }
+    },
+    "visualReview": {
+      "status": "reviewed-no-open-visual-defects-in-captured-views",
+      "mapVersion": "2272cc0c306111c920026df5efa3be25dc8ca005b385daef1ab6fbb532587c51",
+      "preview": {
+        "file": "output/ring-terrain-stage5/final-verified/preview-report.json",
+        "sha256": "97a7e08900ac55bc182eae47d6ec83c6bef5fe01504478b1d1a2d9adefd57d69"
+      },
+      "manuallyInspectedFrames": [
+        {
+          "kind": "overview",
+          "file": "output/ring-terrain-stage5/final-verified/overview.png",
+          "sha256": "9df8966ad3f90d77295da7f2f2cb7999d544709d2cf341ac414fbb1525b7bdd2"
+        },
+        {
+          "kind": "entrance",
+          "file": "output/ring-terrain-stage5/final-verified/entrance.png",
+          "sha256": "40709d005312c26217c3a96d2b6727a0356be3ea7e291505d16a063d2874d021"
+        },
+        {
+          "kind": "monument-trudovaya-slava",
+          "file": "output/ring-terrain-stage5/final-verified/monument-trudovaya-slava.png",
+          "sha256": "dd0fc31ac5c453ff74f74a8ce0861b439b8865c3778687991ebdc7f34bc29770"
+        },
+        {
+          "kind": "monument-kuratov",
+          "file": "output/ring-terrain-stage5/final-verified/monument-kuratov.png",
+          "sha256": "2bfa45fcfb1374355e054e10b8264416045997faeb858e57237ac03871fa6786"
+        },
+        {
+          "kind": "theatre-fountain-west",
+          "file": "output/ring-terrain-stage5/final-verified/theatre-fountain-west.png",
+          "sha256": "188f4abd00597249bf41830a882da291d05ba8202458715cc5250e92d3ec3838"
+        },
+        {
+          "kind": "bus-stop-2afb8d9e7529b4f661c1",
+          "file": "output/ring-terrain-stage5/final-verified/bus-stop-2afb8d9e7529b4f661c1.png",
+          "sha256": "076604681c3be6775a4dbc89aaad3fb263823e94167e0059a77f61f4b9c0ea94"
+        },
+        {
+          "kind": "bench-e81b6a3635e6cc487a3b",
+          "file": "output/ring-terrain-stage5/final-verified/bench-e81b6a3635e6cc487a3b.png",
+          "sha256": "a3acb9e3105beb2b520913ad2bb429e1a6ec099ff36b0c9dd7ab54e023b29e71"
+        },
+        {
+          "kind": "full-northern-crest",
+          "file": "output/ring-terrain-stage5/final-verified/full-northern-crest.png",
+          "sha256": "84b257c86afe82910bfc58cbf7de0830503e28cfa3a6aab4c9ce6198399906f5"
+        },
+        {
+          "kind": "full-northwest-edge",
+          "file": "output/ring-terrain-stage5/final-verified/full-northwest-edge.png",
+          "sha256": "048ac1a762c8eb2359fa95d43e350e7c94b35242ca6c3b535c37bb9598ce5be2"
+        },
+        {
+          "kind": "full-northeast-edge",
+          "file": "output/ring-terrain-stage5/final-verified/full-northeast-edge.png",
+          "sha256": "d44bec06f3cfe84c3ae76b5f34990b00fe1a0f50388d9878a7eea025011e4b73"
+        },
+        {
+          "kind": "full-western-courts",
+          "file": "output/ring-terrain-stage5/final-verified/full-western-courts.png",
+          "sha256": "a07f0324b887d7f70da3a72b0038e4d4c3e2487eaf52734c185015382df25400"
+        },
+        {
+          "kind": "full-eastern-yards",
+          "file": "output/ring-terrain-stage5/final-verified/full-eastern-yards.png",
+          "sha256": "e782f285a1ea111456d00f94bfd2fdc083eb24a891abe32c4a92e7f76afe9a8b"
+        },
+        {
+          "kind": "full-southern-overview",
+          "file": "output/ring-terrain-stage5/final-verified/full-southern-overview.png",
+          "sha256": "5816e603ffb2e1e44490cb7fc74cbd168168eb263cd62ee121a3906cc43dcdc8"
+        },
+        {
+          "kind": "full-southwest-edge",
+          "file": "output/ring-terrain-stage5/final-verified/full-southwest-edge.png",
+          "sha256": "1087724d63491c5174d333847f72d5708d299dfb1cd522146e71c3de4e0c03e9"
+        },
+        {
+          "kind": "full-southeast-edge",
+          "file": "output/ring-terrain-stage5/final-verified/full-southeast-edge.png",
+          "sha256": "d8a709c982ea35f4ac5cb7404249075126962780846272f7217b8b3c7b02f7fa"
+        },
+        {
+          "kind": "full-school-1",
+          "file": "output/ring-terrain-stage5/final-verified/full-school-1.png",
+          "sha256": "e1cd203a807f31c7c0b6570ee26287a4b3943aad5645e9ef5020dfc99354d570"
+        },
+        {
+          "kind": "full-opera-theatre",
+          "file": "output/ring-terrain-stage5/final-verified/full-opera-theatre.png",
+          "sha256": "9020b187a493809796bfc429bc2632496b6ea712fe8c0179d653d2787e6ca6a0"
+        }
+      ],
+      "coverage": [
+        "Syktsu overview and main entrance",
+        "northern crest and northwest/northeast edges",
+        "western courts and eastern enclosed yards",
+        "southern overview and southwest/southeast edges",
+        "school1 and opera theatre",
+        "ring monument, Kuratov plaza and western fountain",
+        "saved bus stop and bench"
+      ],
+      "findings": [
+        "The previous exterior skirt/boundary z-fighting is absent in final northeast/southeast/crest views after the explicit2cm full-only inset.",
+        "No open terrain seams or visibly floating rigid foundations in the17 inspected views.",
+        "New door approaches shown in the views meet their building-side platforms and surrounding ground. Their full physical coverage is provided separately by the292 entrance runs.",
+        "Real HUD labels for Syktsu, school, theatre, ring and public square render at the authored full-map heights. Numeric local-surface checks cover all6 landmarks."
+      ],
+      "browserErrors": [],
+      "limits": "Static orthographic witnesses of an isolated publication; network and frame-time acceptance are separate."
+    },
+    "limitations": [
+      "This evidence does not replace room/network/GPU performance acceptance or live-database rollout.",
+      "Terrain is an approximate ArcticDEM-derived game surface; the broad explicit pad influence is reported rather than hidden."
+    ],
+    "strictAfterBuildStamp": {
+      "file": "output/ring-terrain-stage5/final-verified/physical-acceptance-stamp.json",
+      "sha256": "e59a587752c82d9230ee25d39226f409f81cf8940141795ca81509a84918521e"
+    },
+    "strictBuild": {
+      "file": "output/ring-terrain-stage5/final-verified/build-report.json",
+      "sha256": "5c6f7d44b7a895a0275181f97fc4fe6c41112a536e852b98ca8702c51dffd5f1"
+    },
+    "verifiedArtifactDirectory": "output/ring-terrain-stage5/final-verified",
+    "verifiedBytesEqualPhysicallyCheckedFinal": {
+      "manifest": true,
+      "targetSnapshot": true
+    }
+  },
+  "network": {
+    "status": "passed",
+    "fullStaticCityFunctionalAcceptance": true,
+    "userDatabaseAssessed": false,
+    "networkProfile": {
+      "rttMs": 100,
+      "jitterMs": 20
+    },
+    "scope": "full-static-city functional acceptance; synthetic dynamics"
+  },
+  "hardware": {
+    "surface": "headless",
+    "renderer": {
+      "vendor": "Google Inc. (Apple)",
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "deviceScaleFactor": 1
+    },
+    "quality": "standard",
+    "acceptedCriterion": {
+      "userDecision": "2026-11-13",
+      "minimumAverageFps": 59,
+      "maximumFrameP95Ms": 20,
+      "reportMaximaSeparately": true
+    },
+    "acceptedFrameGatePassed": true,
+    "originalDiagnosticGates": {
+      "strictFrameP95Passed": false,
+      "relativeFrameP95Passed": true,
+      "relativePhysicsP95Passed": true
+    },
+    "variants": [
+      {
+        "kind": "flat-4m",
+        "mapVersion": "007b2e2edc036c69dd95ab772f48a89ce382ef6c6098dc187a9c027fa21a9411",
+        "phases": [
+          {
+            "kind": "steady-ring",
+            "averageFps": 60.00200006666889,
+            "frameMs": {
+              "count": 3600,
+              "mean": 16.66611111111111,
+              "p50": 16.69999998807907,
+              "p95": 17.5,
+              "p99": 17.600000023841858,
+              "max": 17.799999982118607
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.26211111067069903,
+              "p50": 0.29999998211860657,
+              "p95": 0.4000000059604645,
+              "p99": 0.5,
+              "max": 0.800000011920929
+            },
+            "sceneRenderCpuMs": {
+              "count": 3600,
+              "mean": 1.7490555558022525,
+              "p50": 1.7999999821186066,
+              "p95": 3,
+              "p99": 3.4000000059604645,
+              "max": 3.9000000059604645
+            },
+            "drawCalls": {
+              "count": 233,
+              "mean": 48,
+              "p50": 48,
+              "p95": 48,
+              "p99": 48,
+              "max": 48
+            },
+            "sampledMaxima": {
+              "bodies": 2492,
+              "meshes": 560,
+              "activeTriangles": 280739,
+              "jsHeapUsedBytes": 174306980,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 30304829,
+              "graphicsCells": 30,
+              "physicsCells": 30
+            }
+          },
+          {
+            "kind": "camera-route",
+            "averageFps": 59.319138297429056,
+            "frameMs": {
+              "count": 3559,
+              "mean": 16.857965720708066,
+              "p50": 16.69999998807907,
+              "p95": 17.400000005960464,
+              "p99": 19.5,
+              "max": 82.19999998807907
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.2833055553585291,
+              "p50": 0.29999998211860657,
+              "p95": 0.5,
+              "p99": 0.7999999821186066,
+              "max": 0.9000000059604645
+            },
+            "sceneRenderCpuMs": {
+              "count": 3559,
+              "mean": 2.311407698837014,
+              "p50": 1.9000000059604645,
+              "p95": 2.800000011920929,
+              "p99": 18,
+              "max": 77.30000001192093
+            },
+            "drawCalls": {
+              "count": 233,
+              "mean": 33.94849785407725,
+              "p50": 26,
+              "p95": 79,
+              "p99": 108,
+              "max": 109
+            },
+            "sampledMaxima": {
+              "bodies": 2492,
+              "meshes": 763,
+              "activeTriangles": 497280,
+              "jsHeapUsedBytes": 308970814,
+              "wasmReservedBytes": 16908288,
+              "resourceCacheBytes": 40561489,
+              "graphicsCells": 40,
+              "physicsCells": 30
+            }
+          }
+        ]
+      },
+      {
+        "kind": "terrain-full",
+        "mapVersion": "2272cc0c306111c920026df5efa3be25dc8ca005b385daef1ab6fbb532587c51",
+        "phases": [
+          {
+            "kind": "steady-ring",
+            "averageFps": 60.002900140179406,
+            "frameMs": {
+              "count": 3600,
+              "mean": 16.665861111109454,
+              "p50": 16.69999998807907,
+              "p95": 17.400000005960464,
+              "p99": 17.599999994039536,
+              "max": 21.30000001192093
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.2908611110928986,
+              "p50": 0.29999998211860657,
+              "p95": 0.5,
+              "p99": 0.6000000238418579,
+              "max": 1.5
+            },
+            "sceneRenderCpuMs": {
+              "count": 3600,
+              "mean": 5.798083333364791,
+              "p50": 5.799999982118607,
+              "p95": 6.5999999940395355,
+              "p99": 7.299999982118607,
+              "max": 10.699999988079071
+            },
+            "drawCalls": {
+              "count": 233,
+              "mean": 49,
+              "p50": 49,
+              "p95": 49,
+              "p99": 49,
+              "max": 49
+            },
+            "sampledMaxima": {
+              "bodies": 4308,
+              "meshes": 4077,
+              "activeTriangles": 297787,
+              "jsHeapUsedBytes": 360302178,
+              "wasmReservedBytes": 20316160,
+              "resourceCacheBytes": 66575072,
+              "graphicsCells": 30,
+              "physicsCells": 30
+            }
+          },
+          {
+            "kind": "camera-route",
+            "averageFps": 59.301976732557755,
+            "frameMs": {
+              "count": 3558,
+              "mean": 16.8628442945475,
+              "p50": 16.69999998807907,
+              "p95": 17.5,
+              "p99": 23.19999998807907,
+              "max": 83.40000000596046
+            },
+            "physicsStepMs": {
+              "count": 3600,
+              "mean": 0.21769444454047415,
+              "p50": 0.19999998807907104,
+              "p95": 0.4000000059604645,
+              "p99": 0.5,
+              "max": 0.7999999821186066
+            },
+            "sceneRenderCpuMs": {
+              "count": 3558,
+              "mean": 6.661973018486088,
+              "p50": 6.300000011920929,
+              "p95": 7.700000017881393,
+              "p99": 18.5,
+              "max": 74.2999999821186
+            },
+            "drawCalls": {
+              "count": 233,
+              "mean": 48.09012875536481,
+              "p50": 27,
+              "p95": 202,
+              "p99": 377,
+              "max": 414
+            },
+            "sampledMaxima": {
+              "bodies": 4308,
+              "meshes": 6227,
+              "activeTriangles": 540693,
+              "jsHeapUsedBytes": 550853559,
+              "wasmReservedBytes": 20316160,
+              "resourceCacheBytes": 67105595,
+              "graphicsCells": 40,
+              "physicsCells": 30
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "unitTests": {
+      "passed": 869,
+      "files": 122,
+      "sql": true
+    },
+    "additionalEntranceLoaderTests": 8,
+    "entranceWalkSprintRuns": 292,
+    "headlessFrameClockP95Ms": 17.30000001192093,
+    "headedClockAttempt": "closed-before-completion-no-measurement",
+    "productionCutover": false,
+    "realUserDatabaseMigration": false
+  },
+  "productionPrerequisite": {
+    "revision": "548a02fbb1c6cd7dfb80f4b0d5257aea5d678314",
+    "assetReleaseVersion": "8ecdd508c14ad05dfdc62cdddcc68b78b8762e355c069b5e15821cdbe64455bf",
+    "preserve": [
+      "protocol16",
+      "new-avatar-skins",
+      "placement-catalogs",
+      "whole-object-removal",
+      "night-lighting"
+    ],
+    "fullDatabaseCopyExplicitlyAuthorized": true
+  }
+}

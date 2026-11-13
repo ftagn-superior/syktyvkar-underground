@@ -1,0 +1,146 @@
+{
+  "formatVersion": 1,
+  "objects": [
+    {
+      "entityId": "lower-house",
+      "assetId": "terrain-house",
+      "x": -12,
+      "z": 12,
+      "foundation": {
+        "width": 6,
+        "depth": 4,
+        "clearance": 0.3,
+        "burial": 0.02
+      }
+    },
+    {
+      "entityId": "summit-house",
+      "assetId": "terrain-house",
+      "x": 13,
+      "z": -13,
+      "foundation": {
+        "width": 6,
+        "depth": 4,
+        "clearance": 0.3,
+        "burial": 0.02
+      }
+    },
+    {
+      "entityId": "slope-house",
+      "assetId": "terrain-house",
+      "x": 1,
+      "z": -7,
+      "foundation": {
+        "width": 6,
+        "depth": 4,
+        "clearance": 0.3,
+        "burial": 0.02,
+        "approach": {
+          "length": 6,
+          "width": 1.5
+        }
+      }
+    },
+    {
+      "entityId": "terrain-tree-0",
+      "assetId": "tree-terrain-lab",
+      "x": -16,
+      "z": -8
+    },
+    {
+      "entityId": "terrain-tree-1",
+      "assetId": "tree-terrain-lab",
+      "x": -10,
+      "z": -16
+    },
+    {
+      "entityId": "terrain-tree-2",
+      "assetId": "tree-terrain-lab",
+      "x": 15,
+      "z": 1
+    },
+    {
+      "entityId": "terrain-tree-3",
+      "assetId": "tree-terrain-lab",
+      "x": 18,
+      "z": -18
+    },
+    {
+      "entityId": "terrain-lamp-0",
+      "assetId": "terrain-lamp",
+      "x": -7,
+      "z": 3
+    },
+    {
+      "entityId": "terrain-lamp-1",
+      "assetId": "terrain-lamp",
+      "x": 11,
+      "z": -4
+    },
+    {
+      "entityId": "terrain-bench",
+      "assetId": "terrain-bench",
+      "x": -16,
+      "z": 6
+    }
+  ],
+  "spawns": [
+    {
+      "x": -4,
+      "z": 17
+    },
+    {
+      "x": -6,
+      "z": 17
+    },
+    {
+      "x": 18,
+      "z": -10
+    },
+    {
+      "x": -4,
+      "z": -4
+    },
+    {
+      "x": -8,
+      "z": -4
+    },
+    {
+      "x": 8,
+      "z": 6
+    },
+    {
+      "x": 16,
+      "z": -4
+    },
+    {
+      "x": 5,
+      "z": -16
+    }
+  ],
+  "items": [
+    {
+      "seedId": "terrain-crate",
+      "typeId": "wooden-crate",
+      "x": -3,
+      "z": 14
+    },
+    {
+      "seedId": "terrain-ball",
+      "typeId": "watermelon-ball",
+      "x": 3,
+      "z": -2
+    },
+    {
+      "seedId": "terrain-soap",
+      "typeId": "giant-soap",
+      "x": 12,
+      "z": -3
+    }
+  ],
+  "boundary": {
+    "width": 0.2,
+    "height": 1.2,
+    "color": "#75695b"
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "west",
+      "role": "wall",
+      "fade": true,
+      "color": "#d3bda1",
+      "shapes": [
+        {
+          "box": {
+            "center": [-2.9, 1.5, 0],
+            "size": [0.2, 3, 4]
+          }
+        }
+      ]
+    },
+    {
+      "id": "east",
+      "role": "wall",
+      "fade": true,
+      "color": "#d3bda1",
+      "shapes": [
+        {
+          "box": {
+            "center": [2.9, 1.5, 0],
+            "size": [0.2, 3, 4]
+          }
+        }
+      ]
+    },
+    {
+      "id": "south",
+      "role": "wall",
+      "fade": true,
+      "color": "#d3bda1",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 1.5, 1.9],
+            "size": [6, 3, 0.2]
+          }
+        }
+      ]
+    },
+    {
+      "id": "north-left",
+      "role": "wall",
+      "fade": true,
+      "color": "#d3bda1",
+      "shapes": [
+        {
+          "box": {
+            "center": [-1.85, 1.5, -1.9],
+            "size": [2.3, 3, 0.2]
+          }
+        }
+      ]
+    },
+    {
+      "id": "north-right",
+      "role": "wall",
+      "fade": true,
+      "color": "#d3bda1",
+      "shapes": [
+        {
+          "box": {
+            "center": [1.85, 1.5, -1.9],
+            "size": [2.3, 3, 0.2]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lintel",
+      "role": "wall",
+      "fade": true,
+      "color": "#d3bda1",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 2.65, -1.9],
+            "size": [1.4, 0.7, 0.2]
+          }
+        }
+      ]
+    },
+    {
+      "id": "roof",
+      "role": "roof",
+      "fade": true,
+      "color": "#566b7b",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 3.1, 0],
+            "size": [6.4, 0.2, 4.4]
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "west",
+      "center": [-2.9, 1.5, 0],
+      "size": [0.2, 3, 4]
+    },
+    {
+      "id": "east",
+      "center": [2.9, 1.5, 0],
+      "size": [0.2, 3, 4]
+    },
+    {
+      "id": "south",
+      "center": [0, 1.5, 1.9],
+      "size": [6, 3, 0.2]
+    },
+    {
+      "id": "north-left",
+      "center": [-1.85, 1.5, -1.9],
+      "size": [2.3, 3, 0.2]
+    },
+    {
+      "id": "north-right",
+      "center": [1.85, 1.5, -1.9],
+      "size": [2.3, 3, 0.2]
+    },
+    {
+      "id": "lintel",
+      "center": [0, 2.65, -1.9],
+      "size": [1.4, 0.7, 0.2]
+    },
+    {
+      "id": "roof",
+      "center": [0, 3.1, 0],
+      "size": [6.4, 0.2, 4.4]
+    }
+  ]
+}

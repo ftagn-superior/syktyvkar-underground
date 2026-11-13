@@ -24,7 +24,9 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       // its original compound detail models. The new input is the actual current map.
       oldDefinition = await oldExtractionWorld();
       directory = await mkdtemp(join(tmpdir(), 'su-extraction-migration-'));
-      await buildWorld('content/worlds/ring-block/world.json', directory);
+      await buildWorld('content/worlds/ring-block/world.json', directory, {
+        terrainRelease: false,
+      });
       newDefinition = (await readRelease(directory)).world;
       expect(oldDefinition.buildings.filter((i) => i.entityId.startsWith('details-'))).toHaveLength(
         134,

@@ -4,6 +4,8 @@ import { generateFootprint } from '../../tools/world-build/src/city.js';
 import { generateKit, type KitRecipe } from '../../tools/world-build/src/kit.js';
 import { encodeStaticGlb, type StaticMeshPart } from '../../tools/world-build/src/glb.js';
 import { glowRandom } from '../../tools/world-build/src/glow.js';
+import { compileStaticAsset } from '../../packages/terrain-build/src/assets.js';
+import { mergeParts } from '../../tools/world-build/src/merge.js';
 
 const outline: [number, number][] = [
   [-10, -6],
@@ -230,6 +232,40 @@ describe('night glow baked into static models', () => {
     expect(() =>
       validateBuildingParts({ ...parts, lights: [{ ...light, kind: 'disco' }] }),
     ).toThrow(/kind/);
+  });
+
+  it('preserves night metadata through the shared compiler and large mesh merging', () => {
+    const generated = generateFootprint('glow-compiled', { ...house, merge: true });
+    const model = encodeStaticGlb(generated.parts);
+    const light = { position: { x: 1, y: 6, z: 0 }, radius: 14, color: '#ffd49a' };
+    const compiled = compileStaticAsset(
+      'glow-compiled',
+      model,
+      generated.physics,
+      undefined,
+      undefined,
+      {
+        glow: true,
+        lights: [light],
+      },
+    );
+    expect(JSON.parse(Buffer.from(compiled.parts).toString())).toMatchObject({
+      glow: true,
+      lights: [light],
+    });
+    expect(texcoords(compiled.model!)).toEqual(texcoords(model));
+    const vertices = 150_000;
+    const large: StaticMeshPart = {
+      partId: 'large-glow',
+      role: 'detail',
+      occlusionGroup: null,
+      color: '#ffffff',
+      positions: Array(vertices * 3).fill(0),
+      normals: Array(vertices * 3).fill(1),
+      indices: [],
+      glow: Array(vertices * 2).fill(0.5),
+    };
+    expect(mergeParts([large])[0].glow).toEqual(large.glow);
   });
 
   it('draws deterministic thresholds strictly inside 0..1', () => {

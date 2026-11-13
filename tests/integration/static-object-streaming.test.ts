@@ -19,7 +19,9 @@ let directory: string;
 let manifest: WorldManifest;
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'su-extracted-streaming-'));
-  manifest = await buildWorld('content/worlds/ring-block/world.json', directory);
+  manifest = await buildWorld('content/worlds/ring-block/world.json', directory, {
+    terrainRelease: false,
+  });
 });
 afterAll(async () => {
   await rm(directory, { recursive: true, force: true });

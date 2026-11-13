@@ -22,6 +22,7 @@ import {
   MAX_INPUT_QUEUE,
   canonicalJson,
   worldPublicationBaseIdentity,
+  changedWorldPublicationCells,
   type LayoutChanged,
   type WorldPublicationInfo,
   type StaticPlacementEffect,
@@ -247,6 +248,8 @@ export class GameSession {
   private generation = 0;
   private motionRevision = 0;
   private frames: number[] = [];
+  private readonly visibleFrameIntervals = new Float64Array(3600);
+  private visibleFrameCount = 0;
   private frameWarmupMs = 0;
   private corrections: number[] = [];
   private correctionCount = 0;
@@ -428,13 +431,8 @@ export class GameSession {
         await this.changePublication(info);
         return;
       }
-      const previous = new Map(
-        this.manifest.cells.map((cell) => [cell.cellId, this.manifest.files[cell.file]]),
-      );
       this.liveChangedCells = new Set(
-        publication.manifest.cells
-          .filter((cell) => previous.get(cell.cellId) !== publication.manifest.files[cell.file])
-          .map((cell) => cell.cellId),
+        changedWorldPublicationCells(this.manifest, publication.manifest),
       );
       this.liveManifestVerified = true;
       this.updateLayoutPredictionGate();
@@ -1377,6 +1375,13 @@ export class GameSession {
     delta: number,
     command: MoveInput,
   ): { entities: DisplayEntity[]; ownId?: string } {
+    // Capture the visible render clock independently of gameplay/preparation gates.
+    // Diagnostic consumers must not accidentally omit a paused or discarded input frame.
+    if (!document.hidden && Number.isFinite(delta) && delta > 0) {
+      this.visibleFrameIntervals[this.visibleFrameCount % this.visibleFrameIntervals.length] =
+        delta * 1000;
+      this.visibleFrameCount++;
+    }
     if (
       this.state === 'playing' &&
       this.inputEnabled &&
@@ -1690,6 +1695,10 @@ export class GameSession {
         Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) - 0.08
     );
   }
+  /** Static preview consumers must verify the hit against explicit catalog ground IDs. */
+  staticPlacementSurface(from: Vec3, to: Vec3) {
+    return this.physics?.surfaceRay(from, to);
+  }
   get storageUnavailable() {
     return this.room?.state.pauseReason === 'STORAGE_UNAVAILABLE';
   }
@@ -1995,6 +2004,31 @@ export class GameSession {
   resetFrameMeasurements(): void {
     this.frames.length = 0;
     this.frameWarmupMs = 0;
+  }
+  /** Raw visible frame clock, including preparation and input pauses; independent of HUD warmup. */
+  frameHistory(): { firstSequence: number; samples: number[] } {
+    const count = Math.min(this.visibleFrameCount, this.visibleFrameIntervals.length);
+    const first = this.visibleFrameCount - count;
+    return {
+      firstSequence: first + 1,
+      samples: Array.from(
+        { length: count },
+        (_, index) =>
+          this.visibleFrameIntervals[(first + index) % this.visibleFrameIntervals.length],
+      ),
+    };
+  }
+  /** Small observation for route controls; avoids serializing thousands of static records. */
+  motionSnapshot() {
+    const own = this.room?.state.players.get(this.room.sessionId);
+    const predicted = this.ownPhysicalPosition();
+    return {
+      connection: this.state,
+      predicted: predicted ? { position: predicted } : null,
+      authoritative: own ? { position: { x: own.x, y: own.y, z: own.z } } : null,
+      rttMs: this.room?.clock.smoothedRtt() ?? 0,
+      pendingInputs: this.input?.pendingCount ?? 0,
+    };
   }
   correctionHistory(): { firstSequence: number; samples: number[] } {
     return {

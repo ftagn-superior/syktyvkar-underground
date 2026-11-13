@@ -1,5 +1,6 @@
 import type { ItemCatalog, InitialItem } from './items.js';
 import type { Bounds, Quat, SimulationConfig, Vec3 } from './simulation.js';
+import type { TerrainSource } from './terrain.js';
 
 export const WORLD_FORMAT_VERSION = 5;
 export interface BuildingInstance {
@@ -114,6 +115,8 @@ export interface WorldCellManifest {
   assetIds: string[];
   /** Optional bounded transport packs; individual files remain the authoritative fallback. */
   graphicsPacks?: string[];
+  /** Optional verified transport envelopes containing this cell's collision files. */
+  physicsPacks?: string[];
 }
 export interface EntityDefinition {
   entityId: string;
@@ -150,6 +153,8 @@ export type WorldBase = Omit<WorldDefinition, 'buildings' | 'buildingAssets'>;
 /** Small immutable entry point; every static primitive belongs to cells. */
 export type WorldHeader = Omit<WorldDefinition, 'entities' | 'buildings' | 'buildingAssets'>;
 export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
+  /** Relative authoring file for a pinned, already-reviewed terrain release. */
+  terrainRelease?: string;
   itemCatalog: string;
   cellSize: number;
   cells: string[];
@@ -157,6 +162,8 @@ export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
   /** Separate authoring policy; excluded from world and geometry identities. */
   placementPolicy?: string;
   generator?: { kind: 'streaming-lab'; seed: number };
+  /** Build-time only; resolved to ordinary absolute poses and static assets. */
+  terrain?: TerrainSource;
 }
 export interface LocalStaticSet {
   cell: WorldCell;
@@ -173,4 +180,6 @@ export interface WorldManifest {
   worldFile: string;
   cells: WorldCellManifest[];
   assets: Record<string, BuildingAssetManifest>;
+  /** Deterministic owner-local terrain geometry; authored assets never enter this registry. */
+  generatedSupports?: Record<string, { ownerId: string; role: string }>;
 }

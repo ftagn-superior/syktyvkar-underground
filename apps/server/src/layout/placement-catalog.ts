@@ -6,6 +6,7 @@ import {
   validateBuildingParts,
   validatePlacementCatalog,
   validateWorldPlacementAssets,
+  sampleTerrain,
   type BuildingParts,
   type PlacementCatalog,
   type PlacementCatalogReference,
@@ -14,6 +15,7 @@ import {
 } from '@su/contracts';
 import { hash, readWorldModelCatalog, readWorldPlacementPolicy } from '@su/world-release';
 import type { AuthoringRelease } from './release.js';
+import { selectSupportRule } from '@su/terrain-build/supports';
 
 /** One immutable, verified snapshot, shared by discovery, the command and HTTP. */
 export interface ServerPlacementCatalog {
@@ -50,12 +52,14 @@ export async function readPlacementCatalog(
     parts,
     metadata.fixedInstanceIds,
   );
+  const terrain = release.terrain?.formatVersion === 2 ? release.terrain : undefined;
   const models = [...policy.assetIds].sort().map((assetId) => ({
     assetId,
     metadata: {
       ...source.models[assetId].metadata,
       tags: [...source.models[assetId].metadata.tags].sort(),
     },
+    ...(terrain ? { placement: terrainPlacementModel(release, assetId) } : {}),
   }));
   const categories = Object.fromEntries(
     [...new Set(models.map((m) => m.metadata.category))]
@@ -68,7 +72,8 @@ export async function readPlacementCatalog(
     assetReleaseVersion: metadata.assetReleaseVersion,
     modelCatalogVersion: source.catalogVersion,
     placementCatalogVersion: '0'.repeat(64),
-    groundY: 0,
+    groundY: terrain ? null : 0,
+    ...(terrain ? { terrain: { groundEntityIds: terrain.placementGroundIds ?? [] } } : {}),
     yawSteps: 24,
     categories,
     models,
@@ -91,6 +96,67 @@ export async function readPlacementCatalog(
       url: `/worlds/${manifest.worldId}/placement-catalogs/${catalog.placementCatalogVersion}.json`,
     },
   };
+}
+
+function terrainPlacementModel(release: AuthoringRelease, assetId: string) {
+  const terrain = release.terrain;
+  if (terrain?.formatVersion !== 2) throw new Error('Terrain placement requires v2 authoring');
+  const policy = terrain.placementModels?.find((model) => model.assetId === assetId)?.policy;
+  if (!policy) throw new Error(`Missing terrain placement policy: ${assetId}`);
+  if (policy.kind === 'ground-anchor')
+    return { ...policy, contactDatum: policy.contactDatum ?? 'anchor' };
+  const support = selectSupportRule(terrain.supports, {
+    entityId: 'placement-preview',
+    assetId,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+  });
+  if (!support) throw new Error(`Missing default terrain foundation: ${assetId}`);
+  const offsetY = Math.max(support.clearance, -support.burial + 0.002 + 1e-8) - support.jointY;
+  const heightSamples = support.components.flatMap((component) =>
+    [component.outline, ...(component.holes ?? [])].flatMap((ring) =>
+      ring.map(([x, z]) => ({ x, z, offsetY })),
+    ),
+  );
+  for (const approach of support.approaches ?? [])
+    for (const [x, z] of approach.edge)
+      for (const length of [0, approach.length])
+        heightSamples.push({
+          x: x + approach.outward[0] * length,
+          z: z + approach.outward[1] * length,
+          offsetY: -approach.targetY,
+        });
+  return { kind: 'foundation' as const, heightSamples };
+}
+
+/** Private grid and its explicit fixed publication bodies are required together. */
+export function hasTerrainPlacementGround(release: AuthoringRelease): boolean {
+  const terrain = release.terrain;
+  if (
+    terrain?.formatVersion !== 2 ||
+    !terrain.placementGroundIds?.length ||
+    !terrain.placementModels?.length
+  )
+    return false;
+  const fixed = new Set(release.metadata.fixedInstanceIds);
+  return (
+    terrain.placementGroundIds.every((id) => {
+      const instance = release.definition.buildings.find((building) => building.entityId === id);
+      return (
+        fixed.has(id) &&
+        !!instance &&
+        release.definition.buildingAssets[instance.assetId]?.colliders.some(
+          (collider) => collider.kind === 'mesh',
+        )
+      );
+    }) &&
+    release.manifest.cells.every(({ bounds }) =>
+      [
+        [bounds.min.x, bounds.min.z],
+        [bounds.max.x, bounds.max.z],
+      ].every(([x, z]) => !!sampleTerrain(terrain.grid, x, z)),
+    )
+  );
 }
 
 /** Placement currently supports a flat foundation covering every published cell at Y=0. */

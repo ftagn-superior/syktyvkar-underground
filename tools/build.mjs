@@ -12,6 +12,7 @@ await bundle({
     'migrate-world': 'apps/server/src/migrate-world.ts',
     'layout-command': 'apps/server/src/layout-command.ts',
     'preparation-worker': 'apps/server/src/layout/preparation-worker.ts',
+    'terrain-command': 'apps/server/src/terrain-command.ts',
   },
   outdir: 'dist/server',
   outExtension: { '.js': '.mjs' },

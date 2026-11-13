@@ -123,6 +123,187 @@ describe('verified resources', () => {
     cache.clear();
   });
 
+  it('loads verified physics packs into original collision entries and retains individual-file fallback', async () => {
+    const collision = new Uint8Array([7, 8, 9]);
+    const fixture = packedFixture();
+    const packed = encodeGraphicsPack([['collision.json', collision]]);
+    fixture.payloads.set('collision.json', collision);
+    fixture.payloads.set('physics/a.pack', packed);
+    fixture.manifest.cells[0].physicsPacks = ['physics/a.pack'];
+    fixture.manifest.files['collision.json'] = digest(collision);
+    fixture.manifest.files['physics/a.pack'] = digest(packed);
+    const calls: string[] = [];
+    const resources = new VerifiedResources(fixture.manifest, '/', {
+      fetch: async (url) => {
+        calls.push(String(url));
+        return new Response(Uint8Array.from(fixture.payloads.get(String(url).slice(1))!).buffer);
+      },
+    });
+    await resources.prefetchPhysics('0_0');
+    expect(await resources.read('collision.json')).toEqual(collision);
+    expect(calls).toEqual(['/physics/a.pack']);
+    expect(resources.diagnostics()).toMatchObject({ cacheBytes: 3, cacheEntries: 1 });
+    resources.invalidate('collision.json');
+    expect(await resources.read('collision.json')).toEqual(collision);
+    expect(calls).toEqual(['/physics/a.pack', '/collision.json']);
+    delete fixture.manifest.cells[0].physicsPacks;
+    await resources.prefetchPhysics('0_0');
+    expect(calls).toHaveLength(2);
+    resources.dispose();
+  });
+
+  it('rejects corrupt or non-collision physics pack entries without publishing partial cache state', async () => {
+    for (const entries of [
+      [['collision.json', new Uint8Array([99])]],
+      [['model.glb', new Uint8Array([1, 2, 3, 4])]],
+    ] as [string, Uint8Array][][]) {
+      const fixture = packedFixture();
+      const packed = encodeGraphicsPack(entries);
+      fixture.manifest.cells[0].physicsPacks = ['physics/a.pack'];
+      fixture.manifest.files['physics/a.pack'] = digest(packed);
+      fixture.manifest.files['collision.json'] = digest(new Uint8Array([7]));
+      const resources = new VerifiedResources(fixture.manifest, '/', {
+        fetch: async () => new Response(Uint8Array.from(packed).buffer),
+      });
+      await expect(resources.prefetchPhysics('0_0')).rejects.toThrow(
+        /SHA-256|Unexpected physics pack entry/,
+      );
+      expect(resources.diagnostics().cacheBytes).toBe(0);
+      resources.dispose();
+    }
+  });
+
+  it('keeps a shared physics pack alive for a surviving cell and discards the last cancelled consumer', async () => {
+    const fixture = packedFixture();
+    const collision = new Uint8Array([7]);
+    const packed = encodeGraphicsPack([['collision.json', collision]]);
+    fixture.manifest.cells[0].physicsPacks = ['physics/a.pack'];
+    fixture.manifest.cells.push({ ...fixture.manifest.cells[0], cellId: '1_0' });
+    fixture.manifest.files['physics/a.pack'] = digest(packed);
+    fixture.manifest.files['collision.json'] = digest(collision);
+    let finish!: () => void;
+    let signal: AbortSignal | undefined;
+    const resources = new VerifiedResources(fixture.manifest, '/', {
+      fetch: async (_url, options) => {
+        signal = options!.signal as AbortSignal;
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        return new Response(Uint8Array.from(packed).buffer);
+      },
+    });
+    const first = new AbortController();
+    const cancelled = resources.prefetchPhysics('0_0', first.signal).catch((e: Error) => e.name);
+    const retained = resources.prefetchPhysics('1_0');
+    first.abort();
+    expect(await cancelled).toBe('AbortError');
+    expect(signal!.aborted).toBe(false);
+    finish();
+    await retained;
+    expect(await resources.read('collision.json')).toEqual(collision);
+    resources.invalidate('collision.json');
+    const last = new AbortController();
+    const abandoned = resources.prefetchPhysics('0_0', last.signal).catch((e: Error) => e.name);
+    last.abort();
+    expect(await abandoned).toBe('AbortError');
+    finish();
+    await tick();
+    await tick();
+    expect(resources.diagnostics().cacheBytes).toBe(0);
+    resources.dispose();
+  });
+
+  it('transfers verified graphics and physics pack witnesses across contexts without downloading unchanged packs', async () => {
+    const fixture = packedFixture();
+    const collision = new Uint8Array([7, 8, 9]);
+    fixture.payloads.set('collision.json', collision);
+    fixture.payloads.set('physics/a.pack', encodeGraphicsPack([['collision.json', collision]]));
+    fixture.manifest.cells[0].physicsPacks = ['physics/a.pack'];
+    for (const [path, bytes] of fixture.payloads) fixture.manifest.files[path] = digest(bytes);
+    const cache = new VerifiedByteCache();
+    const calls: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      calls.push(String(url));
+      return new Response(
+        Uint8Array.from(fixture.payloads.get(String(url).split('/').slice(2).join('/'))!).buffer,
+      );
+    };
+    const previous = new VerifiedResources(fixture.manifest, '/old/', { cache, fetch: fetcher });
+    await previous.prefetchGraphics('0_0');
+    await previous.prefetchPhysics('0_0');
+    const next = structuredClone(fixture.manifest);
+    const modelB = new Uint8Array([10, 11]),
+      partsB = new Uint8Array([12]),
+      collisionB = new Uint8Array([13]);
+    fixture.payloads.set('b.glb', modelB);
+    fixture.payloads.set('b.parts', partsB);
+    fixture.payloads.set('b.collision', collisionB);
+    fixture.payloads.set(
+      'graphics/b.pack',
+      encodeGraphicsPack([
+        ['b.glb', modelB],
+        ['b.parts', partsB],
+      ]),
+    );
+    fixture.payloads.set('physics/b.pack', encodeGraphicsPack([['b.collision', collisionB]]));
+    for (const [path, bytes] of fixture.payloads) next.files[path] = digest(bytes);
+    next.assets.b = {
+      ...next.assets.a,
+      modelFile: 'b.glb',
+      partsFile: 'b.parts',
+      collisionFile: 'b.collision',
+    };
+    next.cells[0].assetIds.push('b');
+    next.cells[0].graphicsPacks!.push('graphics/b.pack');
+    next.cells[0].physicsPacks!.push('physics/b.pack');
+    const current = new VerifiedResources(next, '/next/', { cache, fetch: fetcher });
+    previous.dispose();
+    await current.prefetchGraphics('0_0');
+    await current.prefetchPhysics('0_0');
+    expect(calls).toEqual([
+      '/old/graphics/a.pack',
+      '/old/physics/a.pack',
+      '/next/graphics/b.pack',
+      '/next/physics/b.pack',
+    ]);
+    expect(await current.read('b.collision')).toEqual(collisionB);
+    current.dispose();
+    cache.dispose();
+  });
+
+  it('checks current entry hashes and cell membership before sharing a pack witness', async () => {
+    const fixture = packedFixture();
+    const cache = new VerifiedByteCache();
+    const original = new VerifiedResources(fixture.manifest, '/old/', {
+      cache,
+      fetch: async () => new Response(Uint8Array.from(fixture.packed).buffer),
+    });
+    await original.prefetchGraphics('0_0');
+    const changed = structuredClone(fixture.manifest);
+    changed.files['model.glb'] = 'f'.repeat(64);
+    const current = new VerifiedResources(changed, '/new/', {
+      cache,
+      fetch: async () => new Response(Uint8Array.from(fixture.packed).buffer),
+    });
+    await expect(current.prefetchGraphics('0_0')).rejects.toThrow('SHA-256');
+    const unrelated = structuredClone(fixture.manifest);
+    unrelated.assets.b = { ...unrelated.assets.a, modelFile: 'b.glb', partsFile: 'b.parts' };
+    unrelated.files['b.glb'] = digest(new Uint8Array([21]));
+    unrelated.files['b.parts'] = digest(new Uint8Array([22]));
+    unrelated.cells[0].assetIds = ['b'];
+    const unauthorized = new VerifiedResources(unrelated, '/other/', {
+      cache,
+      fetch: async () => new Response(Uint8Array.from(fixture.packed).buffer),
+    });
+    await expect(unauthorized.prefetchGraphics('0_0')).rejects.toThrow(
+      'Unexpected graphics pack entry',
+    );
+    original.dispose();
+    current.dispose();
+    unauthorized.dispose();
+    cache.dispose();
+  });
+
   it('unpacks one verified request into independent cached assets without retaining the envelope', async () => {
     const fixture = packedFixture();
     const calls: string[] = [];

@@ -82,6 +82,43 @@ describe('background layout publisher', () => {
     await expect(createLayoutPublication(release, snapshot)).rejects.toThrow('resource changed');
     await expect(publish({ ...snapshot, revision: 0 })).rejects.toThrow('Invalid layout snapshot');
   });
+  it('enforces the complete static-change guard in the worker before writing candidate files', async () => {
+    const { release, worker, snapshot, worldDirectory } = await fixture();
+    const owner = placedStaticInstance({
+      operationId: '12345678-1234-4567-8123-123456789abc',
+      worldEpoch: 'epoch',
+      assetReleaseVersion: snapshot.assetReleaseVersion,
+      expectedLayoutRevision: 1,
+      placementCatalogVersion: 'a'.repeat(64),
+      assetId: STATIC_PLACEMENT_ASSET_ID,
+      position: { x: 10, z: 10 },
+      yawStep: 0,
+    });
+    const before = await createLayoutPublication(release, snapshot);
+    const manifest = structuredClone(before.publication.manifest);
+    manifest.files[Object.values(manifest.assets)[0].modelFile!] = 'f'.repeat(64);
+    const next = { ...snapshot, revision: 2, instances: [...snapshot.instances, owner] };
+    await expect(
+      worker.prepare(next, owner.entityId, 'epoch', {
+        beforeSnapshot: snapshot,
+        beforeManifest: manifest,
+        owner,
+      }),
+    ).rejects.toMatchObject({ code: 'COMMAND_DISABLED' });
+    expect(
+      (await readdir(join(worldDirectory, 'layouts')).catch(() => [])).some((name) =>
+        name.startsWith('.pending-'),
+      ),
+    ).toBe(false);
+    const accepted = await worker.prepare(next, owner.entityId, 'epoch', {
+      beforeSnapshot: snapshot,
+      beforeManifest: before.publication.manifest,
+      owner,
+    });
+    expect(accepted.geometryDelta!.buildings.map((i) => i.entityId)).toEqual([owner.entityId]);
+    expect(Object.keys(accepted.geometryDelta!.assets)).toHaveLength(0);
+    await rm(accepted.stagingDirectory, { recursive: true, force: true });
+  });
   it('terminates timed-out preparation before removing only its owned staging directory', async () => {
     const { worldDirectory, worker, snapshot } = await fixture(1);
     await expect(worker.prepare(snapshot, 'timeout', 'epoch')).rejects.toThrow('timed out');

@@ -67,24 +67,25 @@ pnpm build
 
 Файловые патчи размещений проверяются в `packages/contracts/src/world-layout-patch.test.ts` (офлайн diff, формат и конфликты) и `tests/integration/static-layout.test.ts` (настоящие CLI export/patch/check/apply, сохранность предметов, аудит, откат SQL-сбоя и блокировка работающего мира). Второй набор требует `SU_TEST_DATABASE_URL`.
 
-| Проверка                                                                                                        | Команда                                                                                 |
-| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Аккаунты, профиль, локальный OIDC с RS256                                                                       | `pnpm test:accounts`, `pnpm test:accounts:browser`                                      |
-| Хранение, сетевые операции, миграции и физика предметов                                                         | `pnpm test:items`, `pnpm test:items:browser`                                            |
-| Выдача предметов и приватность ответов                                                                          | `pnpm test:giveme:browser`                                                              |
-| Сенсорный MVP: мультитач, режимы, прерывания и DPR                                                              | `pnpm test:touch:browser`                                                               |
-| Xbox-геймпад: имитация API, лобби, два стика, меню и восстановление                                             | `pnpm test:gamepad:browser`                                                             |
-| Первое лицо: два клиента, Pointer Lock, чат, качества и восстановление                                          | `pnpm test:first-person:browser`                                                        |
-| Первое лицо: стены, физические лучи, глаза и авторизованные предметы                                            | `pnpm test:first-person:geometry`                                                       |
-| Эквивалентность физики Node/Chromium                                                                            | `pnpm test:physics:browser`                                                             |
-| GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser`                                                           |
-| Повреждённый кеш и неверные ресурсы                                                                             | `pnpm test:assets:browser`                                                              |
-| Скины, походка, возврат и переподключение                                                                       | `pnpm test:avatars:browser`                                                             |
-| Реакции, выбираемые анимации, чат                                                                               | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser` |
-| Общие часы `/time`, темы, список игроков и совместимость панелей                                                | `pnpm test:world-ui:browser`                                                            |
-| Перезапуск и восстановление                                                                                     | `pnpm test:restart:browser`                                                             |
-| Город, подготовка, камера 30× и выход в просмотр                                                                | `pnpm test:dynamic-map:browser`                                                         |
-| Загрузка предпросмотра: холодный/тёплый кеш, задержка, запросы и отсутствие ранней физики                       | `pnpm test:loading:browser`                                                             |
+| Проверка                                                                                                        | Команда                                                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Рельеф, покрытия, фундамент, движение и сохранения                                                              | `pnpm test:terrain`, `pnpm test:terrain:browser` — [сценарий и параметры](terrain-lab.md) |
+| Аккаунты, профиль, локальный OIDC с RS256                                                                       | `pnpm test:accounts`, `pnpm test:accounts:browser`                                        |
+| Хранение, сетевые операции, миграции и физика предметов                                                         | `pnpm test:items`, `pnpm test:items:browser`                                              |
+| Выдача предметов и приватность ответов                                                                          | `pnpm test:giveme:browser`                                                                |
+| Сенсорный MVP: мультитач, режимы, прерывания и DPR                                                              | `pnpm test:touch:browser`                                                                 |
+| Xbox-геймпад: имитация API, лобби, два стика, меню и восстановление                                             | `pnpm test:gamepad:browser`                                                               |
+| Первое лицо: два клиента, Pointer Lock, чат, качества и восстановление                                          | `pnpm test:first-person:browser`                                                          |
+| Первое лицо: стены, физические лучи, глаза и авторизованные предметы                                            | `pnpm test:first-person:geometry`                                                         |
+| Эквивалентность физики Node/Chromium                                                                            | `pnpm test:physics:browser`                                                               |
+| GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser`                                                             |
+| Повреждённый кеш и неверные ресурсы                                                                             | `pnpm test:assets:browser`                                                                |
+| Скины, походка, возврат и переподключение                                                                       | `pnpm test:avatars:browser`                                                               |
+| Реакции, выбираемые анимации, чат                                                                               | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser`   |
+| Общие часы `/time`, темы, список игроков и совместимость панелей                                                | `pnpm test:world-ui:browser`                                                              |
+| Перезапуск и восстановление                                                                                     | `pnpm test:restart:browser`                                                               |
+| Город, подготовка, камера 30× и выход в просмотр                                                                | `pnpm test:dynamic-map:browser`                                                           |
+| Загрузка предпросмотра: холодный/тёплый кеш, задержка, запросы и отсутствие ранней физики                       | `pnpm test:loading:browser`                                                               |
 
 Настоящий вход через Telegram проверяется на зарегистрированном callback; локальный OIDC-провайдер проверяет протокол и поведение приложения, не доступность внешнего провайдера.
 

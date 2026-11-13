@@ -6,7 +6,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-export const PROTOCOL_VERSION = 19;
+// Combines terrain support policies with selective live publication and acknowledgements.
+// Previously published v19 clients must reload before consuming these contracts.
+export const PROTOCOL_VERSION = 20;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;

@@ -1,0 +1,181 @@
+{
+  "formatVersion": 1,
+  "status": "unapplied-explicit-cluster-comparison",
+  "sourceGrid": "pilot-grid-4m.json",
+  "selectionReason": "Explicit23 owners:13 initial campus/support-exceedance owners plus10 individually listed transition exceptions from iteration1.",
+  "groupingReason": "Explicit groups formed from these13 reviewed footprints at<=30m separation, to avoid conflicting nearby horizontal planes. Membership is listed and frozen below.",
+  "plateauMarginMetres": 6,
+  "blendWidthsMetres": [
+    80
+  ],
+  "forecourtFrom": "syktsu-pad.json",
+  "blendMethod": "At a plateau use its cluster level. Otherwise let wi=1-smoothstep((distance_i-6)/width), qi=wi/(1-wi); h=(base+sum(qi*level_i))/(1+sum(qi)). Single-cluster case equals the selected smoothstep pad; simultaneous blending is independent of rule order.",
+  "clusters": [
+    {
+      "id": "explicit-cluster-1",
+      "ownerIds": [
+        "osm-way-110770955",
+        "osm-way-111538131",
+        "osm-way-118373015",
+        "osm-way-146724915",
+        "osm-way-1532245447",
+        "osm-way-56438169",
+        "osm-way-662826329",
+        "osm-way-85585732",
+        "osm-way-85585733",
+        "osm-way-85585749",
+        "osm-way-85585762",
+        "osm-way-85585809",
+        "osm-way-85585813",
+        "osm-way-85585817",
+        "osm-way-85585819",
+        "osm-way-92104742"
+      ],
+      "levelMetres": 4.5,
+      "sourceMedianMetres": 1.1289719294210367,
+      "sourceRangeMetres": [
+        0.0,
+        9.403118067952
+      ],
+      "levelReason": "The area median1m is dominated by the large theatre footprint in the flat transition and creates16-degree roads against the campus. Use4.5m near the midrange0..9.4m to balance cut/fill and preserve the previous central-cluster level; explicit alternative to the rejected median."
+    },
+    {
+      "id": "explicit-cluster-2",
+      "ownerIds": [
+        "osm-way-1258973447",
+        "osm-way-1291799392",
+        "osm-way-56438158",
+        "osm-way-92104475",
+        "osm-way-92104556"
+      ],
+      "levelMetres": 6,
+      "sourceMedianMetres": 3.6921007500000007,
+      "sourceRangeMetres": [
+        1.1939568943958543,
+        12.097954959616
+      ],
+      "levelReason": "Retain the reviewed campus6m level across one explicit connected group."
+    },
+    {
+      "id": "explicit-cluster-3",
+      "ownerIds": [
+        "osm-way-92104657",
+        "osm-way-92104707"
+      ],
+      "levelMetres": 5.5,
+      "sourceMedianMetres": 6.260539975048001,
+      "sourceRangeMetres": [
+        0.11513753347200019,
+        9.629760611384002
+      ],
+      "levelReason": "Use5.5m instead of source-median-rounded6.5m to reduce the contrast with the connected central4.5m grading region; measured as an explicit compromise."
+    }
+  ],
+  "reviewedAdditions": [
+    {
+      "entityId": "osm-way-92104742",
+      "triggerVisibleFoundationMetres": 5.613564603657763,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-662826329",
+      "triggerVisibleFoundationMetres": 4.423453521332781,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-111538131",
+      "triggerVisibleFoundationMetres": 4.4184153751262825,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-1532245447",
+      "triggerVisibleFoundationMetres": 4.312066904496692,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-146724915",
+      "triggerVisibleFoundationMetres": 4.232843512798699,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-56438169",
+      "triggerVisibleFoundationMetres": 3.933681484670234,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-56438158",
+      "triggerVisibleFoundationMetres": 3.8890600099925585,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-85585733",
+      "triggerVisibleFoundationMetres": 3.688356549928309,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-110770955",
+      "triggerVisibleFoundationMetres": 3.5536095395552465,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-118373015",
+      "triggerVisibleFoundationMetres": 3.3586702118392986,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    }
+  ],
+  "gradeCorrections": [
+    {
+      "ownerId": "osm-way-696916923",
+      "centerY": 1.9776856014529665,
+      "gain": 0.7218779791033144,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        0.03829966570379837,
+        3.9170715372021347
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    },
+    {
+      "ownerId": "osm-way-111538132",
+      "centerY": 1.8395816341739344,
+      "gain": 0.7638476955993917,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        0.006755524904312117,
+        3.6724077434435567
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    },
+    {
+      "ownerId": "osm-way-109234383",
+      "centerY": 1.7642848656803276,
+      "gain": 0.7935226488836566,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        0.0,
+        3.528569731360655
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    },
+    {
+      "ownerId": "osm-way-1277836302",
+      "centerY": 2.782352063717046,
+      "gain": 0.8390947298433724,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        1.1138872882782496,
+        4.450816839155842
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    }
+  ],
+  "correctionBlendMethod": "Compute each local target from the same completed cluster grid: target=center+gain*(clusterHeight-center). Sum wi*(target-clusterHeight), divide by max(1,sum(wi)), then add once. No ordering dependence or automatic model selection."
+}

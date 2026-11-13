@@ -69,7 +69,7 @@
 ## Производный индекс
 
 `pnpm world:build` проверяет карточки до публикации мира и создаёт каталог отдельно
-для `ring-block`, `physics-lab`, `streaming-lab`. Формат снимка:
+для `ring-block`, `physics-lab`, `streaming-lab`, `terrain-lab`. Формат снимка:
 
 ```ts
 type WorldModelCatalog = {
@@ -123,7 +123,13 @@ type WorldModelCatalog = {
 
 При программном `buildWorld(source, output)` каталог по умолчанию записывается в
 `<output>/model-catalog/`, чтобы временные сборки оставались изолированными.
-Третий аргумент задаёт явную папку; штатный CLI использует `dist/model-catalogs/<worldId>/`.
+Параметр `modelCatalogOutput` в третьем аргументе задаёт явную папку;
+штатный CLI использует `dist/model-catalogs/<worldId>/`.
+Версия каталога terrain-выпуска учитывает приватные параметры рельефа точно так же,
+как `authoring.json`. Плитки ring-block связаны с исходной карточкой основания;
+модели, созданные генератором `terrain-lab` без отдельной авторской карточки,
+перечислены в `generatedAssetIds`. Эти ID не пересекаются с ресурсами карточек,
+а объединённый список обязан покрывать весь manifest.
 
 ## Добавление и проверка
 

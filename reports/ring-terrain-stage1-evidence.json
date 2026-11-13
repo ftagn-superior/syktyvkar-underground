@@ -1,0 +1,179 @@
+{
+  "stage": 1,
+  "date": "2026-11-13",
+  "stage0Commit": "fb9bfdd",
+  "parity": {
+    "status": "passed",
+    "date": "2026-11-13T14:09:58.050Z",
+    "baseline": "output/ring-terrain-stage1/before-baseline.json",
+    "baselineSha256": "9e5964fd1aabdc756e105d5b456d989c1046b7e2947ed86ef87e126e88940460",
+    "method": "Exact SHA256 of every existing public release byte, canonical generated geometry and loaded world; only the new private terrain sidecar and its authoring identity are allowed to differ.",
+    "variants": [
+      {
+        "variant": "flat",
+        "beforeMapVersion": "0dfad43bbbf9881ac2078a97c4dbef81cc3522cd9f47bd5118962420408f4e88",
+        "afterMapVersion": "0dfad43bbbf9881ac2078a97c4dbef81cc3522cd9f47bd5118962420408f4e88",
+        "publicMapVersionEqual": true,
+        "publicManifestBytesEqual": true,
+        "publicReferencedFiles": 63,
+        "publicFileSetEqual": true,
+        "publicFileBytesEqual": true,
+        "mismatchedPublic": [],
+        "generatedGeometrySha256": "1c0d8d7a9d63415821012dd9e154e2585d34733ce26af23f059bea79a357dccf",
+        "generatedGeometryEqual": true,
+        "loadedWorldSha256": "5e9a2418a8fbfd1f6720a997f846e6eced3891693283a07897a10c319435371c",
+        "loadedWorldEqual": true,
+        "seedVersionEqual": true,
+        "fixedInstanceIdsEqual": true,
+        "authoringDifferences": ["assetReleaseVersion", "terrain"],
+        "newPrivateFiles": [
+          {
+            "path": "private/terrain.02161cf58234f8369480f4bd919a7bb33da390565105cd69bf6e3c3a5a9a1fee.json",
+            "bytes": 3978,
+            "sha256": "02161cf58234f8369480f4bd919a7bb33da390565105cd69bf6e3c3a5a9a1fee"
+          }
+        ],
+        "privateDataPresent": true,
+        "beforeAssetReleaseVersion": "a74a1c58d81896534d8313277170f59e03066457bbef4912b517336119b9a4dd",
+        "afterAssetReleaseVersion": "259acc8f6db09d68b6e536cbf0dfcb52599621f807dd6c14915d73f7ff56af60",
+        "buildMs": 315.41220799999996
+      },
+      {
+        "variant": "hill",
+        "beforeMapVersion": "995b0d8f826515ce2d62839524e981a2b625ab148ab2b101bde2690810a2236d",
+        "afterMapVersion": "995b0d8f826515ce2d62839524e981a2b625ab148ab2b101bde2690810a2236d",
+        "publicMapVersionEqual": true,
+        "publicManifestBytesEqual": true,
+        "publicReferencedFiles": 63,
+        "publicFileSetEqual": true,
+        "publicFileBytesEqual": true,
+        "mismatchedPublic": [],
+        "generatedGeometrySha256": "89eed45f085e0cbb3abc6b2d8f23a0e4bd1c4418ee33c6a3409a441e88416e37",
+        "generatedGeometryEqual": true,
+        "loadedWorldSha256": "350ceb912f101580b9dcb765665c86586b3acb02237f5e50c86f3065b013016f",
+        "loadedWorldEqual": true,
+        "seedVersionEqual": true,
+        "fixedInstanceIdsEqual": true,
+        "authoringDifferences": ["assetReleaseVersion", "terrain"],
+        "newPrivateFiles": [
+          {
+            "path": "private/terrain.22684a620120a99063535ab21e9384143af7a43f8d70ef39b697b56f452f4b54.json",
+            "bytes": 12665,
+            "sha256": "22684a620120a99063535ab21e9384143af7a43f8d70ef39b697b56f452f4b54"
+          }
+        ],
+        "privateDataPresent": true,
+        "beforeAssetReleaseVersion": "6d9297ef76628d6a10a8c3addb3f7f04495d4d7923e4a5135ee52f3494e50ce2",
+        "afterAssetReleaseVersion": "b33b05aa96023346e643248c6e3a8783edbf24f14084e691672de0d8207a930a",
+        "buildMs": 268.25754199999994
+      }
+    ],
+    "lowLevel": {
+      "cases": 13,
+      "beforeSha256": "44af029fbcae7e7d19d462a7136237f7c1ff553bd90ffc1d42841b8e97265a6d",
+      "afterSha256": "44af029fbcae7e7d19d462a7136237f7c1ff553bd90ffc1d42841b8e97265a6d",
+      "exactEqual": true
+    },
+    "nonterrain": {
+      "worldId": "physics-lab",
+      "beforeMethod": "Frozen before-sources world-build bundled with frozen contracts/world-release; current unchanged physics-lab authoring content",
+      "frozenBuilderSha256": "54dbce0b66aff1a0c981a41bb9f73836c1d26473313e82028fa45c6c0cfec2a3",
+      "beforeMapVersion": "9b4be5f5c2b9eab578d6e3a02deac69a95bcac86842b83582904000d4ce63cfa",
+      "afterMapVersion": "9b4be5f5c2b9eab578d6e3a02deac69a95bcac86842b83582904000d4ce63cfa",
+      "allFileCount": 17,
+      "allFileBytesEqual": true,
+      "contentUnchangedVsRevision": "8f3d5280e77c7a744ba9cebe47e6044b30debc39",
+      "contentSha256": {
+        "content/buildings/catalog.json": "e9cc60dccc684ee2d5a67af7e80ad3c543314c565f538ed096f84eb7347da14e",
+        "content/buildings/house-a/asset.json": "4b92bb93f4a59b71c1e05103adbb4069b40d1e9a7e4487295f01c6ff0a0ce53c",
+        "content/buildings/house-a/source.json": "92be367d6ee9b1a506666d5023cf9d711b29513a8d420fc002ba1c076e549479",
+        "content/buildings/house-b/asset.json": "ea764ba5e8b51e49b2c2fd642f9f162820d705d9f3eb6f0ce4d5b48df094535e",
+        "content/buildings/house-b/source.json": "11222c08c866e1f0f09de122e204ddf99687e2ca005d40e0064c4d33fa307e4a",
+        "content/buildings/house-remote-a/asset.json": "0bcc802a95472e064a3bda98cf23ff8a34f96770a1c7caf0ee248b6fe2eccaf2",
+        "content/buildings/house-remote-a/source.json": "2b464a140d64454106d61bbb009f7e54e905a2afcf53ea3dc716f19ac44e41dc",
+        "content/buildings/house-remote-b/asset.json": "32ee734cf5e6c16c5941e6c8a803305f802bcf683cb300e5b414f36ee0a2439c",
+        "content/buildings/house-remote-b/source.json": "885e06ce85eceff16293951de075dd5e120b515237bd11b8b8983ac605db8d90",
+        "content/items/catalog.json": "e4f5a3154755af9144d47fccb53ea378c9a2d97af2b8a5cec877a6f9c657c508",
+        "content/worlds/physics-lab/cells/0_0.json": "b5dc7904e51e6cad8f79405e89e8cd103be0562c822f757a82d255ceeda9ee4a",
+        "content/worlds/physics-lab/world.json": "381a5003da5fc107841f8e4906f6d0ea7a010ffb279108fe6a5a08875cf27a1b"
+      }
+    },
+    "oldDistManifestUnchanged": true,
+    "focusedTests": {
+      "numTotalTests": 58,
+      "numPassedTests": 58,
+      "numFailedTests": 0,
+      "success": true,
+      "report": "output/ring-terrain-stage1/after-focused-tests.json"
+    },
+    "typecheck": "passed",
+    "focusedTestCoverage": {
+      "orderedConvexDifferential": 13,
+      "epsilonSensitiveDifferential": 5,
+      "legacyFallbackDifferential": 7,
+      "contextAndStandalone": 6
+    },
+    "currentSourceHashes": {
+      "packages/terrain-build/src/terrain.ts": "1529b05bc0e6f968d9ae7a99b7e68ed0e6ec83595e7b3606d744ddafbd590025",
+      "packages/terrain-build/src/assets.ts": "23c52890a6c769420d4d722d469de487b10f761521bc5572acad06e9fe067520",
+      "packages/terrain-build/src/private-data.ts": "d9762f33a62d4c53b5f80ca4d117e0d43ebc49f52d39704a33a0b4ca7c3f32bc",
+      "packages/terrain-build/src/glb.ts": "1c75f15b6ff220ae26e562cbe4d0d493a588e688f5967c248a57d45b4e29e1d7",
+      "packages/world-release/src/index.ts": "d16973d521d3e126fecfd1ca3496a4f1d671bf48e8a12886a61f91a8af3cb5e8",
+      "tools/world-build/src/index.ts": "ce8019453bafeb07e6413d812b88cbd1f87170695fd064ceb934c991e41676d3",
+      "tools/world-build/src/terrain-authoring.ts": "3b7c9864a56a7b1711595e03c01e19c54a6029686e545d9e47a80f544b1c9266",
+      "tests/integration/terrain-build.test.ts": "7bf45b0bcb34fa47220e0d5d05def2a2a1a5ecd8368bd27db7cfa0e8241412c2"
+    }
+  },
+  "benchmark": {
+    "node": "v26.3.1",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "disclaimer": "Single local synthetic CPU sample; not a full city or GPU benchmark. Preparation included.",
+    "patch": {
+      "grid": [301, 439],
+      "spacing": 2,
+      "queries": 12,
+      "baselineMs": 633.4175,
+      "optimizedMs": 4.2218749999999545,
+      "baselineCpuMs": 739.124,
+      "optimizedCpuMs": 11.635,
+      "speedup": 150.03227239082324,
+      "triangles": 3054,
+      "sha256": "20674e450f686e8c5348fce3c393f51a6f738dea9140e1e6ed4f5f1c7b018e7b"
+    },
+    "tiles": {
+      "grid": [161, 161],
+      "spacing": 2,
+      "tiles": 4,
+      "tileMeters": 80,
+      "surfaces": 64,
+      "baselineMs": 472.2521670000001,
+      "optimizedMs": 101.07570800000008,
+      "baselineCpuMs": 685.34,
+      "optimizedCpuMs": 232.681,
+      "speedup": 4.672261776291488,
+      "sha256": "f6f9de3c49738b28b074161d36c7abbaa9039d4db39f4f455159f3290b2906b2"
+    }
+  },
+  "validation": {
+    "typecheck": "passed",
+    "packageBoundaries": "passed",
+    "applicationBuild": "passed",
+    "allTests": {
+      "success": true,
+      "numTotalTests": 704,
+      "numPassedTests": 581,
+      "numFailedTests": 0,
+      "numPendingTests": 123
+    },
+    "allTestsReport": "output/ring-terrain-stage1/tests.json",
+    "privateReleaseTests": 6,
+    "databaseAndFullBrowserAcceptance": "not run; no dedicated test database configured; not required to claim byte-preserving stage 1 core extraction",
+    "finalFocusedTests": {
+      "passed": 58,
+      "failed": 0,
+      "note": "After final numerical fallback guards, including 31 new core regression tests. Private release tests separately passed 6/6."
+    }
+  },
+  "scope": "Core preparation only. City terrain activation, complex support rules and saved-state migration are later stages."
+}

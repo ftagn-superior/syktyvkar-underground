@@ -10,7 +10,6 @@ import type { Page } from 'playwright';
 import {
   STATIC_PLACEMENT_ASSET_ID,
   STATIC_PLACEMENT_COOLDOWN_MS,
-  placedStaticInstance,
   type PlaceStaticRequest,
   type RemoveStaticRequest,
   type RemoveStaticResult,
@@ -18,6 +17,12 @@ import {
 } from '../packages/contracts/src/index.js';
 import type { WorldState } from '../packages/protocol/src/index.js';
 import type { AuthoritativeWorld } from '../packages/simulation/src/server.js';
+import { readAuthoringRelease } from '../apps/server/src/layout/release.js';
+import { StaticPlacementRejected } from '../apps/server/src/layout/placement-pose.js';
+import {
+  profilePlacementGeometry,
+  profilePlacementIsBlocked,
+} from './helpers/static-layout-profile-placement.js';
 import { createGameServer } from './helpers/game-server.js';
 import { createAccountFixture, loginAccount, responseCookie } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
@@ -29,6 +34,11 @@ assert.ok(databaseUrl, 'A local test database is required');
 const count = Number(process.env.SU_LAYOUT_PROFILE_OPERATIONS ?? 30);
 const clientCounts = (process.env.SU_LAYOUT_PROFILE_CLIENTS ?? '2,3').split(',').map(Number);
 const output = process.env.SU_LAYOUT_PROFILE_OUTPUT ?? 'output/static-layout-live-profile';
+const viewport = {
+  width: Number(process.env.SU_LAYOUT_PROFILE_VIEWPORT_WIDTH ?? 960),
+  height: Number(process.env.SU_LAYOUT_PROFILE_VIEWPORT_HEIGHT ?? 600),
+};
+assert.ok(Object.values(viewport).every((value) => Number.isInteger(value) && value > 0));
 assert.ok(Number.isInteger(count) && count > 0);
 assert.ok(clientCounts.every((value) => value === 2 || value === 3));
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -52,6 +62,7 @@ const profile: any = {
     logicalCpus: cpus().length,
     renderer: 'Chromium SwiftShader',
     quality: 'economy',
+    viewport,
     world: 'ring-block',
     server: 'source TS, separate preparation worker',
     observations:
@@ -82,6 +93,22 @@ for (const clients of clientCounts) {
       modelCatalogDirectory: 'dist/model-catalogs/ring-block',
     });
     fixture.config.publicOrigin = app.url;
+    const release = await readAuthoringRelease(worldDirectory);
+    if (process.env.SU_LAYOUT_PROFILE_REQUIRE_TERRAIN === 'true')
+      assert.equal(
+        release.terrain?.formatVersion,
+        2,
+        'Rebuild the accepted terrain world before profiling',
+      );
+    run.terrain = release.terrain
+      ? {
+          formatVersion: release.terrain.formatVersion,
+          groundIds:
+            release.terrain.formatVersion === 2
+              ? release.terrain.placementGroundIds?.length
+              : undefined,
+        }
+      : null;
     const discover = (): Promise<WorldInfo> => fetch(app!.url + '/api/world').then((r) => r.json());
     let info = await discover();
     const cookie = responseCookie(
@@ -106,7 +133,7 @@ for (const clients of clientCounts) {
     const transfers: Array<{ url: string; bytes: number; at: number }> = [];
     const joins: any[] = [];
     for (let n = 1; n < clients; n++) {
-      const context = await browser.newContext({ viewport: { width: 960, height: 600 } });
+      const context = await browser.newContext({ viewport });
       const page = await context.newPage();
       pages.push(page);
       page.setDefaultTimeout(90_000);
@@ -190,19 +217,21 @@ for (const clients of clientCounts) {
           yawStep: 0,
           assetId: STATIC_PLACEMENT_ASSET_ID,
         } as PlaceStaticRequest;
-        const definition = (app.room as unknown as { definition: any }).definition;
-        if (
-          !world.checkStaticPlacement(
-            placedStaticInstance(candidate),
-            definition.buildingAssets[STATIC_PLACEMENT_ASSET_ID],
-          )
-        ) {
-          position = { x, z };
-          break;
+        try {
+          const candidateGeometry = profilePlacementGeometry(release, candidate);
+          if (!profilePlacementIsBlocked(world, release, candidateGeometry)) {
+            position = { x, z };
+            break;
+          }
+        } catch (error) {
+          if (!(error instanceof StaticPlacementRejected)) throw error;
         }
       }
     assert.ok(position, 'A free warm-neighborhood position is required');
     run.position = position;
+    const baseBodies = app.room.diagnostics().bodies;
+    run.expectedInstancesCreated = 0;
+    run.expectedModelImports = 0;
     let nextAllowed = 0;
     const operation = async (kind: 'place' | 'remove', entityId?: string, measured = true) => {
       await wait(Math.max(0, nextAllowed - performance.now()));
@@ -251,8 +280,64 @@ for (const clients of clientCounts) {
           positions[n].x - positions[n - 1].x,
           positions[n].z - positions[n - 1].z,
         );
+      const definition = (
+        app!.room as unknown as {
+          definition: import('../packages/contracts/src/index.js').WorldDefinition;
+        }
+      ).definition;
+      const persisted = (
+        await fixture.pool.query(
+          'SELECT enabled,position_x,position_y,position_z FROM world_static_instances WHERE entity_id=$1',
+          [reply.entityId],
+        )
+      ).rows[0];
+      assert.ok(persisted, 'The owner is persisted');
+      let geometryVerification: unknown;
+      if (kind === 'place') {
+        const expected = profilePlacementGeometry(release, request as PlaceStaticRequest);
+        assert.ok(
+          Math.abs(persisted.position_y - expected.owner.position.y) < 1e-8,
+          'SQL keeps the server-resolved terrain height',
+        );
+        assert.equal(persisted.enabled, true);
+        if (process.env.SU_LAYOUT_PROFILE_REQUIRE_TERRAIN === 'true')
+          assert.ok(
+            Math.abs(persisted.position_y) > 1e-8,
+            'Terrain placement does not fall back to Y zero',
+          );
+        for (const geometry of expected.geometry)
+          assert.ok(
+            definition.buildings.some((item) => item.entityId === geometry.instance.entityId),
+            'The owner and all declared supports are active',
+          );
+        const bodies = expected.geometry.filter((item) => item.asset.colliders.length).length;
+        assert.equal(
+          app!.room.diagnostics().bodies,
+          baseBodies + bodies,
+          'Exactly the owner and support bodies were added',
+        );
+        run.expectedInstancesCreated += expected.geometry.length;
+        run.expectedModelImports += expected.geometry.length - 1;
+        geometryVerification = {
+          ownerY: persisted.position_y,
+          activeIds: expected.geometry.map((item) => item.instance.entityId),
+          bodiesAdded: bodies,
+        };
+      } else {
+        assert.equal(persisted.enabled, false);
+        assert.ok(
+          !definition.buildings.some((item) => item.entityId === reply.entityId),
+          'The disabled owner is absent',
+        );
+        assert.equal(
+          app!.room.diagnostics().bodies,
+          baseBodies,
+          'Removal releases all owner/support bodies',
+        );
+      }
       const record = {
         kind,
+        geometryVerification,
         measured,
         operationId: request.operationId,
         revision: reply.layoutRevision,
@@ -362,16 +447,20 @@ for (const clients of clientCounts) {
     }));
     for (const changes of run.instanceChanges) {
       if (changes.modelImports === undefined) continue;
-      assert.equal(changes.modelImports, 0, 'Held city models are never imported again');
+      assert.equal(
+        changes.modelImports,
+        run.expectedModelImports,
+        'Only new generated support models are imported',
+      );
       assert.equal(
         changes.instancesCreated,
-        count + 1,
-        'Only the added bench instances are created',
+        run.expectedInstancesCreated,
+        'Only the owner and its declared support instances are created',
       );
       assert.equal(
         changes.instancesRemoved,
-        count + 1,
-        'Only the removed bench instances are released',
+        run.expectedInstancesCreated,
+        'Only the owner and its declared support instances are released',
       );
       assert.equal(
         changes.primitivesCreated,

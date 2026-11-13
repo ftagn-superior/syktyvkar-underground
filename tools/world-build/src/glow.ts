@@ -36,12 +36,4 @@ export function withGlow(part: StaticMeshPart, kind: GlowKind, seed: number, dra
   markGlow(part, start, kind, seed);
 }
 
-/** Свечение части по вершинам; хвост без отметок не светится. */
-export function glowOf(part: StaticMeshPart): number[] | undefined {
-  if (!part.glow) return undefined;
-  const count = part.positions.length / 3;
-  if (part.glow.length > count * 2) throw new Error(`Glow data exceeds ${part.partId}`);
-  return part.glow.length === count * 2
-    ? part.glow
-    : [...part.glow, ...Array<number>(count * 2 - part.glow.length).fill(0)];
-}
+export { glowOf } from '@su/terrain-build/mesh';

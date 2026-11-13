@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "status": "selected-unapplied-explicit-pads",
+  "inputs": {
+    "tools/build-ring-terrain-pads.ts": "cb44865a61421c1ed9da8abf2b4166bc85d90a5e2e2569e41180e589f879285e",
+    "tools/world-build/src/ring-pads.ts": "f96651c3c862be9aa646d34fad6441992066e2b8219458f7225c0b02c2e47d80",
+    "tools/world-build/src/syktsu-pad.ts": "f373e1458ee2b97a179354d3de71168e87fe6f77f041bcf4693d4f6d4b127f6d",
+    "content/worlds/ring-block/terrain-candidate/ring-pads.json": "2a2cce46dad8e8cf6f20a7aa72a56b41ebd4afe41ff84f265fd3521190db95a0",
+    "content/worlds/ring-block/terrain-candidate/pilot-grid-4m.json": "57f1bc2de002ce91dceac37a71995108a887a0601a113fa41309901c3a3002fa",
+    "content/worlds/ring-block/terrain-candidate/model-supports.json": "81ba8577c6773a5433e499eaa77bb02d39c9313d442a2993db1466cdb953a410"
+  },
+  "output": {
+    "file": "pilot-grid-with-pads.json",
+    "sha256": "68e4f6a0dbf9a543db0db0979efd0a326cbe16af7ab19aadef0ad37502a5915c"
+  },
+  "diagnostics": {
+    "heightY": {
+      "count": 33220,
+      "min": -0.12359740877194612,
+      "p95": 6,
+      "max": 8.93274760950758
+    },
+    "triangleSlopeDegrees": {
+      "count": 65700,
+      "min": 0,
+      "p95": 4.669255046207611,
+      "max": 6.594982810499336
+    },
+    "changedTriangles": 46532,
+    "boundary": {
+      "north": {
+        "count": 151,
+        "min": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "south": {
+        "count": 151,
+        "min": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "west": {
+        "count": 220,
+        "min": 0,
+        "p95": 8.707734617195136,
+        "max": 8.93274760950758
+      },
+      "east": {
+        "count": 220,
+        "min": 0,
+        "p95": 0,
+        "max": 0
+      }
+    }
+  },
+  "scope": "Only the explicitly listed23 plateau owners and4 bounded-grade owners; no automatic flattening. Source/full grids remain unchanged. Door/access review and full city gameplay acceptance are separate."
+}

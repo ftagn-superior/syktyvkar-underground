@@ -10,11 +10,14 @@ import {
   type WorldDefinition,
 } from '@su/contracts';
 import { createPhysicsWorld, type PhysicsWorld, type WasmBinary } from './physics-world.js';
+import type { ItemSupportSweep } from './item-support-query.js';
 export class AuthoritativeWorld {
   constructor(private readonly world: PhysicsWorld) {}
   addPlayer(entityId: string, spawn?: Vec3) {
     if (this.world.characters.has(entityId)) return this.world.state(entityId);
-    const position = this.world.findSpawn(undefined, spawn);
+    // Legacy simulation probes may intentionally start in free fall. Runtime
+    // entry uses addPlayerAtPosition(), which always requires stable support.
+    const position = this.world.findSpawn(undefined, spawn, false);
     if (!position) return undefined;
     this.world.createCharacter(entityId, position);
     return this.world.state(entityId);
@@ -22,12 +25,18 @@ export class AuthoritativeWorld {
   checkPlayerSpawnPosition(center: Vec3, excludeId?: string) {
     return this.world.checkPlayerSpawnPosition(center, excludeId);
   }
+  queryPlayerSupports(center: Vec3, sweep: ItemSupportSweep) {
+    return this.world.queryPlayerSupports(center, sweep);
+  }
   findDefaultPlayerSpawn(excludeId?: string): Vec3 | undefined {
     return this.world.findDefaultPlayerSpawn(excludeId);
   }
   /** Preparation target only: creation still requires a successful safety check. */
   getDefaultPlayerSpawnPosition(): Vec3 {
     return this.world.spawnPosition(this.world.definition.spawnPoints[0]);
+  }
+  getPlayerSpawnPosition(point: Vec3): Vec3 {
+    return this.world.spawnPosition(point);
   }
   /** Saved positions already describe the body center and must not be raised again. */
   addPlayerAtPosition(entityId: string, center: Vec3) {
@@ -80,8 +89,15 @@ export class AuthoritativeWorld {
   checkSavedItem(item: ItemState) {
     return this.world.checkSavedItem(item);
   }
-  checkStaticPlacement(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
-    return this.world.checkStaticPlacement(instance, asset);
+  queryItemSupports(typeId: string, pose: ItemPose, sweep: ItemSupportSweep) {
+    return this.world.queryItemSupports(typeId, pose, sweep);
+  }
+  checkStaticPlacement(
+    instance: BuildingInstance,
+    asset: BuildingPhysicsAsset,
+    ignoredStaticIds?: ReadonlySet<string>,
+  ) {
+    return this.world.checkStaticPlacement(instance, asset, ignoredStaticIds);
   }
   addStatic(instance: BuildingInstance, definition: WorldDefinition) {
     this.world.addStatic(instance, definition.buildingAssets[instance.assetId]);
@@ -91,10 +107,17 @@ export class AuthoritativeWorld {
     this.world.removeStatic(entityId);
     Object.assign(this.world.definition, definition);
   }
+  prepareStaticReplacement(definition: WorldDefinition, changedIds?: ReadonlySet<string>) {
+    return this.world.prepareStaticReplacement(definition, changedIds);
+  }
+  /** Probe only the new statics, without requiring support for an airborne player. */
+  overlapsPlayer(position: Vec3) {
+    return this.world.overlaps(this.world.spawnShape, position);
+  }
   respawnPlayer(id: string, spawn?: Vec3): boolean {
     const character = this.world.characters.get(id);
     if (!character) return false;
-    const position = this.world.findSpawn(id, spawn);
+    const position = this.world.findSpawn(id, spawn, false);
     if (!position) return false;
     const next = {
       ...this.world.state(id),

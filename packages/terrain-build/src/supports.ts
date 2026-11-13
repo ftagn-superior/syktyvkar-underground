@@ -271,9 +271,16 @@ function ownerTransform(rule: FoundationSupportRuleV2, owner: BuildingInstance) 
     'invalid owner rotation',
   );
   fail(Math.abs(q.x) + Math.abs(q.z) <= 1e-8, 'tilted owners are not supported');
-  const yaw = 2 * Math.atan2(q.y, q.w),
-    c = Math.cos(yaw),
-    s = Math.sin(yaw);
+  // Derive the yaw basis algebraically from the saved quaternion. Going through
+  // atan2/sin/cos introduces host-dependent last-bit differences into generated
+  // collider JSON and GLB accessor bounds, hence different immutable map hashes.
+  // Dividing by the yaw norm preserves the previous normalized rotation without
+  // quantizing either the saved pose or the generated geometry.
+  const yy = q.y * q.y,
+    ww = q.w * q.w,
+    norm = yy + ww,
+    c = (ww - yy) / norm,
+    s = (2 * q.y * q.w) / norm;
   return (p: Point2): Point2 => [
     owner.position.x + c * p[0] + s * p[1],
     owner.position.z - s * p[0] + c * p[1],

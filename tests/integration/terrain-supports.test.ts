@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   canonicalJson,
   pointInsideClosedMesh,
@@ -101,6 +101,35 @@ const approachRule = (): FoundationSupportRuleV2 => ({
 });
 
 describe('complex foundations on the final terrain triangles', () => {
+  it.each([
+    { y: -0.9733332353872602, w: 0.22939575604306245 },
+    { y: 0.213073017727713, w: 0.9770362783010699 },
+  ])('publishes the saved yaw quaternion without platform trigonometry: %j', (rotation) => {
+    const placed = { ...owner(1), rotation: { x: 0, z: 0, ...rotation } };
+    const support = { ...approachRule(), approaches: [] };
+    const build = (instance: BuildingInstance) =>
+      generateSupportAssets(grid(), support, instance, ids).map(({ asset }) =>
+        compileGeneratedAsset(asset.physics.assetId, asset),
+      );
+    const expected = build(placed);
+    const spies = (['atan2', 'sin', 'cos'] as const).map((name) =>
+      vi.spyOn(Math, name).mockImplementation(() => {
+        throw new Error('Generated yaw must not depend on host trigonometry');
+      }),
+    );
+    try {
+      expect(build(placed)).toEqual(expected);
+      expect(
+        build({
+          ...placed,
+          rotation: { x: 0, z: 0, y: -rotation.y, w: -rotation.w },
+        }),
+      ).toEqual(expected);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
   it.each(['terrain-support-collision-weld.json', 'terrain-support-collapsed-fan.json'])(
     'preserves occupied caps and closed solids after collision contraction: %s',
     async (file) => {

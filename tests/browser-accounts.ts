@@ -71,8 +71,10 @@ try {
   const second = await other.newPage();
   second.on('pageerror', (error) => errors.push(error.message));
   await second.goto(app.url);
-  await second.locator('#telegram-login').click();
-  await second.locator('#profile-form').waitFor({ state: 'visible' });
+  // On the software GPU, two previews can delay rendering across the OIDC redirects.
+  // The explicit authenticated-profile wait owns its own bounded navigation budget.
+  await second.locator('#telegram-login').click({ noWaitAfter: true, timeout: 60_000 });
+  await second.locator('#profile-form').waitFor({ state: 'visible', timeout: 60_000 });
   const same = await second.evaluate(async () => (await fetch('/api/me')).json());
   assert.equal(same.account.accountId, first.account.accountId);
   await page.locator('#join:not([disabled])').click();

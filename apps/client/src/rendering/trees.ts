@@ -18,8 +18,14 @@ import {
 import { applyRadialFog, type RadialState } from './radial-fog';
 import { OcclusionFade } from './occlusion';
 import { SpatialIndex } from './spatial-index';
-import { treeIntersectsRay, treeTemplate } from './tree-geometry';
+import { treeIntersectsRay, treeRayDistance, treeTemplate } from './tree-geometry';
 import { TreeMaterial, TREE_ATTRIBUTES } from './tree-material';
+import {
+  staticHitVisible,
+  staticObjectSelection,
+  staticRayBounds,
+  type StaticObjectHit,
+} from './static-selection';
 
 type Tree = {
   definition: BuildingInstance;
@@ -64,6 +70,29 @@ export class TreeViews {
   }
   has(id: string) {
     return this.trees.has(id);
+  }
+  selection(id: string) {
+    const tree = this.trees.get(id);
+    if (!tree) return;
+    return staticObjectSelection(tree.definition, tree.minimum, tree.maximum);
+  }
+  pick(ray: Ray, protectedIds: ReadonlySet<string>): StaticObjectHit | undefined {
+    let nearest: StaticObjectHit | undefined;
+    for (const id of this.index.query(staticRayBounds(ray))) {
+      const tree = this.trees.get(id)!;
+      if (protectedIds.has(id) || !ray.intersectsBoxMinMax(tree.minimum, tree.maximum)) continue;
+      const distance = treeRayDistance(tree.recipe, Ray.Transform(ray, tree.inverse));
+      if (
+        distance !== undefined &&
+        (!nearest || distance < nearest.distance) &&
+        staticHitVisible(this.radial, ray, distance, tree.born)
+      )
+        nearest = {
+          ...staticObjectSelection(tree.definition, tree.minimum, tree.maximum),
+          distance,
+        };
+    }
+    return nearest;
   }
   add(
     definition: BuildingInstance,

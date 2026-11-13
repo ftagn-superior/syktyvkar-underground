@@ -22,9 +22,15 @@ import {
   MAX_INPUT_QUEUE,
   type WorldPublicationInfo,
   type StaticPlacementEffect,
+  type StaticRemovalEffect,
+  type RemoveStaticRequest,
+  type RemoveStaticResult,
+  parseRemoveStaticRequest,
   type PlaceStaticRequest,
   type PlaceStaticResult,
-  parsePlaceStaticRequest,
+  parseStoredPlaceStaticRequest,
+  type PlacementCatalogReference,
+  type PlacementCatalog,
   parseItemCommand,
   isPlayerMoving,
   type InventoryView,
@@ -75,9 +81,10 @@ import type { DisplayEntity } from '../presentation/display-state';
 import { AnimationBuffer, REMOTE_INTERPOLATION_MS } from '../presentation/animation-buffer';
 import { AnimationRequestState } from '../presentation/animation-request';
 import { WorldSoundEvents } from '../presentation/world-sound-events';
-import { messages, staticPlacementMessages, readableError } from './errors';
+import { messages, staticPlacementMessages, staticRemovalMessages, readableError } from './errors';
 import { PendingAction } from './pending-action';
 import { PersistentOperation } from './persistent-operation';
+import { readPlacementCatalog, PlacementCatalogChanged } from './placement-catalog';
 import { getResponse, loadWorldPublication, WorldVersionMismatch } from './world-publication';
 export { readableError } from './errors';
 
@@ -123,13 +130,19 @@ export class GameSession {
   inventory: InventoryView = { slots: [] };
   private readonly staticOperation = new PersistentOperation<PlaceStaticRequest>(
     'su:static-operation',
-    parsePlaceStaticRequest,
+    parseStoredPlaceStaticRequest,
   );
   private publicationTask?: Promise<void>;
+  private readonly removalOperation = new PersistentOperation<RemoveStaticRequest>(
+    'su:static-removal',
+    parseRemoveStaticRequest,
+  );
   private publicationTarget?: string;
   private switchingPublication = false;
   onStaticPlacementOpen?: (effect: StaticPlacementEffect) => void;
   onStaticPlacementResult?: (result: PlaceStaticResult) => void;
+  onStaticRemovalOpen?: (effect: StaticRemovalEffect) => void;
+  onStaticRemovalResult?: (result: RemoveStaticResult) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
   private readonly itemOperation = new PersistentOperation<ItemCommand>(
@@ -356,12 +369,68 @@ export class GameSession {
   readStaticAsset(path: string, signal?: AbortSignal) {
     return this.resources!.read(path, signal);
   }
+  async loadPlacementCatalog(
+    reference: PlacementCatalogReference,
+    signal?: AbortSignal,
+  ): Promise<PlacementCatalog> {
+    for (let attempt = 0; ; attempt++) {
+      const generation = this.generation;
+      try {
+        const catalog = await readPlacementCatalog(reference, this.info, this.manifest, signal);
+        if (generation !== this.generation)
+          throw new PlacementCatalogChanged('Мир обновлён во время загрузки каталога.');
+        return catalog;
+      } catch (error) {
+        if (signal?.aborted || !(error instanceof PlacementCatalogChanged) || attempt > 0)
+          throw error;
+        await this.refreshPublication();
+        if (!this.info.placementCatalog) throw new Error('Каталог размещения недоступен.');
+        reference = this.info.placementCatalog;
+      }
+    }
+  }
   get staticPlacementPending() {
     return !!this.staticOperation.current;
   }
-  placeStatic(position: { x: number; z: number }, yawStep: number): boolean {
+  get staticRemovalPending() {
+    return !!this.removalOperation.current;
+  }
+  removeStatic(entityId: string, publication: WorldPublicationInfo): boolean {
+    if (
+      this.staticPlacementPending ||
+      this.staticRemovalPending ||
+      this.state !== 'playing' ||
+      !this.accountId ||
+      this.worldPaused ||
+      !this.room ||
+      publication.worldEpoch !== this.info.worldEpoch ||
+      publication.assetReleaseVersion !== this.info.assetReleaseVersion ||
+      publication.layoutRevision !== this.info.layoutRevision
+    )
+      return false;
+    const request = parseRemoveStaticRequest({
+      operationId: crypto.randomUUID(),
+      worldEpoch: publication.worldEpoch,
+      assetReleaseVersion: publication.assetReleaseVersion,
+      expectedLayoutRevision: publication.layoutRevision,
+      entityId,
+    });
+    if (!request) return false;
+    this.removalOperation.begin(request, this.accountId);
+    this.removalOperation.sendIfDue(performance.now(), (value) =>
+      this.room!.send('removeStatic', value),
+    );
+    return true;
+  }
+  placeStatic(
+    position: { x: number; z: number },
+    yawStep: number,
+    assetId: string,
+    placementCatalogVersion: string,
+  ): boolean {
     if (
       this.staticOperation.current ||
+      this.staticRemovalPending ||
       this.state !== 'playing' ||
       !this.accountId ||
       this.worldPaused
@@ -372,6 +441,8 @@ export class GameSession {
         operationId: crypto.randomUUID(),
         worldEpoch: this.info.worldEpoch,
         assetReleaseVersion: this.info.assetReleaseVersion!,
+        assetId,
+        placementCatalogVersion,
         expectedLayoutRevision: this.info.layoutRevision!,
         position,
         yawStep,
@@ -596,13 +667,31 @@ export class GameSession {
         this.staticOperation.complete();
         this.onNotice(
           result.ok
-            ? 'Скамейка сохранена.'
+            ? 'Объект сохранён.'
             : (result.message ??
                 staticPlacementMessages[result.code] ??
                 messages[result.code] ??
                 result.code),
         );
         this.onStaticPlacementResult?.(result);
+      });
+      room.onMessage<RemoveStaticResult>('staticRemovalResult', (result) => {
+        if (this.room !== room || result.operationId !== this.removalOperation.current?.operationId)
+          return;
+        if (!result.ok && ['WORLD_NOT_READY', 'STORAGE_UNAVAILABLE'].includes(result.code)) {
+          this.removalOperation.defer();
+          return;
+        }
+        this.removalOperation.complete();
+        this.onNotice(
+          result.ok
+            ? 'Объект удалён.'
+            : (result.message ??
+                staticRemovalMessages[result.code] ??
+                messages[result.code] ??
+                result.code),
+        );
+        this.onStaticRemovalResult?.(result);
       });
       room.onMessage<unknown>('worldSound', (value) => {
         if (this.room !== room) return;
@@ -638,13 +727,14 @@ export class GameSession {
         if (this.room !== room) return;
         if (
           result.ok &&
-          result.effect?.kind === 'staticPlacement' &&
+          (result.effect?.kind === 'staticPlacement' || result.effect?.kind === 'staticRemoval') &&
           !this.openedStaticActions.has(result.requestId)
         ) {
           this.openedStaticActions.add(result.requestId);
           if (this.openedStaticActions.size > 32)
             this.openedStaticActions.delete(this.openedStaticActions.values().next().value!);
-          this.onStaticPlacementOpen?.(result.effect);
+          if (result.effect.kind === 'staticPlacement') this.onStaticPlacementOpen?.(result.effect);
+          else this.onStaticRemovalOpen?.(result.effect);
         }
         if (this.animationRequest.result(result)) {
           this.onActionFeedback?.(result.ok ? 'click' : 'error');
@@ -1043,8 +1133,10 @@ export class GameSession {
       }
     }
     const room = this.room;
-    if (room && this.state !== 'reconnecting')
+    if (room && this.state !== 'reconnecting') {
       this.staticOperation.sendIfDue(now, (request) => room.send('placeStatic', request));
+      this.removalOperation.sendIfDue(now, (request) => room.send('removeStatic', request));
+    }
     if (this.switchingPublication)
       return room ? this.authoritativeDisplay() : { entities: this.preview() };
     this.planArea();
@@ -1107,6 +1199,7 @@ export class GameSession {
       this.save();
       if (this.accountId) {
         this.staticOperation.restore(this.accountId);
+        this.removalOperation.restore(this.accountId);
         this.itemOperation.restore(this.accountId);
       }
     }
@@ -1590,6 +1683,7 @@ export class GameSession {
     this.inventory = { slots: [] };
     this.itemOperation.reset();
     this.staticOperation.reset();
+    this.removalOperation.reset();
     this.openedStaticActions.clear();
     this.switchingPublication = false;
     this.publicationTask = undefined;
@@ -1676,6 +1770,7 @@ export class GameSession {
         layoutHash: this.info?.layoutHash,
       },
       staticPlacementPending: this.staticOperation.current,
+      staticRemovalPending: this.removalOperation.current,
       plan: this.plan,
       areaResults: this.planResults.slice(),
       streaming: this.streamer?.diagnostics(),

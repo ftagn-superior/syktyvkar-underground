@@ -74,6 +74,8 @@
     "test:avatars:profile": "node --import tsx tests/browser-avatar-profile.ts",
     "test:dynamic-map:browser": "node --import tsx tests/dynamic-map-browser.ts",
     "test:static-placement:browser": "node --import tsx tests/browser-static-placement.ts",
+    "test:static-removal:browser": "node --import tsx tests/browser-static-removal.ts",
+    "test:static-removal:city": "node --import tsx tests/browser-static-removal-city.ts",
     "test:world-ui:browser": "node --import tsx tests/browser-world-ui.ts"
   },
   "devDependencies": {

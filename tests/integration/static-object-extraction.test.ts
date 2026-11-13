@@ -355,7 +355,11 @@ describe('independent static-object extraction evidence', () => {
           art.sourceGeometryHashes[path],
         );
       else if (path === 'content/worlds/ring-block/world.json') {
-        const source = await readFile(path, 'utf8');
+        // The placement allowlist is authoring metadata, outside frozen geometry.
+        const source = (await readFile(path, 'utf8')).replace(
+          /  "placementPolicy": "placement\.json",\n/,
+          '',
+        );
         expect(JSON.parse(source).formatVersion).toBe(5);
         expect(sha256(source.replace('"formatVersion": 5', '"formatVersion": 4'))).toBe(hash);
       } else if (path.endsWith('/asset.json')) {

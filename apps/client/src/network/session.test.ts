@@ -2,12 +2,17 @@ import {
   createWorldPublication,
   type WorldPublication,
 } from '../../../../packages/world-release/src/index.js';
+import { createHash } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   PROTOCOL_VERSION,
+  canonicalJson,
+  placementCatalogIdentity,
+  type PlacementCatalog,
+  type PlacementCatalogReference,
   loadWorldBundle,
   type WorldInfo,
   type WorldManifest,
@@ -179,6 +184,56 @@ beforeEach(() => {
 afterEach(() => {
   for (const instance of sessions.splice(0)) instance.dispose();
   vi.unstubAllGlobals();
+});
+
+describe('static removal confirmation', () => {
+  it('requires the selected publication and never silently retargets a newer layout', () => {
+    const instance = session();
+    instance.info = { ...info };
+    instance.accountId = 'account';
+    instance.state = 'playing';
+    const send = vi.fn();
+    instance.room = { send } as unknown as NonNullable<GameSession['room']>;
+    const selectedPublication = { ...info };
+    instance.info.layoutRevision++;
+    expect(instance.removeStatic('seed-building', selectedPublication)).toBe(false);
+    expect(instance.staticRemovalPending).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    // A selection made in the current publication sends one durable request.
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(true);
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      'removeStatic',
+      expect.objectContaining({
+        entityId: 'seed-building',
+        expectedLayoutRevision: instance.info.layoutRevision,
+        worldEpoch: info.worldEpoch,
+      }),
+    );
+    expect(instance.removeStatic('second-building', instance.info)).toBe(false);
+    expect(instance.placeStatic({ x: 1, z: 2 }, 0, 'bench', 'c'.repeat(64))).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionStorage.getItem('su:static-removal:account')!)).toMatchObject({
+      entityId: 'seed-building',
+      expectedLayoutRevision: instance.info.layoutRevision,
+    });
+    instance.room = undefined;
+  });
+  it('does not send a removal as a guest, during pause or without a room', () => {
+    const instance = session();
+    instance.info = { ...info };
+    instance.state = 'playing';
+    const send = vi.fn();
+    instance.room = { send } as unknown as NonNullable<GameSession['room']>;
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(false);
+    instance.accountId = 'account';
+    (instance as unknown as { persistencePaused: boolean }).persistencePaused = true;
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(false);
+    (instance as unknown as { persistencePaused: boolean }).persistencePaused = false;
+    instance.room = undefined;
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(instance.staticRemovalPending).toBe(false);
+  });
 });
 
 describe('lazy gameplay physics', () => {
@@ -535,5 +590,94 @@ describe('lazy gameplay physics', () => {
     expect(current.dispose).not.toHaveBeenCalled();
     expect(mocks.reserve).toHaveBeenCalledTimes(1);
     expect(instance.diagnostics().predictionWorlds).toBe(1);
+  });
+});
+
+describe('catalog discovery recovery', () => {
+  function catalogFixture() {
+    const catalog: PlacementCatalog = {
+      formatVersion: 1,
+      worldId: manifest.worldId,
+      assetReleaseVersion: info.assetReleaseVersion,
+      modelCatalogVersion: 'c'.repeat(64),
+      placementCatalogVersion: '',
+      groundY: 0,
+      yawSteps: 24,
+      categories: { buildings: { name: 'Здания' } },
+      models: [
+        {
+          assetId: Object.keys(manifest.assets)[0],
+          metadata: {
+            name: 'Тестовая модель',
+            description: 'Модель для проверки загрузки.',
+            category: 'buildings',
+            tags: ['test'],
+          },
+        },
+      ],
+    };
+    catalog.placementCatalogVersion = createHash('sha256')
+      .update(canonicalJson(placementCatalogIdentity(catalog)))
+      .digest('hex');
+    const reference: PlacementCatalogReference = {
+      assetReleaseVersion: catalog.assetReleaseVersion,
+      modelCatalogVersion: catalog.modelCatalogVersion,
+      placementCatalogVersion: catalog.placementCatalogVersion,
+      url: `/worlds/${manifest.worldId}/placement-catalogs/${catalog.placementCatalogVersion}.json`,
+    };
+    return { catalog, reference };
+  }
+  it('refreshes discovery once after 404 and uses the new reference', async () => {
+    const instance = session();
+    await instance.load();
+    const { catalog, reference } = catalogFixture();
+    const stale = {
+      ...reference,
+      placementCatalogVersion: 'd'.repeat(64),
+      url: `/worlds/${manifest.worldId}/placement-catalogs/${'d'.repeat(64)}.json`,
+    };
+    const download = vi.fn(async (url: string | URL | Request) => {
+      const path = new URL(String(url), location.href).pathname;
+      if (path === '/api/world') return Response.json({ ...info, placementCatalog: reference });
+      if (path === stale.url) return new Response(null, { status: 404 });
+      if (path === reference.url) return Response.json(catalog);
+      throw new Error(`Unexpected download: ${path}`);
+    });
+    vi.stubGlobal('fetch', download);
+    const refresh = vi.spyOn(instance, 'refreshPublication');
+    expect(await instance.loadPlacementCatalog(stale)).toEqual(catalog);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(
+      download.mock.calls.map(([url]) => new URL(String(url), location.href).pathname),
+    ).toEqual([stale.url, '/api/world', reference.url]);
+  });
+  it('stops after one discovery refresh when the catalog is still unavailable', async () => {
+    const instance = session();
+    await instance.load();
+    const { reference } = catalogFixture();
+    const download = vi.fn(async (url: string | URL | Request) =>
+      new URL(String(url), location.href).pathname === '/api/world'
+        ? Response.json({ ...info, placementCatalog: reference })
+        : new Response(null, { status: 404 }),
+    );
+    vi.stubGlobal('fetch', download);
+    const refresh = vi.spyOn(instance, 'refreshPublication');
+    await expect(instance.loadPlacementCatalog(reference)).rejects.toThrow('Каталог обновлён');
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(download).toHaveBeenCalledTimes(3);
+  });
+  it('shows a corrupt catalog error without refreshing discovery automatically', async () => {
+    const instance = session();
+    await instance.load();
+    const { catalog, reference } = catalogFixture();
+    catalog.models[0].metadata.name = 'Повреждённые данные';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(catalog)),
+    );
+    const refresh = vi.spyOn(instance, 'refreshPublication');
+    await expect(instance.loadPlacementCatalog(reference)).rejects.toThrow('содержимое');
+    expect(refresh).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

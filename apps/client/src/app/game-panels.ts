@@ -1,5 +1,13 @@
 type PanelName =
-  'help' | 'players' | 'static' | 'reactions' | 'animations' | 'chat' | 'inventory' | 'diagnostics';
+  | 'help'
+  | 'players'
+  | 'static'
+  | 'removal'
+  | 'reactions'
+  | 'animations'
+  | 'chat'
+  | 'inventory'
+  | 'diagnostics';
 
 /** Opening a game panel cancels competing panels and their transient placement state. */
 export class GamePanels {

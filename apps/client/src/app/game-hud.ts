@@ -105,7 +105,7 @@ export class GameHud {
     firstPerson,
     mode,
   }: {
-    placement?: 'inventory' | 'static';
+    placement?: 'inventory' | 'static' | 'removal';
     firstPerson: boolean;
     mode: InputMode;
   }): void {
@@ -114,16 +114,20 @@ export class GameHud {
     this.element('overview-camera-controls').hidden = firstPerson;
     this.element('first-person-camera-controls').hidden = !firstPerson;
     this.element('controls-title').textContent = placing
-      ? placement === 'static'
-        ? 'Размещение скамейки'
-        : 'Поворот предмета'
+      ? placement === 'removal'
+        ? 'Удаление объекта'
+        : placement === 'static'
+          ? 'Размещение объекта'
+          : 'Поворот предмета'
       : firstPerson
         ? 'От первого лица'
         : 'Свободное движение';
     this.element('controls-description').textContent = placing
-      ? placement === 'static'
-        ? 'A / D — поворот на 15° · колесо — масштаб'
-        : 'W / S — наклон · A / D — поворот · Q / E — крен'
+      ? placement === 'removal'
+        ? 'Щелчок — выбор · «Удалить» — подтверждение · Esc — отмена'
+        : placement === 'static'
+          ? 'A / D — поворот на 15° · колесо — масштаб'
+          : 'W / S — наклон · A / D — поворот · Q / E — крен'
       : firstPerson
         ? 'WASD / стрелки — ходьба и боковые шаги · мышь — взгляд · Shift — бег · T — чат · V — обзор'
         : mode === 'touch'

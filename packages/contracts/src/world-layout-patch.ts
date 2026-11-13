@@ -1,3 +1,4 @@
+import { MAX_EDITABLE_STATIC_INSTANCES } from './static-placement.js';
 import type { StaticObjectInstance, WorldLayoutSnapshot } from './world-types.js';
 import { validateBuildingInstances } from './world-bundle.js';
 import { canonicalJson } from './world.js';
@@ -78,7 +79,10 @@ export function validateWorldLayoutSnapshot(value: unknown): asserts value is Wo
   ]);
   header(value);
   revision(value.revision);
-  requireValue(Array.isArray(value.instances) && value.instances.length <= 10_000, 'instances');
+  requireValue(
+    Array.isArray(value.instances) && value.instances.length <= MAX_EDITABLE_STATIC_INSTANCES,
+    'instances',
+  );
   const ids = new Set<string>();
   for (const instance of value.instances) {
     placement(instance, true);

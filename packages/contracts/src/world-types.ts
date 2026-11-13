@@ -154,6 +154,8 @@ export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
   cellSize: number;
   cells: string[];
   assetCatalog: string;
+  /** Separate authoring policy; excluded from world and geometry identities. */
+  placementPolicy?: string;
   generator?: { kind: 'streaming-lab'; seed: number };
 }
 export interface LocalStaticSet {

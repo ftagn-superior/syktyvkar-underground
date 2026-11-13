@@ -27,6 +27,13 @@ import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
 import { GlbInstances } from './glb-instances';
 import { applyRadialFog, type RadialState } from './radial-fog';
+import {
+  staticHitVisible,
+  staticObjectSelection,
+  staticRayBounds,
+  type StaticObjectHit,
+  type StaticObjectSelection,
+} from './static-selection';
 import { adoptGlowAttribute, type WorldNightLights } from './environment/night-lights';
 
 type Asset = {
@@ -309,6 +316,44 @@ export class BuildingViews {
     instance.entries.dispose();
     instance.root.dispose();
     for (const material of instance.materials) material.dispose(false, false);
+  }
+
+  selection(id: string): StaticObjectSelection | undefined {
+    const view = this.references.get(id)?.view;
+    if (view?.root.isEnabled())
+      return staticObjectSelection(view.definition, view.minimum, view.maximum);
+    return this.glbs.selection(id) ?? this.trees.selection(id);
+  }
+
+  /** Only called by the explicit removal tool; ordinary pointer movement never scans meshes. */
+  pick(ray: Ray, protectedIds: ReadonlySet<string> = new Set()): StaticObjectHit | undefined {
+    let nearest = this.glbs.pick(ray, protectedIds);
+    const tree = this.trees.pick(ray, protectedIds);
+    if (tree && (!nearest || tree.distance < nearest.distance)) nearest = tree;
+    for (const id of this.index.query(staticRayBounds(ray))) {
+      const view = this.references.get(id)?.view;
+      if (
+        protectedIds.has(id) ||
+        !view?.root.isEnabled() ||
+        !ray.intersectsBoxMinMax(view.minimum, view.maximum)
+      )
+        continue;
+      for (const mesh of view.meshes) {
+        if (!mesh.isVisible || mesh.visibility <= 0 || !mesh.isEnabled()) continue;
+        const hit = ray.intersectsMesh(mesh, false);
+        if (
+          hit.hit &&
+          hit.distance <= ray.length &&
+          (!nearest || hit.distance < nearest.distance) &&
+          staticHitVisible(this.radial, ray, hit.distance, mesh.metadata?.suStreamingBorn)
+        )
+          nearest = {
+            ...staticObjectSelection(view.definition, view.minimum, view.maximum),
+            distance: hit.distance,
+          };
+      }
+    }
+    return nearest;
   }
   /** Сообщает масштаб кадра; объекты мельче нескольких пикселей перестают рисоваться. */
   setDetailScale(metresPerPixel: number): void {

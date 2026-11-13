@@ -1,12 +1,20 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { canonicalJson, validateWorldManifest, worldManifestIdentity } from '@su/contracts';
-import { hash } from '@su/world-release';
+import {
+  canonicalJson,
+  validateWorldManifest,
+  worldManifestIdentity,
+  validateWorldPlacementAssets,
+  validateBuildingParts,
+  loadWorldBundle,
+} from '@su/contracts';
+import { hash, readWorldPlacementPolicy } from '@su/world-release';
 import { WORLDS } from './index.js';
 import {
   createWorldModelCatalog,
   readWorldModelCatalog,
   readWorldModelSources,
+  readPlacementPolicySource,
 } from './model-catalog.js';
 
 const args = process.argv.slice(2);
@@ -19,6 +27,7 @@ for (const worldId of WORLDS) {
   const world = JSON.parse(await readFile(worldFile, 'utf8'));
   const sources = await readWorldModelSources(resolve(dirname(worldFile), world.assetCatalog));
   for (const model of Object.values(sources.models)) registered.add(model.path);
+  const policySource = await readPlacementPolicySource(worldFile, world, sources);
   if (!sourceOnly) {
     const directory = resolve(`dist/worlds/${worldId}`);
     const manifest = validateWorldManifest(
@@ -40,6 +49,51 @@ for (const worldId of WORLDS) {
         Object.entries(catalog.models).map(([id, model]) => [id, model.runtimeAssetIds]),
       ),
     );
+    const policy = await readWorldPlacementPolicy(
+      `dist/model-catalogs/${worldId}`,
+      manifest,
+      authoring.assetReleaseVersion,
+    );
+    if (
+      !!policy !== !!policySource ||
+      (policy &&
+        policySource &&
+        canonicalJson([...policy.assetIds].sort()) !==
+          canonicalJson([...policySource.assetIds].sort()))
+    )
+      throw new Error(`Placement policy is stale: ${worldId}. Run pnpm world:build.`);
+    if (policy) {
+      const readVerified = async (path: string, expectedHash: string) => {
+        const bytes = await readFile(resolve(directory, path));
+        if (hash(bytes) !== expectedHash)
+          throw new Error(`World resource hash mismatch: ${worldId}/${path}`);
+        return bytes;
+      };
+      const definition = await loadWorldBundle(manifest, readVerified);
+      const parts = Object.fromEntries(
+        await Promise.all(
+          policy.assetIds.map(async (assetId) => {
+            const path = manifest.assets[assetId].partsFile;
+            return [
+              assetId,
+              validateBuildingParts(
+                JSON.parse(
+                  new TextDecoder().decode(await readVerified(path, manifest.files[path])),
+                ),
+              ),
+            ];
+          }),
+        ),
+      );
+      validateWorldPlacementAssets(
+        policy,
+        catalog,
+        manifest,
+        definition,
+        parts,
+        authoring.fixedInstanceIds,
+      );
+    }
     if (canonicalJson(expected) !== canonicalJson(catalog))
       throw new Error(`Model catalog is stale: ${worldId}. Run pnpm world:build.`);
   }

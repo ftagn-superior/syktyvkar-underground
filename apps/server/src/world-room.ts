@@ -1,4 +1,5 @@
 import { LiveStaticPlacement, type LayoutPublications } from './layout/live.js';
+import type { ServerPlacementCatalog } from './layout/placement-catalog.js';
 import type { Pool } from 'pg';
 import { ItemStore } from './items/store.js';
 import type { WorldOwnership } from './world-ownership.js';
@@ -20,6 +21,8 @@ import {
   MAX_PLAYERS,
   parsePlaceStaticRequest,
   type StaticPlacementError,
+  parseRemoveStaticRequest,
+  type StaticRemovalError,
   parseItemCommand,
   type ItemResult,
   type ItemState,
@@ -72,6 +75,7 @@ import type { PlayerSession as Session, ClientAction } from './room/session.js';
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 export interface WorldRoomOptions {
   layouts?: LayoutPublications;
+  placementCatalog?: ServerPlacementCatalog;
   ownership?: WorldOwnership;
   itemStore?: ItemStore;
   definition: WorldDefinition;
@@ -179,9 +183,13 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.state.worldEpoch,
         () => this.layoutChanged(),
         () => this.neutralAll(),
+        options.placementCatalog,
       );
     this.onMessage('placeStatic', (client, request: unknown) => {
       void this.placeStatic(client, request);
+    });
+    this.onMessage('removeStatic', (client, request: unknown) => {
+      void this.removeStatic(client, request);
     });
     this.projectItems(this.world.getSnapshot().items);
     this.onMessage('itemCommand', (client, request: unknown) => {
@@ -776,7 +784,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         'AUTH_REQUIRED',
         command.kind === 'time'
           ? 'Чтобы управлять временем, войдите через Telegram.'
-          : giveFailureMessage('AUTH_REQUIRED'),
+          : command.kind === 'staticPlacement'
+            ? 'Чтобы размещать объекты, войдите через Telegram.'
+            : command.kind === 'staticRemoval'
+              ? 'Чтобы удалять объекты, войдите через Telegram.'
+              : giveFailureMessage('AUTH_REQUIRED'),
       );
     if (command.kind === 'time')
       return this.finishAction(client, session, {
@@ -785,7 +797,15 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       });
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();
-      if (!effect) return fail('COMMAND_DISABLED', 'Размещение скамейки недоступно в этом мире.');
+      if (!effect) return fail('COMMAND_DISABLED', 'Размещение объектов недоступно в этом мире.');
+      if (this.staticPlacement?.busy || this.items.layoutPaused)
+        return fail('WORLD_NOT_READY', 'Обновляется окружение.');
+      this.finishAction(client, session, { requestId, ok: true, effect });
+      return;
+    }
+    if (command.kind === 'staticRemoval') {
+      const effect = this.staticPlacement?.removalEffect();
+      if (!effect) return fail('COMMAND_DISABLED', 'Удаление объектов недоступно в этом мире.');
       if (this.staticPlacement?.busy || this.items.layoutPaused)
         return fail('WORLD_NOT_READY', 'Обновляется окружение.');
       this.finishAction(client, session, { requestId, ok: true, effect });
@@ -987,12 +1007,22 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       .cleanup()
       .catch((error) => console.error('Layout cleanup failed', error));
   }
-  private async placeStatic(client: Client, value: unknown) {
-    const request = parsePlaceStaticRequest(value);
-    const operationId = request?.operationId ?? '';
-    const fail = (code: StaticPlacementError) =>
-      client.send('staticPlacementResult', { operationId, ok: false, code });
-    if (!request) return fail('INVALID_INPUT');
+  private placeStatic(client: Client, value: unknown) {
+    return this.changeStatic(client, value, 'place');
+  }
+  private removeStatic(client: Client, value: unknown) {
+    return this.changeStatic(client, value, 'remove');
+  }
+  private async changeStatic(client: Client, value: unknown, kind: 'place' | 'remove') {
+    const operation =
+      kind === 'place'
+        ? { kind, request: parsePlaceStaticRequest(value) }
+        : { kind, request: parseRemoveStaticRequest(value) };
+    const operationId = operation.request?.operationId ?? '';
+    const resultMessage = kind === 'place' ? 'staticPlacementResult' : 'staticRemovalResult';
+    const fail = (code: StaticRemovalError) =>
+      client.send(resultMessage, { operationId, ok: false, code });
+    if (!operation.request) return fail('INVALID_INPUT');
     const session = this.sessions.get(client.sessionId);
     const authorize = (): StaticPlacementError | undefined => {
       if (
@@ -1008,19 +1038,28 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (this.itemRequests >= 32) return fail('RATE_LIMITED');
     this.itemRequests++;
     try {
-      const result = await this.staticPlacement.place(
-        session!.auth!.accountId,
-        request,
-        authorize,
-        () =>
-          !session?.connected ||
-          session.plan ||
-          this.sessions.get(client.sessionId) !== session ||
-          !this.state.players.has(client.sessionId)
-            ? 'WORLD_NOT_READY'
-            : undefined,
-      );
-      client.send('staticPlacementResult', result);
+      const validateNew = (): StaticPlacementError | undefined =>
+        !session?.connected ||
+        session.plan ||
+        this.sessions.get(client.sessionId) !== session ||
+        !this.state.players.has(client.sessionId)
+          ? 'WORLD_NOT_READY'
+          : undefined;
+      const result =
+        operation.kind === 'place'
+          ? await this.staticPlacement.place(
+              session!.auth!.accountId,
+              operation.request,
+              authorize,
+              validateNew,
+            )
+          : await this.staticPlacement.remove(
+              session!.auth!.accountId,
+              operation.request,
+              authorize,
+              validateNew,
+            );
+      client.send(resultMessage, result);
       if (this.staticPlacement.fatal && !this.layoutFailureReported) {
         this.layoutFailureReported = true;
         this.neutralAll();

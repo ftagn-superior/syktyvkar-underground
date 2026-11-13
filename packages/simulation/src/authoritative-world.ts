@@ -70,6 +70,10 @@ export class AuthoritativeWorld {
     this.world.addStatic(instance, definition.buildingAssets[instance.assetId]);
     Object.assign(this.world.definition, definition);
   }
+  removeStatic(entityId: string, definition: WorldDefinition) {
+    this.world.removeStatic(entityId);
+    Object.assign(this.world.definition, definition);
+  }
   respawnPlayer(id: string, spawn?: Vec3): boolean {
     const character = this.world.characters.get(id);
     if (!character) return false;

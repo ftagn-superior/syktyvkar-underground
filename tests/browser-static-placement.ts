@@ -9,7 +9,11 @@ import { buildStaticPlacementWorld } from './helpers/static-placement-world.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
 import { chatSent, hudClick, openChat } from './helpers/hud.js';
-import { placedStaticInstance, type PlaceStaticRequest } from '../packages/contracts/src/index.js';
+import {
+  placedStaticInstance,
+  STATIC_PLACEMENT_ASSET_ID,
+  type PlaceStaticRequest,
+} from '../packages/contracts/src/index.js';
 if (!process.env.SU_TEST_DATABASE_URL)
   throw new Error('Set SU_TEST_DATABASE_URL to a test PostgreSQL database.');
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
@@ -20,6 +24,7 @@ let app: Awaited<ReturnType<typeof createGameServer>> | undefined;
 let browser: Awaited<ReturnType<typeof launchTestBrowser>> | undefined;
 const errors: string[] = [];
 const pages: Page[] = [];
+const catalogMetrics: Record<string, number> = {};
 async function playing(page: Page) {
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
@@ -30,11 +35,177 @@ async function playing(page: Page) {
 async function command(page: Page, text: string) {
   await page.bringToFront();
   if (await page.evaluate(() => (window as any).__SU_DEBUG__.controls().view === 'first-person')) {
+    await page.locator('#chat-toggle').waitFor({ state: 'visible' });
     await page.locator('#world').focus();
     await page.keyboard.press('t');
-  } else await openChat(page);
+  }
+  await openChat(page);
   await page.locator('#chat-input').fill(text);
   await page.locator('#chat-send:not([disabled])').click();
+}
+async function beginPlacement(page: Page, assetId = STATIC_PLACEMENT_ASSET_ID) {
+  await page.locator('#placement-catalog').waitFor({ state: 'visible' });
+  const card = page.locator(`#placement-catalog [data-asset-id="${assetId}"]`);
+  if ((await card.getAttribute('aria-pressed')) !== 'true') await card.click();
+  await page.evaluate(() => {
+    (window as any).__placementUiTrace = [];
+    if ((window as any).__placementUiTraceInstalled) return;
+    (window as any).__placementUiTraceInstalled = true;
+    for (const name of ['pointerdown', 'pointerup', 'click'])
+      document.addEventListener(
+        name,
+        (event) => {
+          const element = event.target as HTMLElement;
+          if (element.id !== 'placement-catalog-place') return;
+          const snapshot = (window as any).__SU_DEBUG__.snapshot();
+          (window as any).__placementUiTrace.push({
+            type: event.type,
+            disabled: (element as HTMLButtonElement).disabled,
+            connection: snapshot.connection,
+            paused: snapshot.storagePaused,
+            selected: document
+              .querySelector('[data-asset-id][aria-pressed="true"]')
+              ?.getAttribute('data-asset-id'),
+          });
+        },
+        true,
+      );
+  });
+  for (let attempt = 0; ; attempt++) {
+    await playing(page);
+    await page.evaluate(() => {
+      (window as any).__placementUiTrace = [];
+    });
+    await page.locator('#placement-catalog-place:not([disabled])').click();
+    try {
+      await page.locator('#static-placement').waitFor({ state: 'visible', timeout: 1000 });
+      break;
+    } catch (error) {
+      const events: Array<{ type: string; disabled: boolean; connection: string }> =
+        await page.evaluate(() => (window as any).__placementUiTrace);
+      // Preparation may disable the button after Playwright's actionability check but before
+      // native pointerdown. Wait for the barrier and make a new deliberate catalog click.
+      if (
+        attempt < 2 &&
+        !events.some((event) => event.type === 'click') &&
+        events.some((event) => event.disabled && event.connection !== 'playing')
+      )
+        continue;
+      console.error(
+        'Catalog transition trace',
+        await page.evaluate(() => ({
+          events: (window as any).__placementUiTrace,
+          tool: (window as any).__SU_DEBUG__.placement?.(),
+        })),
+      );
+      throw error;
+    }
+  }
+  await page.waitForFunction(() => (window as any).__SU_DEBUG__.placement().hasGhost);
+  await page.waitForFunction(() => document.activeElement?.id === 'world');
+}
+async function inspectCatalog(page: Page) {
+  const opened = performance.now();
+  await page.locator('#placement-catalog [data-asset-id]').first().waitFor();
+  catalogMetrics.openMs = performance.now() - opened;
+  const entries = page.locator('#placement-catalog [data-asset-id]');
+  assert.equal(await entries.count(), city ? 22 : 1);
+  assert.equal(await page.locator('#placement-catalog-place').isDisabled(), true);
+  assert.equal(
+    await page.locator('#placement-catalog [aria-pressed="true"][data-asset-id]').count(),
+    0,
+  );
+  const position = await page.evaluate(
+    () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
+  );
+  const search = page.locator('#placement-catalog-search');
+  await search.fill(' НЕСУЩЕСТВУЮЩАЯ модель ');
+  assert.equal(await entries.count(), 0);
+  await page.getByRole('button', { name: 'Сбросить поиск', exact: true }).click();
+  assert.equal(await entries.count(), city ? 22 : 1);
+  await search.fill('  СКАМЕЙКА   ');
+  assert.equal(await entries.count(), 1);
+  await search.press('w');
+  await search.fill('');
+  assert.deepEqual(
+    await page.evaluate(() => (window as any).__SU_DEBUG__.snapshot().authoritative.position),
+    position,
+  );
+  if (city) {
+    assert.equal(await page.locator('#placement-catalog [data-category]').count(), 5);
+    await page.locator('[data-category="barriers"]').click();
+    assert.equal(await entries.count(), 2);
+    await search.fill('фонарь');
+    assert.equal(await entries.count(), 0);
+    await page.getByRole('button', { name: 'Сбросить поиск', exact: true }).click();
+    await search.fill('дерево');
+    assert.equal(await entries.count(), 9);
+    await search.fill('береза малый');
+    assert.equal(await entries.count(), 1);
+    await search.fill('');
+    const ids = await entries.evaluateAll((elements) =>
+      elements.map((e) => (e as HTMLElement).dataset.assetId!),
+    );
+    for (const id of ids) {
+      const started = performance.now();
+      await page.locator(`#placement-catalog [data-asset-id="${id}"]`).click();
+      await page.locator('#placement-catalog-place:not([disabled])').waitFor();
+      catalogMetrics[`previewReady:${id}`] = performance.now() - started;
+      await page
+        .locator('#placement-model-preview')
+        .screenshot({ path: `output/playwright/placement-model-${id}.png` });
+      await beginPlacement(page, id);
+      await page.mouse.move(480, 350);
+      await page.waitForTimeout(100);
+      await page.screenshot({ path: `output/playwright/placement-ghost-${id}.png` });
+      catalogMetrics[`previewAndGhost:${id}`] = performance.now() - started;
+      await page.locator('#static-placement-other').click();
+      await page.locator('#placement-catalog').waitFor({ state: 'visible' });
+    }
+  }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const theme of ['night', 'day']) {
+    await page
+      .locator(`[data-theme-mode="${theme}"]`)
+      .evaluate((button) => (button as HTMLButtonElement).click());
+    await page
+      .locator('#placement-catalog')
+      .screenshot({ path: `output/playwright/placement-catalog-${theme}.png` });
+  }
+  for (const [width, height] of [
+    [1280, 720],
+    [960, 675],
+    [640, 720],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page
+      .locator('#placement-catalog')
+      .screenshot({ path: `output/playwright/placement-catalog-${width}.png` });
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      true,
+    );
+  }
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = '2';
+  });
+  await search.focus();
+  for (let i = 0; i < 35; i++) {
+    await page.keyboard.press('Tab');
+    assert.equal(
+      await page
+        .locator('#placement-catalog')
+        .evaluate((panel) => panel.contains(document.activeElement)),
+      true,
+    );
+  }
+  await page
+    .locator('#placement-catalog')
+    .screenshot({ path: 'output/playwright/placement-catalog-200.png' });
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = '';
+  });
+  await page.setViewportSize({ width: 960, height: 675 });
 }
 try {
   app = await createGameServer({ port: 0, accounts: fixture, worldDirectory });
@@ -53,6 +224,7 @@ try {
     page.on('console', (message) => {
       if (['error', 'warning'].includes(message.type()))
         console.error('Browser console:', message.text());
+      if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (e) => {
       errors.push(e.message);
@@ -89,7 +261,9 @@ try {
     () => (window as any).__SU_DEBUG__.controls().view === 'first-person',
   );
   await command(owner, '/motherlode');
-  await owner.locator('#static-placement').waitFor({ state: 'visible' });
+  await mkdir('output/playwright', { recursive: true });
+  await inspectCatalog(owner);
+  await beginPlacement(owner);
   await owner.waitForFunction(
     () =>
       (window as any).__SU_DEBUG__.controls().view === 'overview' && !document.pointerLockElement,
@@ -116,7 +290,7 @@ try {
     0,
   );
   await command(owner, '/motherlode');
-  await owner.locator('#static-placement').waitFor({ state: 'visible' });
+  await beginPlacement(owner);
   await owner.keyboard.press('x');
   await owner.locator('#static-placement').waitFor({ state: 'hidden' });
   await owner.locator('#inventory-panel').waitFor({ state: 'visible' });
@@ -130,7 +304,7 @@ try {
     ['#diagnostics-toggle', '#diagnostics'],
   ]) {
     await command(owner, '/motherlode');
-    await owner.locator('#static-placement').waitFor({ state: 'visible' });
+    await beginPlacement(owner);
     await hudClick(owner, toggle);
     await owner.locator('#static-placement').waitFor({ state: 'hidden' });
     await owner.locator(panel).waitFor({ state: 'visible' });
@@ -142,7 +316,7 @@ try {
     await hudClick(owner, toggle);
   }
   await command(owner, '/motherlode');
-  await owner.locator('#static-placement').waitFor({ state: 'visible' });
+  await beginPlacement(owner);
   await owner.locator('#world').dispatchEvent('pointerdown', {
     pointerType: 'touch',
     pointerId: 71,
@@ -152,7 +326,7 @@ try {
   await owner.locator('#static-placement').waitFor({ state: 'hidden' });
   await owner.keyboard.press('w'); // The mode-switching press is consumed.
   await command(owner, '/motherlode');
-  await owner.locator('#static-placement').waitFor({ state: 'visible' });
+  await beginPlacement(owner);
   const frozen = await owner.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
   );
@@ -258,7 +432,7 @@ try {
     if (placed) break;
   }
   assert.ok(placed, `server accepted a free pointer target; refusals: ${refusals.join('; ')}`);
-  await owner.locator('#notice').filter({ hasText: 'Скамейка сохранена' }).waitFor();
+  await owner.locator('#notice').filter({ hasText: 'Объект сохранён' }).waitFor();
   await playing(owner);
   await playing(observer);
   assert.equal(
@@ -276,6 +450,9 @@ try {
     worldEpoch: app.room.state.worldEpoch,
     assetReleaseVersion: (await fetch(app.url + '/api/world').then((r) => r.json()))
       .assetReleaseVersion,
+    assetId: row.after_state.asset_id,
+    placementCatalogVersion: (await fetch(app.url + '/api/world').then((r) => r.json()))
+      .placementCatalog.placementCatalogVersion,
     expectedLayoutRevision: row.layout_revision - 1,
     position: { x: row.after_state.position_x, z: row.after_state.position_z },
     yawStep: 1,
@@ -459,12 +636,19 @@ try {
   if (!city) assert.equal(renderingAfterRestart.glbInstances, 1);
   const result = {
     ok: true,
+    environment: {
+      node: process.version,
+      browser: browser.version(),
+      renderer: 'SwiftShader',
+      quality: 'economy',
+    },
     entityId: row.entity_id,
     position: sent.position,
     layoutRevision: row.layout_revision,
     errors,
     refusals,
     metrics: liveMetrics,
+    catalogMetrics,
     preparations: snapshot.preparations,
     confirmedRendering,
     renderingAfterRestart,

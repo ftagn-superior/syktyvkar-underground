@@ -1,4 +1,8 @@
-import { STATIC_PLACEMENT_COOLDOWN_MS, type StaticPlacementError } from '@su/contracts';
+import {
+  STATIC_PLACEMENT_COOLDOWN_MS,
+  type StaticPlacementError,
+  type StaticRemovalError,
+} from '@su/contracts';
 
 export const messages: Record<string, string> = {
   STORAGE_UNAVAILABLE:
@@ -32,10 +36,21 @@ export const messages: Record<string, string> = {
   ACCOUNTS_UNAVAILABLE: 'Хранилище аккаунтов временно недоступно. Повторите вход позже.',
 };
 export const staticPlacementMessages: Partial<Record<StaticPlacementError, string>> = {
-  RATE_LIMITED: `Размещать скамейки можно раз в ${STATIC_PLACEMENT_COOLDOWN_MS / 1000} секунды.`,
-  AUTH_REQUIRED: 'Чтобы размещать скамейки, войдите через Telegram.',
-  COMMAND_DISABLED: 'Размещение скамейки недоступно в этом мире.',
-  OUT_OF_BOUNDS: 'Скамейка должна целиком находиться в границах мира.',
+  RATE_LIMITED: `Размещать объекты можно раз в ${STATIC_PLACEMENT_COOLDOWN_MS / 1000} секунды.`,
+  AUTH_REQUIRED: 'Чтобы размещать объекты, войдите через Telegram.',
+  COMMAND_DISABLED: 'Размещение объектов недоступно в этом мире.',
+  OUT_OF_BOUNDS: 'Объект должен целиком находиться в границах мира.',
+  CATALOG_CHANGED: 'Каталог обновлён. Выберите модель и подтвердите размещение заново.',
+  ASSET_NOT_ALLOWED: 'Эта модель больше недоступна для размещения. Выберите другую.',
+};
+export const staticRemovalMessages: Partial<Record<StaticRemovalError, string>> = {
+  AUTH_REQUIRED: 'Чтобы удалять объекты, войдите через Telegram.',
+  COMMAND_DISABLED: 'Удаление объектов недоступно в этом мире.',
+  OBJECT_NOT_FOUND: 'Объект больше не существует. Выберите другой.',
+  OBJECT_PROTECTED: 'Основание и границы карты удалить нельзя.',
+  ALREADY_REMOVED: 'Объект уже удалён другим игроком.',
+  LAYOUT_CHANGED: 'Окружение изменилось. Откройте /vilievna и выберите объект заново.',
+  RATE_LIMITED: `Изменять окружение можно раз в ${STATIC_PLACEMENT_COOLDOWN_MS / 1000} секунды.`,
 };
 export function readableError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);

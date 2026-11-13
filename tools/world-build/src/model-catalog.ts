@@ -1,19 +1,24 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdir, readFile, rename, writeFile, unlink } from 'node:fs/promises';
+import { dirname, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   canonicalJson,
   validateWorldModelCategories,
   validateWorldModelDescriptor,
   validateWorldModelCatalog,
-  validateWorldModelCatalogIndex,
   worldModelCatalogIdentity,
   type WorldManifest,
   type WorldModelCatalog,
   type WorldModelCatalogEntry,
   type WorldModelDescriptor,
+  type WorldPlacementPolicy,
+  validateWorldPlacementPolicy,
+  validateWorldPlacementPolicySource,
+  type WorldSource,
+  type WorldPlacementPolicySource,
 } from '@su/contracts';
 import { hash, jsonBytes } from '@su/world-release';
+export { readWorldModelCatalog } from '@su/world-release';
 
 const readJson = async (path: string | URL): Promise<unknown> =>
   JSON.parse(await readFile(path, 'utf8'));
@@ -87,7 +92,11 @@ export function createWorldModelCatalog(
 }
 
 /** Separate from immutable layout publications and their identity/cleanup. */
-export async function writeWorldModelCatalog(catalog: WorldModelCatalog, directory: string) {
+export async function writeWorldModelCatalog(
+  catalog: WorldModelCatalog,
+  directory: string,
+  placementPolicy?: WorldPlacementPolicy,
+) {
   validateWorldModelCatalog(catalog);
   if (hash(canonicalJson(worldModelCatalogIdentity(catalog))) !== catalog.catalogVersion)
     throw new Error('World model catalog hash mismatch');
@@ -101,8 +110,26 @@ export async function writeWorldModelCatalog(catalog: WorldModelCatalog, directo
     if (!(await readFile(file)).equals(Buffer.from(bytes)))
       throw new Error(`World model catalog file changed: ${file}`);
   }
+  if (placementPolicy) {
+    validateWorldPlacementPolicy(placementPolicy);
+    if (
+      placementPolicy.worldId !== catalog.worldId ||
+      placementPolicy.assetReleaseVersion !== catalog.assetReleaseVersion
+    )
+      throw new Error('Placement policy release mismatch');
+    const temporaryPolicy = resolve(directory, `.policy.${randomUUID()}.tmp`);
+    await writeFile(temporaryPolicy, jsonBytes(placementPolicy));
+    await rename(temporaryPolicy, resolve(directory, 'placement-policy.json'));
+  } else {
+    await unlink(resolve(directory, 'placement-policy.json')).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      },
+    );
+  }
   const index = {
     formatVersion: 1,
+    ...(placementPolicy ? { placementPolicy: true } : {}),
     worldId: catalog.worldId,
     assetReleaseVersion: catalog.assetReleaseVersion,
     catalogVersion: catalog.catalogVersion,
@@ -112,27 +139,33 @@ export async function writeWorldModelCatalog(catalog: WorldModelCatalog, directo
   await rename(temporary, resolve(directory, 'index.json'));
 }
 
-export async function readWorldModelCatalog(
-  directory: string,
-  manifest: WorldManifest,
-  assetReleaseVersion: string,
-): Promise<WorldModelCatalog> {
-  const index = validateWorldModelCatalogIndex(await readJson(resolve(directory, 'index.json')));
-  const catalog = validateWorldModelCatalog(
-    await readJson(resolve(directory, `catalog.${index.catalogVersion}.json`)),
-    manifest,
-  );
+/** Resolve only the explicit authoring policy; never infer permissions from asset names. */
+export async function readPlacementPolicySource(
+  worldFile: string,
+  world: Pick<WorldSource, 'worldId' | 'placementPolicy'>,
+  sources: WorldModelSources,
+): Promise<WorldPlacementPolicySource | undefined> {
+  if (world.placementPolicy === undefined) return;
+  const directory = dirname(resolve(worldFile));
+  const path = world.placementPolicy;
   if (
-    catalog.assetReleaseVersion !== assetReleaseVersion ||
-    canonicalJson(index) !==
-      canonicalJson({
-        formatVersion: catalog.formatVersion,
-        worldId: catalog.worldId,
-        assetReleaseVersion: catalog.assetReleaseVersion,
-        catalogVersion: catalog.catalogVersion,
-      }) ||
-    hash(canonicalJson(worldModelCatalogIdentity(catalog))) !== catalog.catalogVersion
+    typeof path !== 'string' ||
+    path.includes('\\') ||
+    !path.split('/').every((part) => part && part !== '.' && part !== '..') ||
+    !resolve(directory, path).startsWith(directory + sep)
   )
-    throw new Error('World model catalog version/release mismatch');
-  return catalog;
+    throw new Error(`World ${world.worldId}: invalid placementPolicy path`);
+  try {
+    const policy = validateWorldPlacementPolicySource(await readJson(resolve(directory, path)));
+    for (const assetId of policy.assetIds) {
+      const model = sources.models[assetId];
+      if (!model) throw new Error(`asset ${assetId} is not registered`);
+      if (model.descriptor.source.kind === 'ground') throw new Error(`asset ${assetId} is ground`);
+    }
+    return policy;
+  } catch (error) {
+    throw new Error(`World ${world.worldId}, placement policy: ${(error as Error).message}`, {
+      cause: error,
+    });
+  }
 }

@@ -329,10 +329,11 @@ describe('static GLB thin instances', () => {
       for (let cycle = 0; cycle < 3; cycle++) {
         const ghost = await WorldView.prototype.createStaticGhost.call(
           { scene: f.scene, disposed: false } as unknown as WorldView,
-          f.model,
+          f.manifest.assets[assetId],
+          f.read,
         );
         expect(f.views.aggregateDiagnostics().glbInstances).toBe(0);
-        const root = f.scene.getTransformNodeByName('static-placement-preview')!;
+        const root = f.scene.getTransformNodeByName(`model-visual:${assetId}`)!;
         const meshes = root.getChildMeshes().filter((mesh) => mesh.getTotalVertices() > 0);
         expect(meshes).toHaveLength(2);
         expect(meshes.every((mesh) => mesh.material?.alpha === 0.5 && !mesh.isPickable)).toBe(true);

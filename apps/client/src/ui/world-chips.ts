@@ -1,4 +1,4 @@
-import { MAX_PLAYERS } from '@su/contracts';
+import { formatGameHour, MAX_PLAYERS } from '@su/contracts';
 import { ICONS } from './icons';
 import { createSign } from './player-sign';
 
@@ -7,12 +7,6 @@ export interface PlayerEntry {
   name: string;
   color: string;
   own: boolean;
-}
-
-/** «ЧЧ:ММ» for a game hour 0..24. */
-export function formatHour(hour: number): string {
-  const minutes = Math.round((((hour % 24) + 24) % 24) * 60) % 1440;
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
 /**
@@ -65,7 +59,7 @@ export class WorldChips {
     );
   }
   setClock(hour: number, daylight: boolean): void {
-    const text = formatHour(hour);
+    const text = formatGameHour(hour);
     if (text !== this.clock) {
       this.clock = text;
       this.clockText.textContent = text;

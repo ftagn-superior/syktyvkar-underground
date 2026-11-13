@@ -33,27 +33,15 @@ import {
   PROTOCOL_VERSION,
   RECONNECT_SECONDS,
   RESPAWN_COOLDOWN_MS,
-  REACTION_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
   worldNeighborhood,
   type PrepareArea,
   type AreaResult,
   type Vec3,
-  findReaction,
-  findAnimation,
   normalizeChatText,
-  chatCooldownMs,
-  WORLD_ACTIVITY_MOVE_DURATION_MS,
   findAvatarSkin,
-  applyDayClockAction,
-  dayClockHour,
-  formatGameHour,
   DEFAULT_AVATAR_SKIN,
-  type AvatarSkinId,
-  type DayClock,
-  type DayClockAction,
-  type MoveInput,
   type ActionResult,
   type ErrorCode,
   type WorldDefinition,
@@ -72,34 +60,16 @@ import { createAuthoritativeWorld } from '@su/simulation/server';
 import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
 import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
+import { ActionLedger, rememberResult } from './gameplay/action-ledger.js';
+import { WorldClock } from './gameplay/world-clock.js';
+import {
+  PlayerActivities,
+  cancelAnimation,
+  updatePlayerActivities,
+} from './gameplay/player-activities.js';
+import type { PlayerSession as Session, ClientAction } from './room/session.js';
 
-const TIME_COMMAND_COOLDOWN_MS = 1000;
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
-type Plan = { message: PrepareArea; deadline: number; readyAt?: number; spawnDeadline?: number };
-interface Session {
-  plan?: Plan;
-  areaResults: Map<string, AreaResult>;
-  entityId: string;
-  joinedAt: number;
-  connected: boolean;
-  name: string;
-  color: string;
-  skinId: AvatarSkinId;
-  lastRequest: number;
-  lastRespawn: number;
-  chatAvailableAtTick: number;
-  reactionAvailableAtTick: number;
-  lastInput: MoveInput;
-  results: Map<number, ActionResult>;
-  pendingActions: Set<number>;
-  auth?: AuthenticatedAccount;
-  cancelReconnect?: () => void;
-}
-interface ClientAction {
-  session: Session;
-  requestId: number;
-  code?: ErrorCode;
-}
 export interface WorldRoomOptions {
   layouts?: LayoutPublications;
   ownership?: WorldOwnership;
@@ -114,7 +84,7 @@ export interface WorldRoomOptions {
   itemCreationEnabled?: boolean;
 }
 
-/** Connection lifecycle and replication only; simulation owns all physical state. */
+/** Coordinates connections, world preparation and replication; gameplay rules live in gameplay/. */
 export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema }> {
   state = new WorldState();
   maxClients = MAX_PLAYERS;
@@ -135,7 +105,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private definition!: WorldDefinition;
   private items!: ItemRuntime;
   private itemRequests = 0;
-  private timeChangeAvailableAt = 0;
+  private readonly dayClock = new WorldClock(this.state);
   private staticPlacement?: LiveStaticPlacement;
   private layoutGroup?: Set<string>;
   private layoutFailureReported = false;
@@ -296,9 +266,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const usedColors = new Set([...this.sessions.values()].map((s) => s.color));
     this.sessions.set(client.sessionId, {
       entityId: `player-${randomUUID()}`,
-      joinedAt: performance.now(),
       connected: true,
-      pendingActions: new Set(),
+      actions: new ActionLedger(),
+      activities: new PlayerActivities(),
       auth,
       name: auth?.profile.displayName ?? `Гость ${ordinal}`,
       skinId: auth?.profile.skinId ?? findAvatarSkin(options.skinId)?.id ?? DEFAULT_AVATAR_SKIN,
@@ -308,12 +278,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           : undefined) ??
         PLAYER_COLORS.find((c) => !usedColors.has(c)) ??
         PLAYER_COLORS[ordinal % PLAYER_COLORS.length],
-      lastRequest: 0,
       lastRespawn: -Infinity,
-      chatAvailableAtTick: 0,
-      reactionAvailableAtTick: 0,
       lastInput: { ...NEUTRAL_INPUT },
-      results: new Map(),
       areaResults: new Map(),
     });
     if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
@@ -464,11 +430,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         }
         session.lastRespawn = performance.now();
         session.lastInput = { ...NEUTRAL_INPUT };
-        this.cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
+        cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
         const projected = this.state.players.get(client.sessionId)!;
-        const actual = this.world
-          .getSnapshot()
-          .players.find((player) => player.entityId === session.entityId)!;
+        const actual = this.world.getPlayerState(session.entityId)!;
         applyEntityState(projected, actual);
         this.interest.upsert(projected);
       } else {
@@ -517,8 +481,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           }
         : {}),
     };
-    session.results.set(requestId, result);
-    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
+    session.actions.remember(result);
     client?.send('actionResult', result);
   }
   private completePlan(
@@ -540,9 +503,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       ok,
       ...(code ? { code } : {}),
     };
-    session.areaResults.set(prepareId, result);
-    if (session.areaResults.size > 32)
-      session.areaResults.delete(session.areaResults.keys().next().value!);
+    rememberResult(session.areaResults, prepareId, result);
     client?.send('areaResult', result);
     if (finishAction && requestId !== undefined)
       this.rememberAction(client, session, requestId, ok, code);
@@ -609,35 +570,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const byId = new Map(snapshot.players.map((player) => [player.entityId, player]));
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
-      if (actual && (!actual.grounded || actual.revision !== player.revision))
-        this.cancelAnimation(player, this.state.serverTick + 1);
+      updatePlayerActivities(player, actual, this.state.serverTick + 1);
       if (actual) {
         applyEntityState(player, actual);
         this.interest.upsert(player);
-      }
-      const tick = this.state.serverTick + 1;
-      if (actual && Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08) {
-        const expires = tick + Math.ceil((WORLD_ACTIVITY_MOVE_DURATION_MS * TICK_RATE) / 1000);
-        if (player.reactionId && !player.reactionExpiresAtTick)
-          player.reactionExpiresAtTick = expires;
-        if (player.animationId && !player.animationEndsAtTick) {
-          player.animationEndsAtTick = expires;
-          player.animationChangedAtTick = tick;
-        }
-        if (player.chatText && !player.chatExpiresAtTick) player.chatExpiresAtTick = expires;
-      }
-      this.expireAnimation(player, this.state.serverTick + 1);
-      if (
-        player.reactionId &&
-        player.reactionExpiresAtTick &&
-        tick >= player.reactionExpiresAtTick
-      ) {
-        player.reactionId = '';
-        player.reactionExpiresAtTick = 0;
-      }
-      if (player.chatText && player.chatExpiresAtTick && tick >= player.chatExpiresAtTick) {
-        player.chatText = '';
-        player.chatExpiresAtTick = 0;
       }
     }
     this.projectItems(snapshot.items);
@@ -721,39 +657,23 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private beginAction(client: Client, request: unknown): ClientAction | undefined {
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
-    const data = request as { requestId?: unknown; worldEpoch?: unknown } | null;
-    if (
-      !data ||
-      typeof data.requestId !== 'number' ||
-      !Number.isSafeInteger(data.requestId) ||
-      data.requestId < 1
-    ) {
-      client.send('problem', { code: 'INVALID_INPUT' });
-      return;
+    const admission = session.actions.begin(request, session.plan?.message);
+    switch (admission.kind) {
+      case 'invalid':
+        client.send('problem', { code: 'INVALID_INPUT' });
+        return;
+      case 'pending':
+        return;
+      case 'prepare':
+        client.send('prepareArea', admission.plan);
+        return;
+      case 'result':
+        client.send('actionResult', admission.result);
+        return;
     }
-    const requestId = data.requestId;
-    // An asynchronous command will acknowledge all duplicate deliveries once committed.
-    if (session.plan?.message.requestId === requestId) {
-      client.send('prepareArea', session.plan.message);
-      return;
-    }
-    if (session.pendingActions.has(requestId)) return;
-    const previous = session.results.get(requestId);
-    if (previous) {
-      client.send('actionResult', previous);
-      return;
-    }
-    if (requestId <= session.lastRequest) {
-      client.send('actionResult', {
-        requestId,
-        ok: false,
-        code: 'ALREADY_PROCESSED',
-      } satisfies ActionResult);
-      return;
-    }
-    session.lastRequest = requestId;
+    const { requestId, worldEpoch } = admission;
     let code: ErrorCode | undefined;
-    if (data.worldEpoch !== this.state.worldEpoch) code = 'STALE_WORLD';
+    if (worldEpoch !== this.state.worldEpoch) code = 'STALE_WORLD';
     else if (
       this.items.paused ||
       session.plan ||
@@ -765,8 +685,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   private finishAction(client: Client, session: Session, result: ActionResult): void {
-    session.results.set(result.requestId, result);
-    if (session.results.size > 32) session.results.delete(session.results.keys().next().value!);
+    session.actions.remember(result);
     if (session.connected) this.clients.getById(client.sessionId)?.send('actionResult', result);
   }
 
@@ -791,142 +710,54 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private react(client: Client, request: unknown): void {
     const action = this.beginAction(client, request);
     if (!action) return;
-    const { session, requestId } = action;
-    let { code } = action;
-    const reaction = findReaction((request as { reactionId?: unknown }).reactionId);
-    const player = this.state.players.get(client.sessionId);
-    const remainingTicks = Math.max(
-      0,
-      session.reactionAvailableAtTick - this.state.serverTick,
-      (player?.reactionExpiresAtTick ?? 0) - this.state.serverTick,
-    );
-    if (!code) {
-      if (!reaction) code = 'INVALID_INPUT';
-      else if (remainingTicks > 0) code = 'RATE_LIMITED';
-      else {
-        player!.reactionId = reaction.id;
-        player!.reactionSequence++;
-        player!.reactionExpiresAtTick = 0;
-        session.reactionAvailableAtTick =
-          this.state.serverTick + Math.ceil((REACTION_COOLDOWN_MS * TICK_RATE) / 1000);
-      }
-    }
+    const { session, requestId, code } = action;
     this.finishAction(client, session, {
       requestId,
-      ok: code === undefined,
-      ...(code ? { code } : {}),
-      ...(code === undefined || code === 'RATE_LIMITED'
-        ? {
-            retryAfterMs: code
-              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
-              : REACTION_COOLDOWN_MS,
-          }
-        : {}),
+      ...session.activities.react(
+        this.state.players.get(client.sessionId),
+        (request as { reactionId?: unknown }).reactionId,
+        this.state.serverTick,
+        code,
+      ),
     });
-  }
-
-  private expireAnimation(player: PlayerSchema, tick: number): void {
-    if (player.animationId && player.animationEndsAtTick && tick >= player.animationEndsAtTick) {
-      player.animationId = '';
-      player.animationChangedAtTick = player.animationEndsAtTick;
-    }
-  }
-
-  private cancelAnimation(player: PlayerSchema, tick = this.state.serverTick): void {
-    this.expireAnimation(player, tick);
-    if (!player.animationId) return;
-    player.animationId = '';
-    player.animationSequence++;
-    player.animationChangedAtTick = tick;
   }
 
   private animate(client: Client, request: unknown): void {
     const action = this.beginAction(client, request);
     if (!action) return;
-    const { session, requestId } = action;
-    let { code } = action;
-    const animation = findAnimation((request as { animationId?: unknown }).animationId);
-    const player = this.state.players.get(client.sessionId);
-    if (player) this.expireAnimation(player, this.state.serverTick);
-    const remainingTicks = player?.animationId
-      ? Math.max(
-          0,
-          player.animationStartedAtTick +
-            Math.ceil(((findAnimation(player.animationId)?.cooldownMs ?? 0) * TICK_RATE) / 1000) -
-            this.state.serverTick,
-          player.animationEndsAtTick - this.state.serverTick,
-        )
-      : 0;
-    if (!code) {
-      const actual = this.world.getSnapshot().players.find((p) => p.entityId === session.entityId);
-      if (!animation) code = 'INVALID_INPUT';
-      else if (remainingTicks > 0) code = 'RATE_LIMITED';
-      else if (
-        !actual?.grounded ||
-        findAvatarSkin(player!.skinId)?.rig !== animation.rig ||
-        (animation.mode === 'fullBody' &&
-          (Math.hypot(actual.velocity.x, actual.velocity.z) > 0.08 ||
-            session.lastInput.moveX !== 0 ||
-            session.lastInput.moveZ !== 0))
-      )
-        code = 'ANIMATION_NOT_ALLOWED';
-      else {
-        player!.animationSequence++;
-        player!.animationId = animation.id;
-        player!.animationStartedAtTick = player!.animationChangedAtTick = this.state.serverTick;
-        player!.animationEndsAtTick = 0;
-      }
-    }
+    const { session, requestId, code } = action;
+    const actual = code ? undefined : this.world.getPlayerState(session.entityId);
     this.finishAction(client, session, {
       requestId,
-      ok: code === undefined,
-      ...(code ? { code } : {}),
-      ...(code === 'RATE_LIMITED'
-        ? { retryAfterMs: Math.ceil((remainingTicks * 1000) / TICK_RATE) }
-        : {}),
+      ...session.activities.animate(
+        this.state.players.get(client.sessionId),
+        actual,
+        session.lastInput,
+        (request as { animationId?: unknown }).animationId,
+        this.state.serverTick,
+        code,
+      ),
     });
   }
 
   private chat(client: Client, request: unknown): void {
     const action = this.beginAction(client, request);
     if (!action) return;
-    const { session, requestId } = action;
-    let { code } = action;
+    const { session, requestId, code } = action;
     const text = normalizeChatText((request as { text?: unknown }).text);
     const command = text && parseChatCommand(text);
     if (command) {
       void this.chatCommand(client, action, command);
       return;
     }
-    const player = this.state.players.get(client.sessionId);
-    const remainingTicks = Math.max(
-      0,
-      session.chatAvailableAtTick - this.state.serverTick,
-      (player?.chatExpiresAtTick ?? 0) - this.state.serverTick,
-    );
-    if (!code) {
-      if (!text) code = 'INVALID_INPUT';
-      else if (remainingTicks > 0) code = 'RATE_LIMITED';
-      else {
-        player!.chatText = text;
-        player!.chatSequence++;
-        player!.chatExpiresAtTick = 0;
-        session.chatAvailableAtTick =
-          this.state.serverTick + Math.ceil((chatCooldownMs(text) * TICK_RATE) / 1000);
-      }
-    }
-    // Cache only the acknowledgement, never the message body or a history.
     this.finishAction(client, session, {
       requestId,
-      ok: code === undefined,
-      ...(code ? { code } : {}),
-      ...(code === undefined || code === 'RATE_LIMITED'
-        ? {
-            retryAfterMs: code
-              ? Math.ceil((remainingTicks * 1000) / TICK_RATE)
-              : chatCooldownMs(text!),
-          }
-        : {}),
+      ...session.activities.chat(
+        this.state.players.get(client.sessionId),
+        text,
+        this.state.serverTick,
+        code,
+      ),
     });
   }
 
@@ -947,7 +778,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
           ? 'Чтобы управлять временем, войдите через Telegram.'
           : giveFailureMessage('AUTH_REQUIRED'),
       );
-    if (command.kind === 'time') return this.timeCommand(client, action, command.action);
+    if (command.kind === 'time')
+      return this.finishAction(client, session, {
+        requestId,
+        ...this.dayClock.command(command.action, Date.now()),
+      });
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();
       if (!effect) return fail('COMMAND_DISABLED', 'Размещение скамейки недоступно в этом мире.');
@@ -965,7 +800,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       return fail('INVALID_INPUT', `Неизвестный тип предмета: ${command.typeId}.`);
     if (this.itemRequests >= 32) return fail('RATE_LIMITED', giveFailureMessage('RATE_LIMITED'));
 
-    session.pendingActions.add(requestId);
+    session.actions.startPending(requestId);
     this.itemRequests++;
     try {
       const result = await this.items.give(
@@ -1003,47 +838,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       // Storage uncertainty remains queued in ItemRuntime; rejection means shutdown.
       fail('WORLD_NOT_READY', giveFailureMessage('WORLD_NOT_READY'));
     } finally {
-      session.pendingActions.delete(requestId);
+      session.actions.finishPending(requestId);
       this.itemRequests--;
     }
-  }
-
-  /** Игровые часы общие для комнаты и не сохраняются: после перезапуска идут по настенным. */
-  private timeCommand(client: Client, action: ClientAction, change?: DayClockAction): void {
-    const { session, requestId } = action;
-    const now = Date.now();
-    let clock: DayClock = {
-      offsetMs: this.state.dayOffsetMs,
-      frozenHour: this.state.dayFrozenHour,
-    };
-    if (change) {
-      // Смена часа перестраивает тени у всех клиентов, поэтому её нельзя слать очередью.
-      if (now < this.timeChangeAvailableAt)
-        return this.finishAction(client, session, {
-          requestId,
-          ok: false,
-          code: 'RATE_LIMITED',
-          message: 'Время меняли только что. Повторите через секунду.',
-          retryAfterMs: this.timeChangeAvailableAt - now,
-        });
-      this.timeChangeAvailableAt = now + TIME_COMMAND_COOLDOWN_MS;
-      clock = applyDayClockAction(clock, change, now);
-      this.state.dayOffsetMs = clock.offsetMs;
-      this.state.dayFrozenHour = clock.frozenHour;
-    }
-    const hour = formatGameHour(dayClockHour(clock, now));
-    this.finishAction(client, session, {
-      requestId,
-      ok: true,
-      // Без этого поля клиент закрыл бы чат на самую длинную паузу.
-      retryAfterMs: change ? TIME_COMMAND_COOLDOWN_MS : 0,
-      message:
-        change?.kind === 'reset'
-          ? `Часы идут по общему времени: ${hour}.`
-          : clock.frozenHour >= 0
-            ? `Время остановлено: ${hour}.`
-            : `Время идёт: ${hour}.`,
-    });
   }
 
   onDrop(client: Client, code?: number): void {
@@ -1059,7 +856,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const player = this.state.players.get(client.sessionId);
     if (player) {
       player.connected = false;
-      this.cancelAnimation(player);
+      cancelAnimation(player, this.state.serverTick);
     }
     // 4010 is the SDK's intentional offline/drop signal, not an application
     // rejection. Only terminal codes release an established session immediately.
@@ -1112,7 +909,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const session = this.sessions.get(client.sessionId);
     if (!session) return;
     const player = this.state.players.get(client.sessionId);
-    if (player) this.cancelAnimation(player);
+    if (player) cancelAnimation(player, this.state.serverTick);
     this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
     this.interest.drop(client.sessionId);
     this.interest.remove(session.entityId);
@@ -1129,7 +926,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       session.auth.expiresAt = 0;
       session.connected = false;
       const player = this.state.players.get(sessionId);
-      if (player) this.cancelAnimation(player);
+      if (player) cancelAnimation(player, this.state.serverTick);
       this.world.setInput(session.entityId, NEUTRAL_INPUT);
       session.cancelReconnect?.();
       const client = this.clients.getById(sessionId);
@@ -1265,7 +1062,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
             ? 'LAYOUT_UPDATING'
             : '';
     if (!wasPaused && this.state.paused)
-      for (const player of this.state.players.values()) this.cancelAnimation(player);
+      for (const player of this.state.players.values())
+        cancelAnimation(player, this.state.serverTick);
     if (wasPaused && !this.state.paused) {
       this.projectItems(this.world.getSnapshot().items);
       for (const id of this.sessions.keys()) this.inputs.get(id).clear();

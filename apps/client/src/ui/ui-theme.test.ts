@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sunPosition } from '../rendering/day-cycle';
+import { sunPosition } from '../rendering/environment/day-cycle';
 import { autoTheme, resolveTheme, THEME_HYSTERESIS } from './ui-theme';
 
 describe('UI theme by the game day', () => {

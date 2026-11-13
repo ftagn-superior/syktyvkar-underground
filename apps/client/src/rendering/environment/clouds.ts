@@ -24,7 +24,7 @@ import {
   cloudLayerOpacity,
   cloudShadowShift,
 } from './cloud-field';
-import type { RadialState } from './radial-fog';
+import type { RadialState } from '../radial-fog';
 
 /** How much direct light the middle of a cloud removes at full sun. */
 const SHADOW_DEPTH = 0.42;
@@ -219,7 +219,11 @@ export class WorldClouds {
     material.backFaceCulling = false;
     material.disableDepthWrite = true;
     material.setTexture('cloudMap', texture);
-    const layer = (this.layer = MeshBuilder.CreateGround('cloud-layer', { width: 1, height: 1 }));
+    const layer = (this.layer = MeshBuilder.CreateGround(
+      'cloud-layer',
+      { width: 1, height: 1 },
+      scene,
+    ));
     layer.material = material;
     layer.isPickable = false;
     layer.alwaysSelectAsActiveMesh = true;

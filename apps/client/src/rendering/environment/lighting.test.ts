@@ -188,6 +188,45 @@ describe('time of day', () => {
 });
 
 describe('world lighting ownership', () => {
+  it('shares composed shadows with the first-person camera without rendering a duplicate map', () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
+    const eyeCamera = new FreeCamera('eyes', new Vector3(0, 2, -5), scene);
+    const lighting = new WorldLighting(scene, camera, [eyeCamera]);
+    try {
+      lighting.staticShadow.addShadowCaster(MeshBuilder.CreateBox('house', {}, scene));
+      const avatar = MeshBuilder.CreateBox('avatar', {}, scene);
+      lighting.shadow.addShadowCaster(avatar);
+      const sun = lighting.shadow.getLight();
+      const composed = lighting.shadow.getShadowMap()!;
+      const cached = lighting.staticShadow.getShadowMap()!;
+      let dynamicRefreshes = 0;
+      composed.onAfterRenderObservable.add(() => dynamicRefreshes++);
+      for (const active of [camera, eyeCamera, camera, eyeCamera]) {
+        scene.activeCamera = active;
+        expect(sun.getShadowGenerator(active)).toBe(lighting.shadow);
+        expect(sun.getShadowGenerator()).toBe(lighting.staticShadow);
+        expect([...sun.getShadowGenerators()!.values()]).toEqual([
+          lighting.staticShadow,
+          lighting.shadow,
+        ]);
+        const before = dynamicRefreshes;
+        scene.render();
+        expect(dynamicRefreshes - before).toBe(1);
+        expect(composed.renderList).toContain(avatar);
+        expect(lighting.shadow.getShadowMap()).toBe(composed);
+        expect(lighting.staticShadow.getShadowMap()).toBe(cached);
+      }
+      expect(lighting.staticShadow.refreshes).toBe(1);
+      lighting.dispose();
+      expect(sun.getShadowGenerators()).toBeNull();
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it('keeps the palette, lights and shadow casters across quality switches and camera movement', () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);

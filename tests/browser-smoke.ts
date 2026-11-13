@@ -9,23 +9,30 @@ import { hudClick } from './helpers/hud.js';
 const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
 const browser = await launchTestBrowser();
 const errors: string[] = [];
+const consoleMessages: { page: number; type: string; text: string }[] = [];
+let pages: Page[] = [];
 async function snapshot(page: Page): Promise<any> {
   return page.evaluate(() => (window as any).__SU_DEBUG__.snapshot());
 }
-async function playing(page: Page) {
+async function playing(page: Page, timeout = 20_000) {
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
     undefined,
-    { timeout: 20_000 },
+    { timeout },
   );
 }
 try {
   const contexts = await Promise.all(
     [0, 1].map(() => browser.newContext({ viewport: { width: 1440, height: 900 } })),
   );
-  const pages = await Promise.all(contexts.map((context) => context.newPage()));
-  for (const page of pages) {
+  pages = await Promise.all(contexts.map((context) => context.newPage()));
+  for (const [index, page] of pages.entries()) {
     page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() !== 'error' && message.type() !== 'warning') return;
+      consoleMessages.push({ page: index, type: message.type(), text: message.text() });
+      if (consoleMessages.length > 80) consoleMessages.shift();
+    });
     await page.goto(`${url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').waitFor();
   }
@@ -38,23 +45,27 @@ try {
   await pages[0].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 2);
   const info = await fetch(`${url}/api/world`).then((response) => response.json());
   const fillers = [];
+  const fullBrowser = await launchTestBrowser();
   try {
+    // Isolate the rejected entrant's WebGL startup from the two active SwiftShader scenes.
+    // Admission is still checked by the real client after all eight seats are occupied.
+    const fullContext = await fullBrowser.newContext();
+    const fullPage = await fullContext.newPage();
+    fullPage.on('pageerror', (error) => errors.push(error.message));
+    await fullPage.goto(`${url}/?diagnostics=1`);
+    await fullPage.locator('#join:not([disabled])').waitFor();
     for (let index = 0; index < 6; index++) {
       const room = await new Client(url).joinById(info.roomId, info);
       prepareSdk(room);
       fillers.push(room);
     }
-    const fullContext = await browser.newContext();
-    const fullPage = await fullContext.newPage();
-    await fullPage.goto(`${url}/?diagnostics=1`);
-    await fullPage.locator('#join:not([disabled])').waitFor();
     await fullPage.locator('#join').click();
     await fullPage.waitForFunction(() =>
       document.querySelector('#notice')?.textContent?.includes('8 игроков'),
     );
     assert.equal((await snapshot(fullPage)).connection, 'ready');
-    await fullContext.close();
   } finally {
+    await fullBrowser.close();
     await Promise.all(fillers.map((room) => room.leave()));
   }
   await pages[0].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 2);
@@ -96,8 +107,12 @@ try {
     moved.authoritative.revision,
   );
   const identity = (await snapshot(pages[0])).authoritative.entityId;
+  const reloadStartedAt = performance.now();
   await pages[0].reload();
-  await playing(pages[0]);
+  // Recreating a standard-quality SwiftShader scene includes cold shader compilation.
+  // Server reconnect and area-preparation deadlines still bound actual recovery.
+  await playing(pages[0], 45_000);
+  const reloadMs = performance.now() - reloadStartedAt;
   assert.equal(
     (await snapshot(pages[0])).authoritative.entityId,
     identity,
@@ -130,6 +145,7 @@ try {
     browser: browser.version(),
     result: 'passed',
     displacement,
+    reloadMs,
     final,
     browserErrors: errors,
   };
@@ -139,6 +155,7 @@ try {
       {
         result: 'passed',
         displacement,
+        reloadMs,
         browser: browser.version(),
         correctionP95: final.correctionP95,
       },
@@ -146,6 +163,40 @@ try {
       2,
     ),
   );
+} catch (error) {
+  const clients = await Promise.allSettled(
+    pages.map((page) =>
+      page.evaluate(() => {
+        const debug = (window as any).__SU_DEBUG__;
+        return {
+          snapshot: debug?.snapshot(),
+          report: debug?.report(),
+          notice: document.querySelector('#notice')?.textContent,
+          joinLabel: document.querySelector('#join-label')?.textContent,
+          visibility: document.visibilityState,
+          focused: document.hasFocus(),
+        };
+      }),
+    ),
+  );
+  await mkdir('output/playwright', { recursive: true });
+  await writeFile(
+    'output/playwright/smoke-failure.json',
+    JSON.stringify(
+      {
+        date: new Date().toISOString(),
+        url,
+        browser: browser.version(),
+        error: error instanceof Error ? error.stack : String(error),
+        browserErrors: errors,
+        consoleMessages,
+        clients,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  throw error;
 } finally {
   await browser.close();
 }

@@ -8,7 +8,7 @@ import { createAccountFixture } from './helpers/account-fixture.js';
 import { buildStaticPlacementWorld } from './helpers/static-placement-world.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
-import { chatSent, openChat } from './helpers/hud.js';
+import { chatSent, hudClick, openChat } from './helpers/hud.js';
 import { placedStaticInstance, type PlaceStaticRequest } from '../packages/contracts/src/index.js';
 if (!process.env.SU_TEST_DATABASE_URL)
   throw new Error('Set SU_TEST_DATABASE_URL to a test PostgreSQL database.');
@@ -117,6 +117,26 @@ try {
   await owner.locator('#static-placement').waitFor({ state: 'hidden' });
   await owner.locator('#inventory-panel').waitFor({ state: 'visible' });
   await owner.keyboard.press('Escape');
+  // Every competing panel must release placement input and its transient ghost.
+  for (const [toggle, panel] of [
+    ['#help-toggle', '#help-panel'],
+    ['#players-toggle', '#players-panel'],
+    ['#reactions-toggle', '#reactions-panel'],
+    ['#animations-toggle', '#animations-panel'],
+    ['#diagnostics-toggle', '#diagnostics'],
+  ]) {
+    await command(owner, '/motherlode');
+    await owner.locator('#static-placement').waitFor({ state: 'visible' });
+    await hudClick(owner, toggle);
+    await owner.locator('#static-placement').waitFor({ state: 'hidden' });
+    await owner.locator(panel).waitFor({ state: 'visible' });
+    assert.equal(
+      await owner.evaluate(() => (window as any).__SU_DEBUG__.controls().firstPersonAvailable),
+      true,
+      'closing placement releases its exclusive input mode',
+    );
+    await hudClick(owner, toggle);
+  }
   await command(owner, '/motherlode');
   await owner.locator('#static-placement').waitFor({ state: 'visible' });
   await owner.locator('#world').dispatchEvent('pointerdown', {

@@ -1,4 +1,4 @@
-import type { EntityState, Quat, Vec3 } from './index.js';
+import type { EntityState, Quat, Vec3 } from './simulation.js';
 
 export const ITEM_REACH = 3;
 export const ITEM_SAVE_INTERVAL_MS = 1000;

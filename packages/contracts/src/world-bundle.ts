@@ -1,18 +1,16 @@
 import {
   WORLD_FORMAT_VERSION,
-  type Bounds,
   type BuildingInstance,
   type BuildingParts,
   type BuildingPhysicsAsset,
-  type Quat,
-  type Vec3,
   type WorldHeader,
   type EntityDefinition,
   type LocalStaticSet,
   type WorldCell,
   type WorldDefinition,
   type WorldManifest,
-} from './index.js';
+} from './world-types.js';
+import type { Bounds, Vec3, Quat } from './simulation.js';
 import { validateWorld, validateWorldHeader, validateEntities } from './world.js';
 import {
   createWorldGrid,

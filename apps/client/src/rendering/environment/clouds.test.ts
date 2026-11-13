@@ -48,6 +48,9 @@ describe('world clouds', () => {
     const other = new Scene(engine);
     const clouds = new WorldClouds(scene, camera);
     try {
+      // The lobby may be the most recently created scene on the page.
+      expect(scene.getMeshByName('cloud-layer')).not.toBeNull();
+      expect(other.getMeshByName('cloud-layer')).toBeNull();
       const facade = new PBRMaterial('facade', scene);
       const item = new StandardMaterial('item', scene);
       const label = new StandardMaterial('label', scene);

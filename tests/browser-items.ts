@@ -85,22 +85,38 @@ try {
     'Деревянный ящик, 3 шт.',
   );
   assert.equal(await page.locator('#inventory-count').textContent(), '3');
-  // Preparing a return preserves the open backpack.
-  const beforeReturn = await page.evaluate(
-    () => (window as any).__SU_DEBUG__.snapshot().authoritative.revision,
-  );
-  // Keyboard activation avoids the HUD's intentional outside-pointer dismissal.
+  const beforeReturn = await page.evaluate(() => {
+    const state = (window as any).__SU_DEBUG__.snapshot();
+    return { revision: state.authoritative.revision, inventory: state.inventory };
+  });
+  // Help replaces the backpack; returning to spawn must preserve all its contents.
   await page.keyboard.press('h');
+  assert.equal(await page.locator('#help-panel').isVisible(), true);
+  assert.equal(await page.locator('#inventory-panel').isHidden(), true);
+  assert.equal(await page.locator('#inventory-toggle').getAttribute('aria-expanded'), 'false');
   await page.locator('#respawn').focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction((revision) => {
     const state = (window as any).__SU_DEBUG__.snapshot();
     return state.connection === 'playing' && state.authoritative.revision > revision;
-  }, beforeReturn);
-  assert.equal(await page.locator('.inventory-panel').isVisible(), true);
-  await page.keyboard.press('Escape');
+  }, beforeReturn.revision);
+  assert.equal(await page.locator('#inventory-panel').isHidden(), true);
+  await page.keyboard.press('x');
+  await page.locator('#inventory-panel').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#help-panel').isHidden(), true);
+  assert.deepEqual(
+    await page.evaluate(() => (window as any).__SU_DEBUG__.snapshot().inventory),
+    beforeReturn.inventory,
+    'respawn and switching panels preserve the exact inventory',
+  );
+  assert.equal(
+    await page.locator('.inventory-choice').getAttribute('aria-label'),
+    'Деревянный ящик, 3 шт.',
+  );
+  assert.equal(await page.locator('#inventory-count').textContent(), '3');
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/items-inventory.png' });
+  await page.keyboard.press('Escape');
   const chosenId = await page.evaluate(
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots[0].items[0].itemId,
   );
@@ -240,10 +256,8 @@ try {
           'signed local OIDC login',
           'three pickups',
           'empty-world prediction',
-          'split',
-          'return preserves open inventory and selected move source',
-          'swap',
-          'merge',
+          'grouped item tiles and total count',
+          'help closes the backpack; respawn and reopening preserve the exact inventory',
           'rotated preview',
           'WASDQE rotate all three axes in 15-degree steps without moving the player or camera',
           'held movement keys cleared and normal controls restored after cancellation and placement',

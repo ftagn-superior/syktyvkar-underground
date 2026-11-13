@@ -18,7 +18,7 @@
 | `apps/client/src/ui/static-placement.ts` | Размещение скамейки |
 | `apps/client/src/interaction/prompt.ts` | Подсказка действия у предмета |
 | `apps/client/src/rendering/world-view.ts` | Подписи игроков и мест, пузыри чата, стикеры реакций (DOM поверх холста) |
-| `apps/client/src/rendering/day-cycle.ts` | Суточный цикл: `sunPosition(hour)`, `skyAt(hour)` |
+| `apps/client/src/rendering/environment/day-cycle.ts` | Суточный цикл: `sunPosition(hour)`, `skyAt(hour)` |
 | `apps/client/src/main.ts` | Связывает всё: состояния соединения, режимы ввода, включение и отключение панелей |
 | `docs/ui.md` | Описание текущей системы; после переработки обновить |
 

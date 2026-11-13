@@ -182,11 +182,71 @@ afterEach(() => {
 });
 
 describe('lazy gameplay physics', () => {
+  it('ignores initial metadata arriving after disposal', async () => {
+    const instance = session();
+    const delayed = deferred<Response>();
+    const previousFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) =>
+      String(url) === '/api/world' ? delayed.promise : previousFetch(url, init),
+    );
+    const loading = instance.load();
+    instance.dispose();
+    delayed.resolve(Response.json(info));
+    await loading;
+    expect(instance.info).toBeUndefined();
+    expect(instance.definition).toBeUndefined();
+    expect(requests).toEqual([]);
+  });
+
+  it('keeps the newer load when an earlier metadata request finishes last', async () => {
+    const instance = session();
+    const delayed = deferred<Response>();
+    const previousFetch = globalThis.fetch;
+    let first = true;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url) === '/api/world' && first) {
+        first = false;
+        return delayed.promise;
+      }
+      return previousFetch(url, init);
+    });
+    const old = instance.load();
+    await instance.load();
+    instance.markPrepared();
+    delayed.resolve(Response.json({ ...info, worldEpoch: 'obsolete' }));
+    await old;
+    expect(instance.info.worldEpoch).toBe(info.worldEpoch);
+    expect(instance.state).toBe('ready');
+  });
+
   it('can report diagnostics before metadata arrives', () => {
     expect(session().diagnostics()).toMatchObject({
       connection: 'loading',
       publication: { mapVersion: undefined },
     });
+  });
+
+  it('ignores a preview refresh after a newer load owns the world context', async () => {
+    const instance = session();
+    await instance.load();
+    instance.markPrepared();
+    const delayed = deferred<Response>();
+    const previousFetch = globalThis.fetch;
+    let first = true;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url) === '/api/world' && first) {
+        first = false;
+        return delayed.promise;
+      }
+      return previousFetch(url, init);
+    });
+    const refresh = instance.refreshPublication();
+    await instance.load();
+    instance.markPrepared();
+    delayed.resolve(Response.json({ ...info, worldEpoch: 'obsolete' }));
+    await refresh;
+    expect(instance.info.worldEpoch).toBe(info.worldEpoch);
+    expect(instance.state).toBe('ready');
   });
 
   it('ignores an old manifest response after a newer publication has replaced the context', async () => {
@@ -227,6 +287,48 @@ describe('lazy gameplay physics', () => {
     await old;
     expect(instance.info.mapVersion).toBe(publicationB.manifest.mapVersion);
     expect(instance.info.layoutRevision).toBe(3);
+    expect(instance.definition.routes).toHaveProperty('context-b');
+    expect(instance.state).toBe('ready');
+  });
+
+  it('can retry the same publication after leaving during an earlier download', async () => {
+    const instance = session();
+    await instance.load();
+    instance.markPrepared();
+    const delayed = deferred<Response>();
+    const previousFetch = globalThis.fetch;
+    let manifests = 0;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(url), 'http://localhost/').pathname;
+      if (path.startsWith('/worlds/layout-b/')) {
+        const file = path.slice('/worlds/layout-b/'.length);
+        if (file === 'manifest.json') {
+          manifests++;
+          return manifests === 1
+            ? delayed.promise
+            : Promise.resolve(Response.json(publicationB.manifest));
+        }
+        return Promise.resolve(new Response(Uint8Array.from(publicationB.payloads.get(file)!)));
+      }
+      return previousFetch(url, init);
+    });
+    const context = instance as unknown as {
+      changePublication: (info: WorldInfo) => Promise<void>;
+    };
+    const next = {
+      ...info,
+      mapVersion: publicationB.manifest.mapVersion,
+      simulationConfigHash: publicationB.manifest.simulationConfigHash,
+      manifestUrl: '/worlds/layout-b/manifest.json',
+      layoutRevision: 2,
+    };
+    const cancelled = context.changePublication(next);
+    await instance.leave();
+    const current = context.changePublication(next);
+    await until(() => manifests === 2);
+    await current;
+    delayed.resolve(Response.json(publicationB.manifest));
+    await cancelled;
     expect(instance.definition.routes).toHaveProperty('context-b');
     expect(instance.state).toBe('ready');
   });

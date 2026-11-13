@@ -19,7 +19,8 @@ body[data-scene='lobby']:not(.world-ready) {
     'head head'
     'fig card'
     'roster roster';
-  grid-template-rows: auto 1fr auto;
+  /* The clipped pass card must still reserve its full height before the roster. */
+  grid-template-rows: auto minmax(max-content, 1fr) auto;
   align-content: start;
   gap: clamp(12px, 2vw, 22px);
   max-width: 1180px;
@@ -498,7 +499,8 @@ body:not(.world-ready) .lobby::before {
   .lobby {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'head' 'fig' 'card' 'roster';
-    grid-template-rows: none;
+    /* Keep the profile and roster in separate rows when the lobby needs to scroll. */
+    grid-template-rows: repeat(4, max-content);
   }
   .l-stage {
     height: clamp(240px, 42dvh, 340px);

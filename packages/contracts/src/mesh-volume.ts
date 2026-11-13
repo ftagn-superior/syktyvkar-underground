@@ -1,4 +1,4 @@
-import type { Vec3 } from './index.js';
+import type { Vec3 } from './simulation.js';
 
 /**
  * A collision mesh describes closed, outward-oriented solid shells. Weld coincident

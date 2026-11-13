@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { rotateCamera } from './helpers/camera.js';
-import { hudClick } from './helpers/hud.js';
+import { waitForCamera } from './helpers/camera.js';
+import { hudClick, setRenderQuality } from './helpers/hud.js';
 
 // Functional SwiftShader integration evidence, with economy rasterization for the 12-view matrix.
 // A standard-quality screenshot also compiles both material families. The 90s background wait
@@ -64,14 +64,29 @@ try {
         () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
       );
       const requested = 0.83 + turn * 0.19;
-      await rotateCamera(page, requested);
+      // On narrow screens the lobby covers the canvas. Keyboard camera controls still work
+      // from the focused world, without bypassing the overlay's pointer hit testing.
+      await page.keyboard.down('e');
+      try {
+        await page.waitForFunction(
+          ({ before, requested }) => {
+            const angle = (window as any).__SU_DEBUG__.report().rendering.camera.azimuth;
+            return Math.atan2(Math.sin(angle - before), Math.cos(angle - before)) >= requested;
+          },
+          { before, requested },
+          { timeout: 15_000 },
+        );
+      } finally {
+        await page.keyboard.up('e');
+      }
+      await waitForCamera(page);
       const after = await page.evaluate(
         () => (window as any).__SU_DEBUG__.report().rendering.camera.azimuth,
       );
+      const observed = Math.atan2(Math.sin(after - before), Math.cos(after - before));
       assert.ok(
-        Math.abs(
-          Math.atan2(Math.sin(after - before - requested), Math.cos(after - before - requested)),
-        ) < 0.01,
+        observed >= requested && observed < Math.PI,
+        `keyboard rotation reaches a distinct view: requested ${requested}, observed ${observed}`,
       );
       await page.waitForFunction(
         () => {
@@ -108,14 +123,10 @@ try {
     return Math.hypot(p.x - origin.x, p.z - origin.z) > 1;
   }, joined.authoritative.position);
   await page.keyboard.up('w');
-  await hudClick(page, '#diagnostics-toggle');
-  await page.locator('#quality').selectOption('standard');
-  await hudClick(page, '#diagnostics-toggle');
+  await setRenderQuality(page, 'standard');
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${output}/playing.png` });
-  await hudClick(page, '#diagnostics-toggle');
-  await page.locator('#quality').selectOption('economy');
-  await hudClick(page, '#diagnostics-toggle');
+  await setRenderQuality(page, 'economy');
   await hudClick(page, '#leave');
   await page.waitForFunction(
     () => {

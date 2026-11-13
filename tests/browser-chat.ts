@@ -195,8 +195,15 @@ try {
   );
   await sender.keyboard.press('t');
   await input.fill('Следующее');
-  if (await sender.evaluate(() => (window as any).__SU_DEBUG__.snapshot().chat.remainingMs > 0))
+  if (await sender.evaluate(() => (window as any).__SU_DEBUG__.snapshot().chat.remainingMs > 0)) {
+    // The replicated movement countdown precedes the next periodic HUD update.
+    await sender.waitForFunction(
+      () => (document.querySelector('#chat-send') as HTMLButtonElement).disabled,
+      undefined,
+      { timeout: 1500 },
+    );
     assert.equal(await sender.locator('#chat-send').isDisabled(), true);
+  }
   await sender.keyboard.press('Escape');
   await Promise.all([
     sender.locator(bubble).waitFor({ state: 'detached', timeout: 7000 }),

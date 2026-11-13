@@ -12,7 +12,7 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
-import { renderQualitySettings, type RenderQuality } from './render-quality';
+import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { REFERENCE_HOUR, skyAt, type Sky } from './day-cycle';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
@@ -30,6 +30,22 @@ const SHADOW_SNAP = (SHADOW_EXTENT / SHADOW_MAP_SIZE) * 128;
  * и требует перерисовать карту неподвижного мира. Шаг в 0,1° на глаз незаметен.
  */
 const LIGHT_STEP_COS = Math.cos((0.1 * Math.PI) / 180);
+
+/** Both game cameras sample the same composed map, with one fixed light-space projection. */
+class WorldSun extends DirectionalLight {
+  constructor(
+    scene: Scene,
+    private readonly shadowCamera: Camera,
+  ) {
+    super('sun', new Vector3(0, -1, 0), scene);
+  }
+
+  override getShadowGenerator(camera: Camera | null = null) {
+    // Keep the registry at two unique generators: Babylon renders every registry entry.
+    // Only receiver selection changes; the default generator remains the static cache.
+    return super.getShadowGenerator(camera ? this.shadowCamera : null);
+  }
+}
 
 /**
  * Тени неподвижного мира. Карта рисуется один раз и обновляется только по запросу:
@@ -132,13 +148,13 @@ export class WorldLighting {
     const fill = (this.fill = new HemisphericLight('sky', new Vector3(0, 1, 0), scene));
     fill.specular = Color3.Black();
     // The direct light: the sun by day, the moon by night. It never turns with the camera.
-    const sun = (this.sun = new DirectionalLight('sun', new Vector3(0, -1, 0), scene));
+    const sun = (this.sun = new WorldSun(scene, camera));
     // Карта теней покрывает квадрат вокруг камеры, а не весь город: иначе тени размываются.
     sun.shadowFrustumSize = SHADOW_EXTENT;
     sun.shadowMinZ = 0;
     sun.shadowMaxZ = SUN_DISTANCE * 2;
-    // The light's default generator is the cache. The camera's own generator takes
-    // precedence for receivers and is rendered after it within the same frame.
+    // The default generator is the cache. All receivers use the composed generator,
+    // which is registered once after the cache and rendered after it within the frame.
     this.staticShadow = new StaticShadowGenerator(SHADOW_MAP_SIZE, sun);
     this.shadow = new ShadowGenerator(SHADOW_MAP_SIZE, sun, undefined, camera);
     for (const shadow of [this.staticShadow, this.shadow]) {

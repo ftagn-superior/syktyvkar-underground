@@ -1,4 +1,4 @@
-import { sunPosition } from '../rendering/day-cycle';
+import { sunPosition } from '../rendering/environment/day-cycle';
 
 /** Две темы интерфейса: «берёста» днём и «полночь» ночью. */
 export type UiTheme = 'day' | 'night';

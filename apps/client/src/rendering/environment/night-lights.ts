@@ -35,6 +35,16 @@ const LAMP_POOL_INTENSITY = 2.2;
 const GLOW_KINDS = ['window', 'shop', 'sign', 'lamp', 'office', 'neon'] as const;
 /** Неоновая вывеска светит слабее фонаря, зато своим цветом. */
 const NEON_POOL_INTENSITY = 1.0;
+/**
+ * Конус света под фонарём: свет, рассеянный в воздухе. Считается в шейдере материала
+ * вдоль луча от камеры до поверхности, поэтому дома перед фонарём закрывают конус,
+ * а новых мешей и вызовов отрисовки нет. Рассеяние на метр луча и тангенс полуугла;
+ * подобрано по снимкам сверху и от первого лица.
+ */
+const CONE_SCATTER = 0.4;
+const CONE_TAN = 0.6;
+/** Отсчётов вдоль луча внутри конуса. */
+const CONE_SAMPLES = 6;
 
 /**
  * Переносит данные свечения из UV модели в собственный атрибут. Так шейдер не путает
@@ -50,6 +60,8 @@ export function adoptGlowAttribute(mesh: Mesh): boolean {
 
 type LampSource = {
   position: Vector3;
+  /** Высота плафона над основанием; у неона 0 — конуса нет. */
+  height: number;
   radius: number;
   color: [number, number, number];
   neon: boolean;
@@ -57,9 +69,13 @@ type LampSource = {
 type NightState = {
   enabled: boolean;
   slots: number;
+  /** Конусы под фонарями; в экономичном режиме выключены. */
+  cones: boolean;
+  /** Рассеяние на метр и тангенс полуугла конуса. */
+  cone: Float32Array;
   /** Пять классов по vec4: вечер, держится, утро, яркость. */
   levels: Float32Array;
-  /** Номер ночи (перемешивает окна), темнота, накал фонарей, 0. */
+  /** Номер ночи (перемешивает окна), темнота, накал фонарей, метка для ореола (0/1). */
   clock: Float32Array;
   lampPositions: Float32Array;
   lampColors: Float32Array;
@@ -83,7 +99,7 @@ class NightLightsPlugin extends MaterialPluginBase {
       material,
       'WorldNightLights',
       207,
-      { SU_NIGHT: false, SU_GLOW: false, SU_LAMP_SLOTS: 0 },
+      { SU_NIGHT: false, SU_GLOW: false, SU_LAMP_SLOTS: 0, SU_LAMP_CONES: false },
       true,
       false,
     );
@@ -99,6 +115,7 @@ class NightLightsPlugin extends MaterialPluginBase {
       SU_NIGHT: boolean;
       SU_GLOW: boolean;
       SU_LAMP_SLOTS: number;
+      SU_LAMP_CONES: boolean;
     };
     target.SU_NIGHT = this.state.enabled && !material.disableLighting && !material.unlit;
     target.SU_GLOW =
@@ -106,6 +123,7 @@ class NightLightsPlugin extends MaterialPluginBase {
       this._material instanceof PBRMaterial &&
       mesh.isVerticesDataPresent(GLOW_ATTRIBUTE);
     target.SU_LAMP_SLOTS = target.SU_NIGHT ? this.state.slots : 0;
+    target.SU_LAMP_CONES = target.SU_NIGHT && this.state.cones;
   }
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh) {
     if (
@@ -122,11 +140,13 @@ class NightLightsPlugin extends MaterialPluginBase {
         { name: 'suNightClock', size: 4, type: 'vec4' },
         { name: 'suLampPositions', size: 4, type: 'vec4', arraySize: LAMP_SLOTS },
         { name: 'suLampColors', size: 4, type: 'vec4', arraySize: LAMP_SLOTS },
+        { name: 'suLampCone', size: 4, type: 'vec4' },
       ],
       fragment: `uniform vec4 suNightLevels[${GLOW_KINDS.length}];
 uniform vec4 suNightClock;
 uniform vec4 suLampPositions[${LAMP_SLOTS}];
-uniform vec4 suLampColors[${LAMP_SLOTS}];`,
+uniform vec4 suLampColors[${LAMP_SLOTS}];
+uniform vec4 suLampCone;`,
     };
   }
   override bindForSubMesh(
@@ -147,6 +167,7 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
     );
     buffer.updateFloatArray('suLampPositions', state.lampPositions);
     buffer.updateFloatArray('suLampColors', state.lampColors);
+    buffer.updateFloat4('suLampCone', state.cone[0], state.cone[1], 0, 0);
   }
   override getCustomCode(shaderType: string): Record<string, string> | null {
     const pbr = this._material instanceof PBRMaterial;
@@ -195,7 +216,62 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
           return light;
         }
       #endif
+      #ifdef SU_LAMP_CONES
+        // Свет, рассеянный в воздухе под фонарями, вдоль луча от глаза до этой точки.
+        // Луч обрезается по описанному цилиндру конуса, внутри — несколько отсчётов.
+        vec3 suLampCones(vec3 position) {
+          vec3 light = vec3(0.0);
+          #if SU_LAMP_SLOTS > 0
+            if (suNightClock.z > 0.0) {
+              vec3 eye = vEyePosition.xyz;
+              vec3 ray = position - eye;
+              float rayLength = length(ray);
+              for (int i = 0; i < SU_LAMP_SLOTS; i++) {
+                float height = suLampColors[i].w;
+                if (height <= 0.0) continue;
+                vec3 lamp = suLampPositions[i].xyz;
+                float reach = 0.25 + height * suLampCone.y;
+                float s0 = 0.0;
+                float s1 = 1.0;
+                // Слой высот от плафона до земли.
+                if (abs(ray.y) > 0.0001) {
+                  float top = (lamp.y - eye.y) / ray.y;
+                  float bottom = (lamp.y - height - eye.y) / ray.y;
+                  s0 = max(s0, min(top, bottom));
+                  s1 = min(s1, max(top, bottom));
+                } else if (eye.y > lamp.y || eye.y < lamp.y - height) continue;
+                // Вертикальный цилиндр вокруг конуса.
+                vec2 offset = eye.xz - lamp.xz;
+                float a = dot(ray.xz, ray.xz);
+                float c = dot(offset, offset) - reach * reach;
+                if (a > 0.000001) {
+                  float b = dot(offset, ray.xz);
+                  float disc = b * b - a * c;
+                  if (disc <= 0.0) continue;
+                  float root = sqrt(disc);
+                  s0 = max(s0, (-b - root) / a);
+                  s1 = min(s1, (-b + root) / a);
+                } else if (c > 0.0) continue;
+                if (s1 <= s0) continue;
+                float stride = (s1 - s0) / ${CONE_SAMPLES}.0;
+                float density = 0.0;
+                for (int k = 0; k < ${CONE_SAMPLES}; k++) {
+                  vec3 point = eye + ray * (s0 + stride * (float(k) + 0.5));
+                  float below = lamp.y - point.y;
+                  float radius = 0.25 + below * suLampCone.y;
+                  float along = clamp(1.0 - below / height, 0.0, 1.0);
+                  density += (1.0 - smoothstep(0.45 * radius, radius, length(point.xz - lamp.xz))) * along * along;
+                }
+                light += suLampColors[i].rgb * density * stride * rayLength;
+              }
+            }
+          #endif
+          return light * suLampCone.x;
+        }
+      #endif
       #ifdef SU_GLOW
+        // Свечение этого пикселя: из него ставится метка для ореола (см. glow-mask.ts).
+        vec3 suGlowLight = vec3(0.0);
         vec3 suNightGlow(vec3 albedo) {
           float kind = floor(vSuGlow.x + 0.5);
           if (kind < 0.5) return vec3(0.0);
@@ -245,8 +321,21 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
               finalDiffuse += suNightLampLight(vPositionW, normalW) * surfaceAlbedo.rgb;
             #endif
           #endif
+          #ifdef SU_LAMP_CONES
+            finalEmissive += suLampCones(vPositionW);
+          #endif
           #ifdef SU_GLOW
-            finalEmissive += suNightGlow(surfaceAlbedo.rgb);
+            suGlowLight = suNightGlow(surfaceAlbedo.rgb);
+            finalEmissive += suGlowLight;
+          #endif
+        `,
+        // Отрицательная альфа помечает огонь для ореола; непрозрачная сцена так не пишет.
+        CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
+          #if defined(SU_GLOW) && !defined(ALPHABLEND)
+            if (suNightClock.w > 0.0) {
+              float suGlowMark = clamp(max(suGlowLight.r, max(suGlowLight.g, suGlowLight.b)) * 4.0, 0.0, 1.0);
+              if (suGlowMark > 0.0) finalColor.a = -suGlowMark;
+            }
           #endif
         `,
       };
@@ -255,6 +344,9 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
       CUSTOM_FRAGMENT_BEFORE_FOG: `
         #ifdef SU_NIGHT
           color.rgb += suNightLampLight(vPositionW, normalW) * diffuseColor * baseColor.rgb;
+        #endif
+        #ifdef SU_LAMP_CONES
+          color.rgb += suLampCones(vPositionW);
         #endif
       `,
     };
@@ -278,6 +370,8 @@ export class WorldNightLights {
     this.state = {
       enabled: true,
       slots: LAMP_SLOTS,
+      cones: true,
+      cone: new Float32Array([CONE_SCATTER, CONE_TAN, 0, 0]),
       levels: new Float32Array(GLOW_KINDS.length * 4),
       clock: new Float32Array(4),
       lampPositions: new Float32Array(LAMP_SLOTS * 4),
@@ -295,11 +389,15 @@ export class WorldNightLights {
     }
   }
 
-  /** Экономичный режим перебирает меньше фонарей; переключение пересобирает шейдеры. */
+  /**
+   * Экономичный режим перебирает меньше фонарей и не рисует конусы под ними;
+   * переключение пересобирает шейдеры.
+   */
   setEconomy(economy: boolean): void {
     const slots = economy ? ECONOMY_LAMP_SLOTS : LAMP_SLOTS;
-    if (slots === this.state.slots) return;
+    if (slots === this.state.slots && this.state.cones === !economy) return;
     this.state.slots = slots;
+    this.state.cones = !economy;
     this.scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
   }
 
@@ -315,6 +413,7 @@ export class WorldNightLights {
         world.addInPlaceFromFloats(position.x, position.y, position.z);
         return {
           position: world,
+          height: light.kind === 'neon' ? 0 : Math.max(0, light.position.y),
           radius: light.radius,
           color: linear(light.color),
           neon: light.kind === 'neon',
@@ -340,7 +439,12 @@ export class WorldNightLights {
       const level: GlowLevel = levels[kind];
       target.set([level.evening, level.keep, level.morning, level.brightness], index * 4);
     });
-    this.state.clock.set([night % 997, levels.dark, Math.max(levels.lamps, levels.neonLight), 0]);
+    this.state.clock.set([
+      night % 997,
+      levels.dark,
+      Math.max(levels.lamps, levels.neonLight),
+      this.state.clock[3],
+    ]);
     this.selectLamps(focus, levels.lamps, levels.neonLight);
   }
 
@@ -373,10 +477,18 @@ export class WorldNightLights {
         : lamps * fade * LAMP_POOL_INTENSITY;
       positions.set([lamp.position.x, lamp.position.y, lamp.position.z, lamp.radius], i * 4);
       colors.set(
-        [lamp.color[0] * strength, lamp.color[1] * strength, lamp.color[2] * strength, 0],
+        [lamp.color[0] * strength, lamp.color[1] * strength, lamp.color[2] * strength, lamp.height],
         i * 4,
       );
     }
+  }
+
+  /**
+   * Помечать ли огни для ореола. Включать только вместе с ореолом: без его прохода
+   * слияния отрицательная альфа дошла бы до холста. Униформа, без пересборки шейдеров.
+   */
+  setGlowMask(on: boolean): void {
+    this.state.clock[3] = on ? 1 : 0;
   }
 
   setEnabled(enabled: boolean): void {

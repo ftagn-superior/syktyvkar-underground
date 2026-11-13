@@ -97,6 +97,30 @@ describe('day cycle', () => {
     expect(night.directLight).toBeLessThan(day.directLight);
   });
 
+  it('keeps the reference look neutral and grades dusk and night', () => {
+    const luminance = ([r, g, b]: readonly number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const day = skyAt(REFERENCE_HOUR);
+    expect(day.grade).toEqual({ shadows: 0, highlights: 0, saturation: 8, vignette: 0 });
+    const night = skyAt(1);
+    const dusk = skyAt(19);
+    // Ночью пустота темнее, тени холоднее, края кадра темнеют.
+    expect(luminance(night.backdrop)).toBeLessThan(luminance(day.backdrop));
+    expect(night.grade.shadows).toBeGreaterThan(day.grade.shadows);
+    expect(night.grade.vignette).toBeGreaterThan(0);
+    // В сумерки света тёплые, а пустота лиловая: красного больше, чем днём.
+    expect(dusk.grade.highlights).toBeGreaterThan(0);
+    expect(dusk.backdrop[0]).toBeGreaterThan(day.backdrop[0]);
+    // Без скачков: за минуту игрового времени ничего не меняется заметно.
+    for (let hour = 0; hour < 24; hour += 0.25) {
+      const a = skyAt(hour);
+      const b = skyAt(hour + 1 / 60);
+      for (let i = 0; i < 3; i++)
+        expect(Math.abs(a.backdrop[i] - b.backdrop[i])).toBeLessThan(0.01);
+      expect(Math.abs(a.grade.vignette - b.grade.vignette)).toBeLessThan(0.05);
+      expect(Math.abs(a.grade.highlights - b.grade.highlights)).toBeLessThan(1);
+    }
+  });
+
   it('derives the same hour on every client and wraps once per game day', () => {
     const now = 1_800_000_000_000;
     expect(hourAt(now)).toBeGreaterThanOrEqual(0);

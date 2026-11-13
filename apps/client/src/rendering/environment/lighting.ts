@@ -14,6 +14,8 @@ import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imagePro
 import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { REFERENCE_HOUR, skyAt, type Sky } from './day-cycle';
+import { darkness } from './night-schedule';
+import { GLOW_MASK_SUPPORTED, glowMaskPatches } from './glow-mask';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -30,6 +32,29 @@ const SHADOW_SNAP = (SHADOW_EXTENT / SHADOW_MAP_SIZE) * 128;
  * и требует перерисовать карту неподвижного мира. Шаг в 0,1° на глаз незаметен.
  */
 const LIGHT_STEP_COS = Math.cos((0.1 * Math.PI) / 180);
+/**
+ * Ореол ночных огней. Размываются только пиксели, помеченные шейдером огней
+ * (см. `glow-mask.ts`): окна, витрины, вывески и плафоны, но не освещённые фонарями
+ * стены. Днём ореол выключен целиком: проходы размытия стоили бы кадра впустую.
+ */
+const BLOOM_WEIGHT = 1.5;
+/**
+ * Запасной порог яркости (с учётом экспозиции), если метку огней поставить нельзя:
+ * выше освещённых луной стен, ниже окон. Пятна под фонарями тогда тоже светятся.
+ */
+const BLOOM_THRESHOLD = 0.2;
+const BLOOM_KERNEL = 64;
+const BLOOM_SCALE = 0.5;
+/** Темнота, с которой включается ореол; ниже неё его вес и так незаметен. */
+const BLOOM_MIN_DARK = 0.05;
+/** Тон теней (холодный синий) и светов (тёплый янтарный) в градусах ColorCurves. */
+const SHADOWS_HUE = 225;
+const HIGHLIGHTS_HUE = 35;
+/**
+ * Шаг веса виньетки. Каждое изменение помечает материалы экономичного режима
+ * (там коррекция в их шейдерах), поэтому вес меняется ступенями, а не каждый кадр.
+ */
+const VIGNETTE_STEP = 0.05;
 
 /** Both game cameras sample the same composed map, with one fixed light-space projection. */
 class WorldSun extends DirectionalLight {
@@ -115,6 +140,8 @@ export class WorldLighting {
   private readonly fill: HemisphericLight;
   private readonly sun: DirectionalLight;
   private pipeline?: DefaultRenderingPipeline;
+  /** 0 днём, 1 ночью; управляет ореолом огней. */
+  private dark = 0;
   private readonly forward = new Vector3();
   private readonly right = new Vector3();
   private readonly up = new Vector3();
@@ -138,7 +165,14 @@ export class WorldLighting {
     imageProcessing.colorCurvesEnabled = true;
     imageProcessing.colorCurves = new ColorCurves();
     imageProcessing.colorCurves.globalSaturation = 8;
-    imageProcessing.vignetteEnabled = false;
+    // Тона теней и светов, насыщенность и виньетку задаёт час (`Sky.grade`).
+    imageProcessing.colorCurves.shadowsHue = SHADOWS_HUE;
+    imageProcessing.colorCurves.highlightsHue = HIGHLIGHTS_HUE;
+    // Виньетка включена всегда, меняется только вес: переключение пересобрало бы шейдеры.
+    imageProcessing.vignetteEnabled = true;
+    imageProcessing.vignetteWeight = 0;
+    imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
+    // Пустота вокруг города; цвет задаёт час, туман на краю берёт его отсюда.
     scene.clearColor = Color4.FromHexString('#101820ff');
     scene.ambientColor = Color3.FromHexString('#8199ac');
 
@@ -182,6 +216,9 @@ export class WorldLighting {
     this.fill.groundColor.set(...sky.groundColor);
     this.sun.intensity = sky.lightIntensity;
     this.sun.diffuse.set(...sky.lightColor);
+    this.dark = darkness(hour);
+    this.applyBloom();
+    this.applyAtmosphere(sky);
     const { x, y, z } = sky.lightDirection;
     const direction = this.direction.set(x, y, z);
     if (Vector3.Dot(direction, this.sun.direction) < LIGHT_STEP_COS) {
@@ -243,8 +280,57 @@ export class WorldLighting {
     ]);
     pipeline.samples = 4;
     pipeline.fxaaEnabled = false;
+    pipeline.bloomThreshold = BLOOM_THRESHOLD;
+    pipeline.bloomKernel = BLOOM_KERNEL;
+    pipeline.bloomScale = BLOOM_SCALE;
     pipeline.bloomEnabled = false;
     this.pipeline = pipeline;
+    this.applyBloom();
+  }
+
+  /** Пустота вокруг города, тон картинки и виньетка этого часа. */
+  private applyAtmosphere(sky: Sky): void {
+    this.scene.clearColor.set(...sky.backdrop, 1);
+    const imageProcessing = this.scene.imageProcessingConfiguration;
+    // ColorCurves пересчитываются при привязке, без пересборки шейдеров.
+    const curves = imageProcessing.colorCurves!;
+    curves.shadowsDensity = sky.grade.shadows;
+    curves.highlightsDensity = sky.grade.highlights;
+    curves.globalSaturation = sky.grade.saturation;
+    const vignette = Math.round(sky.grade.vignette / VIGNETTE_STEP) * VIGNETTE_STEP;
+    if (Math.abs(imageProcessing.vignetteWeight - vignette) > 1e-6)
+      imageProcessing.vignetteWeight = vignette;
+  }
+
+  /**
+   * Ореол растёт вместе с темнотой. Включение пересобирает цепочку постобработки,
+   * поэтому оно происходит дважды за игровые сутки, а не каждый кадр.
+   */
+  private applyBloom(): void {
+    const pipeline = this.pipeline;
+    if (!pipeline) return;
+    const enabled = this.dark >= BLOOM_MIN_DARK;
+    if (pipeline.bloomEnabled !== enabled) pipeline.bloomEnabled = enabled;
+    if (enabled) pipeline.bloomWeight = BLOOM_WEIGHT * this.dark;
+  }
+
+  /**
+   * Должны ли огни помечать себя для ореола в этом кадре. Метка допустима только при
+   * включённом ореоле: его проход слияния возвращает альфу холста к единице.
+   */
+  get glowMask(): boolean {
+    return GLOW_MASK_SUPPORTED && (this.pipeline?.bloomEnabled ?? false);
+  }
+
+  /** Состояние ореола для диагностики и тестов. */
+  bloomDiagnostics() {
+    const pipeline = this.pipeline;
+    return {
+      enabled: pipeline?.bloomEnabled ?? false,
+      weight: pipeline?.bloomEnabled ? pipeline.bloomWeight : 0,
+      glowMask: this.glowMask,
+      patchedPasses: { ...glowMaskPatches },
+    };
   }
 
   /**

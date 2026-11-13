@@ -498,6 +498,7 @@ export class WorldView {
       shadows: this.scene.shadowsEnabled,
       hour: this.environment.hour,
       nightLampSources: this.environment.nightLights.sourceCount,
+      bloom: this.environment.bloomDiagnostics(),
       lights: this.scene.lights.map((light) => ({
         name: light.name,
         type: light.getClassName(),

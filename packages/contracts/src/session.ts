@@ -5,7 +5,9 @@ import { PROFILE_COLORS } from './accounts.js';
 import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 
-export const PROTOCOL_VERSION = 18;
+// The combined release includes saved-position preparation and terrain support policies (v19)
+// and replicated rain, snow and fog weather (v20). Older clients must reload.
+export const PROTOCOL_VERSION = 20;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -60,6 +62,9 @@ export interface PrepareArea {
   worldEpoch: string;
   mapVersion: string;
   reason: 'spawn' | 'respawn' | 'reconnect' | 'layout';
+  /** Initial spawn candidate; unused for respawn, reconnect and layout preparation. */
+  spawnSource?: 'saved' | 'default';
+  /** Center of the physical character capsule, including for ordinary spawn points. */
   position: Vec3;
   cellIds: string[];
   expiresAt: number;
@@ -70,6 +75,25 @@ export interface AreaReady {
   layoutRevision: number;
   worldEpoch: string;
   mapVersion: string;
+}
+export interface AreaFailed extends AreaReady {
+  code: 'RESOURCE_UNAVAILABLE';
+}
+/** A local resource failure cannot supply coordinates or choose a different spawn source. */
+export function parseAreaFailed(value: unknown): AreaFailed | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const v = value as Record<string, unknown>;
+  if (
+    Object.keys(v).sort().join(',') !== 'code,layoutRevision,mapVersion,prepareId,worldEpoch' ||
+    v.code !== 'RESOURCE_UNAVAILABLE' ||
+    !Number.isSafeInteger(v.layoutRevision) ||
+    (v.layoutRevision as number) < 1 ||
+    !['prepareId', 'worldEpoch', 'mapVersion'].every(
+      (key) => typeof v[key] === 'string' && v[key].length > 0 && v[key].length <= 128,
+    )
+  )
+    return;
+  return v as unknown as AreaFailed;
 }
 export interface AreaResult extends AreaReady {
   ok: boolean;

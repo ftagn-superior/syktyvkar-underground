@@ -26,6 +26,11 @@ import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
 import { createItemShape } from './item-shapes.js';
+import {
+  queryItemSupports,
+  queryShapeSupports,
+  type ItemSupportSweep,
+} from './item-support-query.js';
 import { ImpactCollector } from './impacts.js';
 import {
   canonicalJson,
@@ -75,6 +80,18 @@ const rotation = (q: Quat): Quat => ({ x: q.x, y: q.y, z: q.z, w: q.w });
 const zero = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 const identity = (): Quat => ({ x: 0, y: 0, z: 0, w: 1 });
 const down = new Vector3(0, -1, 0);
+const MAX_PLAYER_SLOPE_COSINE = 0.5;
+const PLAYER_SPAWN_PENETRATION = 0.005;
+const ITEM_PLACEMENT_PENETRATION = 0.01;
+
+export type PlayerSpawnFailure =
+  | 'INVALID_POSITION'
+  | 'OUT_OF_BOUNDS'
+  | 'BLOCKED'
+  | 'NO_SUPPORT'
+  | 'UNSTABLE_SUPPORT'
+  | 'STEEP_SUPPORT';
+export type PlayerSpawnCheck = { ok: true } | { ok: false; reason: PlayerSpawnFailure };
 
 interface BodyRecord {
   node: TransformNode;
@@ -111,8 +128,8 @@ export class PhysicsWorld {
   >();
   readonly spawnShape: PhysicsShapeCapsule;
   readonly gravity: Vector3;
-  private readonly buildings: BuildingColliders;
-  private readonly staticReferences = new Map<
+  private buildings: BuildingColliders;
+  private staticReferences = new Map<
     string,
     { version: string; signature: string; references: number; building: boolean }
   >();
@@ -296,6 +313,7 @@ export class PhysicsWorld {
     controller.keepDistance = 0.015;
     controller.keepContactTolerance = 0.05;
     controller.maxStepHeight = 0;
+    controller.maxSlopeCosine = MAX_PLAYER_SLOPE_COSINE;
     controller.setVelocity(vector(state?.velocity ?? zero()));
     // The public registry identifies the controller's engine-owned proxy without accessing private fields.
     const body = this.physics
@@ -439,15 +457,53 @@ export class PhysicsWorld {
       this.teleport(remote.body, remote.node, player.position, player.rotation);
     }
   }
-  spawnPosition(point: Vec3): Vec3 {
+  spawnPosition(point: Vec3, excludeId?: string): Vec3 {
+    return this.spawnCandidate(point, excludeId).position;
+  }
+  private spawnCandidate(point: Vec3, excludeId?: string) {
+    let normal = this.surfaceRay(
+      { ...point, y: point.y + 0.1 },
+      { ...point, y: point.y - 0.1 },
+      excludeId,
+    )?.normal;
+    // A ray exactly on the shared edge of two legacy box slabs can miss both
+    // faces in Havok. Probe inside the capsule footprint, one millimetre away.
+    if (!normal)
+      for (const [dx, dz] of [
+        [0.001, 0],
+        [-0.001, 0],
+        [0, 0.001],
+        [0, -0.001],
+      ]) {
+        normal = this.surfaceRay(
+          { x: point.x + dx, y: point.y + 0.1, z: point.z + dz },
+          { x: point.x + dx, y: point.y - 0.1, z: point.z + dz },
+          excludeId,
+        )?.normal;
+        if (normal) break;
+      }
+    const radius = this.definition.simulation.character.radius;
+    // A vertical capsule's spherical foot needs extra clearance on a slope.
+    const slopeClearance = normal && normal.y > 0.5 ? radius * (1 / normal.y - 1) : 0;
     return {
-      x: point.x,
-      y: point.y + this.definition.simulation.character.height / 2 + 0.02,
-      z: point.z,
+      supported: !!normal && normal.y >= 0.5,
+      position: {
+        x: point.x,
+        y: point.y + this.definition.simulation.character.height / 2 + 0.02 + slopeClearance,
+        z: point.z,
+      },
     };
   }
   overlaps(shape: PhysicsShape, position: Vec3, ignoreBody?: PhysicsBody): boolean {
     if (this.buildings.contains(position)) return true;
+    return this.proximity(shape, position, 0.005, ignoreBody).hasHit;
+  }
+  private proximity(
+    shape: PhysicsShape,
+    position: Vec3,
+    maxDistance: number,
+    ignoreBody?: PhysicsBody,
+  ): ProximityCastResult {
     const inputResult = new ProximityCastResult();
     const hitResult = new ProximityCastResult();
     this.plugin.shapeProximity(
@@ -455,21 +511,69 @@ export class PhysicsWorld {
         shape,
         position: vector(position),
         rotation: Quaternion.Identity(),
-        maxDistance: 0.005,
+        maxDistance,
         shouldHitTriggers: false,
         ignoreBody,
       },
       inputResult,
       hitResult,
     );
-    return hitResult.hasHit;
+    return hitResult;
   }
-  findSpawn(excludeId?: string, requested?: Vec3): Vec3 | undefined {
+  /** Read-only queries at the exact body center; authoring spawn points use spawnPosition(). */
+  checkPlayerSpawnPosition(center: Vec3, excludeId?: string): PlayerSpawnCheck {
+    if (!center || ![center.x, center.y, center.z].every(Number.isFinite))
+      return { ok: false, reason: 'INVALID_POSITION' };
+    const { height, radius } = this.definition.simulation.character;
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const extent = axis === 'y' ? height / 2 : radius;
+      if (
+        center[axis] - extent < this.definition.bounds.min[axis] ||
+        center[axis] + extent > this.definition.bounds.max[axis]
+      )
+        return { ok: false, reason: 'OUT_OF_BOUNDS' };
+    }
+    // Mesh queries see surfaces only, so also reject a capsule enclosed by a solid.
+    if (this.buildings.contains(center)) return { ok: false, reason: 'BLOCKED' };
+    const ignoreBody = this.characters.get(excludeId ?? '')?.body;
+    const overlap = this.proximity(this.spawnShape, center, 0, ignoreBody);
+    if (overlap.hasHit && overlap.hitDistance < -PLAYER_SPAWN_PENETRATION)
+      return { ok: false, reason: 'BLOCKED' };
+    const position = vector(center);
+    const support = new ShapeCastResult();
+    this.plugin.shapeCast(
+      {
+        shape: this.spawnShape,
+        rotation: Quaternion.Identity(),
+        startPosition: position.add(new Vector3(0, 0.02, 0)),
+        endPosition: position.add(new Vector3(0, -0.06, 0)),
+        shouldHitTriggers: false,
+        ignoreBody,
+      },
+      new ShapeCastResult(),
+      support,
+    );
+    if (!support.hasHit) return { ok: false, reason: 'NO_SUPPORT' };
+    // Only retained world geometry is stable: sleeping items and players remain dynamic.
+    if (!support.body || !this.staticReferences.has(support.body.transformNode.name))
+      return { ok: false, reason: 'UNSTABLE_SUPPORT' };
+    if (support.hitNormal.y < MAX_PLAYER_SLOPE_COSINE)
+      return { ok: false, reason: 'STEEP_SUPPORT' };
+    return { ok: true };
+  }
+  findDefaultPlayerSpawn(excludeId?: string): Vec3 | undefined {
+    for (const point of this.definition.spawnPoints) {
+      const center = this.spawnPosition(point);
+      if (this.checkPlayerSpawnPosition(center, excludeId).ok) return center;
+    }
+  }
+  findSpawn(excludeId?: string, requested?: Vec3, requireSupport = true): Vec3 | undefined {
     const points = requested ? [requested] : this.definition.spawnPoints;
     const selfBody = excludeId ? this.characters.get(excludeId)?.body : undefined;
     for (const point of points) {
-      const position = this.spawnPosition(point);
-      if (!this.overlaps(this.spawnShape, position, selfBody)) return position;
+      const { position, supported } = this.spawnCandidate(point, excludeId);
+      if ((supported || !requireSupport) && !this.overlaps(this.spawnShape, position, selfBody))
+        return position;
     }
   }
   advance(dt: number) {
@@ -489,11 +593,15 @@ export class PhysicsWorld {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
       const config = this.definition.simulation.character;
       const speed = input.sprint ? config.sprintSpeed : config.speed;
+      const wasGrounded = record.grounded;
       const support = record.controller.checkSupport(dt, down);
       record.grounded = support.supportedState === CharacterSupportedState.SUPPORTED;
-      const vertical = record.grounded
-        ? Math.min(0, support.averageSurfaceVelocity.y)
-        : record.controller.getVelocity().y + this.gravity.y * dt;
+      const normal = support.averageSurfaceNormal;
+      const vertical =
+        record.grounded && normal.y >= record.controller.maxSlopeCosine
+          ? support.averageSurfaceVelocity.y -
+            ((normal.x * input.moveX + normal.z * input.moveZ) * speed) / normal.y
+          : record.controller.getVelocity().y + this.gravity.y * dt;
       record.controller.setVelocity(
         new Vector3(input.moveX * speed, vertical, input.moveZ * speed),
       );
@@ -507,6 +615,39 @@ export class PhysicsWorld {
       else if (Math.hypot(input.moveX, input.moveZ) > 0.001)
         record.yaw = Math.atan2(input.moveX, input.moveZ);
       record.controller.integrate(dt, support, this.gravity);
+      // At a convex change of slope a tangent velocity can leave the ground even
+      // without a jump. Sweep the whole capsule down over at most one walkable
+      // step, using the same colliders on the server and during prediction.
+      if (
+        (wasGrounded || record.grounded) &&
+        !support.isSurfaceDynamic &&
+        (vertical < -0.001 || !record.grounded)
+      ) {
+        const position = record.controller.getPosition();
+        const distance = speed * Math.hypot(input.moveX, input.moveZ) * dt * 0.6 + 0.05;
+        const hit = new ShapeCastResult();
+        this.plugin.shapeCast(
+          {
+            shape: record.controller.shape,
+            rotation: Quaternion.Identity(),
+            startPosition: position,
+            endPosition: position.add(new Vector3(0, -distance, 0)),
+            shouldHitTriggers: false,
+            ignoreBody: record.body,
+          },
+          new ShapeCastResult(),
+          hit,
+        );
+        if (
+          hit.hasHit &&
+          hit.hitNormal.y >= record.controller.maxSlopeCosine &&
+          hit.body?.getMotionType() === PhysicsMotionType.STATIC
+        ) {
+          const drop = hit.hitFraction * distance - record.controller.keepDistance;
+          if (drop > 0.001) record.controller.setPosition(position.add(new Vector3(0, -drop, 0)));
+          record.grounded = true;
+        }
+      }
     }
     this.plugin.executeStep(dt, this.physics.getBodies());
     if (!this.prediction) this.returnLostItems();
@@ -618,6 +759,7 @@ export class PhysicsWorld {
     playerId?: string,
     ignoreId?: string,
     requireSupport = true,
+    savedContact = false,
   ): ItemError | undefined {
     const type = this.definition.itemCatalog.types[typeId];
     if (!type || !validPose(pose)) return 'INVALID_INPUT';
@@ -655,7 +797,8 @@ export class PhysicsWorld {
                 .add(vector(part.center))
                 .applyRotationQuaternion(q)
                 .add(p);
-              if (this.buildings.contains(corner)) return 'BLOCKED';
+              if (this.buildings.contains(corner, savedContact ? ITEM_PLACEMENT_PENETRATION : 0))
+                return 'BLOCKED';
             }
     }
     if (this.buildings.contains(p)) return 'BLOCKED';
@@ -673,7 +816,7 @@ export class PhysicsWorld {
         input,
         hit,
       );
-      if (hit.hasHit && hit.hitDistance < -0.01) return 'BLOCKED';
+      if (hit.hasHit && hit.hitDistance < -ITEM_PLACEMENT_PENETRATION) return 'BLOCKED';
       if (!requireSupport) return;
       const support = new ShapeCastResult();
       this.plugin.shapeCast(
@@ -698,6 +841,22 @@ export class PhysicsWorld {
     } finally {
       shape.dispose();
     }
+  }
+  /** All contacts for an item's real shape; this query never advances physics. */
+  queryItemSupports(typeId: string, pose: ItemPose, sweep: ItemSupportSweep) {
+    const type = this.definition.itemCatalog.types[typeId];
+    if (!type) throw new Error(`Unknown item type: ${typeId}`);
+    return queryItemSupports(this.scene, this.plugin, this.physics.getBodies(), type, pose, sweep);
+  }
+  /** Actual upright player capsule, using a world-space centre rather than a ground datum. */
+  queryPlayerSupports(center: Vec3, sweep: ItemSupportSweep) {
+    return queryShapeSupports(
+      this.plugin,
+      this.physics.getBodies(),
+      this.spawnShape,
+      { position: center, rotation: identity() },
+      sweep,
+    );
   }
   /** The live editor accepts exactly one box asset. Queries use Havok's actual shapes. */
   checkStaticPlacement(
@@ -776,6 +935,69 @@ export class PhysicsWorld {
     this.releaseStatic(entityId);
     this.impacts.clear(true);
   }
+  /**
+   * Stage the complete building layer between fixed steps, while the room is paused.
+   * Existing dynamic bodies/controllers are never recreated, so sleep state, contacts,
+   * angular velocities and inputs cannot be rewound by an awaited database commit.
+   * All allocation/validation happens before commit; abandon disposes only the staging layer.
+   */
+  prepareStaticReplacement(definition: WorldDefinition) {
+    if (this.prediction || !('buildings' in this.definition) || this.disposed)
+      throw new Error('Static replacement requires a live authoritative world');
+    // Authoritative rooms intentionally initialize dynamics from ItemStore with an
+    // empty seed list. Seeds are publication metadata, not live bodies to recreate.
+    const header = ({
+      buildings: _b,
+      buildingAssets: _a,
+      initialItems: _seeds,
+      ...rest
+    }: WorldDefinition) => rest;
+    if (canonicalJson(header(definition)) !== canonicalJson(header(this.definition)))
+      throw new Error('Live static replacement cannot change the world header or primitives');
+    const previous = this.buildings;
+    const staged = new BuildingColliders(this.scene);
+    const references = new Map([...this.staticReferences].filter(([, entry]) => !entry.building));
+    try {
+      for (const instance of definition.buildings) {
+        if (
+          references.has(instance.entityId) ||
+          this.objects.has(instance.entityId) ||
+          this.characters.has(instance.entityId) ||
+          this.remotePlayers.has(instance.entityId)
+        )
+          throw new Error(`Occupied replacement entity ID: ${instance.entityId}`);
+        const asset = definition.buildingAssets[instance.assetId];
+        if (!asset) throw new Error(`Unknown replacement asset: ${instance.assetId}`);
+        if (asset.colliders.length) staged.add(instance, asset);
+        references.set(instance.entityId, {
+          version: 'initial',
+          signature: canonicalJson(instance),
+          references: 1,
+          building: true,
+        });
+      }
+    } catch (error) {
+      staged.dispose();
+      throw error;
+    }
+    let pending = true;
+    return {
+      commit: () => {
+        if (!pending) return;
+        pending = false;
+        this.buildings = staged;
+        this.staticReferences = references;
+        Object.assign(this.definition, definition);
+        this.impacts.clear(true);
+        previous.dispose();
+      },
+      dispose: () => {
+        if (!pending) return;
+        pending = false;
+        staged.dispose();
+      },
+    };
+  }
   /** Stored dynamic poses can be airborne; new placement still requires support. */
   checkSavedItem(item: ItemState): ItemError | undefined {
     if (!validPose(item) || !validPose(item.safePose)) return 'INVALID_INPUT';
@@ -783,8 +1005,8 @@ export class PhysicsWorld {
       if (!vector || ![vector.x, vector.y, vector.z].every(Number.isFinite)) return 'INVALID_INPUT';
     }
     return (
-      this.checkPlacement(item.typeId, item, undefined, item.entityId, false) ??
-      this.checkPlacement(item.typeId, item.safePose, undefined, item.entityId, false)
+      this.checkPlacement(item.typeId, item, undefined, item.entityId, false, true) ??
+      this.checkPlacement(item.typeId, item.safePose, undefined, item.entityId, false, true)
     );
   }
   returnLostItems() {

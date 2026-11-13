@@ -1,0 +1,4360 @@
+{
+  "formatVersion": 1,
+  "status": "requires-authoring-review",
+  "generator": {
+    "files": {
+      "tools/build-ring-model-supports.py": "a0b1bdf5136a6967e25ec6118bc5bc60dba3d7bb8e37706284794695446d23fe",
+      "tools/build-ring-pilot-support.py": "dc51fb290acfe0e36d33ce93dc2a9f4432ce0cbe50c4a6a1537592ae946c1e26",
+      "tools/world-build/src/ring-support-authoring.ts": "14d86c8237cebf4923f0b82a77d843daf8816ea277f45ee22400287f5944a6c3",
+      "tools/world-build/src/city.ts": "6cfd4f20e7cc2621b890b8cf0e49af001175695e20930cd861bdc0ad5a2109f6",
+      "tools/world-build/src/facade.ts": "556facb1e5fff99c8c0dc3ca3a25e6bd958afca86bed9adba389dc6d00db8c69",
+      "tools/world-build/src/kit.ts": "e4e007789e31da42152246634feaf62808944dd924c2cedc19a60a93c3c2eb73",
+      "tools/world-build/src/house.ts": "8b4625bb54afafde4133347e8f521ef026d9935622171a4d6740375e2248bfef",
+      "tools/world-build/src/triangulate.ts": "f891fb9aa4266dcb1052e7e4fa2e56fd7d2b9eae7070cf8f108697b978967909",
+      "packages/terrain-build/src/triangulate.ts": "f9370431aa8b60cb101f7ae442b717adceb0879cebd8b2cd92b438d75e28aade",
+      "content/worlds/ring-block/terrain-candidate/model-policies.json": "d29214ea285178c172b94785220b1cc72752877d46024df3c1ff4ffaa07efdc9"
+    },
+    "shapelyVersion": "2.2.0",
+    "geosVersion": "3.14.1",
+    "authoringPrecisionMetres": 0.0001,
+    "operation": "Actual contact triangle union with explicit 0.1 mm coordinate precision; no buffer/simplification/hole filling in the output. Precision deviation verified below 1 mm."
+  },
+  "models": [
+    {
+      "assetId": "bench-0152a250d22ef0a9",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bench-0152a250d22ef0a9/asset.json",
+        "descriptorSha256": "a29ce49361ac43b2f82947f9859d94ff5cd0ee8da5ca383bac5902ef52d18f51",
+        "recipeFile": "content/buildings/ring-block/objects/bench-0152a250d22ef0a9/source.json",
+        "recipeSha256": "0c7c940db34f1677dfccedb5ccce5741a603307bc2b4e18233237d58c99646b6",
+        "kind": "kit"
+      },
+      "modelInputSha256": "53e5bd79574a7dac0502be8bf598ae3cfe2a24b49decc0138d074c9677bed5c9",
+      "limitations": [
+        "Two separated feet need per-foot support or accepted embedding; a single sampled centre can leave a foot floating.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bench-0152a250d22ef0a9",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.84,
+                -0.2
+              ],
+              [
+                -0.76,
+                -0.2
+              ],
+              [
+                -0.76,
+                0.2
+              ],
+              [
+                -0.84,
+                0.2
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.76,
+                -0.2
+              ],
+              [
+                0.84,
+                -0.2
+              ],
+              [
+                0.84,
+                0.2
+              ],
+              [
+                0.76,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 4,
+        "exactContactAreaM2": 0.06400000000000006,
+        "supportAreaM2": 0.06399999999999997,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 8.881784197001253e-17,
+        "componentCount": 2,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "bus-stop-32df9c483410f2a3",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bus-stop-32df9c483410f2a3/asset.json",
+        "descriptorSha256": "38be7567f1c372bdd6dc051e90e075cf5cf84af8bb03bd834ec4413a1c81e1c8",
+        "recipeFile": "content/buildings/ring-block/objects/bus-stop-32df9c483410f2a3/source.json",
+        "recipeSha256": "47e558a7b2054d629bb5570ba39682f929783338cf7a55a0741bebc1dd9b4964",
+        "kind": "kit"
+      },
+      "modelInputSha256": "b58b80bebf27bddc895dac3afd6867cfb8223ba34296efc4e208cf7a89c246b9",
+      "limitations": [
+        "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-32df9c483410f2a3",
+        "components": [
+          {
+            "outline": [
+              [
+                2.3502,
+                -0.0499
+              ],
+              [
+                2.4502,
+                -0.0499
+              ],
+              [
+                2.4502,
+                0.0501
+              ],
+              [
+                2.3502,
+                0.0501
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.009999999999999966,
+        "supportAreaM2": 0.010000000000000009,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 5.747370269412424e-06,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "bus-stop-3fcaa09cb4e354d9",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bus-stop-3fcaa09cb4e354d9/asset.json",
+        "descriptorSha256": "5b9be47d5f1f0045970046b5b1a353bf7f75cde9bfdf678e336c6d4211a5d09f",
+        "recipeFile": "content/buildings/ring-block/objects/bus-stop-3fcaa09cb4e354d9/source.json",
+        "recipeSha256": "323097168453ec7d4460b42c8b117861cc317b6ee04f4c5382514c216ea58037",
+        "kind": "kit"
+      },
+      "modelInputSha256": "3ce39ff1b021456c3a0bc0cfd01e4d69e5ee780dc061a38adb1925bc27d94696",
+      "limitations": [
+        "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-3fcaa09cb4e354d9",
+        "components": [
+          {
+            "outline": [
+              [
+                2.35,
+                -0.0503
+              ],
+              [
+                2.45,
+                -0.0503
+              ],
+              [
+                2.45,
+                0.0497
+              ],
+              [
+                2.35,
+                0.0497
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.009999999999999966,
+        "supportAreaM2": 0.010000000000000009,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 1.0270263086590343e-05,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "bus-stop-49b992f34893bfa4",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bus-stop-49b992f34893bfa4/asset.json",
+        "descriptorSha256": "288144d8925a3e5c7d2a970fb0d8ff6612b7066583e04a98ba5a8b91d1bdcb21",
+        "recipeFile": "content/buildings/ring-block/objects/bus-stop-49b992f34893bfa4/source.json",
+        "recipeSha256": "185e261718da13568bfc3f6c460dc5df0f0c238ee848e303c038751938922bf6",
+        "kind": "kit"
+      },
+      "modelInputSha256": "cab59fd995bf2a2c1ef4fd3ff418a2d91ae197c209910a11c121e3609141e25d",
+      "limitations": [
+        "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-49b992f34893bfa4",
+        "components": [
+          {
+            "outline": [
+              [
+                2.3508,
+                -0.0499
+              ],
+              [
+                2.4508,
+                -0.0499
+              ],
+              [
+                2.4508,
+                0.0501
+              ],
+              [
+                2.3508,
+                0.0501
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.009999999999999966,
+        "supportAreaM2": 0.010000000000000009,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 8.532817375627413e-06,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "bus-stop-b1cdbe7df1c69e9e",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bus-stop-b1cdbe7df1c69e9e/asset.json",
+        "descriptorSha256": "211306873e83ef38baea63fea40413dd3adfb0feea80b0135559eb6bd618a7da",
+        "recipeFile": "content/buildings/ring-block/objects/bus-stop-b1cdbe7df1c69e9e/source.json",
+        "recipeSha256": "5fa02db37860327e3aefe26979824a582767dd10b050cc00e992057c93e0cbfb",
+        "kind": "kit"
+      },
+      "modelInputSha256": "8521bb9938b1f3c96e5251ceb321cfafe2bcb83df3815238b991f700b55501bb",
+      "limitations": [
+        "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-b1cdbe7df1c69e9e",
+        "components": [
+          {
+            "outline": [
+              [
+                2.3498,
+                -0.0501
+              ],
+              [
+                2.4498,
+                -0.0501
+              ],
+              [
+                2.4498,
+                0.0499
+              ],
+              [
+                2.3498,
+                0.0499
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.009999999999999966,
+        "supportAreaM2": 0.010000000000000009,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 8.905236322126809e-06,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "bus-stop-ec57d7e82d8c32f8",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bus-stop-ec57d7e82d8c32f8/asset.json",
+        "descriptorSha256": "2f0e1df4d82cfde6276da1479c0004ef905a4e51bd3a4fcf7c51ab690f361c21",
+        "recipeFile": "content/buildings/ring-block/objects/bus-stop-ec57d7e82d8c32f8/source.json",
+        "recipeSha256": "25a671ae1d6cb9b239f92b9c49ac100b3e3ff0af51ec2c87b518ad01a82e4041",
+        "kind": "kit"
+      },
+      "modelInputSha256": "5b23de894b80826bb51c557e7a0eba9638afadd6d1748e05033fa098ee1b6ac7",
+      "limitations": [
+        "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-ec57d7e82d8c32f8",
+        "components": [
+          {
+            "outline": [
+              [
+                2.3494,
+                -0.0498
+              ],
+              [
+                2.4494,
+                -0.0498
+              ],
+              [
+                2.4494,
+                0.0502
+              ],
+              [
+                2.3494,
+                0.0502
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.009999999999999966,
+        "supportAreaM2": 0.009999999999999966,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 7.642593573441174e-06,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "bus-stop-f7605a5e04c65979",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/bus-stop-f7605a5e04c65979/asset.json",
+        "descriptorSha256": "91c3a175da219d0ea90df7bb667f5a07dbbf3947e3d6bc9e3dcb6b2d36aaf160",
+        "recipeFile": "content/buildings/ring-block/objects/bus-stop-f7605a5e04c65979/source.json",
+        "recipeSha256": "69e5c0c8ac18899d9f6fd6c7d92efba860674a087590ed2da7c3df20e40fca28",
+        "kind": "kit"
+      },
+      "modelInputSha256": "da914c4dbd92bb3fbc4ffcf8f9aaf6cfca641728d46c860e6db9700d564af759",
+      "limitations": [
+        "Shelter glass bottoms are at Y=0.1 and only the detached sign post reaches Y=0; a common zero-plane support does not resolve the whole shelter.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "bus-stop-f7605a5e04c65979",
+        "components": [
+          {
+            "outline": [
+              [
+                2.3498,
+                -0.0496
+              ],
+              [
+                2.4498,
+                -0.0496
+              ],
+              [
+                2.4498,
+                0.0504
+              ],
+              [
+                2.3498,
+                0.0504
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.009999999999999966,
+        "supportAreaM2": 0.010000000000000009,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 1.4183439509063292e-05,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "fence-long",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/fence-long/asset.json",
+        "descriptorSha256": "4a9f9634770e0e36aaf71079f53ff94f562c904994ef74129432a4c53c5570de",
+        "recipeFile": "content/buildings/ring-block/objects/fence-long/source.json",
+        "recipeSha256": "e355c6f65ff8f01a57ee793bd615aff2629355af224d18b0e0dcd9ae0f400fbe",
+        "kind": "kit"
+      },
+      "modelInputSha256": "b51a25dde7dfc0278ec44609af2f0938735d0a152726ead2295ab72ef004e147",
+      "limitations": [
+        "Three ground posts and connected rails: per-post support and neighbour continuity require review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "fence-long",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.0,
+                -0.06
+              ],
+              [
+                -1.94,
+                -0.06
+              ],
+              [
+                -1.94,
+                0.06
+              ],
+              [
+                -2.0,
+                0.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -0.06,
+                -0.06
+              ],
+              [
+                0.06,
+                -0.06
+              ],
+              [
+                0.06,
+                0.06
+              ],
+              [
+                -0.06,
+                0.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.94,
+                -0.06
+              ],
+              [
+                2.0,
+                -0.06
+              ],
+              [
+                2.0,
+                0.06
+              ],
+              [
+                1.94,
+                0.06
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 6,
+        "exactContactAreaM2": 0.02880000000000001,
+        "supportAreaM2": 0.02880000000000001,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 3,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "fence-short",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/fence-short/asset.json",
+        "descriptorSha256": "0894e75ea97381a9460245b20426b30dfda05ef10aca507353d6f208222744c0",
+        "recipeFile": "content/buildings/ring-block/objects/fence-short/source.json",
+        "recipeSha256": "f7593ba5a0e1b4ce437e8bd8c04234107624b3e272f98b599be7cfd2e7fb93e2",
+        "kind": "kit"
+      },
+      "modelInputSha256": "63d3e5a8a5feed1cc90370cacf479c941908c131d65752eb9c666a6d302fd4b0",
+      "limitations": [
+        "Two ground posts and connected rails: per-post support and neighbour continuity require review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "fence-short",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.25,
+                -0.06
+              ],
+              [
+                -0.19,
+                -0.06
+              ],
+              [
+                -0.19,
+                0.06
+              ],
+              [
+                -0.25,
+                0.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.19,
+                -0.06
+              ],
+              [
+                0.25,
+                -0.06
+              ],
+              [
+                0.25,
+                0.06
+              ],
+              [
+                0.19,
+                0.06
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 4,
+        "exactContactAreaM2": 0.0144,
+        "supportAreaM2": 0.0144,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 2,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "kuratov-monument",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/manual/kuratov-monument/asset.json",
+        "descriptorSha256": "fb16864719c340b85634cc2a1d7c60d714bc92f873caea322b9de42c5948fc4b",
+        "recipeFile": "content/buildings/ring-block/manual/kuratov-monument/source.json",
+        "recipeSha256": "890ee924f348c7e23458f5cd9800fd8e7a43bff53837a85c0320dfd26a06db04",
+        "kind": "kit"
+      },
+      "modelInputSha256": "5aaa22d2798f442059ff26473840e5abcf462d06587d8dc018940a6c51f402fb",
+      "limitations": [
+        "Large rigid platform requires explicit plaza/foundation/access treatment.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "kuratov-monument",
+        "components": [
+          {
+            "outline": [
+              [
+                -12.3,
+                -18.65
+              ],
+              [
+                12.3,
+                -18.65
+              ],
+              [
+                12.3,
+                18.65
+              ],
+              [
+                -12.3,
+                18.65
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 917.5799999999999,
+        "supportAreaM2": 917.5799999999999,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "playground-02bee7627a8c13ad",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/playground-02bee7627a8c13ad/asset.json",
+        "descriptorSha256": "1e269245bec46158133e07c6d933a49dc1d57daabbcb150408a54b9d1b9b2b13",
+        "recipeFile": "content/buildings/ring-block/objects/playground-02bee7627a8c13ad/source.json",
+        "recipeSha256": "8932b1e62d49cf5f813171a9c6961438b3cfb6ce1511d6ed4f6f3b81496ab381",
+        "kind": "kit"
+      },
+      "modelInputSha256": "5c22b1acdc952efa5d8241f4cabd2da8ef187359303900893f0562138a89547f",
+      "limitations": [
+        "Separated legs and slide: per-foot support and slide-end connection need individual review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-02bee7627a8c13ad",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0603,
+                0.9398
+              ],
+              [
+                -0.9403,
+                0.9398
+              ],
+              [
+                -0.9403,
+                1.0598
+              ],
+              [
+                -1.0603,
+                1.0598
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0598,
+                -1.0603
+              ],
+              [
+                -0.9398,
+                -1.0603
+              ],
+              [
+                -0.9398,
+                -0.9403
+              ],
+              [
+                -1.0598,
+                -0.9403
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9402,
+                0.9394
+              ],
+              [
+                1.0602,
+                0.9394
+              ],
+              [
+                1.0602,
+                1.0594
+              ],
+              [
+                0.9402,
+                1.0594
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9403,
+                -1.0598
+              ],
+              [
+                1.0603,
+                -1.0598
+              ],
+              [
+                1.0603,
+                -0.9398
+              ],
+              [
+                0.9403,
+                -0.9398
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1002,
+                -0.4003
+              ],
+              [
+                4.1002,
+                -0.4003
+              ],
+              [
+                4.1002,
+                0.3997
+              ],
+              [
+                1.1002,
+                0.3997
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 10,
+        "exactContactAreaM2": 2.4576000000000007,
+        "supportAreaM2": 2.4576000000000007,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.0001693744148265123,
+        "componentCount": 5,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "playground-38f532717d60e44d",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/playground-38f532717d60e44d/asset.json",
+        "descriptorSha256": "a07f1e1ad4c8907f0e15d65f1198dfee2e5619b95ed6b85d08bb0b8cd5cd4545",
+        "recipeFile": "content/buildings/ring-block/objects/playground-38f532717d60e44d/source.json",
+        "recipeSha256": "c32b2b9ba56cf60f1f0fa00fb2909e0edd3a21c3c2376a349b413b5b94eb6611",
+        "kind": "kit"
+      },
+      "modelInputSha256": "06b720058d7073faef8f0a8eddb35fad9bbe08c28495b3432b33111fd2e343d9",
+      "limitations": [
+        "Separated legs and slide: per-foot support and slide-end connection need individual review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-38f532717d60e44d",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.06,
+                -1.0595
+              ],
+              [
+                -0.94,
+                -1.0595
+              ],
+              [
+                -0.94,
+                -0.9395
+              ],
+              [
+                -1.06,
+                -0.9395
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0595,
+                0.94
+              ],
+              [
+                -0.9395,
+                0.94
+              ],
+              [
+                -0.9395,
+                1.06
+              ],
+              [
+                -1.0595,
+                1.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9401,
+                -1.0593
+              ],
+              [
+                1.0601,
+                -1.0593
+              ],
+              [
+                1.0601,
+                -0.9393
+              ],
+              [
+                0.9401,
+                -0.9393
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9407,
+                0.9402
+              ],
+              [
+                1.0607,
+                0.9402
+              ],
+              [
+                1.0607,
+                1.0602
+              ],
+              [
+                0.9407,
+                1.0602
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1003,
+                -0.3992
+              ],
+              [
+                4.1003,
+                -0.3992
+              ],
+              [
+                4.1003,
+                0.4008
+              ],
+              [
+                1.1003,
+                0.4008
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 10,
+        "exactContactAreaM2": 2.4576000000000007,
+        "supportAreaM2": 2.4576000000000007,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.0003223228275870332,
+        "componentCount": 5,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "playground-4314b6d046eef599",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/playground-4314b6d046eef599/asset.json",
+        "descriptorSha256": "e642c6103045c3aa6e812e46bfbd4b63a29ff157c9bbf2cadf3d1023b79f0d7e",
+        "recipeFile": "content/buildings/ring-block/objects/playground-4314b6d046eef599/source.json",
+        "recipeSha256": "6a6229b000f4daf2ee3af01ea302f46f75bc85b1683fc95a8dfe8319aa2cabde",
+        "kind": "kit"
+      },
+      "modelInputSha256": "a8527d7d4fcd35890ca6e68d8a7d88c1cf16284a8966f50c11f7ae1f7b67fefa",
+      "limitations": [
+        "Separated legs and slide: per-foot support and slide-end connection need individual review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-4314b6d046eef599",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0594,
+                -1.06
+              ],
+              [
+                -0.9394,
+                -1.06
+              ],
+              [
+                -0.9394,
+                -0.94
+              ],
+              [
+                -1.0594,
+                -0.94
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0592,
+                0.94
+              ],
+              [
+                -0.9392,
+                0.94
+              ],
+              [
+                -0.9392,
+                1.06
+              ],
+              [
+                -1.0592,
+                1.06
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.94,
+                -1.0594
+              ],
+              [
+                1.06,
+                -1.0594
+              ],
+              [
+                1.06,
+                -0.9394
+              ],
+              [
+                0.94,
+                -0.9394
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9402,
+                0.9406
+              ],
+              [
+                1.0602,
+                0.9406
+              ],
+              [
+                1.0602,
+                1.0606
+              ],
+              [
+                0.9402,
+                1.0606
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1001,
+                -0.3998
+              ],
+              [
+                4.1001,
+                -0.3998
+              ],
+              [
+                4.1001,
+                0.4002
+              ],
+              [
+                1.1001,
+                0.4002
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 10,
+        "exactContactAreaM2": 2.4576000000000007,
+        "supportAreaM2": 2.4576000000000007,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.00020907574458308754,
+        "componentCount": 5,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "playground-449f220673cf2d98",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/playground-449f220673cf2d98/asset.json",
+        "descriptorSha256": "448c04be09d0a34146d999075620a6bd30a3d960ef723ba6e63fd6bd75c6f2ea",
+        "recipeFile": "content/buildings/ring-block/objects/playground-449f220673cf2d98/source.json",
+        "recipeSha256": "2a1c5d61fb964592ee365126665d234d24375585ff07d48685bd0cef639c9e03",
+        "kind": "kit"
+      },
+      "modelInputSha256": "56fe922604a7a6a98cbb57373df49c998bb5deba6c22c0f3541dbc8cb3f96e41",
+      "limitations": [
+        "Separated legs and slide: per-foot support and slide-end connection need individual review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-449f220673cf2d98",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0601,
+                0.9404
+              ],
+              [
+                -0.9401,
+                0.9404
+              ],
+              [
+                -0.9401,
+                1.0604
+              ],
+              [
+                -1.0601,
+                1.0604
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0595,
+                -1.0597
+              ],
+              [
+                -0.9395,
+                -1.0597
+              ],
+              [
+                -0.9395,
+                -0.9397
+              ],
+              [
+                -1.0595,
+                -0.9397
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9397,
+                -1.0595
+              ],
+              [
+                1.0597,
+                -1.0595
+              ],
+              [
+                1.0597,
+                -0.9395
+              ],
+              [
+                0.9397,
+                -0.9395
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9404,
+                0.9401
+              ],
+              [
+                1.0604,
+                0.9401
+              ],
+              [
+                1.0604,
+                1.0601
+              ],
+              [
+                0.9404,
+                1.0601
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.0999,
+                -0.3998
+              ],
+              [
+                4.0999,
+                -0.3998
+              ],
+              [
+                4.0999,
+                0.4002
+              ],
+              [
+                1.0999,
+                0.4002
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 10,
+        "exactContactAreaM2": 2.4576000000000002,
+        "supportAreaM2": 2.4576000000000007,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.00019681161800990754,
+        "componentCount": 5,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "playground-50e53e5c702173af",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/playground-50e53e5c702173af/asset.json",
+        "descriptorSha256": "2e1730ad208f330ad8b3ca9d1a6d7816eab1846f3ac84ef3821db51008310e26",
+        "recipeFile": "content/buildings/ring-block/objects/playground-50e53e5c702173af/source.json",
+        "recipeSha256": "4abccd8de6eed3e63fd9dee54658f044dd9fb9aa0e57c8d6d5ac22b8dc905e7f",
+        "kind": "kit"
+      },
+      "modelInputSha256": "0fe1ec6f71548c43cd6f86838af9e191102b984d1623138565c326a219c87f5d",
+      "limitations": [
+        "Separated legs and slide: per-foot support and slide-end connection need individual review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-50e53e5c702173af",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0603,
+                0.9408
+              ],
+              [
+                -0.9403,
+                0.9408
+              ],
+              [
+                -0.9403,
+                1.0608
+              ],
+              [
+                -1.0603,
+                1.0608
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.06,
+                -1.0597
+              ],
+              [
+                -0.94,
+                -1.0597
+              ],
+              [
+                -0.94,
+                -0.9397
+              ],
+              [
+                -1.06,
+                -0.9397
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9394,
+                0.9405
+              ],
+              [
+                1.0594,
+                0.9405
+              ],
+              [
+                1.0594,
+                1.0605
+              ],
+              [
+                0.9394,
+                1.0605
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9397,
+                -1.06
+              ],
+              [
+                1.0597,
+                -1.06
+              ],
+              [
+                1.0597,
+                -0.94
+              ],
+              [
+                0.9397,
+                -0.94
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.0998,
+                -0.4002
+              ],
+              [
+                4.0998,
+                -0.4002
+              ],
+              [
+                4.0998,
+                0.3998
+              ],
+              [
+                1.0998,
+                0.3998
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 10,
+        "exactContactAreaM2": 2.4576,
+        "supportAreaM2": 2.4576000000000007,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.00017002178640894487,
+        "componentCount": 5,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "playground-72396bbdda254bd7",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/playground-72396bbdda254bd7/asset.json",
+        "descriptorSha256": "0eaed167fc22e4e1fe055538f496bdf985ff62d0dfcede810b2a07b4c9583aca",
+        "recipeFile": "content/buildings/ring-block/objects/playground-72396bbdda254bd7/source.json",
+        "recipeSha256": "5344508e9569f6c63f915eefea832d8ae392b88eb5e9e311dd744cddee678bd7",
+        "kind": "kit"
+      },
+      "modelInputSha256": "2308fa5b6c9c4640361425053a01a3b146f6f1fe92d2b68c9fd853d0062a0076",
+      "limitations": [
+        "Separated legs and slide: per-foot support and slide-end connection need individual review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "playground-72396bbdda254bd7",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.0599,
+                -1.0599
+              ],
+              [
+                -0.9399,
+                -1.0599
+              ],
+              [
+                -0.9399,
+                -0.9399
+              ],
+              [
+                -1.0599,
+                -0.9399
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                -1.0599,
+                0.9399
+              ],
+              [
+                -0.9399,
+                0.9399
+              ],
+              [
+                -0.9399,
+                1.0599
+              ],
+              [
+                -1.0599,
+                1.0599
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9399,
+                0.9399
+              ],
+              [
+                1.0599,
+                0.9399
+              ],
+              [
+                1.0599,
+                1.0599
+              ],
+              [
+                0.9399,
+                1.0599
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                0.9403,
+                -1.0608
+              ],
+              [
+                1.0603,
+                -1.0608
+              ],
+              [
+                1.0603,
+                -0.9408
+              ],
+              [
+                0.9403,
+                -0.9408
+              ]
+            ]
+          },
+          {
+            "outline": [
+              [
+                1.1005,
+                -0.3999
+              ],
+              [
+                4.1005,
+                -0.3999
+              ],
+              [
+                4.1005,
+                0.4001
+              ],
+              [
+                1.1005,
+                0.4001
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 10,
+        "exactContactAreaM2": 2.4576000000000002,
+        "supportAreaM2": 2.4576000000000007,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.0002495687444522119,
+        "componentCount": 5,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "sorokin-monument",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/manual/sorokin-monument/asset.json",
+        "descriptorSha256": "a054623bed0d283d77fcf1c1f79a448be8947fa8e248fcffb171868dc8d6622e",
+        "recipeFile": "content/buildings/ring-block/manual/sorokin-monument/source.json",
+        "recipeSha256": "55c4fac5fb4fffeffc76fa573553b91f9f1b5663ce18ecf86bd3f019700a1dac",
+        "kind": "kit"
+      },
+      "modelInputSha256": "41e0319829b15664fe38af46a6440c023ef44df17d529e486c0b7e3525d69752",
+      "limitations": [
+        "Rigid plinth requires explicit foundation height and pedestrian access review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "sorokin-monument",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.7,
+                -1.4
+              ],
+              [
+                1.7,
+                -1.4
+              ],
+              [
+                1.7,
+                1.4
+              ],
+              [
+                -1.7,
+                1.4
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 9.52,
+        "supportAreaM2": 9.52,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "theatre-fountain",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/manual/theatre-fountain/asset.json",
+        "descriptorSha256": "2eb228295fa675e8dc1f5aa563aa5a96c0c11d4f6ce11fd8696560843e47b699",
+        "recipeFile": "content/buildings/ring-block/manual/theatre-fountain/source.json",
+        "recipeSha256": "48d07c77f02d6af50767f184cb28d04263bcb53a1f315767cc1cb82e6c3a02bf",
+        "kind": "kit"
+      },
+      "modelInputSha256": "c2c747042b6c536ee4ea996ffcd2cc65cb73ed6160ab3437dad3987dc2b6a814",
+      "limitations": [
+        "Circular basin requires explicit foundation height and surrounding access review.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "theatre-fountain",
+        "components": [
+          {
+            "outline": [
+              [
+                -5.4,
+                0.0
+              ],
+              [
+                -5.1357,
+                -1.6687
+              ],
+              [
+                -4.3687,
+                -3.174
+              ],
+              [
+                -3.174,
+                -4.3687
+              ],
+              [
+                -1.6687,
+                -5.1357
+              ],
+              [
+                -0.0,
+                -5.4
+              ],
+              [
+                1.6687,
+                -5.1357
+              ],
+              [
+                3.174,
+                -4.3687
+              ],
+              [
+                4.3687,
+                -3.174
+              ],
+              [
+                5.1357,
+                -1.6687
+              ],
+              [
+                5.4,
+                0.0
+              ],
+              [
+                5.1357,
+                1.6687
+              ],
+              [
+                4.3687,
+                3.174
+              ],
+              [
+                3.174,
+                4.3687
+              ],
+              [
+                1.6687,
+                5.1357
+              ],
+              [
+                0.0,
+                5.4
+              ],
+              [
+                -1.6687,
+                5.1357
+              ],
+              [
+                -3.174,
+                4.3687
+              ],
+              [
+                -4.3687,
+                3.174
+              ],
+              [
+                -5.1357,
+                1.6687
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 18,
+        "exactContactAreaM2": 90.1093555597347,
+        "supportAreaM2": 90.10909581999998,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.00025973973468375815,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "trudovaya-slava",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/manual/trudovaya-slava/asset.json",
+        "descriptorSha256": "de5630dcd2ea098c1c0862c53917e953aecdf2c92eb9aa6f7cf9b8812a49367b",
+        "recipeFile": "content/buildings/ring-block/manual/trudovaya-slava/source.json",
+        "recipeSha256": "91e72be5a5094c4207d8a1273d5bc0124bef544e076694de1740af1122b1dc37",
+        "kind": "kit"
+      },
+      "modelInputSha256": "c8e98164141ed8cb2ecd913d14bb3c76f725f4a52c5673a2f0589c7c6aa38ae5",
+      "limitations": [
+        "Mound, ramps and planting form one rigid object; ramp-to-ground connections need individual treatment.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "trudovaya-slava",
+        "components": [
+          {
+            "outline": [
+              [
+                -9.5,
+                0.0
+              ],
+              [
+                -9.1763,
+                -2.4588
+              ],
+              [
+                -8.2272,
+                -4.75
+              ],
+              [
+                -7.3315,
+                -5.9173
+              ],
+              [
+                -7.4991,
+                -6.0849
+              ],
+              [
+                -6.0849,
+                -7.4991
+              ],
+              [
+                -5.9173,
+                -7.3315
+              ],
+              [
+                -4.75,
+                -8.2272
+              ],
+              [
+                -2.4588,
+                -9.1763
+              ],
+              [
+                -0.0,
+                -9.5
+              ],
+              [
+                2.4588,
+                -9.1763
+              ],
+              [
+                4.75,
+                -8.2272
+              ],
+              [
+                5.9173,
+                -7.3315
+              ],
+              [
+                6.0849,
+                -7.4991
+              ],
+              [
+                7.4991,
+                -6.0849
+              ],
+              [
+                7.3315,
+                -5.9173
+              ],
+              [
+                8.2272,
+                -4.75
+              ],
+              [
+                9.1763,
+                -2.4588
+              ],
+              [
+                9.5,
+                0.0
+              ],
+              [
+                9.1763,
+                2.4588
+              ],
+              [
+                8.2272,
+                4.75
+              ],
+              [
+                7.3315,
+                5.9173
+              ],
+              [
+                7.4991,
+                6.0849
+              ],
+              [
+                6.0849,
+                7.4991
+              ],
+              [
+                5.9173,
+                7.3315
+              ],
+              [
+                4.75,
+                8.2272
+              ],
+              [
+                2.4588,
+                9.1763
+              ],
+              [
+                0.0,
+                9.5
+              ],
+              [
+                -2.4588,
+                9.1763
+              ],
+              [
+                -4.75,
+                8.2272
+              ],
+              [
+                -5.9173,
+                7.3315
+              ],
+              [
+                -6.0849,
+                7.4991
+              ],
+              [
+                -7.4991,
+                6.0849
+              ],
+              [
+                -7.3315,
+                5.9173
+              ],
+              [
+                -8.2272,
+                4.75
+              ],
+              [
+                -9.1763,
+                2.4588
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 30,
+        "exactContactAreaM2": 281.6706949317094,
+        "supportAreaM2": 281.66975008,
+        "precisionFilledFootprintHausdorffBoundMetres": 7.071113586425783e-05,
+        "precisionSymmetricDifferenceM2": 0.0011392884711194542,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-099af16b64bb72e2",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-099af16b64bb72e2/asset.json",
+        "descriptorSha256": "de3ee6773ef9228c84d58e84d5dd42d8f9257ad086001c823de8031149adce17",
+        "recipeFile": "content/buildings/ring-block/objects/wall-099af16b64bb72e2/source.json",
+        "recipeSha256": "3fc337efeefbcd726b6724bd1da8c50f65457fbe17d5b37510eaf769edf1aff5",
+        "kind": "kit"
+      },
+      "modelInputSha256": "3a127902ae6ecc386b70d91db83ec6931b044141666451b1bf2ecfeabb1be51e",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-099af16b64bb72e2",
+        "components": [
+          {
+            "outline": [
+              [
+                -3.9875,
+                -0.175
+              ],
+              [
+                3.9875,
+                -0.175
+              ],
+              [
+                3.9875,
+                0.175
+              ],
+              [
+                -3.9875,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 2.79125,
+        "supportAreaM2": 2.79125,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-131c74cb0805583c",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-131c74cb0805583c/asset.json",
+        "descriptorSha256": "8f01a968e186b4732f4bad69ebc4c47c3b899432b982929a8d1dee3b40d37461",
+        "recipeFile": "content/buildings/ring-block/objects/wall-131c74cb0805583c/source.json",
+        "recipeSha256": "3273bf4849454393671600b77c468f519da2fa85074ebfda5b9bcf1d4a664235",
+        "kind": "kit"
+      },
+      "modelInputSha256": "f5de4f5e8049f1b43d3075254e9ddb422deacd30b8f1e9ce53bd1bf7f6c09000",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-131c74cb0805583c",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.6795,
+                -0.175
+              ],
+              [
+                6.6795,
+                -0.175
+              ],
+              [
+                6.6795,
+                0.175
+              ],
+              [
+                -6.6795,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 4.67565,
+        "supportAreaM2": 4.67565,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-2217ff2b34fb28cd",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-2217ff2b34fb28cd/asset.json",
+        "descriptorSha256": "ad4e7788cdab0247e846f12ab204c0efabaffd6d5d3725b7cf75c07331b677d7",
+        "recipeFile": "content/buildings/ring-block/objects/wall-2217ff2b34fb28cd/source.json",
+        "recipeSha256": "b68fd98893393a4ff597acfa31b74656436ab85b27bda0d5fc0ab99dcda03ff4",
+        "kind": "kit"
+      },
+      "modelInputSha256": "b4f6f63b7eefdd26bb42050d4e4ca5d44161b3cb5c24bd783f2ce06614d5d55e",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-2217ff2b34fb28cd",
+        "components": [
+          {
+            "outline": [
+              [
+                -21.809,
+                -0.175
+              ],
+              [
+                21.809,
+                -0.175
+              ],
+              [
+                21.809,
+                0.175
+              ],
+              [
+                -21.809,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 15.2663,
+        "supportAreaM2": 15.2663,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-2617e974dbc3454a",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-2617e974dbc3454a/asset.json",
+        "descriptorSha256": "cb62f763a83686d863dd837d9a1365cc2e4e76e38974e2b2bfa8eef63c106ad2",
+        "recipeFile": "content/buildings/ring-block/objects/wall-2617e974dbc3454a/source.json",
+        "recipeSha256": "3fe6344fe14dff63e39bcf2464a4ae71c90f44b35358864989fb91cce4bd29e5",
+        "kind": "kit"
+      },
+      "modelInputSha256": "ce013c8bd4f58a8f954e43584c4d3c594d5697d9273f765a3022e8a60b8f00b7",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-2617e974dbc3454a",
+        "components": [
+          {
+            "outline": [
+              [
+                -12.5515,
+                -0.175
+              ],
+              [
+                12.5515,
+                -0.175
+              ],
+              [
+                12.5515,
+                0.175
+              ],
+              [
+                -12.5515,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 8.78605,
+        "supportAreaM2": 8.78605,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-2984babf7df38428",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-2984babf7df38428/asset.json",
+        "descriptorSha256": "566568721c1fe0f0da1d47f4476379acc6d8489f92eae6a2b2e5f7012433e46c",
+        "recipeFile": "content/buildings/ring-block/objects/wall-2984babf7df38428/source.json",
+        "recipeSha256": "8f29f1e2c1a3644697aadc7d26e01bb46eead8508d6153e01b29641845ba1cd2",
+        "kind": "kit"
+      },
+      "modelInputSha256": "5cc74e5f3911d26b7d488fd14178f15b6ce1f7d119e7935f658f724727d76082",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-2984babf7df38428",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.395,
+                -0.175
+              ],
+              [
+                0.395,
+                -0.175
+              ],
+              [
+                0.395,
+                0.175
+              ],
+              [
+                -0.395,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.27649999999999997,
+        "supportAreaM2": 0.27649999999999997,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-335e3c20fced95c6",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-335e3c20fced95c6/asset.json",
+        "descriptorSha256": "1a3551736c8126a74517dc60eaf161f27985a55d5932d05e032ea1493e94bdde",
+        "recipeFile": "content/buildings/ring-block/objects/wall-335e3c20fced95c6/source.json",
+        "recipeSha256": "a91deb443d8425d167ad1f5b2fe08f18901879de48a9b4f90206df9db2a8e1cf",
+        "kind": "kit"
+      },
+      "modelInputSha256": "0611fea339039adaebec149daef688983b3c704015ecb21a620ed502acd3baa4",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-335e3c20fced95c6",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.001,
+                -0.175
+              ],
+              [
+                4.001,
+                -0.175
+              ],
+              [
+                4.001,
+                0.175
+              ],
+              [
+                -4.001,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 2.8007,
+        "supportAreaM2": 2.8007,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-3b3f548354cc44a5",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-3b3f548354cc44a5/asset.json",
+        "descriptorSha256": "b8bbbaff8261e7c528a341e17878511ac8bade60138358946a9ec897c55c33f3",
+        "recipeFile": "content/buildings/ring-block/objects/wall-3b3f548354cc44a5/source.json",
+        "recipeSha256": "941b1c5e1ff4df98100083162065362fe72db80e0e77f66938426e0022507470",
+        "kind": "kit"
+      },
+      "modelInputSha256": "44359e59816e0f2aa3b28c94e857dffa4a1bb11e00f9b2b98d1e996f92d512c5",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-3b3f548354cc44a5",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.9,
+                -0.2
+              ],
+              [
+                1.9,
+                -0.2
+              ],
+              [
+                1.9,
+                0.2
+              ],
+              [
+                -1.9,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.52,
+        "supportAreaM2": 1.52,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-3d5e0d17a09f6ae8",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-3d5e0d17a09f6ae8/asset.json",
+        "descriptorSha256": "2e3a99e15637f67f0cdaee9fd9df54d4b9f8c4fb87be01fba9962291a3d5a85e",
+        "recipeFile": "content/buildings/ring-block/objects/wall-3d5e0d17a09f6ae8/source.json",
+        "recipeSha256": "5aa6eff6dae022b9e0fcf4d60330e0958dc4839e136c10ca58fb9d2a6c93654d",
+        "kind": "kit"
+      },
+      "modelInputSha256": "035efea0d215ba760b69de2b21d7bf7357d9e6c74b2adeea37731313c86116db",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-3d5e0d17a09f6ae8",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.961,
+                -0.175
+              ],
+              [
+                1.961,
+                -0.175
+              ],
+              [
+                1.961,
+                0.175
+              ],
+              [
+                -1.961,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.3727,
+        "supportAreaM2": 1.3727,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-3e76aad470cd519f",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-3e76aad470cd519f/asset.json",
+        "descriptorSha256": "fa3f254b0df3144ec886d6693a65ca4576f93c62cf8ba17df2b38f51871f0b91",
+        "recipeFile": "content/buildings/ring-block/objects/wall-3e76aad470cd519f/source.json",
+        "recipeSha256": "072b1bcc88f8435981bbf3e4852a26d7e43569bec4a502c58d14813caa4b5c79",
+        "kind": "kit"
+      },
+      "modelInputSha256": "c372fd40a122aaaf61e9e7761c033277773199d603bee3da326241c29ca53cd4",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-3e76aad470cd519f",
+        "components": [
+          {
+            "outline": [
+              [
+                -49.6715,
+                -0.175
+              ],
+              [
+                49.6715,
+                -0.175
+              ],
+              [
+                49.6715,
+                0.175
+              ],
+              [
+                -49.6715,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 34.77005,
+        "supportAreaM2": 34.77005,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-4b2ac31288681f3c",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-4b2ac31288681f3c/asset.json",
+        "descriptorSha256": "4ba53c8debedd7c7f5e82e2123f8e11fa3be0a542c15969242d7caafd904c45a",
+        "recipeFile": "content/buildings/ring-block/objects/wall-4b2ac31288681f3c/source.json",
+        "recipeSha256": "a06d39853f1d45f35db687a3e402397821acd1503a86491830e78ac0463a9bb9",
+        "kind": "kit"
+      },
+      "modelInputSha256": "2c834fcc805391c60da6febef9a7e930c7954224e5103bd6fd6937546c4492b9",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-4b2ac31288681f3c",
+        "components": [
+          {
+            "outline": [
+              [
+                -17.423,
+                -0.175
+              ],
+              [
+                17.423,
+                -0.175
+              ],
+              [
+                17.423,
+                0.175
+              ],
+              [
+                -17.423,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 12.196099999999998,
+        "supportAreaM2": 12.196099999999998,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-5173f7fffa3553ab",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-5173f7fffa3553ab/asset.json",
+        "descriptorSha256": "3501e40f797bd2df79ed9b3f62e0a6242e8d7fe3ff89aaa3b749ff9a8c4c4d8a",
+        "recipeFile": "content/buildings/ring-block/objects/wall-5173f7fffa3553ab/source.json",
+        "recipeSha256": "1b2a039c2e8d452814183ed632b4bd736638863dd44da73eeeac4174a94d4490",
+        "kind": "kit"
+      },
+      "modelInputSha256": "d15c941647a78c01bb445558b1b22f376f98e89e8d29c474bbd922736a54237c",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5173f7fffa3553ab",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.169,
+                -0.175
+              ],
+              [
+                4.169,
+                -0.175
+              ],
+              [
+                4.169,
+                0.175
+              ],
+              [
+                -4.169,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 2.9182999999999995,
+        "supportAreaM2": 2.9182999999999995,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-5694d737ade0d318",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-5694d737ade0d318/asset.json",
+        "descriptorSha256": "a5fdfb57a47383bde4f47df5aba5eaaefb82a40e5d5a7ad46841f9becfcdf6b1",
+        "recipeFile": "content/buildings/ring-block/objects/wall-5694d737ade0d318/source.json",
+        "recipeSha256": "61a2349d7d467494ee8e83f747e92148c8a60ddf9060e4f0484f0119c17f5c78",
+        "kind": "kit"
+      },
+      "modelInputSha256": "070fa69a748721fdbb17e4949d521d242bb002c1012c77bb876d5fab0b7e5ac4",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5694d737ade0d318",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.2065,
+                -0.175
+              ],
+              [
+                4.2065,
+                -0.175
+              ],
+              [
+                4.2065,
+                0.175
+              ],
+              [
+                -4.2065,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 2.94455,
+        "supportAreaM2": 2.94455,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-56e797f9f0f58b86",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-56e797f9f0f58b86/asset.json",
+        "descriptorSha256": "d430dc4a41f3a25ec94aa7295b61dc931d2e5f40955ab0c792959c525ee92834",
+        "recipeFile": "content/buildings/ring-block/objects/wall-56e797f9f0f58b86/source.json",
+        "recipeSha256": "a7a3ba6ec5cd337b78206f4a47d67160a802872d9b7d25d252af3030d3bb763f",
+        "kind": "kit"
+      },
+      "modelInputSha256": "3e05f75409ef87e6abda28a78cc166ba775f8fa9bcd8cae9091bf92c7f6612f6",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-56e797f9f0f58b86",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.696,
+                -0.175
+              ],
+              [
+                0.696,
+                -0.175
+              ],
+              [
+                0.696,
+                0.175
+              ],
+              [
+                -0.696,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.4871999999999999,
+        "supportAreaM2": 0.4871999999999999,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-5adb725bc7bda324",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-5adb725bc7bda324/asset.json",
+        "descriptorSha256": "627824bb8195d8d69960e16b5806b2308ff48fee0cb5f67d2902d24c5b6d4daf",
+        "recipeFile": "content/buildings/ring-block/objects/wall-5adb725bc7bda324/source.json",
+        "recipeSha256": "d0fd0cabffbc05073f68d28d082bbc1a3eb984c1239916dad568df4ce9edc272",
+        "kind": "kit"
+      },
+      "modelInputSha256": "94333d9826032b71d8ffa5dd85a63ae7e2282c27323efb9487d0ac9a12bf533a",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5adb725bc7bda324",
+        "components": [
+          {
+            "outline": [
+              [
+                -16.558,
+                -0.175
+              ],
+              [
+                16.558,
+                -0.175
+              ],
+              [
+                16.558,
+                0.175
+              ],
+              [
+                -16.558,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 11.590599999999998,
+        "supportAreaM2": 11.590599999999998,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-5d7e0ba5aeab76f8",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-5d7e0ba5aeab76f8/asset.json",
+        "descriptorSha256": "90902733fc07819b3f4c7f05a44df58c283ebf26e604f875ece07999bc5c918e",
+        "recipeFile": "content/buildings/ring-block/objects/wall-5d7e0ba5aeab76f8/source.json",
+        "recipeSha256": "efcc14862912bf98e73b33b3cbbb3d117c7d156a48b5112a5902a8aaeed6a408",
+        "kind": "kit"
+      },
+      "modelInputSha256": "5657a169adcc0c294bf1d6b3f6d053a3342a4cd637ab9d1242ecd209a02f0b2d",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5d7e0ba5aeab76f8",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.1995,
+                -0.175
+              ],
+              [
+                2.1995,
+                -0.175
+              ],
+              [
+                2.1995,
+                0.175
+              ],
+              [
+                -2.1995,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.53965,
+        "supportAreaM2": 1.53965,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-5f99452b08fd3816",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-5f99452b08fd3816/asset.json",
+        "descriptorSha256": "4f1882591930e003d68182b1a6a823d5608360e7c9e10b7110b09da654d4c5aa",
+        "recipeFile": "content/buildings/ring-block/objects/wall-5f99452b08fd3816/source.json",
+        "recipeSha256": "85c497b7ae40cb85c228737278012d46842b748c3a90c44525acbac8934b3f07",
+        "kind": "kit"
+      },
+      "modelInputSha256": "3b04825fdc1bffe022241de5f329985ce3b029c48f9e32ab1dc223316facd7b5",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-5f99452b08fd3816",
+        "components": [
+          {
+            "outline": [
+              [
+                -4.81,
+                -0.175
+              ],
+              [
+                4.81,
+                -0.175
+              ],
+              [
+                4.81,
+                0.175
+              ],
+              [
+                -4.81,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 3.3669999999999995,
+        "supportAreaM2": 3.3669999999999995,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-637d0f64ba883ad8",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-637d0f64ba883ad8/asset.json",
+        "descriptorSha256": "87c27798979b58c506bdae2ea1a36b1f3e58ddfa97122064c0ce720fb80d1b95",
+        "recipeFile": "content/buildings/ring-block/objects/wall-637d0f64ba883ad8/source.json",
+        "recipeSha256": "8ae25e1ca3e688bf95fad299d1d1eead9ceb4481e5aa9fd39aaf63bd6fc229db",
+        "kind": "kit"
+      },
+      "modelInputSha256": "abc9bbcb97934e22efc88d4d90ef859f9d01e2c5680ea3d13c2b7da7a0af60b1",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-637d0f64ba883ad8",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.929,
+                -0.175
+              ],
+              [
+                0.929,
+                -0.175
+              ],
+              [
+                0.929,
+                0.175
+              ],
+              [
+                -0.929,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.6503,
+        "supportAreaM2": 0.6503,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-6554fcd6f5196079",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-6554fcd6f5196079/asset.json",
+        "descriptorSha256": "17baadc0db22a650591e63cf408b690d2f06aa3a8df346bd2c7d495426263096",
+        "recipeFile": "content/buildings/ring-block/objects/wall-6554fcd6f5196079/source.json",
+        "recipeSha256": "754547e35c679530806ed6439b36be4c8688c6f4ea0a5e543604ca6381d30018",
+        "kind": "kit"
+      },
+      "modelInputSha256": "31e31e3978df18d5fc1b96fc1806ac4fe9cf56f6aa7b9a0e209fcde2b2ce5db6",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-6554fcd6f5196079",
+        "components": [
+          {
+            "outline": [
+              [
+                -43.815,
+                -0.175
+              ],
+              [
+                43.815,
+                -0.175
+              ],
+              [
+                43.815,
+                0.175
+              ],
+              [
+                -43.815,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 30.670499999999997,
+        "supportAreaM2": 30.670499999999997,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-6d5da86ac031db6d",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-6d5da86ac031db6d/asset.json",
+        "descriptorSha256": "3413ae134a9dce770ec28956a915863324cc955ccc3ac3b66c6c192b943d6796",
+        "recipeFile": "content/buildings/ring-block/objects/wall-6d5da86ac031db6d/source.json",
+        "recipeSha256": "8490e7b890efcd8190f9231405607e7ec1316f7ecf466d7f830f596b267c09ff",
+        "kind": "kit"
+      },
+      "modelInputSha256": "24e5dee5c5361ddef5e639adb4a2725faf42e92dd36db8a9fa25740ea4864324",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-6d5da86ac031db6d",
+        "components": [
+          {
+            "outline": [
+              [
+                -5.1735,
+                -0.175
+              ],
+              [
+                5.1735,
+                -0.175
+              ],
+              [
+                5.1735,
+                0.175
+              ],
+              [
+                -5.1735,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 3.6214499999999994,
+        "supportAreaM2": 3.6214499999999994,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-75773768f1d82877",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-75773768f1d82877/asset.json",
+        "descriptorSha256": "24750068cdfb5bb21058bd7ded61adfa58b744ce791f4ee3da5523bdda471739",
+        "recipeFile": "content/buildings/ring-block/objects/wall-75773768f1d82877/source.json",
+        "recipeSha256": "f28f919bb41585934de1c36f050fc9a2bfedab8845d8d2ee1a36b734a7cb1182",
+        "kind": "kit"
+      },
+      "modelInputSha256": "289ac7dd02b0d8f175b9edaa3fb8730cc05ac4c261eccfe64953e83f99f570ef",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-75773768f1d82877",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.5335,
+                -0.175
+              ],
+              [
+                2.5335,
+                -0.175
+              ],
+              [
+                2.5335,
+                0.175
+              ],
+              [
+                -2.5335,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.77345,
+        "supportAreaM2": 1.77345,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-784f8223d30cd1b4",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-784f8223d30cd1b4/asset.json",
+        "descriptorSha256": "3833b1b6c2cc7643d11f2ca04e385ce44c8ae8353e8b8304e7b029d88d2ffce6",
+        "recipeFile": "content/buildings/ring-block/objects/wall-784f8223d30cd1b4/source.json",
+        "recipeSha256": "7d52bf9d78601633876546138735f5f1ac4eabcf875d971362e3226bb57ebcf5",
+        "kind": "kit"
+      },
+      "modelInputSha256": "60890d5ce0c3f3f782b9a5b414304aa119acf429e05176c9f5ecbca5a7d94cf6",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-784f8223d30cd1b4",
+        "components": [
+          {
+            "outline": [
+              [
+                -16.51,
+                -0.175
+              ],
+              [
+                16.51,
+                -0.175
+              ],
+              [
+                16.51,
+                0.175
+              ],
+              [
+                -16.51,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 11.557,
+        "supportAreaM2": 11.557,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-81be1cbdae1a70f1",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-81be1cbdae1a70f1/asset.json",
+        "descriptorSha256": "0ae57d9f992fc05db36dbae7045bea2a8accb76de9c8ac1e9d5af88080668e9f",
+        "recipeFile": "content/buildings/ring-block/objects/wall-81be1cbdae1a70f1/source.json",
+        "recipeSha256": "95b3e3a177c45a982d67fac2bf63d3933f5a6bb64d028df8715aa2ccee4ea288",
+        "kind": "kit"
+      },
+      "modelInputSha256": "bac35439270ee5514cd0ca293ee2c2379bbdc81af765cfdc9fff42cc27729087",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-81be1cbdae1a70f1",
+        "components": [
+          {
+            "outline": [
+              [
+                -5.841,
+                -0.2
+              ],
+              [
+                5.841,
+                -0.2
+              ],
+              [
+                5.841,
+                0.2
+              ],
+              [
+                -5.841,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 4.6728000000000005,
+        "supportAreaM2": 4.6728000000000005,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-890194516c7097a0",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-890194516c7097a0/asset.json",
+        "descriptorSha256": "ae1680c8583adf0d64c74d2d3a74427c6ac1558cea72f56230d61d47e851b56e",
+        "recipeFile": "content/buildings/ring-block/objects/wall-890194516c7097a0/source.json",
+        "recipeSha256": "0333b0e0f2aea1b0547fea35883ec812940117e59d48a140df63dc2b0f1bc191",
+        "kind": "kit"
+      },
+      "modelInputSha256": "1e66da236e47a4b06d05f1d48141cde5ab63186048ca1df1d6a87d3795e086d4",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-890194516c7097a0",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.1825,
+                -0.2
+              ],
+              [
+                6.1825,
+                -0.2
+              ],
+              [
+                6.1825,
+                0.2
+              ],
+              [
+                -6.1825,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 4.946000000000001,
+        "supportAreaM2": 4.946000000000001,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-8e66fe4a88a61908",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-8e66fe4a88a61908/asset.json",
+        "descriptorSha256": "8c51a213c27c51d93c38d4c8d25560367e1415cd2f9acbdbcd39f0cb609496e0",
+        "recipeFile": "content/buildings/ring-block/objects/wall-8e66fe4a88a61908/source.json",
+        "recipeSha256": "07c5a9cd99ffbd305e34302f4df879ecf1d9679f3259e3bc47dbc79e81f7c1de",
+        "kind": "kit"
+      },
+      "modelInputSha256": "e21e9994538c3e7825c216f989867ba323328ac3f2c9da2856f3d0118d833def",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-8e66fe4a88a61908",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.3805,
+                -0.2
+              ],
+              [
+                1.3805,
+                -0.2
+              ],
+              [
+                1.3805,
+                0.2
+              ],
+              [
+                -1.3805,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.1044,
+        "supportAreaM2": 1.1044,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-8ea14f520ae5cbcd",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-8ea14f520ae5cbcd/asset.json",
+        "descriptorSha256": "e572359ab3a83a069a6ee47bee6a64a34951679d15d1e7c5ad43d0c47a2c99e2",
+        "recipeFile": "content/buildings/ring-block/objects/wall-8ea14f520ae5cbcd/source.json",
+        "recipeSha256": "9228885bfbfab6f2c031c0bf98597d5a0e8743b8064720b1748b356026d1571c",
+        "kind": "kit"
+      },
+      "modelInputSha256": "211b7fac1e8f932b9ce2049ae013ab703748c9ef3147064a71c2637bc124cbb2",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-8ea14f520ae5cbcd",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.2325,
+                -0.175
+              ],
+              [
+                0.2325,
+                -0.175
+              ],
+              [
+                0.2325,
+                0.175
+              ],
+              [
+                -0.2325,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.16275,
+        "supportAreaM2": 0.16275,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-9368b355a5ffcf13",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-9368b355a5ffcf13/asset.json",
+        "descriptorSha256": "174c5ebab912280bf38592f283c4cd44ca132768344250ee567111fdbbaa56e9",
+        "recipeFile": "content/buildings/ring-block/objects/wall-9368b355a5ffcf13/source.json",
+        "recipeSha256": "fc2bdbe7e634cf32b28bdffc6c8106adda07630003e9ee72f5d324497e13a79a",
+        "kind": "kit"
+      },
+      "modelInputSha256": "b838df315907915b8a9574fb0765eed029712303e83c20e9e7e48e810ad90e7a",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9368b355a5ffcf13",
+        "components": [
+          {
+            "outline": [
+              [
+                -33.263,
+                -0.175
+              ],
+              [
+                33.263,
+                -0.175
+              ],
+              [
+                33.263,
+                0.175
+              ],
+              [
+                -33.263,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 23.2841,
+        "supportAreaM2": 23.2841,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-93ca921064bed340",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-93ca921064bed340/asset.json",
+        "descriptorSha256": "9eaec8f34a46ecad226d096501559d3ba4a6fc199849ce1499d70c909e06b5d3",
+        "recipeFile": "content/buildings/ring-block/objects/wall-93ca921064bed340/source.json",
+        "recipeSha256": "5e38319983dd619c378ef6c24da37a255ca6cf70eb188a54cb033b77a174b661",
+        "kind": "kit"
+      },
+      "modelInputSha256": "7ad9fd1d3e30c34bd528d84dddfe297bc66ad243ca654040e9afc525af9206fd",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-93ca921064bed340",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.8245,
+                -0.175
+              ],
+              [
+                6.8245,
+                -0.175
+              ],
+              [
+                6.8245,
+                0.175
+              ],
+              [
+                -6.8245,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 4.77715,
+        "supportAreaM2": 4.77715,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-9c6bc239175a762b",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-9c6bc239175a762b/asset.json",
+        "descriptorSha256": "4ba92f279c3e647779026f04385d27726e4b99dbaac24c453219bebe5699a896",
+        "recipeFile": "content/buildings/ring-block/objects/wall-9c6bc239175a762b/source.json",
+        "recipeSha256": "d285a9302f8e7a03d1d250a2971489a02ff79baf456e6b7dfa6efaf15c998c42",
+        "kind": "kit"
+      },
+      "modelInputSha256": "ee4f5f3f6629fc9afe85e81c1ec3b6900700f979ae22076a37126d963405268f",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9c6bc239175a762b",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.1845,
+                -0.175
+              ],
+              [
+                1.1845,
+                -0.175
+              ],
+              [
+                1.1845,
+                0.175
+              ],
+              [
+                -1.1845,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.82915,
+        "supportAreaM2": 0.82915,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-9d662a3014714796",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-9d662a3014714796/asset.json",
+        "descriptorSha256": "a2977e5a942dacb446b3f4db595ae09e459d0535f0d4d4526a995a44c32b502e",
+        "recipeFile": "content/buildings/ring-block/objects/wall-9d662a3014714796/source.json",
+        "recipeSha256": "4abba001cc784310456aaeefaffb397274865ecba5fa8acf69425bd3efe77cb2",
+        "kind": "kit"
+      },
+      "modelInputSha256": "ed39f6bd11b973871a7246484ba0c0a03046f5477fd8e500cc8cd021e87695c4",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9d662a3014714796",
+        "components": [
+          {
+            "outline": [
+              [
+                -13.9055,
+                -0.175
+              ],
+              [
+                13.9055,
+                -0.175
+              ],
+              [
+                13.9055,
+                0.175
+              ],
+              [
+                -13.9055,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 9.733849999999999,
+        "supportAreaM2": 9.733849999999999,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-9f1c9f7808e1b305",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-9f1c9f7808e1b305/asset.json",
+        "descriptorSha256": "2ecfc5f2464bf59d322f0b296d3f70ecefddf1ca24e5b15ff808060472f11626",
+        "recipeFile": "content/buildings/ring-block/objects/wall-9f1c9f7808e1b305/source.json",
+        "recipeSha256": "0eaea8aab15021ae29a7b8b2596dbfcd1d1b5123bc5343e9f6584b3fc487c1a2",
+        "kind": "kit"
+      },
+      "modelInputSha256": "26e8fee1c7a5ab56aa734b5eb110ce6b790c953df2d9ed6089d7f389cf958d45",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-9f1c9f7808e1b305",
+        "components": [
+          {
+            "outline": [
+              [
+                -11.6615,
+                -0.175
+              ],
+              [
+                11.6615,
+                -0.175
+              ],
+              [
+                11.6615,
+                0.175
+              ],
+              [
+                -11.6615,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 8.16305,
+        "supportAreaM2": 8.16305,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-a1aef454a3398465",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-a1aef454a3398465/asset.json",
+        "descriptorSha256": "ce291d1777faa0a6593c30fd38711a0307656bc75a0b94f1ed1968fe33a3d5b4",
+        "recipeFile": "content/buildings/ring-block/objects/wall-a1aef454a3398465/source.json",
+        "recipeSha256": "0e3ff86750c3a338815f0e7b2a6ae5318fd76a18cbb8e9dd4e165bebdbefd0ea",
+        "kind": "kit"
+      },
+      "modelInputSha256": "a18177cce05177e3e5d2da5b815d8d2366a25fcdd1d23bdabf83a4b92adcaecb",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-a1aef454a3398465",
+        "components": [
+          {
+            "outline": [
+              [
+                -27.287,
+                -0.175
+              ],
+              [
+                27.287,
+                -0.175
+              ],
+              [
+                27.287,
+                0.175
+              ],
+              [
+                -27.287,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 19.1009,
+        "supportAreaM2": 19.1009,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-a6ee3c6e69418bd6",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-a6ee3c6e69418bd6/asset.json",
+        "descriptorSha256": "7a07d49dd79b2bfd3d16bb5cc67b2f858afe3e98aed6d291db620dc08466a0e6",
+        "recipeFile": "content/buildings/ring-block/objects/wall-a6ee3c6e69418bd6/source.json",
+        "recipeSha256": "c49c68ed4832540d059ad2ca845fecfb415385c0274a135f1ac3947c689a76b3",
+        "kind": "kit"
+      },
+      "modelInputSha256": "c306909121011e325d300cd35c6554ce3b94338c839f9c9651d4a7cffad317ec",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-a6ee3c6e69418bd6",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.906,
+                -0.2
+              ],
+              [
+                2.906,
+                -0.2
+              ],
+              [
+                2.906,
+                0.2
+              ],
+              [
+                -2.906,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 2.3248,
+        "supportAreaM2": 2.3248,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-aa0bead65714868e",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-aa0bead65714868e/asset.json",
+        "descriptorSha256": "55d9b77e26cd1a195a4a490439d2ae66df06359f93fe761634a066b746214ebc",
+        "recipeFile": "content/buildings/ring-block/objects/wall-aa0bead65714868e/source.json",
+        "recipeSha256": "41521f99c4865a9e29e8da6cab2eec49264442b92aef385bcdb5101282688eea",
+        "kind": "kit"
+      },
+      "modelInputSha256": "dbbc8672189fe43806528276e0455a8770e4b1db392baf946823c080e65d6a43",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-aa0bead65714868e",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.3725,
+                -0.175
+              ],
+              [
+                0.3725,
+                -0.175
+              ],
+              [
+                0.3725,
+                0.175
+              ],
+              [
+                -0.3725,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.26075,
+        "supportAreaM2": 0.26075,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-ba3ba75528e1ed69",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-ba3ba75528e1ed69/asset.json",
+        "descriptorSha256": "645266e34fecce8d491e270087954e562806b27433e8c4bfacbf2feedcb4a282",
+        "recipeFile": "content/buildings/ring-block/objects/wall-ba3ba75528e1ed69/source.json",
+        "recipeSha256": "074ab82736dbeea7cf78c5f0b37815da60035ed4a7adf69a9a9876156249d280",
+        "kind": "kit"
+      },
+      "modelInputSha256": "ac20057278ace6cd15dfce54aed778b036d69b919b2b68854a8a4a56041e99ca",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-ba3ba75528e1ed69",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.054,
+                -0.2
+              ],
+              [
+                2.054,
+                -0.2
+              ],
+              [
+                2.054,
+                0.2
+              ],
+              [
+                -2.054,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.6432,
+        "supportAreaM2": 1.6432,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-c05e0a7c2bfc1190",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-c05e0a7c2bfc1190/asset.json",
+        "descriptorSha256": "3cca524811c70beff019660c84fc12e62a3d79e3858b5644afe5b6989b937072",
+        "recipeFile": "content/buildings/ring-block/objects/wall-c05e0a7c2bfc1190/source.json",
+        "recipeSha256": "9c313daeee3c9a743ed0e8045d83798d374299653663b2d874ddf0fb8401b5ac",
+        "kind": "kit"
+      },
+      "modelInputSha256": "74aed58c441c6253a8b025d630d8a579fc8acd9a6a48d5f6aed047509ac17ab8",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c05e0a7c2bfc1190",
+        "components": [
+          {
+            "outline": [
+              [
+                -20.391,
+                -0.2
+              ],
+              [
+                20.391,
+                -0.2
+              ],
+              [
+                20.391,
+                0.2
+              ],
+              [
+                -20.391,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 16.3128,
+        "supportAreaM2": 16.3128,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-c1eae6ce2c50ab27",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-c1eae6ce2c50ab27/asset.json",
+        "descriptorSha256": "48814d776bda13f8ea88ec20564f91e78ad6b0ad21fa8cad3875f4d42b0a4ded",
+        "recipeFile": "content/buildings/ring-block/objects/wall-c1eae6ce2c50ab27/source.json",
+        "recipeSha256": "97bb4c096262e7fea9bd7a89409155b2c059202fa70c775a290ff9e55a06a839",
+        "kind": "kit"
+      },
+      "modelInputSha256": "7c4be8bb695df27d7d54a9bd13f6687e2d7d6dc5bb973d7a6f169635c85164a7",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c1eae6ce2c50ab27",
+        "components": [
+          {
+            "outline": [
+              [
+                -3.9125,
+                -0.175
+              ],
+              [
+                3.9125,
+                -0.175
+              ],
+              [
+                3.9125,
+                0.175
+              ],
+              [
+                -3.9125,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 2.73875,
+        "supportAreaM2": 2.73875,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-c3fe7a1c5bc6a7bc",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-c3fe7a1c5bc6a7bc/asset.json",
+        "descriptorSha256": "8c62700942b7444fc085ef0367d38897d9a10814c9b4d5dd62f718cc700d67f0",
+        "recipeFile": "content/buildings/ring-block/objects/wall-c3fe7a1c5bc6a7bc/source.json",
+        "recipeSha256": "675fb7c7f7f51df78206424b99eb12b87412f43df98333e1ae793cf6d3299b35",
+        "kind": "kit"
+      },
+      "modelInputSha256": "7e4261c0ff87506cec71d442906a8038a686e0df3fb09bad32a92d131ea14fb1",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c3fe7a1c5bc6a7bc",
+        "components": [
+          {
+            "outline": [
+              [
+                -2.0905,
+                -0.175
+              ],
+              [
+                2.0905,
+                -0.175
+              ],
+              [
+                2.0905,
+                0.175
+              ],
+              [
+                -2.0905,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.46335,
+        "supportAreaM2": 1.46335,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-c950b3ccb2cef770",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-c950b3ccb2cef770/asset.json",
+        "descriptorSha256": "db1662204ef179b41b2c00dc5c4e10c2959f4b152f295d2fce00933f5b2efe5b",
+        "recipeFile": "content/buildings/ring-block/objects/wall-c950b3ccb2cef770/source.json",
+        "recipeSha256": "53fed892c9dd6036d0601f9ab85ed28607f22b50590a7ba82677a12efca7db68",
+        "kind": "kit"
+      },
+      "modelInputSha256": "86b838906cf9d76adce7034e14708a84978e323f24303ad2016c69f0fe494065",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-c950b3ccb2cef770",
+        "components": [
+          {
+            "outline": [
+              [
+                -15.0385,
+                -0.175
+              ],
+              [
+                15.0385,
+                -0.175
+              ],
+              [
+                15.0385,
+                0.175
+              ],
+              [
+                -15.0385,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 10.52695,
+        "supportAreaM2": 10.52695,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-cdd89c4fe9cf2077",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-cdd89c4fe9cf2077/asset.json",
+        "descriptorSha256": "a745d7f5ac553462c505f3b8d54301164f6a69264203e4b29828fb3aeaea920a",
+        "recipeFile": "content/buildings/ring-block/objects/wall-cdd89c4fe9cf2077/source.json",
+        "recipeSha256": "a030e0e44e94b3634f03c18cb7132239d12951d455ac46082cfda2e288a38c12",
+        "kind": "kit"
+      },
+      "modelInputSha256": "b6b5a0447c5a5b53d791f19859e928bc6f707a63c9b29c040d5d7400b5ce37ef",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-cdd89c4fe9cf2077",
+        "components": [
+          {
+            "outline": [
+              [
+                -9.064,
+                -0.2
+              ],
+              [
+                9.064,
+                -0.2
+              ],
+              [
+                9.064,
+                0.2
+              ],
+              [
+                -9.064,
+                0.2
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 7.251200000000001,
+        "supportAreaM2": 7.251200000000001,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-ce7ab008ea008e4f",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-ce7ab008ea008e4f/asset.json",
+        "descriptorSha256": "1843a95a942892bdae4ab2067b9db15b1c1adca0e31cf952d9ce0702a6215d37",
+        "recipeFile": "content/buildings/ring-block/objects/wall-ce7ab008ea008e4f/source.json",
+        "recipeSha256": "5f48945e4351b36a5f02c5f6c6202519a826deebd814ee66a49dc8150de12bc1",
+        "kind": "kit"
+      },
+      "modelInputSha256": "eacce91016fccd27535fccdb3dda7066561bf844e95a477cb9ece483248b9b49",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-ce7ab008ea008e4f",
+        "components": [
+          {
+            "outline": [
+              [
+                -0.401,
+                -0.175
+              ],
+              [
+                0.401,
+                -0.175
+              ],
+              [
+                0.401,
+                0.175
+              ],
+              [
+                -0.401,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 0.2807,
+        "supportAreaM2": 0.2807,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-d0905ee9df8e3aa5",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-d0905ee9df8e3aa5/asset.json",
+        "descriptorSha256": "7fe07430dfa84be0a1e687159523e337c5e261f2585a2e4622d67122c70ebf19",
+        "recipeFile": "content/buildings/ring-block/objects/wall-d0905ee9df8e3aa5/source.json",
+        "recipeSha256": "f26764e066ab75e2c88eb09cc1b975e6db11ed98f15f6129389f88e4494187ac",
+        "kind": "kit"
+      },
+      "modelInputSha256": "dce05c0b06fce16459de8f576c9fdf6562b36a48ede804a0315740e5cd59ed7e",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-d0905ee9df8e3aa5",
+        "components": [
+          {
+            "outline": [
+              [
+                -6.3765,
+                -0.175
+              ],
+              [
+                6.3765,
+                -0.175
+              ],
+              [
+                6.3765,
+                0.175
+              ],
+              [
+                -6.3765,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 4.46355,
+        "supportAreaM2": 4.46355,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-d0bcb88663242e34",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-d0bcb88663242e34/asset.json",
+        "descriptorSha256": "cbd6d22de6b0679bf74323c9db60b60c59491bbb23c8112e60396c86da96dac1",
+        "recipeFile": "content/buildings/ring-block/objects/wall-d0bcb88663242e34/source.json",
+        "recipeSha256": "289f76aade71445d6d1c61348f083f3e085a200b11aa1e7a049d0b47a40a4867",
+        "kind": "kit"
+      },
+      "modelInputSha256": "2fc675a8fa66c397b071ac6f826a41ffdc1503e8d1f9a82a74839c4e5d3da744",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-d0bcb88663242e34",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.781,
+                -0.175
+              ],
+              [
+                1.781,
+                -0.175
+              ],
+              [
+                1.781,
+                0.175
+              ],
+              [
+                -1.781,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 1.2467,
+        "supportAreaM2": 1.2467,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-d38ea743fe61ec46",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-d38ea743fe61ec46/asset.json",
+        "descriptorSha256": "ed5dfb9b49d96eec9d038f90953fa385a45d0c9962c97b054b54201687d31660",
+        "recipeFile": "content/buildings/ring-block/objects/wall-d38ea743fe61ec46/source.json",
+        "recipeSha256": "f9cf94eaa61254ba0b166df3ddf960111e2c7cbce05ec2cf2bd37c725e3ac093",
+        "kind": "kit"
+      },
+      "modelInputSha256": "2455fc9b180c212d18d8aac7bdc4db5f044a0b633d0b62c1c3290eb881d92468",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-d38ea743fe61ec46",
+        "components": [
+          {
+            "outline": [
+              [
+                -16.773,
+                -0.175
+              ],
+              [
+                16.773,
+                -0.175
+              ],
+              [
+                16.773,
+                0.175
+              ],
+              [
+                -16.773,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 11.7411,
+        "supportAreaM2": 11.7411,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "wall-f3b140cb8595e57a",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/objects/wall-f3b140cb8595e57a/asset.json",
+        "descriptorSha256": "ff33327eb2c3483b553e0569f8621c454c6d01d2f8d13ffd4273dfcea08525ea",
+        "recipeFile": "content/buildings/ring-block/objects/wall-f3b140cb8595e57a/source.json",
+        "recipeSha256": "1b1489d0806d7e2042c8a12f83c292d0988e4a8fbe4a38efddc2c9adfb93aea6",
+        "kind": "kit"
+      },
+      "modelInputSha256": "bd0292e9cc382980154b7f68950bd4242a725c1f0e778750e97bb23ae7fec48f",
+      "limitations": [
+        "Rigid wall or retaining segment: evaluate full contact footprint, maximum plinth height and continuity with neighbouring segments.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "wall-f3b140cb8595e57a",
+        "components": [
+          {
+            "outline": [
+              [
+                -13.156,
+                -0.175
+              ],
+              [
+                13.156,
+                -0.175
+              ],
+              [
+                13.156,
+                0.175
+              ],
+              [
+                -13.156,
+                0.175
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 9.2092,
+        "supportAreaM2": 9.2092,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    },
+    {
+      "assetId": "water-kiosk",
+      "status": "requires-authoring-review",
+      "source": {
+        "descriptorFile": "content/buildings/ring-block/manual/water-kiosk/asset.json",
+        "descriptorSha256": "c984169493c6d1f07bbc9ebba4c9998f29fb0f3d595432ffa72055280464a08e",
+        "recipeFile": "content/buildings/ring-block/manual/water-kiosk/source.json",
+        "recipeSha256": "296c77dd8f89f7e37514bbc608962dcbcc4e61b56226a564ed4511ac2236095e",
+        "kind": "kit"
+      },
+      "modelInputSha256": "3d089761f5472080aa1397b2f46ba14e424b255707a1a5268618088ea06ae8b4",
+      "limitations": [
+        "Rigid booth requires a base and explicitly reviewed tap-side approach.",
+        "Only actual rendered bottoms at Y=0 are included. Raised lower faces and surrounding access are not solved by this candidate.",
+        "No automatic adoption: evaluate maximum foundation height, all contacts and neighbouring connections on the intended grid."
+      ],
+      "candidateRule": {
+        "kind": "foundation-v2",
+        "assetId": "water-kiosk",
+        "components": [
+          {
+            "outline": [
+              [
+                -1.2,
+                -0.9
+              ],
+              [
+                1.2,
+                -0.9
+              ],
+              [
+                1.2,
+                0.9
+              ],
+              [
+                -1.2,
+                0.9
+              ]
+            ]
+          }
+        ],
+        "jointY": 0,
+        "clearance": 0.02,
+        "burial": 0.1,
+        "color": "#8b8580"
+      },
+      "evidence": {
+        "contactTriangleCount": 2,
+        "exactContactAreaM2": 4.32,
+        "supportAreaM2": 4.32,
+        "precisionFilledFootprintHausdorffBoundMetres": 5.000019073486328e-05,
+        "precisionSymmetricDifferenceM2": 0.0,
+        "componentCount": 1,
+        "holeCount": 0
+      }
+    }
+  ]
+}

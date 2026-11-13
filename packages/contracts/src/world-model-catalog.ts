@@ -33,6 +33,8 @@ export interface WorldModelCatalog {
   catalogVersion: string;
   categories: WorldModelCategories['categories'];
   models: Record<string, WorldModelCatalogEntry>;
+  /** Explicit compiler-generated terrain/support resources without an authoring model card. */
+  generatedAssetIds?: string[];
 }
 export interface WorldModelCatalogIndex {
   formatVersion: 1;
@@ -182,6 +184,21 @@ export function validateWorldModelCatalog(
       );
       if (manifest)
         requireValue(Object.hasOwn(manifest.assets, assetId), `missing runtime asset ${assetId}`);
+      runtimeIds.add(assetId);
+    }
+  }
+  if (value.generatedAssetIds !== undefined) {
+    requireValue(
+      Array.isArray(value.generatedAssetIds) && value.generatedAssetIds.length <= 100_000,
+      'generated assets',
+    );
+    for (const assetId of value.generatedAssetIds) {
+      requireValue(
+        id(assetId) && !runtimeIds.has(assetId),
+        `duplicate/invalid generated asset ${assetId}`,
+      );
+      if (manifest)
+        requireValue(Object.hasOwn(manifest.assets, assetId), `missing generated asset ${assetId}`);
       runtimeIds.add(assetId);
     }
   }

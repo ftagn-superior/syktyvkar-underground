@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "status": "selected-unapplied-gameplay-candidate",
+  "generator": {
+    "tools/build-syktsu-terrain-pad.ts": "cf88a53b02b9eb89ee9fc3c7ea05b6bec9db7a6d590aa3805300696e7a2fd7ec",
+    "tools/world-build/src/syktsu-pad.ts": "f373e1458ee2b97a179354d3de71168e87fe6f77f041bcf4693d4f6d4b127f6d",
+    "content/worlds/ring-block/terrain-candidate/syktsu-pad.json": "dc66dccde73213f794dc318d69ee896c6dfafc9278a55b0a724f939f75dd6b54",
+    "content/worlds/ring-block/terrain-candidate/pilot-grid-4m.json": "57f1bc2de002ce91dceac37a71995108a887a0601a113fa41309901c3a3002fa",
+    "content/buildings/ring-block/osm-way-1258973447/terrain-support.json": "4466acc973c27a4be5c3b8fa2cbf38fe5f963f539b91e904f3c533cb5d1fd2af"
+  },
+  "output": {
+    "file": "pilot-grid-with-pad.json",
+    "sha256": "1f6183f00ece6b14137f9ea6aafbe1486b1f87e1e2863410a3bdbd5b7e50bb1f"
+  },
+  "diagnostics": {
+    "heightY": {
+      "count": 33220,
+      "min": -0.12359740877194612,
+      "p95": 7.868636783999998,
+      "max": 12.642664949103239
+    },
+    "triangleSlopeDegrees": {
+      "count": 65700,
+      "min": 0,
+      "p95": 4.526256028237152,
+      "max": 7.712196350857974
+    },
+    "changedTriangles": 36107,
+    "boundary": {
+      "north": {
+        "count": 151,
+        "min": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "south": {
+        "count": 151,
+        "min": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "west": {
+        "count": 220,
+        "min": 0,
+        "p95": 11.666536257484589,
+        "max": 12.642664949103239
+      },
+      "east": {
+        "count": 220,
+        "min": 0,
+        "p95": 0,
+        "max": 0
+      }
+    }
+  },
+  "limitations": [
+    "Explicit Syktsu campus pad only; source and full grids are unchanged.",
+    "Neighbouring support-height exceedances and unresolved entrances remain blocking; see syktsu-pad.json.",
+    "Isolated Node walking does not replace full city, browser, networking or state-migration acceptance."
+  ]
+}

@@ -1,0 +1,841 @@
+{
+  "formatVersion": 1,
+  "status": "selected-unapplied-explicit-pads",
+  "sourceGrid": "pilot-grid-4m.json",
+  "selectionReason": "Explicit23 owners:13 initial campus/support-exceedance owners plus10 individually listed transition exceptions from iteration1.",
+  "groupingReason": "Explicit groups formed from these13 reviewed footprints at<=30m separation, to avoid conflicting nearby horizontal planes. Membership is listed and frozen below.",
+  "plateauMarginMetres": 6,
+  "forecourtFrom": "syktsu-pad.json",
+  "blendMethod": "At a plateau use its cluster level. Otherwise let wi=1-smoothstep((distance_i-6)/width), qi=wi/(1-wi); h=(base+sum(qi*level_i))/(1+sum(qi)). Single-cluster case equals the selected smoothstep pad; simultaneous blending is independent of rule order.",
+  "clusters": [
+    {
+      "id": "explicit-cluster-1",
+      "ownerIds": [
+        "osm-way-110770955",
+        "osm-way-111538131",
+        "osm-way-118373015",
+        "osm-way-146724915",
+        "osm-way-1532245447",
+        "osm-way-56438169",
+        "osm-way-662826329",
+        "osm-way-85585732",
+        "osm-way-85585733",
+        "osm-way-85585749",
+        "osm-way-85585762",
+        "osm-way-85585809",
+        "osm-way-85585813",
+        "osm-way-85585817",
+        "osm-way-85585819",
+        "osm-way-92104742"
+      ],
+      "levelMetres": 4.5,
+      "sourceMedianMetres": 1.1289719294210367,
+      "sourceRangeMetres": [
+        0.0,
+        9.403118067952
+      ],
+      "levelReason": "The area median1m is dominated by the large theatre footprint in the flat transition and creates16-degree roads against the campus. Use4.5m near the midrange0..9.4m to balance cut/fill and preserve the previous central-cluster level; explicit alternative to the rejected median."
+    },
+    {
+      "id": "explicit-cluster-2",
+      "ownerIds": [
+        "osm-way-1258973447",
+        "osm-way-1291799392",
+        "osm-way-56438158",
+        "osm-way-92104475",
+        "osm-way-92104556"
+      ],
+      "levelMetres": 6,
+      "sourceMedianMetres": 3.6921007500000007,
+      "sourceRangeMetres": [
+        1.1939568943958543,
+        12.097954959616
+      ],
+      "levelReason": "Retain the reviewed campus6m level across one explicit connected group."
+    },
+    {
+      "id": "explicit-cluster-3",
+      "ownerIds": [
+        "osm-way-92104657",
+        "osm-way-92104707"
+      ],
+      "levelMetres": 5.5,
+      "sourceMedianMetres": 6.260539975048001,
+      "sourceRangeMetres": [
+        0.11513753347200019,
+        9.629760611384002
+      ],
+      "levelReason": "Use5.5m instead of source-median-rounded6.5m to reduce the contrast with the connected central4.5m grading region; measured as an explicit compromise."
+    }
+  ],
+  "reviewedAdditions": [
+    {
+      "entityId": "osm-way-92104742",
+      "triggerVisibleFoundationMetres": 5.613564603657763,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-662826329",
+      "triggerVisibleFoundationMetres": 4.423453521332781,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-111538131",
+      "triggerVisibleFoundationMetres": 4.4184153751262825,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-1532245447",
+      "triggerVisibleFoundationMetres": 4.312066904496692,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-146724915",
+      "triggerVisibleFoundationMetres": 4.232843512798699,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-56438169",
+      "triggerVisibleFoundationMetres": 3.933681484670234,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-56438158",
+      "triggerVisibleFoundationMetres": 3.8890600099925585,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-85585733",
+      "triggerVisibleFoundationMetres": 3.688356549928309,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-110770955",
+      "triggerVisibleFoundationMetres": 3.5536095395552465,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    },
+    {
+      "entityId": "osm-way-118373015",
+      "triggerVisibleFoundationMetres": 3.3586702118392986,
+      "reason": "Explicit correction of the observed outer-transition conflict from iteration1; choose the connected group level before simultaneous generation."
+    }
+  ],
+  "gradeCorrections": [
+    {
+      "ownerId": "osm-way-696916923",
+      "centerY": 1.9776856014529665,
+      "gain": 0.7218779791033144,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        0.03829966570379837,
+        3.9170715372021347
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    },
+    {
+      "ownerId": "osm-way-111538132",
+      "centerY": 1.8395816341739344,
+      "gain": 0.7638476955993917,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        0.006755524904312117,
+        3.6724077434435567
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    },
+    {
+      "ownerId": "osm-way-109234383",
+      "centerY": 1.7642848656803276,
+      "gain": 0.7935226488836566,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        0.0,
+        3.528569731360655
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    },
+    {
+      "ownerId": "osm-way-1277836302",
+      "centerY": 2.782352063717046,
+      "gain": 0.8390947298433724,
+      "plateauMarginMetres": 6,
+      "blendWidthMetres": 20,
+      "triggerRangeMetres": [
+        1.1138872882782496,
+        4.450816839155842
+      ],
+      "targetRangeMetres": 2.8,
+      "reason": "Explicit local reduction of the measured terrain height span under this long outer-transition building; avoids extending the main horizontal plateau. Apply all corrections together against the same clustered surface, never sequentially."
+    }
+  ],
+  "correctionBlendMethod": "Compute each local target from the same completed cluster grid: target=center+gain*(clusterHeight-center). Sum wi*(target-clusterHeight), divide by max(1,sum(wi)), then add once. No ordering dependence or automatic model selection.",
+  "sourceGridSha256": "57f1bc2de002ce91dceac37a71995108a887a0601a113fa41309901c3a3002fa",
+  "supportRulesSha256": "81ba8577c6773a5433e499eaa77bb02d39c9313d442a2993db1466cdb953a410",
+  "blendWidthMetres": 80,
+  "placements": [
+    {
+      "entityId": "osm-way-109234383",
+      "assetId": "osm-way-109234383",
+      "position": {
+        "x": 101.63,
+        "y": 0,
+        "z": -568.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "109234383",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-110770955",
+      "assetId": "osm-way-110770955",
+      "position": {
+        "x": 17.13,
+        "y": 0,
+        "z": -521.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "110770955",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-111538131",
+      "assetId": "osm-way-111538131",
+      "position": {
+        "x": 67.57,
+        "y": 0,
+        "z": -451.66
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "111538131",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-111538132",
+      "assetId": "osm-way-111538132",
+      "position": {
+        "x": 201.3,
+        "y": 0,
+        "z": -349.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "111538132",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-118373015",
+      "assetId": "osm-way-118373015",
+      "position": {
+        "x": -92.1,
+        "y": 0,
+        "z": -497.95
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "118373015",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-1258973447",
+      "assetId": "osm-way-1258973447",
+      "position": {
+        "x": -148.88,
+        "y": 0,
+        "z": -157.92
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "1258973447",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-1277836302",
+      "assetId": "osm-way-1277836302",
+      "position": {
+        "x": 99.16,
+        "y": 0,
+        "z": -79.03
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "1277836302",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-1291799392",
+      "assetId": "osm-way-1291799392",
+      "position": {
+        "x": -80.63,
+        "y": 0,
+        "z": -28.99
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "1291799392",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-146724915",
+      "assetId": "osm-way-146724915",
+      "position": {
+        "x": 172.96,
+        "y": 0,
+        "z": -250.55
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "146724915",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-1532245447",
+      "assetId": "osm-way-1532245447",
+      "position": {
+        "x": -64.3,
+        "y": 0,
+        "z": -325.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "1532245447",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-56438158",
+      "assetId": "osm-way-56438158",
+      "position": {
+        "x": -143.37,
+        "y": 0,
+        "z": 12.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "56438158",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-56438169",
+      "assetId": "osm-way-56438169",
+      "position": {
+        "x": 124.95,
+        "y": 0,
+        "z": -158.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "56438169",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-662826329",
+      "assetId": "osm-way-662826329",
+      "position": {
+        "x": -36.35,
+        "y": 0,
+        "z": -535.72
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "662826329",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-696916923",
+      "assetId": "osm-way-696916923",
+      "position": {
+        "x": 166.88,
+        "y": 0,
+        "z": -436.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "696916923",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585732",
+      "assetId": "osm-way-85585732",
+      "position": {
+        "x": -101.9,
+        "y": 0,
+        "z": -403.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585732",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585733",
+      "assetId": "osm-way-85585733",
+      "position": {
+        "x": 7.15,
+        "y": 0,
+        "z": -292.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585733",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585749",
+      "assetId": "osm-way-85585749",
+      "position": {
+        "x": -5.72,
+        "y": 0,
+        "z": -450.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585749",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585762",
+      "assetId": "osm-way-85585762",
+      "position": {
+        "x": 25.78,
+        "y": 0,
+        "z": -384.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585762",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585809",
+      "assetId": "osm-way-85585809",
+      "position": {
+        "x": -34.62,
+        "y": 0,
+        "z": -388.35
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585809",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585813",
+      "assetId": "osm-way-85585813",
+      "position": {
+        "x": 81.65,
+        "y": 0,
+        "z": -291.2
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585813",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585817",
+      "assetId": "osm-way-85585817",
+      "position": {
+        "x": 88.05,
+        "y": 0,
+        "z": -230.98
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585817",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-85585819",
+      "assetId": "osm-way-85585819",
+      "position": {
+        "x": -151.87,
+        "y": 0,
+        "z": -378.45
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "85585819",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-92104475",
+      "assetId": "osm-way-92104475",
+      "position": {
+        "x": -224.75,
+        "y": 0,
+        "z": -280.15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "92104475",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-92104556",
+      "assetId": "osm-way-92104556",
+      "position": {
+        "x": -185.92,
+        "y": 0,
+        "z": -302.7
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "92104556",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-92104657",
+      "assetId": "osm-way-92104657",
+      "position": {
+        "x": -244,
+        "y": 0,
+        "z": -435.3
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "92104657",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-92104707",
+      "assetId": "osm-way-92104707",
+      "position": {
+        "x": -230.9,
+        "y": 0,
+        "z": -366.8
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "92104707",
+        "type": "way",
+        "provider": "osm"
+      }
+    },
+    {
+      "entityId": "osm-way-92104742",
+      "assetId": "osm-way-92104742",
+      "position": {
+        "x": -175,
+        "y": 0,
+        "z": -476.52
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "instanceRevision": 1,
+      "enabled": true,
+      "sourceRef": {
+        "id": "92104742",
+        "type": "way",
+        "provider": "osm"
+      }
+    }
+  ],
+  "forecourt": {
+    "ownerId": "osm-way-1258973447",
+    "outline": [
+      [
+        -97.97093935628826,
+        -124.44945372554744
+      ],
+      [
+        -92.88145542075804,
+        -113.58220231270255
+      ],
+      [
+        -81.56140186571125,
+        -118.88374807887986
+      ],
+      [
+        -86.65088580124146,
+        -129.75099949172474
+      ]
+    ]
+  },
+  "selection": {
+    "plateauOwners": 23,
+    "boundedGradeOwners": 4,
+    "geometry": "Actual structural outlines forplateau distance; open courtyards remainterrain. No solid footprints enlarged.",
+    "allFootprintModelsChecked": 136,
+    "exceedingThreeMetres": 0,
+    "measured": {
+      "allTriangleSlopeDegrees": {
+        "min": 0.0,
+        "p95": 4.669255046207624,
+        "max": 6.594982810499342
+      },
+      "surfaces": {
+        "road": {
+          "min": 0.0,
+          "p95": 6.0411886035862805,
+          "max": 6.57000308735871
+        },
+        "footway": {
+          "min": 0.0,
+          "p95": 4.677750683176348,
+          "max": 6.517144302072016
+        }
+      },
+      "modifiedAreaM2": 327248.0,
+      "affectedObjectCount": 2353
+    },
+    "rejectedCompactAlternative": {
+      "level5": {
+        "visibleFoundationExceedances": 5,
+        "affectedObjects": 2436
+      },
+      "level6": {
+        "visibleFoundationExceedances": 6,
+        "affectedObjects": 2436
+      }
+    },
+    "limitations": [
+      "Selected approximate gameplay terrain; no geodetic accuracy claim.",
+      "Foundation<=3m does not by itself establish walkable door approaches.",
+      "Actual state migration and full city gameplay acceptance remain required."
+    ]
+  }
+}

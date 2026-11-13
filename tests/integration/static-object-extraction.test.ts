@@ -29,6 +29,10 @@ import {
   sha256,
   worldColliders,
 } from '../helpers/static-extraction.js';
+import {
+  reviewedLightingFlatRelease,
+  withoutReviewedRingLighting,
+} from '../helpers/reviewed-ring-lighting.js';
 
 const plantingCategories = new Set(['tree', 'bush']);
 const remappedCategories = new Set([
@@ -48,7 +52,7 @@ const minimumAmbientFactor = 0.7;
 // allowances below are exactly the sunny-city refresh: palette, parapet caps,
 // sub-5 cm ground separation and planting topology inside the old envelopes.
 function visualInvariant(recipe: any, path: string): unknown {
-  const copy = structuredClone(recipe);
+  const copy = withoutReviewedRingLighting(recipe, path);
   if (path.endsWith('/ring-block-ground/source.json'))
     for (const layer of copy.layers) delete layer.elevation;
   if (path.endsWith('/manual/trudovaya-slava/source.json'))
@@ -101,7 +105,9 @@ describe('independent static-object extraction evidence', () => {
     library = await json(`${libraryFixture}/invariants.json`);
     remap = await json('content/migrations/ring-block/static-library-v1.json');
     validateStaticAssetRemapRules(remap);
-    await buildWorld('content/worlds/ring-block/world.json', join(temporary, 'release'));
+    await buildWorld('content/worlds/ring-block/world.json', join(temporary, 'release'), {
+      terrainRelease: false,
+    });
     release = await readRelease(join(temporary, 'release'));
   });
   afterAll(async () => {
@@ -190,7 +196,11 @@ describe('independent static-object extraction evidence', () => {
     expect(planting.filter((o: any) => o.category === 'tree')).toHaveLength(829);
     expect(planting.filter((o: any) => o.category === 'bush')).toHaveLength(277);
     expect(remap.sourceDescriptionHash).toBe(library.sourceDescriptionHash);
-    expect(staticAssetLibraryHash(remap, release.manifest.assets)).toBe(library.targetLibraryHash);
+    expect(remap.targetLibraryHash).toBe(library.targetLibraryHash);
+    expect(staticAssetLibraryHash(remap, release.manifest.assets)).toBe(
+      reviewedLightingFlatRelease.libraryHash,
+    );
+    expect(reviewedLightingFlatRelease.libraryHash).not.toBe(library.targetLibraryHash);
     const targets = new Set(Object.values(remap.assetMap));
     expect([...targets].filter((id) => id.startsWith('tree-'))).toHaveLength(9);
     expect([...targets].filter((id) => id.startsWith('bush-'))).toHaveLength(6);
@@ -356,10 +366,9 @@ describe('independent static-object extraction evidence', () => {
         );
       else if (path === 'content/worlds/ring-block/world.json') {
         // The placement allowlist is authoring metadata, outside frozen geometry.
-        const source = (await readFile(path, 'utf8')).replace(
-          /  "placementPolicy": "placement\.json",\n/,
-          '',
-        );
+        const source = (await readFile(path, 'utf8'))
+          .replace(/  "placementPolicy": "placement\.json",\n/, '')
+          .replace(/  "terrainRelease": "terrain-release\.json",\n/, '');
         expect(JSON.parse(source).formatVersion).toBe(5);
         expect(sha256(source.replace('"formatVersion": 5', '"formatVersion": 4'))).toBe(hash);
       } else if (path.endsWith('/asset.json')) {
@@ -466,15 +475,19 @@ describe('independent static-object extraction evidence', () => {
       const first =
         id === 'ring-block'
           ? release.manifest
-          : await buildWorld(`content/worlds/${id}/world.json`, join(temporary, `normal-${id}`));
+          : await buildWorld(`content/worlds/${id}/world.json`, join(temporary, `normal-${id}`), {
+              terrainRelease: false,
+            });
       const isolated = await buildWorld(
         join(temporary, `content/worlds/${id}/world.json`),
         join(temporary, `isolated-${id}`),
+        { terrainRelease: false },
       );
       expect(isolated).toEqual(first);
       const repeated = await buildWorld(
         join(temporary, `content/worlds/${id}/world.json`),
         join(temporary, `isolated-${id}`),
+        { terrainRelease: false },
       );
       expect(repeated).toEqual(first);
     }

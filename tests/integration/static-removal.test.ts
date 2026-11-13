@@ -318,9 +318,18 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live whole-object static rem
   it('keeps a committed collider failure paused and recovers the persisted deletion on restart', async () => {
     const cookie = await login('removal-physics-failure');
     const player = await connect(cookie);
-    vi.spyOn(AuthoritativeWorld.prototype, 'removeStatic').mockImplementationOnce(() => {
-      throw new Error('injected collider removal failure');
-    });
+    const prepare = AuthoritativeWorld.prototype.prepareStaticReplacement;
+    vi.spyOn(AuthoritativeWorld.prototype, 'prepareStaticReplacement').mockImplementationOnce(
+      function (this: AuthoritativeWorld, definition) {
+        const staged = prepare.call(this, definition);
+        return {
+          ...staged,
+          commit: () => {
+            throw new Error('injected collider removal failure');
+          },
+        };
+      },
+    );
     const req = request();
     player.room.send('removeStatic', req);
     await until(() => !app.room.isReady() && player.removals.length === 1);

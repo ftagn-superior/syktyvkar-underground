@@ -245,9 +245,13 @@ export class ItemRuntime {
         this.saving = false;
       });
   }
-  async close() {
+  /** Stop gameplay before final snapshots, retaining the world ownership connection. */
+  beginClose() {
     this.closing = true;
     this.statusChanged();
+  }
+  async close() {
+    this.beginClose();
     const flush = this.enqueue(async () => {
       await this.store.save(this.world.getSnapshot().items, ++this.snapshotSequence);
     });

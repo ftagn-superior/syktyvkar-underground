@@ -12,9 +12,15 @@ import { CellStreamer, cellNeighborhood, circularCells, type CellGraphics } from
 import { VerifiedResources } from './resources';
 let directory: string;
 let manifest: WorldManifest;
+let packedManifest: WorldManifest;
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'su-dm-cells-'));
   manifest = await buildWorld(resolve('content/worlds/streaming-lab/world.json'), directory);
+  packedManifest = await buildWorld(
+    resolve('content/worlds/streaming-lab/world.json'),
+    join(directory, 'packed'),
+    { physicsPacks: true },
+  );
 });
 afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
@@ -29,14 +35,16 @@ async function until(stream: CellStreamer, predicate = () => stream.criticalRead
   }
   throw new Error(JSON.stringify(stream.diagnostics()));
 }
-function fixture(clockStep = 0) {
+function fixture(clockStep = 0, packed = false) {
+  const selectedManifest = packed ? packedManifest : manifest;
+  const selectedDirectory = packed ? join(directory, 'packed') : directory;
   let now = 0;
   const reads: string[] = [];
-  const resources = new VerifiedResources(manifest, '/', {
+  const resources = new VerifiedResources(selectedManifest, '/', {
     fetch: async (url) => {
       const path = String(url).slice(1);
       reads.push(path);
-      return new Response(await readFile(join(directory, path)));
+      return new Response(await readFile(join(selectedDirectory, path)));
     },
   });
   const physics = new Map<string, number>(),
@@ -63,7 +71,7 @@ function fixture(clockStep = 0) {
     releaseStatic: (id) => remove(graphical, id),
   };
   const stream = new CellStreamer(
-    manifest,
+    selectedManifest,
     resources,
     {
       retainStatic: (item) => {
@@ -280,26 +288,31 @@ describe('segmented world ownership', () => {
       v.stream.dispose();
     }
   });
-  it('holds shared seam instances once per cell and releases history after leaving both circles', async () => {
-    const v = fixture();
-    const start = { x: -125, y: 0, z: -312.5 },
-      far = { x: 950, y: 0, z: 950 };
-    try {
-      v.stream.setArea(start);
-      await until(v.stream, () => v.stream.backgroundReady);
-      expect(v.physics.get('house-6-5-0')).toBe(2);
-      v.stream.setArea(far, far, ['6_5']);
-      await until(v.stream, () => v.stream.backgroundReady);
-      v.advance();
-      expect(v.physics.get('house-6-5-0')).toBe(1);
-      v.stream.setArea(far);
-      v.advance();
-      expect(v.physics.has('house-6-5-0')).toBe(false);
-      expect(v.graphical.has('house-6-5-0')).toBe(false);
-    } finally {
-      v.stream.dispose();
-    }
-  });
+  it.each([false, true])(
+    'holds shared seam instances and prediction history with physics packs=%s',
+    async (packed) => {
+      const v = fixture(0, packed);
+      const start = { x: -125, y: 0, z: -312.5 },
+        far = { x: 950, y: 0, z: 950 };
+      try {
+        v.stream.setArea(start);
+        await until(v.stream, () => v.stream.backgroundReady);
+        expect(v.reads.some((path) => path.startsWith('physics/'))).toBe(packed);
+        if (packed) expect(v.reads.some((path) => path.endsWith('/colliders.json'))).toBe(false);
+        expect(v.physics.get('house-6-5-0')).toBe(2);
+        v.stream.setArea(far, far, ['6_5']);
+        await until(v.stream, () => v.stream.backgroundReady);
+        v.advance();
+        expect(v.physics.get('house-6-5-0')).toBe(1);
+        v.stream.setArea(far);
+        v.advance();
+        expect(v.physics.has('house-6-5-0')).toBe(false);
+        expect(v.graphical.has('house-6-5-0')).toBe(false);
+      } finally {
+        v.stream.dispose();
+      }
+    },
+  );
   it('keeps static preview without colliders or game readiness and reuses it on join/leave', async () => {
     const v = fixture();
     const p = { x: 0, y: 0, z: 0 };
@@ -389,5 +402,49 @@ describe('segmented world ownership', () => {
       failed.stream.dispose();
     }
     expect(failed.physics.size).toBe(0);
+  });
+  it('prepares a replacement area after a corrupt saved cell without reusing unverified bytes', async () => {
+    const saved = { x: -950, y: 0.92, z: -950 };
+    const start = { x: 950, y: 0.92, z: 950 };
+    const savedCells = new Set(cellNeighborhood(manifest, saved));
+    const unavailable = new Set(
+      manifest.cells.filter((cell) => savedCells.has(cell.cellId)).map((cell) => cell.file),
+    );
+    const requests: { path: string; cache?: RequestCache }[] = [];
+    const resources = new VerifiedResources(manifest, '/', {
+      fetch: async (url, options) => {
+        const path = String(url).slice(1);
+        requests.push({ path, cache: options?.cache });
+        return new Response(
+          unavailable.has(path) ? new Uint8Array([0]) : await readFile(join(directory, path)),
+        );
+      },
+    });
+    const stream = new CellStreamer(
+      manifest,
+      resources,
+      { retainStatic: () => {}, releaseStatic: () => {} },
+      { prepareCellAssets: async () => () => {}, retainStatic: () => {}, releaseStatic: () => {} },
+    );
+    try {
+      stream.setPreparationArea(saved);
+      await until(stream, () => !!stream.problem);
+      expect(stream.problem).toMatch(/SHA-256/);
+      expect(stream.criticalReady).toBe(false);
+      const corruptPath = requests.find(({ path }) => unavailable.has(path))!.path;
+      expect(requests.filter(({ path }) => path === corruptPath).map(({ cache }) => cache)).toEqual(
+        ['default', 'reload'],
+      );
+      stream.setPreparationArea(start);
+      await until(stream);
+      expect(stream.problem).toBeUndefined();
+      expect(stream.diagnostics().required.sort()).toEqual(
+        cellNeighborhood(manifest, start).sort(),
+      );
+      expect(stream.diagnostics().required.every((id) => !savedCells.has(id))).toBe(true);
+    } finally {
+      stream.dispose();
+    }
+    expect(resources.diagnostics().pending).toBe(0);
   });
 });

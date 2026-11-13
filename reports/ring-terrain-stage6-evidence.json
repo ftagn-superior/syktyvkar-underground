@@ -1,0 +1,1606 @@
+{
+  "formatVersion": 1,
+  "reviewedAt": "2026-11-13T21:23:19.223356+00:00",
+  "status": "completed",
+  "scope": "Fix d7c3e12 produces exact Mac/Linux map fb497 and all8963 content hashes. Fresh292 probes and canonical1027 bytes pass. Hardware/network/resources were measured on prior map e145; float32 collider and GLB BIN identity is verified, but these are not new measurements on fb497. Original network peak and resync limitations remain explicit.",
+  "privacy": "No private database rows, account/session/player IDs, tokens, item coordinates or connection strings are included.",
+  "production": {
+    "switched": true,
+    "acceptedIntegrationUpstream": "65ec21441ee7281c29400d724e17755a40fbcda0",
+    "integratedUpstream": "65ec214",
+    "actualObservedState": {
+      "gitHead": "65ec214",
+      "runningRuntimeMatchesRetained3949Archive": true,
+      "byteIdenticalRuntimeFiles": 279,
+      "databaseSchemaVersion": 6,
+      "playerPositionsTableExists": false,
+      "worldItems": 1,
+      "inventoryItems": 9,
+      "layoutRevision": 5224,
+      "source": "Deployment owner observed current runtime archive and fresh online database copy; code HEAD differs from running artifacts.",
+      "phase": "before-the-closed-production-window"
+    },
+    "status": "publicly-open-and-verified",
+    "candidateCommit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+    "candidateMapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+    "closedWindowProgress": {
+      "source": "Actual stored captures and independent comparisons in final-server-evidence",
+      "finalStoppedBackupAndRestoreChecked": true,
+      "retainedRuntimeRestoreBoots": 2,
+      "schema6To7AuditPassed": true,
+      "terrainApplyAndReplayMatched": true,
+      "initialInstalledProtocolVersion": 19,
+      "initialRuntimeReady": true,
+      "initialGeneratedMapVersion": "bcb893927c15d742e31e03f3759c0ccbf9439ce38a7ef55338f349487a015b23",
+      "initialCrossHostDifferenceDetected": true,
+      "finalValidation": "passed-with-explicit-browser-resource-limitations",
+      "publicReopeningConfirmed": true,
+      "compatibilityOnlyAdoption": true,
+      "historicalTerrainMarkerUnchanged": true,
+      "cleanSaveRestartCycles": 2
+    },
+    "deployedCommit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+    "completedAt": "2026-11-13T21:23:19.223356+00:00",
+    "protocolVersion": 19,
+    "databaseSchemaVersion": 7,
+    "layoutRevision": 8931,
+    "mapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+    "worldCompatibility": "a7e8a5fc0a5f724d2b734f76949967dd6578451b35159e4ece809e93477ecd88",
+    "lastIntegratedUpstreamHead": "65ec214",
+    "remainingWork": [],
+    "finalAcceptance": {
+      "applicationFilesVerified": 273,
+      "publicationResourcesVerified": 8963,
+      "fullTestsPassed": 1138,
+      "fullTestsSkipped": 0,
+      "physicalRunsPassed": 292,
+      "staticRows": 3712,
+      "enabledStaticRows": 3706,
+      "worldItems": 1,
+      "inventoryItems": 9,
+      "accounts": 2,
+      "savedPlayerPositions": 0,
+      "safePosesExact": true,
+      "maxPositionDriftMetres": 6.67572021484375e-06,
+      "maxRotationDriftRadians": 1.8133874427578564e-05,
+      "currentAndSafePosesDirectlyValidated": true,
+      "browserFunctionalStatus": "passed",
+      "browserRawHarnessStatus": "failed",
+      "browserResourceCleanliness": "undetermined",
+      "browserWalkMetres": 19.724442166481097,
+      "browserLimitations": [
+        "External font intentionally blocked by the private-header harness",
+        "Three ERR_ABORTED graphics requests: individual cause/recovery not recorded; independent review found no demonstrated runtime defect"
+      ],
+      "publicEndpoints": {
+        "/": 200,
+        "/api/world": 200,
+        "/health/ready": 200
+      },
+      "tlsVerified": true,
+      "maintenanceHeaderUsedForPublicVerification": false,
+      "runtimeSession": "ring-terrain-4"
+    },
+    "finalEvidence": [
+      {
+        "path": "output/ring-terrain-stage6/production-switch/validation-passed.json",
+        "sha256": "113b6f5f6afa08568cce9bbe3879dcaf5eb26d53546c7af3a0ddf49eb201820b"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/public-from-mac-verification.json",
+        "sha256": "8fe7eb3c1b626762bea40a9b80ae182d825a03a9f0ba1ffb5524b979a50a4e2f"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/final-server-evidence/public-reopened-verification.json",
+        "sha256": "510232f7e49ac69b27c4ea8c4b58128bedca8fa65bea25473f5d327710942ad5"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/final-server-evidence/independent-final-review.json",
+        "sha256": "d11e15f83ee1838f643ab809604eeedebf6518149ed3d8e3b2104c45e6f19746"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/final-server-evidence/independent-final-restart-review.json",
+        "sha256": "48e67f9dcdd93d64bbe5065fd549096579b1c878b944435c6a0325ba20468fee"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/boot2-browser-smoke-attempt2/report.json",
+        "sha256": "fb906bbc5a7ccaa484d569e4dda2763d945fdd927caa09efd7fa868df9b1e8d3"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/boot2-browser-smoke-attempt2/reviewed-functional-gate.json",
+        "sha256": "4b30664d3671822c3a3581aa857dbfbb1c1763b2d6d195a1304eca581dc19847"
+      },
+      {
+        "path": "output/ring-terrain-stage6/production-switch/boot2-browser-smoke-attempt2/background-cancellation-independent-review.json",
+        "sha256": "2bd605a765d3971c9f03f0a6aa8e63c8a82fd91a7b2d0ee3f4dce0dedd2c4bbb"
+      }
+    ],
+    "earlierAcceptedIntegrationUpstream": "548a02fbb1c6cd7dfb80f4b0d5257aea5d678314"
+  },
+  "canonicalAuthoring": {
+    "status": "passed",
+    "cwdContainsOnlyCommittedContent": true,
+    "databaseAccess": false,
+    "ignoredInputAccess": false,
+    "artifactByteIdentity": [
+      "manifest.json",
+      "authoring.json",
+      "private/terrain.f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b.json"
+    ],
+    "mapVersion": "fa9500cfbbd79183971fb47538b556ab1fd00868c61fdb1d6afc06eea72926ca",
+    "assetReleaseVersion": "9e55617e5bf8582b198682369ecafb603f9ed73877e06c5562c91590cb0b909d",
+    "seedVersion": "6062355fc8cba03dc87c61d27d43b25dc6bbd9ed88954d787541e8cd1458a6e9",
+    "resourcesVerified": 1027
+  },
+  "automatedChecks": {
+    "fullVitest": {
+      "passedSuites": 147,
+      "passedTests": 1007,
+      "failed": 0,
+      "skipped": 0,
+      "sqlScope": "isolated terrain_test database",
+      "durationSeconds": 324.95,
+      "log": {
+        "path": "output/ring-terrain-stage6/unit-tests-final.log",
+        "sha256": "6ff9aad7e7513f68bd1610f39f0909db9ac2bc646aba35daa64b42f0e7af8ef8",
+        "bytes": 406
+      }
+    },
+    "postCollectorTargetedTests": {
+      "passed": 22,
+      "log": {
+        "path": "output/ring-terrain-stage6/frame-history-tests.log",
+        "sha256": "0cccf63e7597d24187d9f3fb646b0486007ed174a59146f39310d346235ae743",
+        "bytes": 221
+      }
+    },
+    "typecheck": {
+      "path": "output/ring-terrain-stage6/typecheck-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "packageBoundaries": {
+      "path": "output/ring-terrain-stage6/package-boundaries-final.log",
+      "sha256": "957d44119c03205364a326b807771eb26ab06daf579f24cae65744e350ce243c",
+      "bytes": 23
+    },
+    "catalogSources": {
+      "path": "output/ring-terrain-stage6/catalog-sources-final.log",
+      "sha256": "588eecd1888181f63b7c1936a0adc15f518a0cc1ba128487bfcd6264c5f49f7d",
+      "bytes": 163
+    },
+    "historicalScope": "Initial stage6 runtime17; subsequent revisions and latest final-source validation are recorded separately.",
+    "latestFinalSourceValidation": {
+      "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+      "passedFiles": 162,
+      "passedTests": 1138,
+      "failedTests": 0,
+      "skippedTests": 0,
+      "allPackageChecksPassed": true,
+      "evidence": {
+        "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/run-summary.json",
+        "sha256": "a7f733407a4005f68b3932f73c210b09bb8eee13f5329e300c176739ff542d3f",
+        "bytes": 1918
+      }
+    }
+  },
+  "nativeHardwarePerformance": {
+    "status": "passed",
+    "scope": "single live network client on migrated full production copy",
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "quality": "standard",
+    "hour": 12,
+    "network": "direct loopback",
+    "browser": "158.0.8127.18",
+    "renderer": {
+      "vendor": "Google Inc. (Apple)",
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "measurement": "Native application frame intervals; lightweight pose polling; no full scene diagnostic polling during samples",
+    "criteria": {
+      "meanFpsMinimum": 59,
+      "frameP95MaximumMs": 20,
+      "peaksReportedSeparately": true
+    },
+    "warmupMs": 60000,
+    "realWorldItemCount": 4,
+    "joinMs": 3392,
+    "phases": [
+      {
+        "kind": "steady",
+        "frames": 3600,
+        "totalMs": 59997.19999998808,
+        "wallTimeMs": 60002.70000001788,
+        "meanFps": 59.997300121476655,
+        "frameP95Ms": 17.5,
+        "frameMaxMs": 27.200000017881393,
+        "framesOver33ms": 0,
+        "framesOver50ms": 0,
+        "samples": 240,
+        "playingSamples": 240,
+        "thresholdForFramesOver33ms": 33.34,
+        "coverageErrorMs": 5.500000029802322,
+        "sequenceGapCount": 0,
+        "hidden": false,
+        "independentlyRecomputed": true,
+        "performanceAccepted": true,
+        "raw": {
+          "path": "output/ring-terrain-stage6/live-profile-native/steady-samples.json",
+          "sha256": "56d9354a36ac77fb186756420b16df88fff9aece6c6c55027a47c6d49c95fa0f",
+          "bytes": 172916
+        }
+      },
+      {
+        "kind": "route",
+        "frames": 6322,
+        "totalMs": 106145.90000000596,
+        "wallTimeMs": 106148.69999998808,
+        "meanFps": 59.55795973008346,
+        "frameP95Ms": 17.5,
+        "frameMaxMs": 79.80000001192093,
+        "framesOver33ms": 26,
+        "framesOver50ms": 14,
+        "samples": 425,
+        "playingSamples": 425,
+        "thresholdForFramesOver33ms": 33.34,
+        "coverageErrorMs": 2.7999999821186066,
+        "sequenceGapCount": 0,
+        "hidden": false,
+        "independentlyRecomputed": true,
+        "performanceAccepted": true,
+        "raw": {
+          "path": "output/ring-terrain-stage6/live-profile-native/route-samples.json",
+          "sha256": "f58d82295dd59e89da02fd88f513f2920c86a6f56591cf819e4db7c7d99a0aeb",
+          "bytes": 335685
+        }
+      }
+    ],
+    "routeWaypoints": 7,
+    "firstPersonModeVerified": true,
+    "restartAfterLiveSimulation": {
+      "readiness": 200,
+      "items": 4
+    },
+    "report": {
+      "path": "output/ring-terrain-stage6/live-profile-native/report.json",
+      "sha256": "1985692f4bf3a19e6b325032a6586649dc6d65375755fcf83fe45623faae840c",
+      "bytes": 1025293
+    },
+    "measuredScript": {
+      "path": "output/ring-terrain-stage6/live-profile-native/measured-live-profile.ts",
+      "sha256": "0e4de4580cf450d87a2956f9598e5b75e6992a8253a9c77145ca8a1b9eda517a",
+      "bytes": 12942
+    },
+    "declaredHashes": {
+      "path": "output/ring-terrain-stage6/live-profile-native/evidence-hashes.json",
+      "sha256": "6d877bbab4b8931f3720de8868a4ea75ec8559be94ad94975356c1e3f7072bfa",
+      "bytes": 183
+    },
+    "declaredHashesIndependentlyVerified": true,
+    "currentCollectorCodeReviewed": {
+      "nativeUnclampedVisibleIntervals": true,
+      "captureBeforeGameplayGates": true,
+      "boundedSequenceRing": true,
+      "wallClockFps": true,
+      "visibilityAndCoverageAssertions": true
+    },
+    "runtimeProtocolVersion": 17,
+    "acceptanceAppliesTo": "Recorded integration based on548a02f; later bloom/atmosphere changes require a fresh profile."
+  },
+  "priorIntrusiveProfile": {
+    "status": "performance-budget-failed",
+    "accepted": false,
+    "reason": "Heavy full-scene diagnostic polling; RAF timestamps do not represent the native game-loop interval. Raw failed evidence retained.",
+    "phases": [
+      {
+        "kind": "steady",
+        "totalMs": 59997.800000005955,
+        "frames": 3601,
+        "meanFps": 60.01886735846385,
+        "frameP95Ms": 16.70000000001164,
+        "frameMaxMs": 16.800000000017462,
+        "framesOver33ms": 0,
+        "framesOver50ms": 0,
+        "performanceAccepted": true,
+        "playingSamples": 235,
+        "samples": 235
+      },
+      {
+        "kind": "route",
+        "totalMs": 258912.5,
+        "frames": 15002,
+        "meanFps": 57.94235504272679,
+        "frameP95Ms": 16.79999999998836,
+        "frameMaxMs": 100,
+        "framesOver33ms": 192,
+        "framesOver50ms": 44,
+        "performanceAccepted": false,
+        "playingSamples": 1013,
+        "samples": 1013
+      }
+    ],
+    "report": {
+      "path": "output/ring-terrain-stage6/live-profile/report.json",
+      "sha256": "7230a9b44295e2fb6d90f68f0dc05d5f4031d10c94237b30f4a3914e1fb643db",
+      "bytes": 1026223
+    }
+  },
+  "twoClientNetwork": {
+    "status": "passed",
+    "scope": "full-static-city functional acceptance; synthetic dynamics",
+    "fullStaticCityFunctionalAcceptance": true,
+    "performanceAcceptance": false,
+    "userDatabaseAssessed": false,
+    "dynamicInput": "two synthetic guest players; deliberately empty synthetic item state",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "quality": "standard",
+    "networkProfile": {
+      "rttMs": 100,
+      "jitterMs": 20,
+      "packetLossModelled": false
+    },
+    "clientCount": 2,
+    "clients": [
+      {
+        "client": 0,
+        "frames": 14496,
+        "correctionCount": 4276,
+        "correctionP95": 0.0007245118327364354,
+        "correctionMax": 0.013181436134931406,
+        "rttP50": 226.37125099950993,
+        "rttP95": 329.6028793305616,
+        "maxPending": 27,
+        "stalledFrames": 0,
+        "missingCorrections": 0,
+        "historyFrames": 14495,
+        "maxHistoryCells": 2,
+        "correctionUnit": "metres",
+        "pinViolationCount": 0,
+        "coldJoinAttempts": 1,
+        "clickToPlayingMs": 7420.132666999998,
+        "spawnPreparationMs": 5384.4000000059605
+      },
+      {
+        "client": 1,
+        "frames": 13418,
+        "correctionCount": 4285,
+        "correctionP95": 0.0007053064637465967,
+        "correctionMax": 0.01496065816131504,
+        "rttP50": 220.74197893433453,
+        "rttP95": 279.86417868332774,
+        "maxPending": 24,
+        "stalledFrames": 0,
+        "missingCorrections": 0,
+        "historyFrames": 13418,
+        "maxHistoryCells": 2,
+        "correctionUnit": "metres",
+        "pinViolationCount": 0,
+        "coldJoinAttempts": 1,
+        "clickToPlayingMs": 7690.623333000003,
+        "spawnPreparationMs": 5653.600000023842
+      }
+    ],
+    "routeObservations": 16,
+    "cameraLocations": 2,
+    "failureCount": 0,
+    "errorCount": 0,
+    "abortedFetchCount": 6,
+    "relayEpipeCount": 4,
+    "server": {
+      "players": 2,
+      "sessions": 2,
+      "bodies": 6572,
+      "maxQueue": 7,
+      "stepP95Ms": 1.46875,
+      "stepP99Ms": 2.14162499998929,
+      "cumulativeStepP95Ms": 1.6,
+      "cumulativeStepP99Ms": 2.2,
+      "maxStepMs": 14.720249999983935
+    },
+    "sourceUnchanged": true,
+    "syntheticDatabaseRemoved": true,
+    "report": {
+      "path": "output/ring-terrain-stage6/full-gameplay/2026-11-13T19-12-17-195Z/results.json",
+      "sha256": "da06866ecf17c52acdf0ac95ecfc74533b54d3b9fb2a70f8e9f1ea55895b5e8c",
+      "bytes": 73273
+    },
+    "runtimeProtocolVersion": 17
+  },
+  "resourceLifecycle": {
+    "status": "passed",
+    "cycles": 20,
+    "allReleasedCountsEqualEmpty": true,
+    "released": {
+      "meshes": 4,
+      "materials": 5,
+      "geometries": 4,
+      "nodes": 0,
+      "textures": 4,
+      "assets": 0,
+      "physics": {
+        "entities": 0,
+        "references": 0,
+        "buildings": {
+          "instances": 0,
+          "assets": 0,
+          "shapes": 0,
+          "references": 0
+        },
+        "bodies": 0,
+        "items": 0,
+        "remotePlayers": 0
+      }
+    },
+    "cacheBytes": 67106985,
+    "cacheEntries": 5326,
+    "pending": 0,
+    "integrityRetries": 0,
+    "pinFrames": 180,
+    "maximumPinDrift": 0,
+    "historyOutsidePlayerNeighborhood": true,
+    "report": {
+      "path": "output/ring-terrain-stage6/full-resource-lifecycle/2026-11-13T19-00-49-953Z/results.json",
+      "sha256": "a4a8a8ce67cb508303e86e57ababe57650fb3ffdeed3ff774b2ffc4c251fb13b",
+      "bytes": 2707241
+    }
+  },
+  "strictReleaseVerification": {
+    "status": "passed",
+    "physicalAcceptance": {
+      "status": "accepted-exact-map",
+      "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+      "catalogSha256": "194879a3a802ebbdfd1859febf1db90c2b85b9f8612a1860f5ae361364e5e2d7",
+      "scope": "Exact publication matches the terrain-bound entrance physics evidence; network, migration and performance acceptance remain separate."
+    },
+    "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+    "assetReleaseVersion": "9e55617e5bf8582b198682369ecafb603f9ed73877e06c5562c91590cb0b909d",
+    "privateTerrainSha256": "f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b",
+    "publications": [
+      {
+        "directory": "export-world",
+        "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+        "files": 8963,
+        "totalBytes": 207379823,
+        "candidateByteIdentity": true,
+        "contentHashesValid": true
+      },
+      {
+        "directory": "authoring-world",
+        "mapVersion": "fa9500cfbbd79183971fb47538b556ab1fd00868c61fdb1d6afc06eea72926ca",
+        "files": 1027,
+        "totalBytes": 85591051,
+        "candidateByteIdentity": true,
+        "contentHashesValid": true
+      }
+    ],
+    "exactByteFiles": [
+      {
+        "file": "export-world/manifest.json",
+        "sha256": "d63940c846a57559dd15f5c6e2e1b288661e6f62ed9cd8f69c98a77db1610087",
+        "bytes": 4284227
+      },
+      {
+        "file": "authoring-world/manifest.json",
+        "sha256": "bd27ea2eec78e16fdb6730ca51adf95684fa23bcb06e8395c72b474ead880d13",
+        "bytes": 473899
+      },
+      {
+        "file": "authoring-world/authoring.json",
+        "sha256": "9b9bd99df8c8412282979b7ef9f5c4fbc6d42f556f6546c983ee5bc3f3acca68",
+        "bytes": 1153
+      },
+      {
+        "file": "target-static-snapshot.json",
+        "sha256": "840d4d18d7ad811d2c80b68351e66d785edb627b9747607f6a4fa63a8b6a5a90",
+        "bytes": 1839964
+      },
+      {
+        "file": "terrain-pose-rules.json",
+        "sha256": "a6217a22d127174bcad653d9e5b78610c5a6196b2d5f0e9f20cb09009d4e31da",
+        "bytes": 36845
+      },
+      {
+        "file": "authoring-world/private/terrain.f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b.json",
+        "sha256": "f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b",
+        "bytes": 570659
+      }
+    ],
+    "independentlyRecheckedExactByteFiles": 6,
+    "immutableInputPinCount": 16,
+    "independentlyRecheckedImmutableInputPins": 16,
+    "databaseAccess": false,
+    "historicalInputsChanged": false,
+    "report": {
+      "path": "output/stage6/strict-verified/strict-verification.json",
+      "sha256": "480e73cb80775eeb16bf014332d28ed2c6c7397f136452281cac75c29fdfe76d",
+      "bytes": 5475
+    },
+    "buildReport": {
+      "path": "output/stage6/strict-verified/build-report.json",
+      "sha256": "64c02d7d828fa566050c3c806da0e7f57eb5e84a43ca4dcf17db003a2e7137cb",
+      "bytes": 2484
+    },
+    "physicalAcceptanceStamp": {
+      "path": "output/stage6/strict-verified/physical-acceptance-stamp.json",
+      "sha256": "000398a4f2f6582d21ea9a3fb9cbd73a16b748ee0aa21c5293fe8425be222cf7",
+      "bytes": 356
+    },
+    "runtimeProtocolVersion": 17
+  },
+  "migrationAndRollbackEvidence": {
+    "scope": "Local rehearsal on the authorized full production copy; production has not been changed.",
+    "rehearsalReport": {
+      "path": "output/ring-terrain-stage6/rehearsal/report.json",
+      "sha256": "0b10f1d56d8eda19d6d886d72ea2f610ff7b5b88958528b68a7922cf74d2334d",
+      "bytes": 3511
+    },
+    "rollbackReport": {
+      "path": "output/ring-terrain-stage6/rollback-check.json",
+      "sha256": "0cfdabfc48432449c30cb50005d9a1728156fb612d012197d2eabf90d4980dc7",
+      "bytes": 2420
+    }
+  },
+  "previousObservedRelease": {
+    "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+    "assetReleaseVersion": "9e55617e5bf8582b198682369ecafb603f9ed73877e06c5562c91590cb0b909d",
+    "simulationConfigHash": "01bce0ee709c51539a40c442573d96aa98dbac31dfb9041649f806bb1db58abd",
+    "protocolVersion": 17,
+    "layoutRevision": 8929,
+    "layoutHash": "fc665c669f59de37dc2ee903708ad4ae7e73e9f48a1adb6333d88d02530b1256"
+  },
+  "newIntegration": {
+    "upstream": "3949e16",
+    "protocolVersion": 18,
+    "status": "code-integrated; focused-animation-test-and-physical-and-hardware-acceptance-pending",
+    "featuresPreserved": [
+      "gamepad",
+      "bloom and atmosphere",
+      "adaptive activity cooldown",
+      "room weather",
+      "terrain placement and support policies"
+    ],
+    "sourceRevision": 5224,
+    "sourceSnapshotSha256": "bd9e13946dde3705f8a95a6dbe324caef6681e1b1904cae64d5746214ec1a302",
+    "sourceOwners": 3712,
+    "enabledOwners": 3706,
+    "existingTargetRowsPreserved": 3711,
+    "newRows": 1,
+    "newRowsDisabled": true,
+    "typecheck": {
+      "status": "passed",
+      "log": {
+        "path": "output/ring-terrain-stage6/upstream-3949/typecheck.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    },
+    "packageBoundaries": {
+      "status": "passed",
+      "log": {
+        "path": "output/ring-terrain-stage6/upstream-3949/package-boundaries.log",
+        "sha256": "957d44119c03205364a326b807771eb26ab06daf579f24cae65744e350ce243c",
+        "bytes": 23
+      }
+    },
+    "catalogSources": {
+      "status": "passed",
+      "log": {
+        "path": "output/ring-terrain-stage6/upstream-3949/catalog-sources.log",
+        "sha256": "588eecd1888181f63b7c1936a0adc15f518a0cc1ba128487bfcd6264c5f49f7d",
+        "bytes": 163
+      }
+    },
+    "fullVitest": {
+      "status": "one-failure-pending-focused-test-fix",
+      "suites": 154,
+      "passedSuites": 153,
+      "tests": 1049,
+      "passedTests": 1048,
+      "failedTests": 1,
+      "skippedTests": 0,
+      "durationSeconds": 301.79,
+      "failureFile": "tests/integration/animations.test.ts",
+      "failureLine": 304,
+      "failureReason": "Existing test retries animation after support loss before the new persistent one-second cooldown expires.",
+      "sqlScope": "isolated terrain_test database",
+      "log": {
+        "path": "output/ring-terrain-stage6/upstream-3949/unit-tests.log",
+        "sha256": "17543d55d1a021c9d56de54564d4bf1afa47ddf7b1bd695d44ca58a79ed0812c",
+        "bytes": 1683
+      }
+    },
+    "canonicalBuild": {
+      "status": "passed",
+      "scope": "Default canonical build after integrating upstream 3949e16 and protocol18",
+      "databaseAccess": false,
+      "mapVersion": "fa9500cfbbd79183971fb47538b556ab1fd00868c61fdb1d6afc06eea72926ca",
+      "assetReleaseVersion": "9e55617e5bf8582b198682369ecafb603f9ed73877e06c5562c91590cb0b909d",
+      "seedVersion": "6062355fc8cba03dc87c61d27d43b25dc6bbd9ed88954d787541e8cd1458a6e9",
+      "privateTerrainSha256": "f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b",
+      "referenceDirectory": "output/ring-terrain-stage6/default-build",
+      "keyArtifactByteIdentity": [
+        "manifest.json",
+        "authoring.json",
+        "private/terrain.f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b.json"
+      ],
+      "resourcesVerified": 1027,
+      "allResourceBytesIdentical": true
+    },
+    "canonicalBuildEvidence": {
+      "path": "output/ring-terrain-stage6/upstream-3949/default-build-verification.json",
+      "sha256": "95ee582f09bb50e2fdf49284d5c3eb228f238ab08875be86aaa438f65834bea8",
+      "bytes": 801
+    },
+    "candidate": {
+      "status": "passed",
+      "sourceSnapshotSha256": "bd9e13946dde3705f8a95a6dbe324caef6681e1b1904cae64d5746214ec1a302",
+      "sourceRevision": 5224,
+      "sourceOwners": 3712,
+      "enabledOwners": 3706,
+      "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+      "assetReleaseVersion": "9e55617e5bf8582b198682369ecafb603f9ed73877e06c5562c91590cb0b909d",
+      "publications": [
+        {
+          "directory": "export-world",
+          "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+          "resources": 8963,
+          "manifestByteIdentity": true,
+          "allResourceByteIdentity": true,
+          "allContentHashesValid": true
+        },
+        {
+          "directory": "authoring-world",
+          "mapVersion": "fa9500cfbbd79183971fb47538b556ab1fd00868c61fdb1d6afc06eea72926ca",
+          "resources": 1027,
+          "manifestByteIdentity": true,
+          "allResourceByteIdentity": true,
+          "allContentHashesValid": true
+        }
+      ],
+      "privateTerrainBytesUnchanged": true,
+      "physicalAcceptance": "pending-fresh-protocol18-entrance-evidence",
+      "productionSwitched": false,
+      "preservedTargetRows": 3711,
+      "newTargetRows": 1,
+      "newRowsDisabled": true,
+      "existingTargetRowsByteEquivalent": true
+    },
+    "candidateEvidence": {
+      "path": "output/ring-terrain-stage6/upstream-3949/candidate-verification.json",
+      "sha256": "519e5a9ca5651440074758f1caf08711ac00e1f06b6239916fd1646863b78840",
+      "bytes": 1207
+    },
+    "physicalAcceptance": "pending-fresh-protocol18-entrance-evidence",
+    "hardwarePerformance": "pending-fresh-protocol18-native-profile",
+    "historicalIntermediateStage": true,
+    "supersededBy": "newestIntegration and production.finalAcceptance; pending flags below describe the earlier protocol18 candidate"
+  },
+  "newestIntegration": {
+    "upstream": "65ec214",
+    "status": "accepted-and-deployed; public-reopening-verified",
+    "protocolVersion": 19,
+    "databaseSchemaVersion": 7,
+    "publicTableCount": 14,
+    "newTable": "player_positions",
+    "previousEvidenceIsFinalAcceptance": false,
+    "productionTouchedByTerrainWork": true,
+    "playerPositionPolicy": {
+      "decision": "atomic-support-proven-capsule-y-migration",
+      "implementedAndVerified": true,
+      "coordinateMeaning": "physical capsule centre",
+      "preserved": [
+        "account_id",
+        "world_id",
+        "x",
+        "z",
+        "write_epoch",
+        "write_sequence",
+        "updated_at"
+      ],
+      "changed": [
+        "y"
+      ],
+      "requires": [
+        "matching source/target capsule geometry",
+        "unique stable support in both physical worlds",
+        "no new penetration including migrated dynamic items",
+        "exact source state hash",
+        "atomic target-state and protected-state verification"
+      ],
+      "rejects": [
+        "airborne saved pose",
+        "dynamic support",
+        "ambiguous support",
+        "invalid capsule or changed geometry"
+      ],
+      "fallbackToDefaultSpawn": false,
+      "savedPositionsAreSimultaneousBodies": false,
+      "independentReview": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/player-migration-independent-review.json",
+        "sha256": "574edbf2474703092961bacfaae3f597145351f890c2a038b5fd133d7fcf5e46",
+        "bytes": 3124
+      },
+      "testScope": "Nonempty saved-position fixtures are covered by passing SQL/physics tests in full suite. Fresh production copy has zero saved positions after schema6→7."
+    },
+    "backupScope": "Fresh production schema6 database (13 tables), followed by a separately verified additive6→7 migration before terrain planning and rehearsal.",
+    "rollbackRuntime": "Exact retained running3949 artifacts (279files identical in production-runtime-65ec archive), paired with the fresh schema6 backup; do not rebuild source65ec for schema6 rollback.",
+    "schemaVersionMeaning": "Schema7 additive migration, protected data and final runtime acceptance verified in the closed production window; public reopening on protocol19 confirmed by finalEvidence.",
+    "initialPlayerPositionRowsAfterSchemaMigration": 0,
+    "automatedChecks": {
+      "fullVitest": {
+        "status": "passed",
+        "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+        "files": 162,
+        "passedFiles": 162,
+        "vitestNestedSuites": 336,
+        "tests": 1138,
+        "passedTests": 1138,
+        "failedTests": 0,
+        "skippedTests": 0,
+        "durationSeconds": 309.552,
+        "sqlScope": "isolated terrain_test database on localhost; no production access",
+        "sourceFiles": 511,
+        "sourceUnchanged": true,
+        "sourceSnapshotSha256": "cdc45b929bb7e7218df34f7c73699eab4215f95af422941b18ab189a130bd4a3",
+        "log": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/vitest-full-sql.log",
+          "sha256": "76da3269e73bccd8b71f72105ea69f6d11b90bc4816baa30cd29aacb9909ec1b",
+          "bytes": 202340
+        },
+        "jsonResults": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/vitest-results.json",
+          "sha256": "636f4428e25f45eef7f50775eac12db1aeba80cb9703a9573b419ada94e16129",
+          "bytes": 454438
+        },
+        "runSummary": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/run-summary.json",
+          "sha256": "a7f733407a4005f68b3932f73c210b09bb8eee13f5329e300c176739ff542d3f",
+          "bytes": 1918
+        },
+        "sourceBefore": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/source-before.json",
+          "sha256": "cdc45b929bb7e7218df34f7c73699eab4215f95af422941b18ab189a130bd4a3",
+          "bytes": 57060
+        },
+        "sourceAfter": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/source-after.json",
+          "sha256": "cdc45b929bb7e7218df34f7c73699eab4215f95af422941b18ab189a130bd4a3",
+          "bytes": 57060
+        }
+      },
+      "typecheck": {
+        "status": "passed",
+        "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+        "log": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/typescript.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "packageBoundaries": {
+        "status": "passed",
+        "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+        "log": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/boundaries.log",
+          "sha256": "957d44119c03205364a326b807771eb26ab06daf579f24cae65744e350ce243c",
+          "bytes": 23
+        }
+      },
+      "catalogSources": {
+        "status": "passed",
+        "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+        "log": {
+          "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/catalog-sources.log",
+          "sha256": "588eecd1888181f63b7c1936a0adc15f518a0cc1ba128487bfcd6264c5f49f7d",
+          "bytes": 163
+        }
+      },
+      "appBuild": {
+        "status": "passed",
+        "scope": "Final protocol19 after legacy API split",
+        "evidence": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/attempt2/app-build-verification.json",
+          "sha256": "fa76f66c882cd914331baec0d5f539f960cdbd7ca3a7a1d19a41845400ace130",
+          "bytes": 434
+        }
+      },
+      "typecheckAfterSpawnSplit": {
+        "status": "passed",
+        "log": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/typecheck-after-spawn-split.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "initialAppBuild": {
+        "status": "passed",
+        "log": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/app-build.log",
+          "sha256": "8a6be5db017a9a7be513c87596494df348d6baed275453a58dda02f6f8e98ff9",
+          "bytes": 22524
+        },
+        "scope": "Initial protocol19; a fresh attempt2 build is required after the legacy API split"
+      },
+      "deterministicTransform": {
+        "status": "passed",
+        "testFiles": 3,
+        "tests": 54,
+        "testLog": {
+          "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-tests.log",
+          "sha256": "1c71fcbce1a1294560be0d90ca33c4d33c808667eb43ac7ec8bdafbe0216446d",
+          "bytes": 208
+        },
+        "typecheckLog": {
+          "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-typecheck.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "preSavedContactFullVitest": {
+        "status": "historical-run-one-failure-resolved-by-focused-runtime-fix",
+        "suites": 161,
+        "passedSuites": 160,
+        "tests": 1130,
+        "passedTests": 1129,
+        "failedTests": 1,
+        "skippedTests": 0,
+        "durationSeconds": 358.29,
+        "failureFile": "packages/simulation/src/player-spawn.test.ts",
+        "failureLine": 119,
+        "failureReason": "New upstream regression expected legacy addPlayer to support deliberate floorless probes; integrated terrain findSpawn required support for all callers.",
+        "sqlScope": "isolated terrain_test database",
+        "log": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/unit-tests.log",
+          "sha256": "3d90076fda93fb96f2230cbf5f61141acb632ee750c239a4b08734201f9de92b",
+          "bytes": 1604
+        },
+        "resolution": {
+          "status": "passed",
+          "runtimeChange": "Explicit support requirement defaults true; only legacy addPlayer/respawnPlayer opt out. Production saved/default APIs remain strict.",
+          "fullSuiteRepeated": false,
+          "focusedTestFiles": 9,
+          "focusedTests": 111,
+          "evidence": {
+            "path": "output/ring-terrain-stage6/upstream-65ec/focused-spawn-fix-verification.json",
+            "sha256": "1a991254e924f7a536d36977d5b5eda45489a5c54866668047b5bc43b050bc73",
+            "bytes": 1236
+          }
+        }
+      },
+      "preSavedContactTypecheck": {
+        "status": "passed",
+        "log": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/typecheck.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "preSavedContactPackageBoundaries": {
+        "status": "passed",
+        "log": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/boundaries.log",
+          "sha256": "957d44119c03205364a326b807771eb26ab06daf579f24cae65744e350ce243c",
+          "bytes": 23
+        }
+      },
+      "preSavedContactCatalogSources": {
+        "status": "passed",
+        "log": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/catalog.log",
+          "sha256": "588eecd1888181f63b7c1936a0adc15f518a0cc1ba128487bfcd6264c5f49f7d",
+          "bytes": 163
+        }
+      }
+    },
+    "canonicalBuild": {
+      "status": "passed",
+      "scope": "Ordinary canonical authoring build after algebraic transform fix",
+      "resourcesVerified": 1027,
+      "allResourceBytesIdentical": true,
+      "mapVersion": "fa9500cfbbd79183971fb47538b556ab1fd00868c61fdb1d6afc06eea72926ca",
+      "assetReleaseVersion": "9e55617e5bf8582b198682369ecafb603f9ed73877e06c5562c91590cb0b909d",
+      "verification": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-authoring/verification.json",
+        "sha256": "526f1c163d2f8566deb3e924f7920e38caf2ef8f587c4c695b581dea52ee0a6f",
+        "bytes": 318
+      }
+    },
+    "freshCopyRehearsal": {
+      "status": "passed",
+      "schemaUpgrade": {
+        "from": 6,
+        "to": 7,
+        "existingRowsPreserved": true,
+        "savedPlayerPositions": 0
+      },
+      "schemaUpgradeEvidence": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/rehearsal-initial/report.json",
+        "sha256": "f9c7edd0ea6dc59ebb1537eaaeec78bfb42d924ed2bcb5c1516d74e9a06612f3",
+        "bytes": 1269
+      },
+      "schemaUpgradeEvidenceNote": "This initial run separately proved schema preservation, then correctly rejected an unreviewed item pose. The accepted run uses the reviewed exact-pose rule.",
+      "tablesVerified": 14,
+      "worldItems": 1,
+      "inventoryItems": 9,
+      "savedPlayerPositions": {
+        "before": 0,
+        "after": 0,
+        "identityAndXZPreserved": true
+      },
+      "planReadOnly": true,
+      "planHash": "f57116059d540eea9be5c2ee9ae3114b5b20ae3bf1cd8eaf45b23fff324b085c",
+      "applyCurrentStateMatches": true,
+      "replayStatus": "already-applied",
+      "replayCurrentStateMatches": true,
+      "replayReadOnly": true,
+      "identitiesPropertiesAndInventoryPreserved": true,
+      "boots": [
+        {
+          "cycle": 0,
+          "readiness": 200,
+          "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+          "layoutRevision": 8931,
+          "items": 1,
+          "placementCatalogVersion": "d53853afe0227c425eb271f2d74c873170e75000568e461403a73bf8d50f9be8"
+        },
+        {
+          "cycle": 1,
+          "readiness": 200,
+          "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+          "layoutRevision": 8931,
+          "items": 1,
+          "placementCatalogVersion": "d53853afe0227c425eb271f2d74c873170e75000568e461403a73bf8d50f9be8"
+        }
+      ],
+      "targetRevision": 8931,
+      "report": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/rehearsal/report.json",
+        "sha256": "63e5415f51c8c24e0d7d5ad6b209bdaef92632ec46fbb34ecc9dca90b925946f",
+        "bytes": 3353
+      }
+    },
+    "freshItemPoseDecision": {
+      "status": "independently-reviewed",
+      "count": 1,
+      "currentPoseLiftMetres": 0.001,
+      "exactPoseAndSupportPinned": true,
+      "safePoseAdditionalLiftMetres": 0,
+      "review": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/item-rule-independent-review.json",
+        "sha256": "de2ed971763b465e708b19fcff6f3dd71f9a9d4ba3a4a7e3b605bdd371228d4d",
+        "bytes": 669
+      }
+    },
+    "physicalAcceptance": {
+      "status": "passed",
+      "scope": "Fresh 292 entrance probes after final saved-item validation fix, independently checked against exact current sources and publication",
+      "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+      "mapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+      "runs": 292,
+      "failures": 0,
+      "rules": 48,
+      "runtimePins": 44,
+      "sourcePins": 453,
+      "catalogSha256": "eb93a7437ef847ff4727a3080ef9c2a25574205252db77348755ddb2e4440c99",
+      "publicationManifestSha256": "2a981f16822091d85281fda872575cec166b1074be29e2f336a7c5db061edc46",
+      "terrainGenerator": {
+        "file": "packages/terrain-build/src/supports.ts",
+        "sha256": "661f643b2718f0ffb6b71507b5bd799e4e10bab6eee4996d281b321d5c7ee374"
+      },
+      "stamp": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-entrance-acceptance-attempt2/physical-acceptance-stamp.json",
+        "sha256": "86b19ee03715a049b3d458a7d2c2229aac567070f38f3cfdcaeb927a3824e7bf",
+        "bytes": 1153
+      },
+      "independentVerification": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-entrance-acceptance-attempt2/independent-verification.json",
+        "sha256": "c0c59f5c8a555587efd46a5782710e6765fc885e6dc453d6a960c43174df2cfa",
+        "bytes": 501
+      }
+    },
+    "hardwarePerformance": {
+      "status": "passed",
+      "scope": "single live network client on migrated full production copy",
+      "protocolVersion": 19,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "quality": "standard",
+      "hour": 12,
+      "network": "direct loopback",
+      "browser": "158.0.8127.18",
+      "renderer": {
+        "vendor": "Google Inc. (Apple)",
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+        "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+      },
+      "measurement": "Native application frame intervals; lightweight pose polling; no full scene diagnostic polling during samples",
+      "criteria": {
+        "meanFpsMinimum": 59,
+        "frameP95MaximumMs": 20,
+        "peaksReportedSeparately": true
+      },
+      "warmupMs": 60000,
+      "worldItems": 1,
+      "inventoryItemsInRehearsalCopy": 9,
+      "inventoryCountSource": "freshCopyRehearsal",
+      "layoutRevision": 8931,
+      "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+      "phases": [
+        {
+          "kind": "steady",
+          "totalMs": 59997.70000001788,
+          "wallTimeMs": 60005.40000000596,
+          "frames": 3600,
+          "meanFps": 59.99460048595031,
+          "frameP95Ms": 17.5,
+          "frameMaxMs": 22.200000017881393,
+          "framesOver33ms": 0,
+          "framesOver50ms": 0,
+          "playingSamples": 241,
+          "samples": 241,
+          "counterGaps": 0,
+          "hidden": false,
+          "coverageErrorMs": 7.699999988079071,
+          "performanceAccepted": true
+        },
+        {
+          "kind": "route",
+          "totalMs": 165510.09999999404,
+          "wallTimeMs": 165505.39999997616,
+          "frames": 9884,
+          "meanFps": 59.72010580924504,
+          "frameP95Ms": 17.5,
+          "frameMaxMs": 76.2000000178814,
+          "framesOver33ms": 26,
+          "framesOver50ms": 13,
+          "playingSamples": 663,
+          "samples": 663,
+          "counterGaps": 0,
+          "hidden": false,
+          "coverageErrorMs": 4.700000017881393,
+          "performanceAccepted": true
+        }
+      ],
+      "routeStops": 7,
+      "maximumAuthoritativeStopErrorMetres": 0.3320006700942252,
+      "firstPersonVerified": true,
+      "restartAfterLiveSimulation": {
+        "readiness": 200,
+        "items": 1
+      },
+      "report": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/report.json",
+        "sha256": "848cd8e5a51a7c6462deb2dbdc194cf574b15b0ffa667d4c1dae9eb4f4db4a65",
+        "bytes": 1023878
+      },
+      "script": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/measured-live-profile.ts",
+        "sha256": "2e1f35d2c12696d89b626f4a73be4e507cdc38547c3550e219bcea856b13e058",
+        "bytes": 13298
+      },
+      "sourceArtifacts": [
+        {
+          "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/report.json",
+          "sha256": "848cd8e5a51a7c6462deb2dbdc194cf574b15b0ffa667d4c1dae9eb4f4db4a65",
+          "bytes": 1023878
+        },
+        {
+          "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/measured-live-profile.ts",
+          "sha256": "2e1f35d2c12696d89b626f4a73be4e507cdc38547c3550e219bcea856b13e058",
+          "bytes": 13298
+        },
+        {
+          "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/steady-samples.json",
+          "sha256": "f7a8d31b59a20163d6c8880589ecc0c2ed3f15eb47e17a1c8b604140ac56c302",
+          "bytes": 173288
+        },
+        {
+          "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/route-samples.json",
+          "sha256": "f0a0f152d7a8b315b8dcc4bcfb8162d0292dec061b8343fcdb0bf2bed1d3b21f",
+          "bytes": 523584
+        },
+        {
+          "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/evidence-hashes.json",
+          "sha256": "c05da760337bee7cc20b95e520995ad33a4d25e33bb59d9355713f7caafb76fc",
+          "bytes": 639
+        }
+      ],
+      "independentVerification": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/live-profile-native/independent-verification.json",
+        "sha256": "70fad17a289900a0b37b780ddd28334bd08012a13a1278db22717711621b1762",
+        "bytes": 2618
+      },
+      "measurementProvenance": {
+        "measuredMapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+        "measuredBeforeDeterministicTransformFix": true,
+        "rerunOnFixedMap": false,
+        "fixedMapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+        "equivalenceEvidence": {
+          "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-mac/geometry-delta.json",
+          "sha256": "8e6fe6b3523e63b840421ba54f5b8d6fd5a8a5f9519f688fd19a3e5eca8fd67a",
+          "bytes": 919
+        },
+        "interpretation": "Actual recorded measurements remain for e145. Fixed fb497 retains identical GLB binary payloads, float32 collision geometry and topology; fresh physical acceptance is recorded separately. No new GPU/network/resource measurements are claimed."
+      }
+    },
+    "networkAcceptance": {
+      "status": "original-criteria-passed; single-diagnostic-repeat-reviewed; original-peak-cause-unknown",
+      "protocolVersion": 19,
+      "scope": "full-static-city functional acceptance; synthetic dynamics",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "quality": "standard",
+      "networkProfile": {
+        "rttMs": 100,
+        "jitterMs": 20
+      },
+      "packetLossModelled": false,
+      "p95CriterionMetres": 0.2,
+      "p95CriterionPassed": true,
+      "samplesExcluded": 0,
+      "thresholdChanged": false,
+      "correctionP95Metres": [
+        0.0006836822964006208,
+        0.000752179950648616
+      ],
+      "correctionMaximumMetres": [
+        0.5637562642079527,
+        0.033104011366487045
+      ],
+      "client0CorrectionsOverPoint2Metres": [
+        {
+          "index": 1976,
+          "metres": 0.4703193866464514
+        },
+        {
+          "index": 1977,
+          "metres": 0.5637562642079527
+        },
+        {
+          "index": 1978,
+          "metres": 0.4667647516397122
+        }
+      ],
+      "maxPendingInputs": [
+        30,
+        30
+      ],
+      "missingCorrections": [
+        0,
+        0
+      ],
+      "pinViolations": [
+        0,
+        0
+      ],
+      "reportedStalledFramesAreNotAbsenceOfPredictionPauses": true,
+      "rawSamplesWithStalledTrue": [
+        1,
+        5
+      ],
+      "rawWaitingSamples": [
+        1,
+        4
+      ],
+      "serverResyncs": 3,
+      "transientWindows": [
+        [
+          {
+            "sampleIndices": [
+              1954
+            ],
+            "elapsedFromFirstSampleSeconds": 219.54379999998213,
+            "maximumEnclosingDurationMs": 210.0,
+            "states": [
+              "waiting"
+            ],
+            "pending": [
+              28
+            ],
+            "predictedAbsent": true,
+            "recoveredToPlaying": true
+          }
+        ],
+        [
+          {
+            "sampleIndices": [
+              911,
+              912
+            ],
+            "elapsedFromFirstSampleSeconds": 102.44830000001193,
+            "maximumEnclosingDurationMs": 327.90000000596046,
+            "states": [
+              "waiting",
+              "waiting"
+            ],
+            "pending": [
+              24,
+              23
+            ],
+            "predictedAbsent": true,
+            "recoveredToPlaying": true
+          },
+          {
+            "sampleIndices": [
+              1961,
+              1962,
+              1963
+            ],
+            "elapsedFromFirstSampleSeconds": 220.18180000001192,
+            "maximumEnclosingDurationMs": 441.60000002384186,
+            "states": [
+              "playing",
+              "waiting",
+              "waiting"
+            ],
+            "pending": [
+              30,
+              21,
+              22
+            ],
+            "predictedAbsent": true,
+            "recoveredToPlaying": true
+          }
+        ]
+      ],
+      "collectorLimitation": "Corrections have no event timestamps or sequence-to-sample mapping. stalledFrames counts only frames with playing state and both predicted and authoritative poses; it omits prediction-paused frames.",
+      "peakTimingAssessment": "Three consecutive corrections at client0 indices1976–1978; rough20Hz inference suggests first sprint return, but exact phase/pose/cause cannot be proved from existing artifact.",
+      "sourceUnchanged": true,
+      "result": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/network-gameplay/2026-11-13T20-11-36-597Z/results.json",
+        "sha256": "2e41e77d8d2926b72f4acf096729f1e9814b38424b8b8c8fece31387feda55fb",
+        "bytes": 74450
+      },
+      "independentReview": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/network-gameplay/2026-11-13T20-11-36-597Z/independent-review.json",
+        "sha256": "5079175da0a939662ab0a6056764b5a29cf355323d8d8023ad9f899f75e1abb5",
+        "bytes": 4768
+      },
+      "runtimeBlockerFound": false,
+      "originalPeakCause": "unknown; not reproduced in the one diagnostic repeat",
+      "diagnosticRepeats": 1,
+      "furtherRepeats": 0,
+      "stage0Verdict": "No runtime contract violation found in reviewed evidence; original peak and pause limitations remain material observations.",
+      "stage0Review": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/network-peak-review.json",
+        "sha256": "5249d7f426d989b13200b60ca7a49ac24b6d87490aed2f5db3a7134554c5d2a2",
+        "bytes": 18209
+      },
+      "diagnosticRepeat": {
+        "status": "criteria-passed-with-stated-limitations",
+        "protocolVersion": 19,
+        "criteriaChanged": false,
+        "runtimeChanged": false,
+        "samplesExcluded": 0,
+        "correctionP95Metres": [
+          0.0011615410150932401,
+          0.0006998156428565063
+        ],
+        "correctionMaximumMetres": [
+          0.02077760568210565,
+          0.011905027036779318
+        ],
+        "correctionCounts": [
+          4847,
+          4846
+        ],
+        "timestampedCorrectionCounts": [
+          4846,
+          4844
+        ],
+        "untimestampedPhaseCloseFlushValues": [
+          [
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "requiredAndHistoryCellsRetained": true,
+        "authoritativeRevisions": [
+          0
+        ],
+        "serverResyncs": 1,
+        "latePauseLimitation": "One prediction-guard/resync began after movement at a stationary endpoint with retained required/history physics cells; trace ends before recovery. Exact guard subcondition was not recorded.",
+        "resumeObserved": false,
+        "maxPendingInputs": [
+          26,
+          22
+        ],
+        "observedRttP95Ms": [
+          300.4023765710608,
+          206.11109832873106
+        ],
+        "result": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/network-diagnostic/2026-11-13T20-23-19-957Z/results.json",
+          "sha256": "b7a604c2edcb8a8e0d1126bf7165be97a833647692fb520b15ca476880988479",
+          "bytes": 74207
+        },
+        "independentVerification": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/network-diagnostic/2026-11-13T20-23-19-957Z/independent-verification.json",
+          "sha256": "ccea78695be6681653946505e2cca3941a30230cec71b039b65dbc32e0371088",
+          "bytes": 3431
+        },
+        "instrumentation": {
+          "path": "output/ring-terrain-stage6/upstream-65ec/network-diagnostic/instrumentation.json",
+          "sha256": "e6ec9a803815f3f92403367916116c9909d85db8c2b786edaba1ee42741e30fa",
+          "bytes": 513
+        }
+      },
+      "measurementProvenance": {
+        "measuredMapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+        "measuredBeforeDeterministicTransformFix": true,
+        "rerunOnFixedMap": false,
+        "fixedMapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+        "equivalenceEvidence": {
+          "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-mac/geometry-delta.json",
+          "sha256": "8e6fe6b3523e63b840421ba54f5b8d6fd5a8a5f9519f688fd19a3e5eca8fd67a",
+          "bytes": 919
+        },
+        "interpretation": "Actual recorded measurements remain for e145. Fixed fb497 retains identical GLB binary payloads, float32 collision geometry and topology; fresh physical acceptance is recorded separately. No new GPU/network/resource measurements are claimed."
+      }
+    },
+    "resourceLifecycle": {
+      "status": "passed",
+      "protocolVersion": 19,
+      "cycles": 20,
+      "allReleasedExactlyMatchEmpty": true,
+      "empty": {
+        "meshes": 4,
+        "materials": 5,
+        "geometries": 4,
+        "nodes": 0,
+        "textures": 4,
+        "assets": 0,
+        "physics": {
+          "entities": 0,
+          "references": 0,
+          "buildings": {
+            "instances": 0,
+            "assets": 0,
+            "shapes": 0,
+            "references": 0
+          },
+          "bodies": 0,
+          "items": 0,
+          "remotePlayers": 0
+        }
+      },
+      "cacheBytes": 67105613,
+      "cacheEntries": 5330,
+      "pending": 0,
+      "httpActive": 0,
+      "integrityRetries": 0,
+      "pinFrames": 180,
+      "maximumDrift": 0,
+      "historyCellOutsidePlayerNeighborhoodRetained": true,
+      "clock": "Only the CellStreamer release clock advances by 5001ms; physics advances normally",
+      "sourceUnchanged": true,
+      "report": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/resource-lifecycle/2026-11-13T20-16-48-291Z/results.json",
+        "sha256": "29688caa1a4e1ad94355b7563f121f9a46da8f3faf2a59432f021e20936c47bf",
+        "bytes": 2710042
+      },
+      "independentVerification": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/resource-lifecycle/2026-11-13T20-16-48-291Z/independent-verification.json",
+        "sha256": "5758c0a5878eae9552b51b7287fb80facabd256da8f1f127f1ee2645975ad68e",
+        "bytes": 1122
+      },
+      "measurementProvenance": {
+        "measuredMapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+        "measuredBeforeDeterministicTransformFix": true,
+        "rerunOnFixedMap": false,
+        "fixedMapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+        "equivalenceEvidence": {
+          "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-mac/geometry-delta.json",
+          "sha256": "8e6fe6b3523e63b840421ba54f5b8d6fd5a8a5f9519f688fd19a3e5eca8fd67a",
+          "bytes": 919
+        },
+        "interpretation": "Actual recorded measurements remain for e145. Fixed fb497 retains identical GLB binary payloads, float32 collision geometry and topology; fresh physical acceptance is recorded separately. No new GPU/network/resource measurements are claimed."
+      }
+    },
+    "initialPhysicalAcceptance": {
+      "status": "initial19-passed-but-superseded-by-runtime-pin-change",
+      "runs": 292,
+      "failures": 0,
+      "runtimePins": 44,
+      "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+      "catalogSha256": "c8aab580265469df10c78768636cc0e194bf81fcd35f5e310cf1c68c823871f0",
+      "privateTerrainSha256": "f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b",
+      "publicResourcesVerified": 9990,
+      "strictReport": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/strict-verified/strict-verification.json",
+        "sha256": "373cd77e4248e7a6abcb49097f24347bb86786b8091d337cbd07ad592436182f",
+        "bytes": 5577
+      },
+      "independentReview": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/strict-independent-review.json",
+        "sha256": "22b3ae14bc7a86792af05412d3e8ef52839b76a1092ead3a8b0413f6c53af53e",
+        "bytes": 567
+      },
+      "next": "Fresh attempt2 entrance/strict evidence after legacy API split"
+    },
+    "candidateCommit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+    "candidateMapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+    "preDeterminismPhysicalAcceptance": {
+      "status": "passed",
+      "attempt": 2,
+      "runs": 292,
+      "failures": 0,
+      "runtimePins": 44,
+      "mapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+      "catalogSha256": "8ab642ac8ecb8f74f5ab35c0bc5ddde9d11a378b93fb51a52c6976e08cf89725",
+      "privateTerrainSha256": "f9fde9fbcdc188f757a7b5ee14c1e43df79aca358d848930c04461aaf5be2d5b",
+      "publicResourcesVerified": 9990,
+      "strictReport": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/attempt2/strict-verified/strict-verification.json",
+        "sha256": "f0fcbc60d9875ee6968a171090e234f5bbe4a3ee5f468270236ee3f52b6c3ec0",
+        "bytes": 5613
+      },
+      "independentReview": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/attempt2/strict-independent-review.json",
+        "sha256": "a4d52e64b87c2b0d8b7ce59dafa5edf1dc6128f8d9a9c3871f4c07b3d6e5e3de",
+        "bytes": 582
+      }
+    },
+    "crossPlatformDeterminism": {
+      "status": "passed",
+      "commit": "d7c3e12",
+      "change": "Normalized algebraic quaternion yaw basis replaces atan2/sin/cos round-trip; no rounding, owner pose change or second height migration",
+      "oldAcceptedMapVersion": "e145e78d5a9d865e2f5b78d33ee4fab5750a87ce27431378445c3aa3e426aec1",
+      "fixedMapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+      "linuxManifestByteIdenticalToMac": true,
+      "allPublicResourceHashesEqual": true,
+      "resources": 8963,
+      "originalPlatformColliderDeltaMaximumMetres": 4.440892098500626e-16,
+      "changedAssetVersionsVersusOriginal": 72,
+      "maximumFixedColliderDeltaVersusOriginalMetres": 5.115907697472721e-13,
+      "colliderTopologyDifferences": 0,
+      "float32ColliderValuesCompared": 32616,
+      "float32ColliderValueDifferences": 0,
+      "glbBinaryDifferences": 0,
+      "boundsDifferences": 0,
+      "headerUnchanged": true,
+      "cellJsonUnchanged": true,
+      "privateTerrainAndAuthoringReleaseUnchanged": true,
+      "verification": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-verification.json",
+        "sha256": "8c855c5ae4262d7b3518f932aa879dde0ce8bef7c0a8c44ca8c358aa4f9e60e2",
+        "bytes": 4038
+      },
+      "originalPlatformNumericDiff": {
+        "path": "output/ring-terrain-stage6/production-switch/cross-platform-numeric-diff.json",
+        "sha256": "c90346774c7ff8f21b2048e2030f617afbd981fe1912de35dd630dae97b0be19",
+        "bytes": 5584
+      },
+      "fixedGeometryDelta": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-mac/geometry-delta.json",
+        "sha256": "8e6fe6b3523e63b840421ba54f5b8d6fd5a8a5f9519f688fd19a3e5eca8fd67a",
+        "bytes": 919
+      },
+      "linuxManifest": {
+        "path": "output/ring-terrain-stage6/production-switch/fixed-linux-manifest.json",
+        "sha256": "2a981f16822091d85281fda872575cec166b1074be29e2f336a7c5db061edc46",
+        "bytes": 4284227
+      }
+    },
+    "preDeterminismCanonicalBuild": {
+      "status": "passed",
+      "resourcesVerified": 1027,
+      "allResourceBytesIdentical": true,
+      "verification": {
+        "path": "output/ring-terrain-stage6/upstream-65ec/default-build-verification.json",
+        "sha256": "9f70a9024e43a6df917f84833c484651f66a953581b884a329ca03d8d6da965f",
+        "bytes": 831
+      }
+    },
+    "preSavedContactPhysicalAcceptance": {
+      "status": "passed",
+      "scope": "Fresh292 entrance probes on exact deterministic publication after numeric transform fix",
+      "mapVersion": "fb4977299c4934ed06eba6b8c0f68f86ce3cbe816b02a0aee6c6d80d2ce045c6",
+      "runs": 292,
+      "failures": 0,
+      "rules": 48,
+      "runtimePins": 44,
+      "catalogSha256": "db0d7385b6e73899581ff21ad3e18bbb83c2e9de06c421261313c036a8b47a4e",
+      "publicationManifestSha256": "2a981f16822091d85281fda872575cec166b1074be29e2f336a7c5db061edc46",
+      "terrainGenerator": {
+        "file": "packages/terrain-build/src/supports.ts",
+        "sha256": "661f643b2718f0ffb6b71507b5bd799e4e10bab6eee4996d281b321d5c7ee374"
+      },
+      "stamp": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-entrance-acceptance/physical-acceptance-stamp.json",
+        "sha256": "a52af8ac119ca1122024062a24641a47d929d6202e3e5ae081f509b977a7e0d8",
+        "bytes": 1058
+      },
+      "independentVerification": {
+        "path": "output/ring-terrain-stage6/production-switch/deterministic-transform-entrance-acceptance/independent-verification.json",
+        "sha256": "281a1c26d97f0fc6f722b46ad194ce741f52e0ca9f8dde983758bc4e26f6baed",
+        "bytes": 416
+      }
+    },
+    "savedContactValidation": {
+      "status": "passed",
+      "commit": "4640e738c8e00fe7fc6af18d0653bfb9d65b65be",
+      "cause": "Closed-mesh box-corner containment rejected natural post-boot settlement before existing Havok penetration tolerance could apply",
+      "supportContactMinusSavedYMetres": 2.8192996978759766e-05,
+      "nativeShapeProximityHasHit": false,
+      "safePoseClearanceMetres": 0.01500005722046005,
+      "scope": "Only saved-item box-corner containment permits an explicit point outside the full mesh union within the existing 0.01m penetration bound; part centers, origin, new placements, player/static placement, actual-shape proximity and its threshold stay strict or unchanged",
+      "savedItemStateUnchanged": true,
+      "offlineProbePhysicsStepped": false,
+      "offlineProbeDatabaseAccess": false,
+      "focusedTests": 58,
+      "focusedFiles": 6,
+      "typecheckPassed": true,
+      "independentRuntimeReview": {
+        "path": "output/ring-terrain-stage6/production-switch/saved-contact-independent-review.json",
+        "sha256": "53a53d64fd1c77e2521860b8c9754615437635c7875b57a0ee3dd40a7694bb4f",
+        "bytes": 2416
+      },
+      "initialProbe": {
+        "path": "output/ring-terrain-stage6/production-switch/saved-item-probe.json",
+        "sha256": "7711c3fe0cdb8c507bb6303e5009ffce928b52f13d1b555ffc85366fc1008c08",
+        "bytes": 3094
+      },
+      "fixedExactPoseVerification": {
+        "path": "output/ring-terrain-stage6/production-switch/fixed-saved-item-verification.json",
+        "sha256": "3afff9bbdba212da7ddc50ef960e5556c5b7b4a9c82a1f1fcbb0c5c8b79b0d31",
+        "bytes": 940
+      },
+      "fullSuite": "passed",
+      "initialFullSuiteSandboxRestriction": "First attempt could not connect/listen on localhost (EPERM); retained as infrastructure evidence, not a runtime regression",
+      "initialSandboxAttempt": {
+        "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/run-summary.json",
+        "sha256": "5156cca53ffb32d96254aba3fadf3efef2101bc87df18ffb808fdca3d62803d6",
+        "bytes": 1886
+      },
+      "fullSuiteEvidence": {
+        "path": "output/ring-terrain-stage6/production-switch/saved-contact-fullsuite/attempt2/run-summary.json",
+        "sha256": "a7f733407a4005f68b3932f73c210b09bb8eee13f5329e300c176739ff542d3f",
+        "bytes": 1918
+      }
+    }
+  },
+  "postAcceptanceCleanup": {
+    "completedAt": "2026-11-13T21:47:21.276995+00:00",
+    "sourceMerge": "fast-forward objects into main, retaining validated commit d4fe109 and complete history",
+    "localTemporaryFilesBytesRemoved": 12875914147,
+    "localTaskOutputFilesRemoved": 337414,
+    "localTemporaryServersListening": 0,
+    "temporaryPostgresDirectoryRemoved": true,
+    "remoteTemporaryDatabaseRemoved": "su_terrain_rollback_20261113",
+    "productionProcessPreserved": true,
+    "productionReadinessAfterCleanup": 200,
+    "localPrivateRecoveryDirectory": ".local-backups/ring-terrain-20261113",
+    "remotePrivateRecoveryDirectory": "/root/backups/syktyvkar-underground/ring-terrain-20261113",
+    "evidenceArchive": {
+      "path": ".local-backups/ring-terrain-20261113/acceptance-evidence.tar.gz",
+      "sha256": "03a3f60e37710740020369fa0a4fa26f3f3ca388658bdb7be02dbcc5ed62a26d",
+      "bytes": 67791893,
+      "evidenceFiles": 759,
+      "allFilesVerified": true,
+      "originalRelativePathsPreserved": true,
+      "excludedDirectRawRasterReferences": 6
+    },
+    "retainedActiveRemoteLog": "output/ring-terrain-switch-20261113/server-4.log",
+    "notes": [
+      "Full temporary DB clones, repeated world/application builds, task caches and source rasters were removed.",
+      "Source rasters can be obtained again from recorded provenance; six historical direct raster links are explicitly excluded from the evidence archive.",
+      "Private recovery database dump and compatible old runtime are retained separately; they are not Git content.",
+      "Other user inputs and unrelated output artifacts were preserved."
+    ]
+  }
+}

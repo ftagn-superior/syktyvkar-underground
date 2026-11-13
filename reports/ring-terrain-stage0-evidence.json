@@ -1,0 +1,691 @@
+{
+  "inspectionDate": "2026-11-13",
+  "sourceCommit": "8f3d5280e77c7a744ba9cebe47e6044b30debc39",
+  "arcticdem": {
+    "purpose": "Source inspection only; DSM and road samples are not bare-earth terrain",
+    "source": {
+      "dataset": "ArcticDEM mosaic",
+      "version": "4.1",
+      "tile": "44_72_1_1_2m_v4.1",
+      "metadataUrl": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1.json",
+      "metadataSha256": "e14346686dd4a02fc631b4c15665a65a4e6bc20b6150d07c30168081578b3fe8",
+      "crs": "EPSG:3413",
+      "heightDatum": "WGS84 ellipsoid",
+      "license": "CC-BY-4.0"
+    },
+    "georeference": {
+      "origin": {
+        "lat": 61.66386729706631,
+        "lon": 50.815951774241576
+      },
+      "metersPerDegree": {
+        "lon": 52837.29,
+        "lat": 110573.15
+      },
+      "historicalCommit": "81c4ae63b3c0af4144c1fb21c3365ebe13c94fef",
+      "formula": "lon=lon0+x/52837.29; lat=lat0-z/110573.15",
+      "north": "-Z"
+    },
+    "inputs": {
+      "content/worlds/ring-block/world.json": "9d8bf9507e88b81087e9ed0394cf639d2dbd9feeb6abcfbaae66b4135ad37c54",
+      "content/buildings/ring-block/ring-block-ground/source.json": "a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6"
+    },
+    "worldBounds": {
+      "min": {
+        "x": -269,
+        "y": -5,
+        "z": -745
+      },
+      "max": {
+        "x": 331,
+        "y": 60,
+        "z": 131
+      }
+    },
+    "wgs84Bounds": {
+      "west": 50.810860672862226,
+      "east": 50.82221628932174,
+      "south": 61.662682560988884,
+      "north": 61.67060491827001
+    },
+    "nativeWorldPixels": 141287,
+    "nativeValidPixels": 141287,
+    "nativeCoverageFraction": 1.0,
+    "nativeWorldStatistics": {
+      "dem": {
+        "count": 141287,
+        "min": 122.078125,
+        "p05": 126.4609375,
+        "median": 136.0625,
+        "p95": 144.5546875,
+        "max": 154.8359375
+      },
+      "mad": {
+        "count": 141287,
+        "min": 0.0,
+        "p05": 0.3671875,
+        "median": 1.3125,
+        "p95": 3.2734375,
+        "max": 12.8515625
+      },
+      "count": {
+        "count": 141287,
+        "min": 3.0,
+        "p05": 4.0,
+        "median": 4.0,
+        "p95": 7.0,
+        "max": 7.0
+      },
+      "datamask": {
+        "count": 141287,
+        "min": 1.0,
+        "p05": 1.0,
+        "median": 1.0,
+        "p95": 1.0,
+        "max": 1.0
+      },
+      "mindate": {
+        "count": 141287,
+        "min": 6618.0,
+        "p05": 6618.0,
+        "median": 6716.0,
+        "p95": 6716.0,
+        "max": 7553.0
+      },
+      "maxdate": {
+        "count": 141287,
+        "min": 7553.0,
+        "p05": 7574.0,
+        "median": 7574.0,
+        "p95": 7574.0,
+        "max": 7583.0
+      }
+    },
+    "diagnosticGrid": {
+      "step": 2,
+      "shape": [439, 301],
+      "method": "nearest",
+      "valid": 132139
+    },
+    "roadCoreDSM": {
+      "count": 5910,
+      "min": 122.1953125,
+      "p05": 123.578125,
+      "median": 127.34375,
+      "p95": 135.8984375,
+      "max": 146.015625
+    },
+    "roadCoreDefinition": "Euclidean distance to non-road raster centres >4 m on the 2 m diagnostic grid",
+    "roadCoreQualityFilteredDSM": {
+      "count": 1784,
+      "min": 122.59375,
+      "p05": 123.4140625,
+      "median": 126.7109375,
+      "p95": 135.582421875,
+      "max": 146.015625
+    },
+    "originRoadCoreQualityFilteredDSM": {
+      "count": 204,
+      "min": 123.1953125,
+      "p05": 123.438671875,
+      "median": 124.31640625,
+      "p95": 124.88828125,
+      "max": 125.484375
+    },
+    "pilotBoundsXZ": [-225, -280, 0, -40],
+    "pilotRoadCoreQualityFilteredDSM": {
+      "count": 202,
+      "min": 125.5703125,
+      "p05": 125.99375,
+      "median": 129.375,
+      "p95": 136.215234375,
+      "max": 139.5390625
+    },
+    "highestRoadSamplesForReview": [
+      {
+        "x": 37.0,
+        "z": -639.0,
+        "dsmHeight": 146.015625
+      },
+      {
+        "x": 49.0,
+        "z": -641.0,
+        "dsmHeight": 144.5546875
+      },
+      {
+        "x": 233.0,
+        "z": -343.0,
+        "dsmHeight": 144.09375
+      },
+      {
+        "x": 107.0,
+        "z": -281.0,
+        "dsmHeight": 141.5625
+      },
+      {
+        "x": -31.0,
+        "z": -627.0,
+        "dsmHeight": 141.171875
+      }
+    ],
+    "qualityFilter": "count>=3, datamask=1, MAD<=1 m; does not establish ground truth",
+    "assets": {
+      "dem": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_dem.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-dem-crop.tif",
+        "sha256": "aacf50dc16a1b7b4cd9d44e10991d44b30bf69d1964fe8b3478b303bbd4260ac",
+        "bytes": 428315
+      },
+      "mad": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_mad.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-mad-crop.tif",
+        "sha256": "dcc4210d1b1b3bd985e32f7bf4185e4d8ceb087829467c815065196e4106ad07",
+        "bytes": 388303
+      },
+      "count": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_count.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-count-crop.tif",
+        "sha256": "69432b9342a9f27c4b15d1b46580178805606115838b22a72f0264121d831c96",
+        "bytes": 3280
+      },
+      "datamask": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_datamask.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-datamask-crop.tif",
+        "sha256": "f1baaddf9bb3d899937bf53dc718258656900da3f3e883c7edcdbc62e21a260f",
+        "bytes": 1694
+      },
+      "mindate": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_mindate.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-mindate-crop.tif",
+        "sha256": "a6edf862a616c617f361230b3fa634c90af31ceab68aedd3008287ffe847af00",
+        "bytes": 4031
+      },
+      "maxdate": {
+        "url": "https://pgc-opendata-dems.s3.us-west-2.amazonaws.com/arcticdem/mosaics/v4.1/2m/44_72/44_72_1_1_2m_v4.1_maxdate.tif",
+        "crop": "output/ring-terrain-stage0/arcticdem-maxdate-crop.tif",
+        "sha256": "96481afe23f7089d658fd886c9677e10c28af9761a04f2fbae932e9fe366957d",
+        "bytes": 2585
+      }
+    },
+    "libraryVersions": {
+      "rasterio": "1.5.2",
+      "pyproj": "3.8.0",
+      "numpy": "2.5.4"
+    }
+  },
+  "referenceSources": {
+    "checked_at_utc": "2026-11-13T13:14:42Z",
+    "bbox_wgs84": [50.810860673, 61.662682561, 50.822216289, 61.670604918],
+    "method": "Native raster windows with two-pixel padding; statistics only over pixel centers inside the exact map bbox.",
+    "sources": [
+      {
+        "name": "copernicus",
+        "url": "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N61_00_E050_00_DEM/Copernicus_DSM_COG_10_N61_00_E050_00_DEM.tif",
+        "bbox_wgs84": [50.810860673, 61.662682561, 50.822216289, 61.670604918],
+        "vertical_reference": "EGM2008 (EPSG:3855)",
+        "unit": "m",
+        "role": "elevation",
+        "datum_comparison": "Not compared directly to WGS84 ellipsoid heights.",
+        "status": "ok",
+        "source_headers": {
+          "Content-Length": "23846245",
+          "Content-Type": "image/tiff",
+          "ETag": "\"d42c2a11d6c8733bfc984805a6dc8a88\"",
+          "Last-Modified": "Mon, 09 May 2022 14:38:16 GMT",
+          "Accept-Ranges": "bytes"
+        },
+        "source_crs": "EPSG:4326",
+        "source_dimensions": [1800, 3600],
+        "source_resolution_degrees": [0.0005555555555555556, 0.0002777777777777778],
+        "source_scale": 1.0,
+        "source_offset": 0.0,
+        "source_nodata": null,
+        "window_col_row_width_height": [1458, 1184, 25, 33],
+        "window_bounds_wgs84": [50.80972222222223, 61.662083333333335, 50.82361111111111, 61.67125],
+        "native_window_shape": [33, 25],
+        "native_centers_inside_bbox": 580,
+        "valid_native_centers_inside_bbox": 580,
+        "valid_native_centers_fraction": 1.0,
+        "statistics_raw": {
+          "min": 120.90111541748047,
+          "max": 141.90762329101562,
+          "mean": 132.44346379247204,
+          "percentiles": {
+            "1": 124.52638664245606,
+            "5": 127.13396835327148,
+            "25": 130.18592071533203,
+            "50": 132.50507354736328,
+            "75": 134.9679946899414,
+            "95": 137.45196075439452,
+            "99": 139.04137359619142
+          }
+        },
+        "statistics_using_raster_scale_m": {
+          "min": 120.90111541748047,
+          "max": 141.90762329101562,
+          "mean": 132.44346379247204,
+          "percentiles": {
+            "1": 124.52638664245606,
+            "5": 127.13396835327148,
+            "25": 130.18592071533203,
+            "50": 132.50507354736328,
+            "75": 134.9679946899414,
+            "95": 137.45196075439452,
+            "99": 139.04137359619142
+          }
+        },
+        "artifact": {
+          "path": "copernicus-raw-crop.tif",
+          "bytes": 3944,
+          "sha256": "a8b60e33187206501c6ccb70ac75b8e165e5d2f921b9b676e1054d48fadf2410"
+        }
+      },
+      {
+        "name": "gedtm30",
+        "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2.tif",
+        "bbox_wgs84": [50.810860673, 61.662682561, 50.822216289, 61.670604918],
+        "vertical_reference": "EGM2008 (EPSG:3855)",
+        "unit": "m",
+        "role": "elevation",
+        "datum_comparison": "Not compared directly to WGS84 ellipsoid heights.",
+        "status": "metadata_conflict",
+        "source_headers": {
+          "Content-Length": "432407644715",
+          "Content-Type": "image/tiff",
+          "ETag": "\"8bf9b35f45e9befaa9b91d877bf230d7-3107\"",
+          "Last-Modified": "Wed, 23 Sep 2026 14:42:14 GMT",
+          "Accept-Ranges": "bytes"
+        },
+        "source_crs": "EPSG:4326",
+        "source_dimensions": [1296009, 540009],
+        "source_resolution_degrees": [0.00027777777777799305, 0.00027777777777799305],
+        "source_scale": 0.1,
+        "source_offset": 0.0,
+        "source_nodata": 3.4028234663852886e38,
+        "window_col_row_width_height": [830921, 83988, 46, 33],
+        "window_bounds_wgs84": [
+          50.81013888906776, 61.662083333315245, 50.82291666684554, 61.67124999998192
+        ],
+        "native_window_shape": [33, 46],
+        "native_centers_inside_bbox": 1160,
+        "valid_native_centers_inside_bbox": 1160,
+        "valid_native_centers_fraction": 1.0,
+        "statistics_raw": {
+          "min": 120.69999694824219,
+          "max": 139.6999969482422,
+          "mean": 131.61060354956265,
+          "percentiles": {
+            "1": 124.0,
+            "5": 126.19999694824219,
+            "25": 129.3000030517578,
+            "50": 131.6999969482422,
+            "75": 134.1999969482422,
+            "95": 136.39999389648438,
+            "99": 137.89999389648438
+          }
+        },
+        "statistics_using_raster_scale_m": {
+          "min": 12.069999694824219,
+          "max": 13.969999694824219,
+          "mean": 13.161060354956266,
+          "percentiles": {
+            "1": 12.4,
+            "5": 12.61999969482422,
+            "25": 12.930000305175781,
+            "50": 13.16999969482422,
+            "75": 13.41999969482422,
+            "95": 13.639999389648438,
+            "99": 13.789999389648438
+          }
+        },
+        "interpretation": {
+          "status": "unresolved_scale_metadata_conflict",
+          "raster_scale": 0.1,
+          "documented_scale": 1,
+          "documentation": "https://zenodo.org/records/18887460",
+          "meaning": "Float32 raw values and scale-adjusted values retained independently. Do not select either as confirmed metres until the discrepancy is resolved."
+        },
+        "artifact": {
+          "path": "gedtm30-raw-crop.tif",
+          "bytes": 3496,
+          "sha256": "9baa4ebc14ba40e7b1c4533e2649b72ff1a026ae6a6c074e0b73a5214a01ffad"
+        }
+      },
+      {
+        "name": "gedtm30-uncertainty",
+        "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_std_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2.tif",
+        "bbox_wgs84": [50.810860673, 61.662682561, 50.822216289, 61.670604918],
+        "vertical_reference": "EGM2008 (EPSG:3855)",
+        "unit": "m",
+        "role": "prediction_standard_deviation",
+        "datum_comparison": "Not compared directly to WGS84 ellipsoid heights.",
+        "status": "metadata_conflict",
+        "source_headers": {
+          "Content-Length": "566076302917",
+          "Content-Type": "image/tiff",
+          "ETag": "\"8865102a2c05c0f1d50ae3bdd947a425-4979\"",
+          "Last-Modified": "Wed, 23 Sep 2026 14:42:15 GMT",
+          "Accept-Ranges": "bytes"
+        },
+        "source_crs": "EPSG:4326",
+        "source_dimensions": [1296009, 540009],
+        "source_resolution_degrees": [0.00027777777777799305, 0.00027777777777799305],
+        "source_scale": 0.1,
+        "source_offset": 0.0,
+        "source_nodata": 3.4028234663852886e38,
+        "window_col_row_width_height": [830921, 83988, 46, 33],
+        "window_bounds_wgs84": [
+          50.81013888906776, 61.662083333315245, 50.82291666684554, 61.67124999998192
+        ],
+        "native_window_shape": [33, 46],
+        "native_centers_inside_bbox": 1160,
+        "valid_native_centers_inside_bbox": 1160,
+        "valid_native_centers_fraction": 1.0,
+        "statistics_raw": {
+          "min": 0.2199999988079071,
+          "max": 5.389999866485596,
+          "mean": 0.8218017237710542,
+          "percentiles": {
+            "1": 0.28589999556541446,
+            "5": 0.3499999940395355,
+            "25": 0.46000000834465027,
+            "50": 0.6600000262260437,
+            "75": 0.9624999910593033,
+            "95": 1.89099998474121,
+            "99": 2.7305000185966533
+          }
+        },
+        "statistics_using_raster_scale_m": {
+          "min": 0.02199999988079071,
+          "max": 0.5389999866485596,
+          "mean": 0.08218017237710541,
+          "percentiles": {
+            "1": 0.028589999556541443,
+            "5": 0.034999999403953555,
+            "25": 0.04600000083446503,
+            "50": 0.06600000262260437,
+            "75": 0.09624999910593034,
+            "95": 0.189099998474121,
+            "99": 0.2730500018596654
+          }
+        },
+        "interpretation": {
+          "status": "unresolved_scale_metadata_conflict",
+          "raster_scale": 0.1,
+          "documented_scale": 1,
+          "documentation": "https://zenodo.org/records/18887460",
+          "meaning": "Float32 raw values and scale-adjusted values retained independently. Do not select either as confirmed metres until the discrepancy is resolved."
+        },
+        "artifact": {
+          "path": "gedtm30-uncertainty-raw-crop.tif",
+          "bytes": 4048,
+          "sha256": "2939f737554bf67c3769eca8cef412fabda86dc5e8b6f4bdd28ea8958ac56129"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "inspectionDate": "2026-11-13",
+    "source": {
+      "path": "data/map-layout.json",
+      "bytes": 1780429,
+      "sha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+      "provenance": "User identifies this as current database layout export; live revision not independently queried"
+    },
+    "snapshot": {
+      "formatVersion": 1,
+      "worldId": "ring-block",
+      "assetReleaseVersion": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+      "seedVersion": "7ad10571b13b707cac54bde162317ecde5561f3f3dcf8b0aed648d769c60061d",
+      "revision": 5214,
+      "activeLayoutHash": "1b2049230dc806c8cbc0e2801e1aaced11531bac33fdbbaa1c7caad88ad6f40c"
+    },
+    "validation": {
+      "schema": "passed: validateWorldLayoutSnapshot",
+      "duplicateIds": 0,
+      "assetIdsAbsentFromCurrentSourceCatalog": [],
+      "fullGeometryAndPhysicalItems": "Exported static layout validated against isolated fresh source build; physical item state, safePose and gameplay not checked. See source-build-inspection.json."
+    },
+    "counts": {
+      "instances": 3709,
+      "enabled": 3709,
+      "disabled": 0,
+      "distinctAssetIds": 221,
+      "withSourceRef": 3688,
+      "placedPrefix": 3
+    },
+    "instanceRevisions": {
+      "min": 1,
+      "max": 2,
+      "histogram": {
+        "1": 2208,
+        "2": 1501
+      }
+    },
+    "positions": {
+      "yMin": 0,
+      "yMax": 0,
+      "nonzeroY": 0
+    },
+    "currentSourceComparison": {
+      "path": "content/worlds/ring-block/cells/0_0.json",
+      "sha256": "870dc3cb8280516581576037459d38c690acbaa1929a22d222ec5ab0064a61ca",
+      "sourceTotal": 3707,
+      "excludedFixedSourceIds": ["ground"],
+      "comparison": "Match entityId, exact canonical JSON comparison of asset, pose, sourceRef and enabled; revisions excluded from placement diff",
+      "beforeCount": 3706,
+      "afterCount": 3709,
+      "sharedCount": 3706,
+      "extraCount": 3,
+      "missingCount": 0,
+      "extraIds": [
+        "placed_3ba5e66f-02ab-4507-8180-2a4949c9e9f8",
+        "placed_ad09b26f-9d3f-455d-8a0c-696f30f6f4b7",
+        "placed_fded0e89-4ca3-4050-8b0c-122a442fe88c"
+      ],
+      "missingIds": [],
+      "changedSharedCount": 0,
+      "changedByField": {
+        "assetId": 0,
+        "position": 0,
+        "rotation": 0,
+        "sourceRef": 0,
+        "enabled": 0
+      },
+      "changedShared": [],
+      "extras": [
+        {
+          "entityId": "placed_3ba5e66f-02ab-4507-8180-2a4949c9e9f8",
+          "assetId": "bench-0152a250d22ef0a9",
+          "position": {
+            "x": -5.675596438979312,
+            "y": 0,
+            "z": 20.60633711612951
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0.9238795325112868,
+            "z": 0,
+            "w": -0.3826834323650895
+          },
+          "instanceRevision": 1,
+          "enabled": true
+        },
+        {
+          "entityId": "placed_ad09b26f-9d3f-455d-8a0c-696f30f6f4b7",
+          "assetId": "bench-0152a250d22ef0a9",
+          "position": {
+            "x": -7.913454836791033,
+            "y": 0,
+            "z": 18.655259246829758
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0.3826834323650898,
+            "z": 0,
+            "w": 0.9238795325112867
+          },
+          "instanceRevision": 1,
+          "enabled": true
+        },
+        {
+          "entityId": "placed_fded0e89-4ca3-4050-8b0c-122a442fe88c",
+          "assetId": "bench-0152a250d22ef0a9",
+          "position": {
+            "x": -8.978704039780482,
+            "y": 0,
+            "z": 14.780707316247899
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "instanceRevision": 1,
+          "enabled": true
+        }
+      ],
+      "revisionAboveOne": 1501
+    },
+    "localDist": {
+      "assetReleaseVersion": "d39d0af1380827f6ccf12ea9bcf72a50d8a8d9efa2e8ef0a8105381afa9ee369",
+      "seedVersion": "7ad10571b13b707cac54bde162317ecde5561f3f3dcf8b0aed648d769c60061d",
+      "mapVersion": "59d35a5994fa94866cd5e1b86f45b611137ebd4133af40092bc773a50401ce53",
+      "seedCount": 1744,
+      "assetReleaseMatchesExport": false,
+      "seedVersionMatchesExport": true,
+      "comparison": {
+        "beforeCount": 1744,
+        "afterCount": 3709,
+        "sharedCount": 1744,
+        "extraCount": 1965,
+        "missingCount": 0,
+        "changedSharedCount": 1501,
+        "changedByField": {
+          "assetId": 1501,
+          "position": 258,
+          "rotation": 0,
+          "sourceRef": 0,
+          "enabled": 0
+        }
+      },
+      "interpretation": "Local dist is a different asset release and is not the geometry baseline for this export. The database retains the original seedVersion through migrations; matching seedVersion does not establish matching current source layout."
+    },
+    "included": [
+      "Editable static instances including disabled rows if present",
+      "entityId, assetId, absolute position and rotation, enabled, instanceRevision, optional sourceRef",
+      "worldId, assetReleaseVersion, seedVersion and global revision"
+    ],
+    "notIncluded": [
+      "Physical item state and safePose",
+      "Inventory contents and item ownership",
+      "Accounts, player reconnect/runtime positions",
+      "Persistent world epoch/compatibility and operation history",
+      "Fixed ground, boundary geometry, spawns and resource bytes",
+      "Database schema history and full PostgreSQL backup"
+    ],
+    "performanceTarget": {
+      "source": "User confirmation relayed by parent agent",
+      "device": "Current Mac, Apple M3 Pro, 18 GPU cores, 36 GB unified memory",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "targetFps": 60
+    },
+    "scope": "Read-only export inspection; only this aggregate written. Does not replace consistent full database backup.",
+    "isolatedSourceBuildVerification": {
+      "report": "output/ring-terrain-stage0/source-build-inspection.json",
+      "assetReleaseMatches": true,
+      "staticLayoutValidation": "passed",
+      "mapVersion": "cfd51f479770b837615ed9cd5d053ab46552cf9795447404239e1dbd3e75e65b"
+    }
+  },
+  "sourceBuild": {
+    "inspectionDate": "2026-11-13",
+    "method": "buildWorld(source, explicit output); imported API, no CLI, no pruning, no database",
+    "source": "content/worlds/ring-block/world.json",
+    "directory": "output/ring-terrain-stage0/source-world",
+    "buildMs": 6414.312459,
+    "verificationAndMeasurementMs": 376.5428750000001,
+    "manifest": {
+      "mapVersion": "cfd51f479770b837615ed9cd5d053ab46552cf9795447404239e1dbd3e75e65b",
+      "sha256": "7db22d5b97fbc8e2a26a5b43cca1957ab41c525d76422fa18e8d51db459cb38a",
+      "assetCount": 261,
+      "cellCount": 40,
+      "fileCount": 921,
+      "referencedBytes": 20262404,
+      "bytesByKind": {
+        "other": 9542821,
+        "model": 9453264,
+        "colliders": 209160,
+        "parts": 39376,
+        "cell": 1017783
+      },
+      "maxFileBytesByKind": {
+        "other": 1004492,
+        "model": 1004164,
+        "colliders": 10798,
+        "parts": 882,
+        "cell": 84211
+      }
+    },
+    "authoring": {
+      "formatVersion": 1,
+      "assetReleaseVersion": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+      "seedVersion": "01e6d950230daff27b3af9b99dc4481b54401a10fee589ac53896303c88a8d3b",
+      "fixedInstanceCount": 40,
+      "seedCount": 3706
+    },
+    "export": {
+      "sha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+      "revision": 5214,
+      "assetReleaseVersion": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+      "seedVersion": "7ad10571b13b707cac54bde162317ecde5561f3f3dcf8b0aed648d769c60061d",
+      "instanceCount": 3709,
+      "assetReleaseMatches": true,
+      "seedVersionMatches": false
+    },
+    "staticLayoutValidation": {
+      "status": "passed",
+      "scope": "Actual exported static instances + fixed ground; current catalog, IDs, all poses, world bounds and publication resource limits. No database, physical item, spawn capsule, movement, render or network validation."
+    },
+    "exportPublication": {
+      "mapVersion": "7e0e072b2aea003323fa50ab7b624e67b64876ffcb9668bde63a35a6957b5b52",
+      "layoutHash": "1b2049230dc806c8cbc0e2801e1aaced11531bac33fdbbaa1c7caad88ad6f40c",
+      "buildingCount": 3749,
+      "assetCount": 261,
+      "cellCount": 40
+    },
+    "unchanged": {
+      "oldDistManifest": true,
+      "originalExport": true
+    },
+    "limitations": [
+      "No application runtime built or started",
+      "No database connection, physical/safePose snapshot, restore or gameplay acceptance",
+      "Build resource bytes are serialized uncompressed file sizes, not GPU/RAM or transfer costs"
+    ]
+  },
+  "decisions": {
+    "heightReferenceMetersWgs84Ellipsoid": 124,
+    "heightFormula": "Y = validated ground ellipsoid height - 124",
+    "terrainVerticalExaggeration": 1,
+    "gpu": "Apple M3 Pro (18 GPU cores)",
+    "ramGb": 36,
+    "viewport": [1920, 1080],
+    "quality": "standard",
+    "targetFps": 60,
+    "frameP95BudgetMs": 16.7,
+    "warmupSeconds": 60,
+    "sampleSeconds": 60,
+    "pilotBoundsXZ": [-225, -280, 0, -40]
+  },
+  "limitations": [
+    "DSM is not a validated ground model",
+    "Terrain range and route slopes require ground reconstruction",
+    "Static export is not a complete database backup",
+    "No hardware gameplay baseline measured"
+  ]
+}

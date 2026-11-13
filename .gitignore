@@ -2,7 +2,11 @@ node_modules/
 dist/
 apps/client/public/generated/
 output/
+.local-backups/
 .playwright-cli/
+.DS_Store
+__pycache__/
+*.py[cod]
 *.tsbuildinfo
 .env
 .env.*

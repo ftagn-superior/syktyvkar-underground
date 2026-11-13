@@ -1,0 +1,177 @@
+{
+  "formatVersion": 1,
+  "kind": "explicit-syktsu-ground-pad",
+  "status": "selected-unapplied-gameplay-candidate",
+  "assetId": "osm-way-1258973447",
+  "ownerId": "osm-way-1258973447",
+  "sourceGrid": "pilot-grid-4m.json",
+  "sourceGridSha256": "57f1bc2de002ce91dceac37a71995108a887a0601a113fa41309901c3a3002fa",
+  "supportRule": {
+    "path": "content/buildings/ring-block/osm-way-1258973447/terrain-support.json",
+    "sha256": "4466acc973c27a4be5c3b8fa2cbf38fe5f963f539b91e904f3c533cb5d1fd2af"
+  },
+  "placement": {
+    "position": {
+      "x": -148.88,
+      "y": 0,
+      "z": -157.92
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "w": 1
+    }
+  },
+  "placementEvidence": {
+    "snapshotPath": "data/map-layout.json",
+    "snapshotSha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+    "revision": 5214,
+    "interpretation": "Fixed authored campus ground area at the reviewed saved pose. It does not follow future building edits automatically."
+  },
+  "levelMetres": 6,
+  "plateauMarginMetres": 6,
+  "blendWidthMetres": 80,
+  "forecourt": {
+    "purpose": "Explicit main-entrance forecourt to connect the six-metre approach to the existing footway; no interior access claim.",
+    "outline": [
+      [
+        -97.97093935628826,
+        -124.44945372554744
+      ],
+      [
+        -92.88145542075804,
+        -113.58220231270255
+      ],
+      [
+        -81.56140186571125,
+        -118.88374807887986
+      ],
+      [
+        -86.65088580124146,
+        -129.75099949172474
+      ]
+    ],
+    "widthMetres": 12,
+    "inwardMetres": 0.5,
+    "outwardMetres": 12
+  },
+  "method": "Union actual structural support components with the explicit forecourt for distance queries. Set nodes within 6 m to Y=6; blend toward unchanged pilot terrain with 1-smoothstep((distance-6)/80). No solid courtyard fill and no change to source/full grid.",
+  "rationale": [
+    "Eliminates the 7.213 m visible Syktsu plinth: actual footprint and outer-step approach are on one explicit campus pad.",
+    "20–40 m blends cause excessive path and road slopes; 80 m is gentler.",
+    "Compared with level7/blend80, level6/blend80 gives lower road maximum (5.525 vs6.577 degrees), lower arrival-route maximum (3.932 vs4.612 degrees), and12 rather than13 buildings over the provisional3 m support threshold.",
+    "The baseline maximum6.436 degrees was an observed value, not a mandatory design limit. Selected total maximum7.712 degrees remains subject to city gameplay review.",
+    "This is an explicit approximate gameplay grade, not a surveyed or historically verified campus elevation."
+  ],
+  "measured": {
+    "heightY": {
+      "min": -0.12359740877194612,
+      "p95": 7.868636783999998,
+      "max": 12.642664949103239
+    },
+    "allTriangleSlopeDegrees": {
+      "min": 0.0,
+      "p95": 4.526256028237155,
+      "max": 7.712196350857976
+    },
+    "modifiedAreaM2": 80216.0,
+    "groundChangeY": {
+      "min": -3.977173884722065,
+      "p95": 3.353426,
+      "max": 4.07763511845273
+    },
+    "support": {
+      "min": 6.0,
+      "max": 6.0,
+      "sampleVertices": 4981,
+      "ownerY": 6.08,
+      "maximumVisibleFoundationHeightMetres": 0.08000000000000007
+    },
+    "mainApproach": {
+      "lengthMetres": 6,
+      "farEdgeY": [
+        6.0,
+        6.0
+      ],
+      "topY": 6.12,
+      "endpointSlopeDegrees": {
+        "min": 1.1457628381751046,
+        "p95": 1.1457628381751046,
+        "max": 1.1457628381751046
+      }
+    },
+    "route": {
+      "pointsXZ": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -33.0,
+          -75.0
+        ],
+        [
+          -68.0,
+          -130.0
+        ],
+        [
+          -89.5397695398988,
+          -121.77263181753719
+        ]
+      ],
+      "surfaceSlopeDegreesAtQuarterMetreSamples": {
+        "min": 0.0,
+        "p95": 3.806003665094035,
+        "max": 3.931824033122617
+      }
+    }
+  },
+  "affectedObjects": {
+    "count": 602,
+    "byPolicy": {
+      "ground-anchor": 160,
+      "unsupported": 419,
+      "foundation": 23
+    },
+    "method": "Intersections with complete generated projected-object masks, including extended models; count each entity once. The masks are not foundation geometry."
+  },
+  "neighbourReview": {
+    "changedBuildings": 22,
+    "buildingsExceedingThreeMetres": 12,
+    "newExceedances": [
+      {
+        "entityId": "osm-way-1291799392",
+        "beforeMetres": 1.513356116537091,
+        "afterMetres": 4.159896815824943,
+        "entranceStatus": "authored-input-requires-approach-review"
+      },
+      {
+        "entityId": "osm-way-92104475",
+        "beforeMetres": 2.068776108992001,
+        "afterMetres": 4.771765284469445,
+        "entranceStatus": "authored-input-requires-approach-review"
+      },
+      {
+        "entityId": "osm-way-92104556",
+        "beforeMetres": 1.355287903273588,
+        "afterMetres": 4.262608222962336,
+        "entranceStatus": "authored-input-requires-approach-review"
+      }
+    ],
+    "status": "blocking-unresolved-neighbour-foundations-and-entrances",
+    "note": "Selecting this pad does not accept the surrounding buildings or hide the other existing support-height exceedances."
+  },
+  "isolatedPhysics": {
+    "ownerY": 6.08,
+    "maximumApproachRayErrorMetres": 0.000488914489745973,
+    "walking": true,
+    "sprinting": true,
+    "milestonesPerPass": 8,
+    "scope": "Isolated Node Havok terrain + actual Syktsu building, foundation and approach; surrounding city objects, networking and browser are not included."
+  },
+  "evidence": {
+    "output/ring-terrain-stage4/pad-evaluation/comparison.json": "e29b8f3e6af665b6ac52c658ca88aaaec7bf71e255ef25a4f2e8cd0a1d022c77",
+    "output/ring-terrain-stage4/pad-evaluation/geometry-check.json": "facad65ea7780ffa67063a094ad5c5ab73c78a44001fb40bd3f1eaf3c4c24c56"
+  }
+}

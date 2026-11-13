@@ -1,0 +1,281 @@
+{
+  "formatVersion": 1,
+  "date": "2026-11-13",
+  "status": "offline-pilot-and-synthetic-dynamic-rehearsal-passed",
+  "actualUserDatabaseAcceptance": false,
+  "productionChanged": false,
+  "mapVersion": "9e34f33dc4859ed26096101ed2a99b92300a765190666cfdcc424e8de260c104",
+  "sourceExport": {
+    "sha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+    "revision": 5214,
+    "instances": 3709
+  },
+  "staticPlan": {
+    "issues": [],
+    "changedY": 3377,
+    "ownerIdentityXZRotationPreserved": true
+  },
+  "physics": {
+    "status": "passed",
+    "scope": "Published full-city movement, spawns, stops and boundaries; terrain-only ray comparison and explicit ground+boundary confirmation for city-obstructed probes. No room, network, saved-state migration or GPU measurement.",
+    "fullGameplayAcceptance": false,
+    "performanceAcceptance": false,
+    "limits": {
+      "rayErrorMetres": 0.01,
+      "waypointDistanceMetres": 0.15,
+      "minimumFootGapMetres": -0.05,
+      "maximumFootGapMetres": 0.2,
+      "restDriftMetres": 0.01,
+      "stoppingDriftMetres": 0.02,
+      "boundaryDriveSeconds": 2,
+      "restSettleSeconds": 2,
+      "restHoldSeconds": 10,
+      "outerRayInsetMetres": 0.001
+    },
+    "staticBodies": {
+      "entities": 6461,
+      "references": 6461,
+      "buildings": {
+        "instances": 6275,
+        "assets": 2787,
+        "shapes": 5677,
+        "references": 6275
+      },
+      "bodies": 6461,
+      "items": 0,
+      "remotePlayers": 0
+    },
+    "issues": [],
+    "inputs": {
+      "release": "output/ring-terrain-stage4/export-world",
+      "manifestSha256": "e7dd7afc8e5ff86d38e1106ee7300c6f9a2ceccaf804010e6a83fc2378e3e90e",
+      "grid": {
+        "path": "output/ring-terrain-stage4/authoring-world/private/terrain.35c9b221617a551e621d6f4465efb1912a2302d2f4f059e346b6adb4a0fe43cd.json",
+        "sha256": "35c9b221617a551e621d6f4465efb1912a2302d2f4f059e346b6adb4a0fe43cd"
+      },
+      "rules": {
+        "path": "output/ring-terrain-stage4/terrain-pose-rules.json",
+        "sha256": "a6217a22d127174bcad653d9e5b78610c5a6196b2d5f0e9f20cb09009d4e31da"
+      },
+      "controls": {
+        "path": "tests/fixtures/ring-terrain-city-controls.json",
+        "sha256": "9f0109953471f45b4bf13c67183270865998f95b1e5ec64adbbfe6caf95a0372"
+      },
+      "runnerSha256": "0c5ad21bd3005b61044db1a12da301dae41b4ced3a43f9da6e94a8d09ccf884f",
+      "scenariosSha256": "64aec9b1c8ceae13d481faac0f1b758f524669008108dfede06a8111fc4e4919"
+    }
+  },
+  "physicsSummary": {
+    "rays": 192,
+    "maximumRayErrorMetres": 0.002193,
+    "spawns": 8,
+    "routePasses": 8,
+    "routeSteps": 13662,
+    "maximumFootGapMetres": 0.06884,
+    "stopAndRestDriftMetres": 0,
+    "fullCityBoundaryProbes": 558,
+    "additionalIsolatedBoundaryProbes": 2
+  },
+  "databaseRehearsal": {
+    "status": "passed",
+    "scope": "disposable PostgreSQL schema; not the user database",
+    "staticInput": "exact saved export; no reseeding or static fixture edits",
+    "dynamicInput": "synthetic world items, account and inventory; no real dynamic snapshot was supplied",
+    "nonExportDatabaseFields": "synthetic bootstrap epochs/timestamps/history; the static JSON export is not a backup of the user database",
+    "checks": {
+      "exactStaticImport": true,
+      "cliPlan": {
+        "status": "valid",
+        "planHash": "3a76a87a917433ffa1895142123f909bdc1aa5d7b021cb17833a0a0bae4447a1",
+        "issues": 0,
+        "databaseChanged": false,
+        "publicationWritten": false,
+        "report": "output/ring-terrain-stage4/staging-migration/1b5c5108-67a1-44fc-8175-d0c840a89c7e/plan.json"
+      },
+      "planReadOnly": true,
+      "cliApply": {
+        "status": "applied",
+        "operationId": "3a76a87a-9174-53ff-a189-5142123f909b",
+        "currentStateMatches": true,
+        "planHash": "3a76a87a917433ffa1895142123f909bdc1aa5d7b021cb17833a0a0bae4447a1",
+        "report": "output/ring-terrain-stage4/staging-migration/1b5c5108-67a1-44fc-8175-d0c840a89c7e/apply.json"
+      },
+      "cliReplay": {
+        "status": "already-applied",
+        "operationId": "3a76a87a-9174-53ff-a189-5142123f909b",
+        "currentStateMatches": true,
+        "planHash": "3a76a87a917433ffa1895142123f909bdc1aa5d7b021cb17833a0a0bae4447a1",
+        "report": "output/ring-terrain-stage4/staging-migration/1b5c5108-67a1-44fc-8175-d0c840a89c7e/replay.json"
+      },
+      "inventoryPreserved": true,
+      "replayReadOnly": true,
+      "targetStartup": {
+        "layoutHash": "74762969561a9218f4d429b8ee4f360199821ce61272a5e1173bf1281bc23ea7",
+        "mapVersion": "9e34f33dc4859ed26096101ed2a99b92300a765190666cfdcc424e8de260c104",
+        "itemCount": 2,
+        "staticCount": 3709
+      },
+      "targetRestart": {
+        "layoutHash": "74762969561a9218f4d429b8ee4f360199821ce61272a5e1173bf1281bc23ea7",
+        "mapVersion": "9e34f33dc4859ed26096101ed2a99b92300a765190666cfdcc424e8de260c104",
+        "itemCount": 2,
+        "staticCount": 3709
+      },
+      "liveServerCycles": [
+        {
+          "cycle": 0,
+          "readiness": 200,
+          "layoutHash": "74762969561a9218f4d429b8ee4f360199821ce61272a5e1173bf1281bc23ea7",
+          "layoutRevision": 8592,
+          "items": 2,
+          "ticks": 1
+        },
+        {
+          "cycle": 1,
+          "readiness": 200,
+          "layoutHash": "74762969561a9218f4d429b8ee4f360199821ce61272a5e1173bf1281bc23ea7",
+          "layoutRevision": 8592,
+          "items": 2,
+          "ticks": 0
+        }
+      ],
+      "oldReleaseRejectedWithoutWrites": true,
+      "replayAfterRestart": {
+        "status": "already-applied",
+        "operationId": "3a76a87a-9174-53ff-a189-5142123f909b",
+        "currentStateMatches": false,
+        "planHash": "3a76a87a917433ffa1895142123f909bdc1aa5d7b021cb17833a0a0bae4447a1",
+        "report": "output/ring-terrain-stage4/staging-migration/1b5c5108-67a1-44fc-8175-d0c840a89c7e/replay-after-restart.json"
+      },
+      "backupRestoredExactState": {
+        "stateHash": "0ca23fdb1a43419fd6c5f750e134e31c34addcb1c9d590a0e6f8feb49769e596",
+        "tables": 13
+      },
+      "sourceStartupAfterRestore": {
+        "layoutHash": "1b2049230dc806c8cbc0e2801e1aaced11531bac33fdbbaa1c7caad88ad6f40c",
+        "mapVersion": "7e0e072b2aea003323fa50ab7b624e67b64876ffcb9668bde63a35a6957b5b52",
+        "itemCount": 2,
+        "staticCount": 3709
+      }
+    },
+    "inputs": {
+      "layoutSha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+      "rulesSha256": "a6217a22d127174bcad653d9e5b78610c5a6196b2d5f0e9f20cb09009d4e31da",
+      "sourceAssetRelease": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+      "targetAssetRelease": "0014138cd53dd9765459c4b6e3a71ee7b4748a6439488cc70d0a312ad00ca217",
+      "savedSeedVersion": "7ad10571b13b707cac54bde162317ecde5561f3f3dcf8b0aed648d769c60061d",
+      "authoredSourceSeedVersion": "01e6d950230daff27b3af9b99dc4481b54401a10fee589ac53896303c88a8d3b",
+      "savedRevision": 5214,
+      "staticCount": 3709,
+      "disabledCount": 0
+    },
+    "plan": {
+      "planHash": "3a76a87a917433ffa1895142123f909bdc1aa5d7b021cb17833a0a0bae4447a1",
+      "sourceStateHash": "64d3373b6237852ad23f38067b01f714d60bdfb72c356c32f1a2adc8bdcab326",
+      "targetStateHash": "f4545bcc2006b5c8a5872960771d07510e6bafba42d9143a4253296bcd268e40",
+      "targetLayoutHash": "74762969561a9218f4d429b8ee4f360199821ce61272a5e1173bf1281bc23ea7",
+      "sourceCompatibility": "3263913fc1d19c17981a901ac350a3545bcd0b11c5e747b46e539e4715fc5de5",
+      "targetCompatibility": "f1b0c56b5aa52326467a6be41e68861c4cf74bce0d857bacc76c81e6c3feef84"
+    },
+    "disposableSchemaDropped": true
+  },
+  "verification": {
+    "fullSuitePassed": 843,
+    "fullSuiteInitialCliHarnessSkipped": 5,
+    "cliHarnessCorrectedRepeatPassed": 5,
+    "cityAcceptanceScopedPassed": 4,
+    "typescript": "passed",
+    "packageBoundaries": "passed",
+    "applicationBuild": "passed",
+    "finalCommitOutcomeSqlTestsPassed": 19,
+    "profileTestsPassed": 17,
+    "pilotRebuildAfterNumericalFix": "passed"
+  },
+  "artifacts": [
+    {
+      "path": "output/ring-terrain-stage4/city-acceptance.json",
+      "sha256": "68c94c20e8d9bf8e66e44e5b6cf91130237a720121863cc3c866b1f65785119c"
+    },
+    {
+      "path": "output/ring-terrain-stage4/preview-report.json",
+      "sha256": "aae7a21d0987ec7b9889f18a0c5486c7d1a3a08e363c206e42c20d53019b4147"
+    },
+    {
+      "path": "output/ring-terrain-stage4/preview-extra-report.json",
+      "sha256": "c25ab2b23347baca6d845952da90991d6fc13f3371e5a76feba5b85d4d43c2b9"
+    },
+    {
+      "path": "output/ring-terrain-stage4/staging-migration/1b5c5108-67a1-44fc-8175-d0c840a89c7e/report.json",
+      "sha256": "2fea7465273bf53c44b721fb3a4c99c7aa9d3e811284e31876da256d93317b5d"
+    },
+    {
+      "path": "output/ring-terrain-stage4/static-preflight.json",
+      "sha256": "aa064472eca7848c076bae12104246b3b94235543fc067be7a237e55c0ee6212"
+    },
+    {
+      "path": "output/ring-terrain-stage4/hardware-profile/comparison.json",
+      "sha256": "0e869859a951fd6998f0f71a983a910191b0b62bbab48d087e7f6dd62ee7a67c"
+    },
+    {
+      "path": "output/ring-terrain-stage4/build-report.json",
+      "sha256": "dd3771841129c7cdd7c20a917e8ab0d1162a5d41c15a27216139fe695ef897c1"
+    }
+  ],
+  "remaining": [
+    "Full current PostgreSQL backup and rehearsal of actual saved state",
+    "Full terrain, all entrances and content acceptance",
+    "Hardware 16.7 ms p95, network and streaming resource-cycle acceptance",
+    "Actual operational cutover"
+  ],
+  "hardware": {
+    "scope": "Real WorldView, CellStreamer and browser Havok over the current exported static layout. Stationary local neutral controller, no visible avatars or items, no room/network/database. Camera route is not a verified walking route. Not full city gameplay acceptance.",
+    "host": {
+      "platform": "darwin",
+      "cpu": "Apple M3 Pro",
+      "logicalCpus": 12,
+      "memoryBytes": 38654705664,
+      "node": "v26.3.1"
+    },
+    "browser": "158.0.8127.18",
+    "renderer": {
+      "vendor": "Google Inc. (Apple)",
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "deviceScaleFactor": 1
+    },
+    "quality": "standard",
+    "fixedHour": 12,
+    "warmupMs": 60000,
+    "sampleMs": 60000,
+    "focusHeight": "Each variant samples its own verified terrain grid continuously at identical route XZ",
+    "strictFrameP95BudgetMs": 16.7,
+    "relativeBudget": "max(1.2 * flat-4m p95, flat-4m p95 + 1 ms), separately for frame and local physics",
+    "pilotGates": {
+      "strictFrameP95Passed": false,
+      "relativeFrameP95Passed": true,
+      "relativePhysicsP95Passed": true
+    },
+    "fullGameplayAcceptance": {
+      "assessed": false,
+      "passed": false
+    },
+    "summary": {
+      "flatFrameP95Ms": [18.2, 18.4],
+      "pilotFrameP95Ms": [18.2, 18.4],
+      "flatPhysicsP95Ms": [1, 1],
+      "pilotPhysicsP95Ms": [0.5, 0.5],
+      "routeDrawCallsP95": {
+        "flat": 70,
+        "pilot": 306
+      },
+      "routeSceneRenderCpuP95Ms": {
+        "flat": 4.3,
+        "pilot": 8.0
+      }
+    }
+  }
+}

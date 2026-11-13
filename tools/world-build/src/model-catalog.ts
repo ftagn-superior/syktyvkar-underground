@@ -68,6 +68,7 @@ export function createWorldModelCatalog(
   manifest: WorldManifest,
   assetReleaseVersion: string,
   runtimeAssetIds: Record<string, string[]>,
+  generatedAssetIds: string[] = [],
 ): WorldModelCatalog {
   const models: Record<string, WorldModelCatalogEntry> = {};
   for (const assetId of Object.keys(sources.models).sort()) {
@@ -86,6 +87,7 @@ export function createWorldModelCatalog(
     catalogVersion: '0'.repeat(64),
     categories: sources.categories,
     models,
+    ...(generatedAssetIds.length ? { generatedAssetIds: [...generatedAssetIds].sort() } : {}),
   };
   catalog.catalogVersion = hash(canonicalJson(worldModelCatalogIdentity(catalog)));
   return validateWorldModelCatalog(catalog, manifest);

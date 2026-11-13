@@ -11,6 +11,7 @@ export * from './sounds.js';
 export * from './world-layout-patch.js';
 export * from './simulation.js';
 export * from './world-types.js';
+export * from './terrain.js';
 export * from './world-model-catalog.js';
 export * from './input.js';
 export * from './session.js';

@@ -103,7 +103,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     owner.room.send('placeStatic', req);
     owner.room.send('placeStatic', req);
     await until(() => owner.results.length === 2 && !app.room.state.paused);
-    expect(owner.results[0]).toMatchObject({ ok: true, entityId: `placed_${req.operationId}` });
+    expect(owner.results[0], JSON.stringify(owner.results[0])).toMatchObject({
+      ok: true,
+      entityId: `placed_${req.operationId}`,
+    });
     expect(owner.results[1]).toEqual(owner.results[0]);
     expect(owner.preparation.plans.at(-1)?.reason).toBe('layout');
     expect(observer.preparation.plans.at(-1)?.reason).toBe('layout');
@@ -172,9 +175,18 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     );
     const owner = await connect(cookie);
     const req = request();
-    vi.spyOn(AuthoritativeWorld.prototype, 'addStatic').mockImplementationOnce(() => {
-      throw new Error('injected Havok apply failure');
-    });
+    const prepare = AuthoritativeWorld.prototype.prepareStaticReplacement;
+    vi.spyOn(AuthoritativeWorld.prototype, 'prepareStaticReplacement').mockImplementationOnce(
+      function (this: AuthoritativeWorld, definition) {
+        const staged = prepare.call(this, definition);
+        return {
+          ...staged,
+          commit: () => {
+            throw new Error('injected Havok apply failure');
+          },
+        };
+      },
+    );
     owner.room.send('placeStatic', req);
     await until(() => !app.room.isReady());
     await until(() => owner.results.length > 0);

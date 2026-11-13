@@ -50,6 +50,20 @@ const manifest = {
 } as unknown as WorldManifest;
 
 describe('world model catalog contracts', () => {
+  it('explicitly accounts for generated terrain resources without hiding missing or duplicated cards', () => {
+    const value = fixture();
+    const extra = {
+      ...manifest,
+      assets: { ...manifest.assets, 'generated-support': {} },
+    } as unknown as WorldManifest;
+    expect(() => validateWorldModelCatalog(value, extra)).toThrow('unmapped');
+    value.generatedAssetIds = ['generated-support'];
+    expect(validateWorldModelCatalog(value, extra)).toEqual(value);
+    value.generatedAssetIds.push('house');
+    expect(() => validateWorldModelCatalog(value, extra)).toThrow('duplicate');
+    value.generatedAssetIds = ['missing'];
+    expect(() => validateWorldModelCatalog(value, extra)).toThrow('missing generated');
+  });
   it('accepts complete cards, repeated display names and a shared category vocabulary', () => {
     expect(validateWorldModelCategories({ formatVersion: 1, categories }).categories).toEqual(
       categories,

@@ -358,7 +358,7 @@ export function startGame(): void {
       !!gamepad?.snapshot().ready &&
       !gamepadResumeRequired &&
       !help?.isOpen &&
-      !session.areaProblem &&
+      !session.criticalAreaProblem &&
       !isTextInput(document.activeElement)
     );
   }
@@ -386,7 +386,8 @@ export function startGame(): void {
     if (!pageActive || document.hidden) return 'Вернитесь в игру, чтобы продолжить.';
     if (graphicsLost) return 'Графика недоступна. A — перезагрузить страницу.';
     if (help?.isOpen) return '';
-    if (session.areaProblem) return 'Не удалось загрузить окружение. A — повторить · Y — меню.';
+    if (session.criticalAreaProblem)
+      return 'Не удалось загрузить окружение. A — повторить · Y — меню.';
     if ((session.room || gamepadContext === 'waiting') && !gamepadBaseReady())
       return 'Ожидаем готовности мира. Y — меню.';
     if (!state.ready) return 'Отпустите стики и кнопки.';
@@ -415,7 +416,7 @@ export function startGame(): void {
       ? 'graphics'
       : help?.isOpen
         ? help.gamepadContext
-        : session.areaProblem && session.room
+        : session.criticalAreaProblem && session.room
           ? 'area-error'
           : !welcome.hidden
             ? 'lobby'
@@ -1183,6 +1184,8 @@ export function startGame(): void {
     Object.defineProperty(window, '__SU_DEBUG__', {
       value: Object.freeze({
         snapshot: () => structuredClone(session.diagnostics()),
+        motion: () => session.motionSnapshot(),
+        frames: () => session.frameHistory(),
         placement: () => staticPlacement?.diagnostics(),
         removal: () => staticRemoval?.diagnostics(),
         project: (position: { x: number; y: number; z: number }) => {

@@ -34,6 +34,7 @@ describe('published world model catalog', () => {
     for (const path of [
       'content/buildings/catalog.json',
       'content/buildings/ring-block/catalog.json',
+      'content/buildings/terrain-lab/catalog.json',
     ]) {
       const sources = await readWorldModelSources(path);
       for (const { descriptor, path: file } of Object.values(sources.models)) {

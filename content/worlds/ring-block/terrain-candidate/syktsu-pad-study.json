@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "status": "unapplied-comparison-input",
+  "ownerId": "osm-way-1258973447",
+  "sourceGrid": "pilot-grid-4m.json",
+  "sourceRule": "content/buildings/ring-block/osm-way-1258973447/terrain-support.json",
+  "sourcePlacement": {
+    "x": -148.88,
+    "z": -157.92,
+    "yaw": 0
+  },
+  "structuralPad": "actual support components, preserving every hole and detached component",
+  "pedestrianForecourt": {
+    "purpose": "Explicit main-entrance forecourt to connect the six-metre approach to the existing footway; no interior access claim.",
+    "outline": [
+      [
+        -97.97093935628826,
+        -124.44945372554744
+      ],
+      [
+        -92.88145542075804,
+        -113.58220231270255
+      ],
+      [
+        -81.56140186571125,
+        -118.88374807887986
+      ],
+      [
+        -86.65088580124146,
+        -129.75099949172474
+      ]
+    ],
+    "widthMetres": 12,
+    "inwardMetres": 0.5,
+    "outwardMetres": 12
+  },
+  "plateauMarginMetres": 6,
+  "plateauMarginReason": "At least the 4 m grid-cell diagonal; every cell intersecting the authored pad has all four nodes at the target level.",
+  "levelsMetres": [
+    5,
+    6,
+    7
+  ],
+  "blendWidthsMetres": [
+    20,
+    40,
+    60,
+    80
+  ],
+  "blendFunction": "height=base+(level-base)*(1-smoothstep(max(0,distance_to_authored_pad-plateauMargin)/blendWidth))",
+  "affectedObjectMethod": "Intersections with complete generated projected-object masks, including extended models; count each entity once. The masks are not foundation geometry."
+}

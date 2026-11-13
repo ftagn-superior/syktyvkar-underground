@@ -40,7 +40,9 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
     const rooms: Room<WorldState>[] = [];
     const rate = vi.spyOn(StaticLayoutStore.prototype, 'gameRateLimited').mockResolvedValue(false);
     try {
-      await buildWorld('content/worlds/ring-block/world.json', worldDirectory);
+      await buildWorld('content/worlds/ring-block/world.json', worldDirectory, {
+        terrainRelease: false,
+      });
       const start = async () => {
         app = await createGameServer({
           port: 0,

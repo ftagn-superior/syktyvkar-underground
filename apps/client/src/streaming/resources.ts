@@ -50,7 +50,12 @@ export class VerifiedResources {
   ) {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.limit = options.cacheBytes ?? 64 * 1024 * 1024;
-    this.packPaths = new Set((manifest.cells ?? []).flatMap((cell) => cell.graphicsPacks ?? []));
+    this.packPaths = new Set(
+      (manifest.cells ?? []).flatMap((cell) => [
+        ...(cell.graphicsPacks ?? []),
+        ...(cell.physicsPacks ?? []),
+      ]),
+    );
     if (!Number.isSafeInteger(this.limit) || this.limit < 0)
       throw new Error('Invalid byte cache budget');
   }
@@ -102,26 +107,43 @@ export class VerifiedResources {
   }
   /** Packs change transport only: callers can still read every original file after LRU eviction. */
   async prefetchGraphics(cellId: string, signal?: AbortSignal, priority = 0): Promise<void> {
+    return this.prefetchPack(cellId, 'graphics', signal, priority);
+  }
+  /** Original collision files remain the fallback for older manifests and LRU eviction. */
+  async prefetchPhysics(cellId: string, signal?: AbortSignal, priority = 0): Promise<void> {
+    return this.prefetchPack(cellId, 'physics', signal, priority);
+  }
+  private async prefetchPack(
+    cellId: string,
+    kind: 'graphics' | 'physics',
+    signal?: AbortSignal,
+    priority = 0,
+  ): Promise<void> {
     if (this.disposed || signal?.aborted) throw aborted();
     const cell = this.manifest.cells.find((entry) => entry.cellId === cellId);
-    if (!cell) throw new Error(`Unknown graphics cell: ${cellId}`);
-    if (!cell.graphicsPacks?.length) return;
+    if (!cell) throw new Error(`Unknown ${kind} cell: ${cellId}`);
+    const packs = kind === 'graphics' ? cell.graphicsPacks : cell.physicsPacks;
+    if (!packs?.length) return;
     const allowed = new Set(
       cell.assetIds.flatMap((id) => {
         const asset = this.manifest.assets[id];
-        return asset.modelFile ? [asset.modelFile, asset.partsFile] : [asset.partsFile];
+        return kind === 'physics'
+          ? [asset.collisionFile]
+          : asset.modelFile
+            ? [asset.modelFile, asset.partsFile]
+            : [asset.partsFile];
       }),
     );
-    for (const pack of cell.graphicsPacks) {
+    for (const pack of packs) {
       if ([...allowed].every((path) => this.cache.has(path))) break;
       if (this.packEntries.get(pack)?.every((path) => this.cache.has(path))) continue;
       const entries = decodeGraphicsPack(await this.read(pack, signal, priority));
       // Validate the entire envelope before adding anything to the asset cache.
       for (const [path, bytes] of entries) {
         if (this.disposed || signal?.aborted) throw aborted();
-        if (!allowed.has(path)) throw new Error(`Unexpected graphics pack entry: ${path}`);
+        if (!allowed.has(path)) throw new Error(`Unexpected ${kind} pack entry: ${path}`);
         if ((await this.digest(bytes)) !== this.manifest.files[path])
-          throw new Error(`Graphics pack entry SHA-256 mismatch: ${path}`);
+          throw new Error(`${kind} pack entry SHA-256 mismatch: ${path}`);
       }
       if (this.disposed || signal?.aborted) throw aborted();
       this.packEntries.set(pack, [...entries.keys()]);

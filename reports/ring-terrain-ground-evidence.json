@@ -1,0 +1,5907 @@
+{
+  "inspectionDate": "2026-11-13",
+  "scope": "Stage 0 diagnostic ground reconstruction and isolated hardware reference; no production terrain acceptance",
+  "artifacts": {
+    "groundEstimate": {
+      "path": "output/ring-terrain-stage0/ground-estimate.json",
+      "sha256": "d521d4e9e70e8d7dd7b51c1dc4ce4d0a0bfbb9e61a02fe5aea63036746e6b507"
+    },
+    "alignment": {
+      "path": "output/ring-terrain-stage0/alignment-diagnostic.json",
+      "sha256": "1730beada6cb870014dfd1ab033e10949147d82cc39e3dd4d8f6e9ea10fb8fb4"
+    },
+    "coarseReferenceCheck": {
+      "path": "output/ring-terrain-stage0/gedtm-scale-and-datum-check.json",
+      "sha256": "0c6403ad0572f2bd1b369a89e0cca1d18868f1926d08471fbc520f73c96681c7"
+    },
+    "coarseComparison": {
+      "path": "output/ring-terrain-stage0/coarse-ground-comparison.json",
+      "sha256": "7006416ccfc362f3062075e6a3574b6258d315ca2a7b0bf188f227a314dc8fb0"
+    },
+    "hardwareBaseline": {
+      "path": "output/ring-terrain-stage0/hardware-baseline/summary.json",
+      "sha256": "000ed71f5160041fcfd65ac39c1d6f6a3bec7e506803de34bba8c07e04395816"
+    },
+    "pilotTransitionCheck": {
+      "path": "output/ring-terrain-stage0/pilot-transition-check.json",
+      "sha256": "9a99e437f884434a749b3270def7a4ae0dd20ddfa04a0de6ee4e077f5229b1f1"
+    }
+  },
+  "groundEstimate": {
+    "status": "diagnostic_candidate_not_approved_terrain",
+    "verticalReference": "WGS84 ellipsoid, Y=h-124",
+    "georeferenceChangeApplied": false,
+    "method": "Mapped open areas; 16 m buildings / 4 m vegetation / 2 m other exclusions; source quality; 3x3 DSM range<=2m; 10m blocks with >=3 samples, observed value nearest p20; Huber curvature-regularized 10m lattice; bilinear diagnostic output at 2m",
+    "parameters": {
+      "smoothing": 30,
+      "huberDeltaM": 1,
+      "maxIterations": 100,
+      "convergenceMaxNodeChangeM": 0.001,
+      "convergenceMaxWeightChange": 0.001,
+      "qualityMadMaxM": 1,
+      "blockMeters": 10
+    },
+    "solverAudits": [
+      {
+        "anchorCount": 502,
+        "smoothing": 30,
+        "iterations": 26,
+        "maxNodeChangeM": 0.0009333377838096624,
+        "converged": true
+      },
+      {
+        "anchorCount": 624,
+        "smoothing": 30,
+        "iterations": 27,
+        "maxNodeChangeM": 0.0008302721406412417,
+        "converged": true
+      },
+      {
+        "anchorCount": 390,
+        "smoothing": 30,
+        "iterations": 23,
+        "maxNodeChangeM": 0.0009840448184430528,
+        "converged": true
+      },
+      {
+        "anchorCount": 502,
+        "smoothing": 30,
+        "iterations": 29,
+        "maxNodeChangeM": 0.000902036981152321,
+        "converged": true
+      },
+      {
+        "anchorCount": 502,
+        "smoothing": 10,
+        "iterations": 23,
+        "maxNodeChangeM": 0.000842821745138167,
+        "converged": true
+      },
+      {
+        "anchorCount": 502,
+        "smoothing": 100,
+        "iterations": 19,
+        "maxNodeChangeM": 0.000700398033402827,
+        "converged": true
+      },
+      {
+        "anchorCount": 535,
+        "smoothing": 30,
+        "iterations": 26,
+        "maxNodeChangeM": 0.000979913894223472,
+        "converged": true
+      },
+      {
+        "anchorCount": 154,
+        "smoothing": 30,
+        "iterations": 21,
+        "maxNodeChangeM": 0.000985206611138878,
+        "converged": true
+      },
+      {
+        "anchorCount": 224,
+        "smoothing": 30,
+        "iterations": 18,
+        "maxNodeChangeM": 0.0006858790688379912,
+        "converged": true
+      },
+      {
+        "anchorCount": 205,
+        "smoothing": 30,
+        "iterations": 28,
+        "maxNodeChangeM": 0.0007639070796319203,
+        "converged": true
+      },
+      {
+        "anchorCount": 196,
+        "smoothing": 30,
+        "iterations": 16,
+        "maxNodeChangeM": 0.0009312735260634392,
+        "converged": true
+      }
+    ],
+    "inputs": {
+      "output/ring-terrain-stage0/source-inspection.json": "48e85796bed37f48da367542ec474eb75e5ca866884d3d84969d3534ee3c6a52",
+      "output/ring-terrain-stage0/object-masks.json": "cae0e239dc01e3d22d4a292feb95de6a3c2e7a4d705d0643d078de2678b5287d",
+      "content/buildings/ring-block/ring-block-ground/source.json": "a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6"
+    },
+    "candidateSampleCount": 4953,
+    "anchorCount": 502,
+    "heightY": {
+      "count": 132139,
+      "min": -0.2810618062993383,
+      "p05": 1.1248105526183942,
+      "median": 7.914410664746707,
+      "p95": 13.57824881388843,
+      "max": 14.526076911020048
+    },
+    "pilotHeightY": {
+      "count": 13560,
+      "min": 0.9586004504380108,
+      "p05": 1.6809705924427503,
+      "median": 4.143470594977316,
+      "p95": 8.731531270955767,
+      "max": 11.31921342880302
+    },
+    "triangleSlopeDegrees": {
+      "count": 262800,
+      "min": 0.001778766160891324,
+      "p05": 0.4891440688844077,
+      "median": 1.630937676213788,
+      "p95": 3.9305664594602416,
+      "max": 4.703112678748317
+    },
+    "pilotTriangleSlopeDegrees": {
+      "count": 26656,
+      "min": 0.3502259309436168,
+      "p05": 0.8055307190435815,
+      "median": 1.687343944578593,
+      "p95": 3.2797408252875515,
+      "max": 3.3841748214924876
+    },
+    "nearestAnchorDistanceM": {
+      "count": 132139,
+      "min": 0.0,
+      "p05": 4.47213595499958,
+      "median": 28.42534080710379,
+      "p95": 74.72616676907762,
+      "max": 119.07980517283357
+    },
+    "pilotNearestAnchorDistanceM": {
+      "count": 13560,
+      "min": 0.0,
+      "p05": 5.656854249492381,
+      "median": 33.52610922848042,
+      "p95": 78.89359903999063,
+      "max": 99.45853407325085
+    },
+    "within50mAnchorFraction": 0.7864143061473146,
+    "pilotWithin50mAnchorFraction": 0.7286135693215339,
+    "variantRangeM": {
+      "count": 132139,
+      "min": 0.12305447136390013,
+      "p05": 0.33164176528832484,
+      "median": 2.3094456140701665,
+      "p95": 8.935807474788103,
+      "max": 10.06524985958131
+    },
+    "pilotVariantRangeM": {
+      "count": 13560,
+      "min": 0.12324657322191213,
+      "p05": 0.19500554375226825,
+      "median": 1.136646899072701,
+      "p95": 4.447987120134851,
+      "max": 7.102757022884283
+    },
+    "variants": {
+      "building_buffer_12": {
+        "anchorCount": 624,
+        "heightY": {
+          "count": 132139,
+          "min": -0.22278232402585746,
+          "p05": 1.3384070345494066,
+          "median": 9.509212084612074,
+          "p95": 15.978946376492292,
+          "max": 17.126846681601652
+        },
+        "absoluteDeltaM": {
+          "count": 132139,
+          "min": 3.6601324033824767e-6,
+          "p05": 0.03326571456332879,
+          "median": 0.6958053787090996,
+          "p95": 4.366390426696566,
+          "max": 5.395063510527734
+        }
+      },
+      "building_buffer_20": {
+        "anchorCount": 390,
+        "heightY": {
+          "count": 132139,
+          "min": -0.307739650291032,
+          "p05": 0.7510154518701723,
+          "median": 5.981985141217707,
+          "p95": 11.340455046240612,
+          "max": 15.175715914701343
+        },
+        "absoluteDeltaM": {
+          "count": 132139,
+          "min": 3.586261606791652e-6,
+          "p05": 0.026989927233586952,
+          "median": 0.8381073513816855,
+          "p95": 5.339101202248227,
+          "max": 6.488906002068642
+        }
+      },
+      "block_median": {
+        "anchorCount": 502,
+        "heightY": {
+          "count": 132139,
+          "min": -0.12658934485030923,
+          "p05": 1.2735436991776758,
+          "median": 8.229160397882731,
+          "p95": 13.787946946360567,
+          "max": 14.762969867072083
+        },
+        "absoluteDeltaM": {
+          "count": 132139,
+          "min": 6.927462102623849e-6,
+          "p05": 0.10566333111058261,
+          "median": 0.2140289576296981,
+          "p95": 0.4775887766513753,
+          "max": 1.515942764815322
+        }
+      },
+      "smoothing_10": {
+        "anchorCount": 502,
+        "heightY": {
+          "count": 132139,
+          "min": -0.5629933911437366,
+          "p05": 1.2509021746660465,
+          "median": 8.330265838314407,
+          "p95": 15.769208824917753,
+          "max": 17.076831994292096
+        },
+        "absoluteDeltaM": {
+          "count": 132139,
+          "min": 6.5920314578082895e-6,
+          "p05": 0.03437240938671424,
+          "median": 0.5583394081739499,
+          "p95": 3.1251221724862486,
+          "max": 3.985441930696405
+        }
+      },
+      "smoothing_100": {
+        "anchorCount": 502,
+        "heightY": {
+          "count": 132139,
+          "min": 0.09354653987942645,
+          "p05": 1.1189542196393825,
+          "median": 7.185093018829232,
+          "p95": 10.826024878105693,
+          "max": 12.078726553746948
+        },
+        "absoluteDeltaM": {
+          "count": 132139,
+          "min": 1.0870973613741342e-5,
+          "p05": 0.03660079124875804,
+          "median": 0.49092588102264845,
+          "p95": 3.428606008898114,
+          "max": 4.041094239261103
+        }
+      },
+      "diagnostic_source_offset": {
+        "anchorCount": 535,
+        "heightY": {
+          "count": 132139,
+          "min": -0.22922345433610963,
+          "p05": 1.1267133413013093,
+          "median": 8.135981807604667,
+          "p95": 13.240313232552781,
+          "max": 14.17615233165513
+        },
+        "absoluteDeltaM": {
+          "count": 132139,
+          "min": 4.1396949871153055e-5,
+          "p05": 0.03579537888075044,
+          "median": 0.4929319004372612,
+          "p95": 1.5789386232929232,
+          "max": 2.5506368546813185
+        }
+      }
+    },
+    "spatialHoldout": {
+      "blockMeters": 60,
+      "bufferMeters": 20,
+      "folds": [
+        {
+          "fold": 0,
+          "trainAnchors": 154,
+          "testAnchors": 154,
+          "absoluteResidualM": {
+            "count": 154,
+            "min": 0.017276013145021807,
+            "p05": 0.1146511191772646,
+            "median": 2.423847752165557,
+            "p95": 10.580037632892433,
+            "max": 16.534656377023154
+          },
+          "signedResidualM": {
+            "count": 154,
+            "min": -16.534656377023154,
+            "p05": -10.580037632892441,
+            "median": 0.6271980841460376,
+            "p95": 5.180349344712152,
+            "max": 5.867734756891167
+          }
+        },
+        {
+          "fold": 1,
+          "trainAnchors": 224,
+          "testAnchors": 108,
+          "absoluteResidualM": {
+            "count": 108,
+            "min": 0.018675182972572202,
+            "p05": 0.18265181843206124,
+            "median": 1.7767699472082228,
+            "p95": 10.507983258819701,
+            "max": 12.856715567898334
+          },
+          "signedResidualM": {
+            "count": 108,
+            "min": -12.856715567898334,
+            "p05": -10.507983258819701,
+            "median": -0.7802167063343788,
+            "p95": 2.690077882450163,
+            "max": 4.9629368455518375
+          }
+        },
+        {
+          "fold": 2,
+          "trainAnchors": 205,
+          "testAnchors": 120,
+          "absoluteResidualM": {
+            "count": 120,
+            "min": 0.013549348515340398,
+            "p05": 0.08191947356115463,
+            "median": 1.6855087072195545,
+            "p95": 8.174594839044133,
+            "max": 13.553137953690822
+          },
+          "signedResidualM": {
+            "count": 120,
+            "min": -13.553137953690822,
+            "p05": -8.174594839044133,
+            "median": 0.27104243247976,
+            "p95": 3.2793369046081224,
+            "max": 5.521716606034175
+          }
+        },
+        {
+          "fold": 3,
+          "trainAnchors": 196,
+          "testAnchors": 120,
+          "absoluteResidualM": {
+            "count": 120,
+            "min": 0.02600959776808054,
+            "p05": 0.07696210371493492,
+            "median": 1.6328185052620086,
+            "p95": 8.457988420471562,
+            "max": 11.91455980353534
+          },
+          "signedResidualM": {
+            "count": 120,
+            "min": -11.91455980353534,
+            "p05": -7.294618948812075,
+            "median": -0.07378261854699986,
+            "p95": 7.48972574239845,
+            "max": 9.172273786482208
+          }
+        }
+      ],
+      "interpretation": "Agreement with held-out candidate DSM observations only; not ground truth or geodetic accuracy"
+    },
+    "route": {
+      "pointsXZ": [
+        [0.0, 0.0],
+        [-33.0, -75.0],
+        [-68.0, -130.0],
+        [-93.0264, -120.1397],
+        [-68.0, -130.0],
+        [-100.0, -200.0],
+        [-141.0, -280.0]
+      ],
+      "estimatedY": [
+        0.31999958436684856, 1.5519903749773445, 2.5892255509073228, 2.688932783005597,
+        2.5892255509073228, 4.432426987660223, 9.11275893167383
+      ],
+      "segmentAverageSlopeDegrees": [
+        0.8614036393355156, 0.9115253725919693, 0.2123802688441464, 0.2123802688441464,
+        1.3718445627680849, 2.9804015103962533
+      ],
+      "interpretation": "Diagnostic profile, not a validated walkable route"
+    },
+    "limitations": [
+      "Contemporary authored masks are not a complete historical inventory of roofs and vegetation",
+      "Wide elevated objects can survive candidate selection",
+      "No surveyed bare-earth controls",
+      "Interpolated areas and extrapolation at edges remain uncertain",
+      "Variant spread is not a confidence interval",
+      "Smoothing controls slopes; these are candidate slopes, not proven real slopes"
+    ]
+  },
+  "alignment": {
+    "purpose": "Relative alignment diagnostic only; no surveyed control, no automatic correction",
+    "sourceSamplingOffsetMeaning": "DSM is sampled at model X+dx,Z+dz. A positive result is a diagnostic optimum, not an authorized georeference change.",
+    "method": "Current simple footprint geometries only; compound recipes with sections excluded because top-level outlines are not authoritative body geometry. Buildings>=6m high and >=200m2, edges>=8m; samples 4m inside/outside every4m, away from vertices/map boundary. Per building mean clipped contrast [-10,20]; aggregate median across buildings. Translation search +/-20m step2m.",
+    "n_all_footprints": 136,
+    "n_simple_footprints": 131,
+    "excluded_compound_recipes": [
+      {
+        "id": "osm-way-111538131",
+        "reason": "compound recipe: top-level outline is not authoritative body geometry",
+        "section_count": 4
+      },
+      {
+        "id": "osm-way-117389706",
+        "reason": "compound recipe: top-level outline is not authoritative body geometry",
+        "section_count": 3
+      },
+      {
+        "id": "osm-way-1258973447",
+        "reason": "compound recipe: top-level outline is not authoritative body geometry",
+        "section_count": 15
+      },
+      {
+        "id": "osm-way-146724915",
+        "reason": "compound recipe: top-level outline is not authoritative body geometry",
+        "section_count": 3
+      },
+      {
+        "id": "osm-way-92104661",
+        "reason": "compound recipe: top-level outline is not authoritative body geometry",
+        "section_count": 2
+      }
+    ],
+    "n_selected_buildings": 82,
+    "n_edge_samples": 2312,
+    "overall": {
+      "count_buildings": 82,
+      "best_source_sampling_offset_xz_m": [-6, 2],
+      "mean_edge_contrast_m_at_zero": 0.7043589454168074,
+      "mean_edge_contrast_m_at_best": 1.1362537717651429,
+      "index": 238
+    },
+    "spatial_groups": {
+      "north": {
+        "count_buildings": 52,
+        "best_source_sampling_offset_xz_m": [-6, 0],
+        "mean_edge_contrast_m_at_zero": 0.662277407584523,
+        "mean_edge_contrast_m_at_best": 0.9845004464835903,
+        "index": 217
+      },
+      "south": {
+        "count_buildings": 30,
+        "best_source_sampling_offset_xz_m": [-8, 2],
+        "mean_edge_contrast_m_at_zero": 0.7622152657437373,
+        "mean_edge_contrast_m_at_best": 1.626113090869568,
+        "index": 237
+      },
+      "west": {
+        "count_buildings": 45,
+        "best_source_sampling_offset_xz_m": [-6, 2],
+        "mean_edge_contrast_m_at_zero": 0.5574502270319824,
+        "mean_edge_contrast_m_at_best": 1.0663254803775948,
+        "index": 238
+      },
+      "east": {
+        "count_buildings": 37,
+        "best_source_sampling_offset_xz_m": [-4, 0],
+        "mean_edge_contrast_m_at_zero": 0.8881767729476818,
+        "mean_edge_contrast_m_at_best": 1.1857524455015334,
+        "index": 218
+      }
+    },
+    "building_holdout": {
+      "train": {
+        "count_buildings": 43,
+        "best_source_sampling_offset_xz_m": [-6, 2],
+        "mean_edge_contrast_m_at_zero": 0.5574502270319824,
+        "mean_edge_contrast_m_at_best": 1.1671527640229173,
+        "index": 238
+      },
+      "test_at_train_offset": 1.1270110205652615,
+      "test_at_zero": 0.7890351965990656,
+      "test_independent_best": {
+        "count_buildings": 39,
+        "best_source_sampling_offset_xz_m": [-10, 4],
+        "mean_edge_contrast_m_at_zero": 0.7890351965990656,
+        "mean_edge_contrast_m_at_best": 1.1555460632931602,
+        "index": 257
+      },
+      "note": "building holdout checks alignment consistency; does not measure geodetic truth"
+    },
+    "individual_buildings": [
+      {
+        "id": "osm-way-109234380",
+        "center_xz": [47.650000000000006, -619.9],
+        "area_m2": 750.689999999995,
+        "height_m": 13.2,
+        "edge_samples": 30,
+        "best_offset": [-8, 0],
+        "zero_contrast": 1.3167795629797885,
+        "best_contrast": 1.4470861439911336
+      },
+      {
+        "id": "osm-way-109234381",
+        "center_xz": [132.4, -635.05],
+        "area_m2": 692.9800000000068,
+        "height_m": 13.2,
+        "edge_samples": 30,
+        "best_offset": [16, 2],
+        "zero_contrast": 0.7890351965990656,
+        "best_contrast": 1.5438057704905883
+      },
+      {
+        "id": "osm-way-109234382",
+        "center_xz": [184.15000000000003, -609.325],
+        "area_m2": 1211.9149999999936,
+        "height_m": 19.4,
+        "edge_samples": 40,
+        "best_offset": [-6, 4],
+        "zero_contrast": 1.9554758558434877,
+        "best_contrast": 3.2881540518864627
+      },
+      {
+        "id": "osm-way-109234383",
+        "center_xz": [101.625, -568.3],
+        "area_m2": 1042.5099999999911,
+        "height_m": 16.3,
+        "edge_samples": 42,
+        "best_offset": [16, 4],
+        "zero_contrast": 1.5272600672691383,
+        "best_contrast": 2.6966706350229934
+      },
+      {
+        "id": "osm-way-109234384",
+        "center_xz": [7.65, -585.475],
+        "area_m2": 820.3649999999998,
+        "height_m": 13.2,
+        "edge_samples": 30,
+        "best_offset": [-20, -18],
+        "zero_contrast": -0.8161338318924398,
+        "best_contrast": 0.7700875750451189
+      },
+      {
+        "id": "osm-way-109234385",
+        "center_xz": [-144.5, -587.5],
+        "area_m2": 758.1599999999889,
+        "height_m": 16.3,
+        "edge_samples": 34,
+        "best_offset": [-8, 2],
+        "zero_contrast": 2.1331941965741112,
+        "best_contrast": 2.547058920723984
+      },
+      {
+        "id": "osm-way-109234386",
+        "center_xz": [-56.2, -601.8],
+        "area_m2": 1088.0000000000027,
+        "height_m": 16.3,
+        "edge_samples": 40,
+        "best_offset": [-16, 8],
+        "zero_contrast": 1.6459137999898352,
+        "best_contrast": 2.3059975413200213
+      },
+      {
+        "id": "osm-way-110253707",
+        "center_xz": [227.85, -623.975],
+        "area_m2": 723.7549999999974,
+        "height_m": 28.7,
+        "edge_samples": 24,
+        "best_offset": [16, 20],
+        "zero_contrast": 0.23601145193229436,
+        "best_contrast": 1.4983950139702031
+      },
+      {
+        "id": "osm-way-110770955",
+        "center_xz": [17.125, -521.7],
+        "area_m2": 876.9600000000028,
+        "height_m": 7,
+        "edge_samples": 30,
+        "best_offset": [10, 18],
+        "zero_contrast": -2.5718895137191726,
+        "best_contrast": 1.5261170157515076
+      },
+      {
+        "id": "osm-way-110770957",
+        "center_xz": [279.25, -715.325],
+        "area_m2": 612.4550000000017,
+        "height_m": 13.2,
+        "edge_samples": 15,
+        "best_offset": [-8, -2],
+        "zero_contrast": 1.0203936829831037,
+        "best_contrast": 1.8378701663176855
+      },
+      {
+        "id": "osm-way-110777684",
+        "center_xz": [-42.974999999999994, -674.1916666666667],
+        "area_m2": 785.8549999999977,
+        "height_m": 7,
+        "edge_samples": 22,
+        "best_offset": [12, 20],
+        "zero_contrast": -0.39246250149034395,
+        "best_contrast": 1.5081948848112512
+      },
+      {
+        "id": "osm-way-110777686",
+        "center_xz": [-83.4, -638.9250000000001],
+        "area_m2": 277.27999999999884,
+        "height_m": 7,
+        "edge_samples": 12,
+        "best_offset": [10, 4],
+        "zero_contrast": 0.14712050659664536,
+        "best_contrast": 0.8913507092426395
+      },
+      {
+        "id": "osm-way-110777687",
+        "center_xz": [-212.64999999999998, -625.0166666666665],
+        "area_m2": 408.9400000000169,
+        "height_m": 7,
+        "edge_samples": 12,
+        "best_offset": [-6, 4],
+        "zero_contrast": 1.0724962607384327,
+        "best_contrast": 1.6236019748212864
+      },
+      {
+        "id": "osm-way-110777688",
+        "center_xz": [7.9, -652.95],
+        "area_m2": 365.1700000000001,
+        "height_m": 7,
+        "edge_samples": 14,
+        "best_offset": [20, 8],
+        "zero_contrast": 0.34025859442521217,
+        "best_contrast": 2.518162505248193
+      },
+      {
+        "id": "osm-way-110777689",
+        "center_xz": [105.775, -669.175],
+        "area_m2": 277.2000000000007,
+        "height_m": 7,
+        "edge_samples": 14,
+        "best_offset": [-14, -20],
+        "zero_contrast": -0.48889979756136726,
+        "best_contrast": 2.7198200446622565
+      },
+      {
+        "id": "osm-way-110777690",
+        "center_xz": [146.45, -676.35],
+        "area_m2": 351.13000000000466,
+        "height_m": 7,
+        "edge_samples": 16,
+        "best_offset": [16, -18],
+        "zero_contrast": 1.0468952568048824,
+        "best_contrast": 1.6200358290155261
+      },
+      {
+        "id": "osm-way-110777691",
+        "center_xz": [-124.625, -646.325],
+        "area_m2": 420.22000000000116,
+        "height_m": 7,
+        "edge_samples": 18,
+        "best_offset": [20, -20],
+        "zero_contrast": -0.4839836007091994,
+        "best_contrast": 1.1915879555512814
+      },
+      {
+        "id": "osm-way-110777693",
+        "center_xz": [97.6, -703.125],
+        "area_m2": 317.4399999999987,
+        "height_m": 7,
+        "edge_samples": 12,
+        "best_offset": [-12, 14],
+        "zero_contrast": 0.29743523157728663,
+        "best_contrast": 2.6957037435717504
+      },
+      {
+        "id": "osm-way-110777694",
+        "center_xz": [58.14999999999999, -663.25],
+        "area_m2": 381.3199999999997,
+        "height_m": 7,
+        "edge_samples": 16,
+        "best_offset": [-14, 14],
+        "zero_contrast": 0.5162494515675835,
+        "best_contrast": 2.481658628235211
+      },
+      {
+        "id": "osm-way-110777695",
+        "center_xz": [-166.62499999999997, -624.15],
+        "area_m2": 409.8750000000073,
+        "height_m": 7,
+        "edge_samples": 12,
+        "best_offset": [6, -8],
+        "zero_contrast": 0.003362643950737265,
+        "best_contrast": 0.7008427709076201
+      },
+      {
+        "id": "osm-way-110778592",
+        "center_xz": [-220.4416666666667, -673.2166666666666],
+        "area_m2": 408.2700000000186,
+        "height_m": 7,
+        "edge_samples": 12,
+        "best_offset": [-16, 14],
+        "zero_contrast": 0.8622910092203284,
+        "best_contrast": 1.4289508734226455
+      },
+      {
+        "id": "osm-way-110778594",
+        "center_xz": [-138.16666666666666, -710.6333333333333],
+        "area_m2": 409.1900000000023,
+        "height_m": 7,
+        "edge_samples": 8,
+        "best_offset": [12, 20],
+        "zero_contrast": 0.08901973385919959,
+        "best_contrast": 2.1381463186706284
+      },
+      {
+        "id": "osm-way-110778595",
+        "center_xz": [-175.7, -705.3],
+        "area_m2": 630.8799999999901,
+        "height_m": 19.4,
+        "edge_samples": 22,
+        "best_offset": [-10, -2],
+        "zero_contrast": 2.209950398138251,
+        "best_contrast": 2.653019443675708
+      },
+      {
+        "id": "osm-way-110778598",
+        "center_xz": [-175.375, -672.1833333333333],
+        "area_m2": 411.02500000000146,
+        "height_m": 7,
+        "edge_samples": 12,
+        "best_offset": [14, 18],
+        "zero_contrast": -1.0254258746009317,
+        "best_contrast": 0.6976145241412368
+      },
+      {
+        "id": "osm-way-111493596",
+        "center_xz": [-168.27500000000003, -545.6],
+        "area_m2": 800.2900000000081,
+        "height_m": 10.1,
+        "edge_samples": 24,
+        "best_offset": [-12, 4],
+        "zero_contrast": 0.8049051959407443,
+        "best_contrast": 2.9078293056456537
+      },
+      {
+        "id": "osm-way-111536850",
+        "center_xz": [-66.35, -447.09999999999997],
+        "area_m2": 449.33000000000175,
+        "height_m": 10.1,
+        "edge_samples": 18,
+        "best_offset": [-2, -10],
+        "zero_contrast": 0.1301048725126574,
+        "best_contrast": 2.9636381586253244
+      },
+      {
+        "id": "osm-way-111538132",
+        "center_xz": [201.3, -349.3],
+        "area_m2": 858.1599999999999,
+        "height_m": 13.2,
+        "edge_samples": 32,
+        "best_offset": [-20, 10],
+        "zero_contrast": 0.8712465382147165,
+        "best_contrast": 1.2495692378758
+      },
+      {
+        "id": "osm-way-111538134",
+        "center_xz": [191.46666666666667, -405.98333333333335],
+        "area_m2": 1262.3949999999968,
+        "height_m": 28.7,
+        "edge_samples": 35,
+        "best_offset": [-16, -20],
+        "zero_contrast": 0.9059624407872312,
+        "best_contrast": 1.9699160723412124
+      },
+      {
+        "id": "osm-way-117389687",
+        "center_xz": [31.900000000000006, -219.9],
+        "area_m2": 787.5799999999986,
+        "height_m": 7,
+        "edge_samples": 25,
+        "best_offset": [8, 18],
+        "zero_contrast": -1.4634845030294616,
+        "best_contrast": 1.5303705423954796
+      },
+      {
+        "id": "osm-way-117389693",
+        "center_xz": [234.79999999999998, -464.7],
+        "area_m2": 429.56000000000495,
+        "height_m": 10.1,
+        "edge_samples": 20,
+        "best_offset": [-14, 2],
+        "zero_contrast": -0.5476794635240949,
+        "best_contrast": 0.4519172125700123
+      },
+      {
+        "id": "osm-way-1277836302",
+        "center_xz": [99.15833333333332, -79.03333333333335],
+        "area_m2": 1966.0599999999995,
+        "height_m": 16.3,
+        "edge_samples": 54,
+        "best_offset": [-12, -4],
+        "zero_contrast": 0.9333088739819667,
+        "best_contrast": 1.822465564197343
+      },
+      {
+        "id": "osm-way-1280945083",
+        "center_xz": [271.6000000000001, -650.1333333333333],
+        "area_m2": 1108.7350000000442,
+        "height_m": 7,
+        "edge_samples": 42,
+        "best_offset": [20, 2],
+        "zero_contrast": 0.523871529026124,
+        "best_contrast": 1.4352250910672897
+      },
+      {
+        "id": "osm-way-1281369739",
+        "center_xz": [198.1, -516.9499999999999],
+        "area_m2": 953.5899999999965,
+        "height_m": 6,
+        "edge_samples": 30,
+        "best_offset": [-12, 8],
+        "zero_contrast": 0.146528033526414,
+        "best_contrast": 1.3215038229443243
+      },
+      {
+        "id": "osm-way-1281375677",
+        "center_xz": [257.3642857142857, -576.2642857142857],
+        "area_m2": 660.1249999999854,
+        "height_m": 7,
+        "edge_samples": 19,
+        "best_offset": [2, -20],
+        "zero_contrast": 0.22569276564739857,
+        "best_contrast": 1.6480283572344137
+      },
+      {
+        "id": "osm-way-1291799392",
+        "center_xz": [-80.63333333333334, -28.988888888888887],
+        "area_m2": 1612.435,
+        "height_m": 31.8,
+        "edge_samples": 38,
+        "best_offset": [-14, -20],
+        "zero_contrast": -0.4336687321024085,
+        "best_contrast": 1.3346409002883035
+      },
+      {
+        "id": "osm-way-1292842070",
+        "center_xz": [19.175, -71.50000000000001],
+        "area_m2": 951.4899999999999,
+        "height_m": 28.7,
+        "edge_samples": 22,
+        "best_offset": [-16, -18],
+        "zero_contrast": 0.2640606273148743,
+        "best_contrast": 1.9686662200993625
+      },
+      {
+        "id": "osm-way-1303691960",
+        "center_xz": [-28.952631578947365, 79.27894736842106],
+        "area_m2": 1545.7150000000001,
+        "height_m": 31.8,
+        "edge_samples": 24,
+        "best_offset": [20, 2],
+        "zero_contrast": -1.1521336298438918,
+        "best_contrast": 2.1205385860568815
+      },
+      {
+        "id": "osm-way-1303693231",
+        "center_xz": [-83.5, 76.375],
+        "area_m2": 1185.9599999999991,
+        "height_m": 16.3,
+        "edge_samples": 44,
+        "best_offset": [-12, 6],
+        "zero_contrast": 2.666119752657299,
+        "best_contrast": 2.959488565020368
+      },
+      {
+        "id": "osm-way-1317421165",
+        "center_xz": [67.21666666666665, 30.416666666666668],
+        "area_m2": 915.1900000000002,
+        "height_m": 28.7,
+        "edge_samples": 24,
+        "best_offset": [14, -20],
+        "zero_contrast": -0.03723894577704693,
+        "best_contrast": 1.4311580629570233
+      },
+      {
+        "id": "osm-way-1317432069",
+        "center_xz": [158.16666666666666, 17.95],
+        "area_m2": 637.0499999999994,
+        "height_m": 7,
+        "edge_samples": 21,
+        "best_offset": [4, 0],
+        "zero_contrast": 1.701312578391816,
+        "best_contrast": 1.7129189074492703
+      },
+      {
+        "id": "osm-way-1317554464",
+        "center_xz": [116.29285714285717, -27.185714285714294],
+        "area_m2": 1952.9350000000004,
+        "height_m": 16.3,
+        "edge_samples": 57,
+        "best_offset": [-8, 6],
+        "zero_contrast": 2.7573269130477613,
+        "best_contrast": 3.1192513952097367
+      },
+      {
+        "id": "osm-way-1532245447",
+        "center_xz": [-64.3, -325.8],
+        "area_m2": 1101.2600000000002,
+        "height_m": 16.3,
+        "edge_samples": 40,
+        "best_offset": [-12, 14],
+        "zero_contrast": 0.7189897670853753,
+        "best_contrast": 1.3250749580526375
+      },
+      {
+        "id": "osm-way-1532257419",
+        "center_xz": [-58.76666666666667, -182.66666666666666],
+        "area_m2": 1280.0249999999999,
+        "height_m": 16.3,
+        "edge_samples": 40,
+        "best_offset": [-6, 6],
+        "zero_contrast": 1.9696379745695254,
+        "best_contrast": 3.220272011633928
+      },
+      {
+        "id": "osm-way-55717715",
+        "center_xz": [259.975, -272.775],
+        "area_m2": 1135.7949999999983,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-8, 6],
+        "zero_contrast": 1.498551706157124,
+        "best_contrast": 2.0186759271613104
+      },
+      {
+        "id": "osm-way-55717726",
+        "center_xz": [271.925, -344.6],
+        "area_m2": 1656.119999999988,
+        "height_m": 16.3,
+        "edge_samples": 46,
+        "best_offset": [-10, 4],
+        "zero_contrast": 2.75540373219235,
+        "best_contrast": 3.06864222952752
+      },
+      {
+        "id": "osm-way-56433426",
+        "center_xz": [259.65, -378.075],
+        "area_m2": 846.1650000000081,
+        "height_m": 13.2,
+        "edge_samples": 30,
+        "best_offset": [-6, -20],
+        "zero_contrast": 0.43147901808548,
+        "best_contrast": 1.2808418347321189
+      },
+      {
+        "id": "osm-way-56438149",
+        "center_xz": [79.85, -148.55],
+        "area_m2": 1406.5999999999985,
+        "height_m": 16.3,
+        "edge_samples": 42,
+        "best_offset": [-12, 14],
+        "zero_contrast": 0.005522700328978793,
+        "best_contrast": 2.235940399599271
+      },
+      {
+        "id": "osm-way-56438150",
+        "center_xz": [122.525, 55.9],
+        "area_m2": 840.6999999999998,
+        "height_m": 16.3,
+        "edge_samples": 30,
+        "best_offset": [-6, 8],
+        "zero_contrast": 1.7353588486859612,
+        "best_contrast": 3.315704832779658
+      },
+      {
+        "id": "osm-way-56438151",
+        "center_xz": [73.92500000000001, 79.525],
+        "area_m2": 846.6549999999995,
+        "height_m": 16.3,
+        "edge_samples": 30,
+        "best_offset": [-8, 4],
+        "zero_contrast": 1.8518558709844417,
+        "best_contrast": 3.1199256983032058
+      },
+      {
+        "id": "osm-way-56438158",
+        "center_xz": [-143.375, 12.2],
+        "area_m2": 1412.5,
+        "height_m": 28.7,
+        "edge_samples": 46,
+        "best_offset": [-6, 20],
+        "zero_contrast": -0.2528340809612202,
+        "best_contrast": 3.8853787320600333
+      },
+      {
+        "id": "osm-way-56438161",
+        "center_xz": [-18.4, -110.125],
+        "area_m2": 910.4999999999993,
+        "height_m": 16.3,
+        "edge_samples": 32,
+        "best_offset": [-14, 6],
+        "zero_contrast": 0.05151257069692683,
+        "best_contrast": 3.2203988809816213
+      },
+      {
+        "id": "osm-way-56438162",
+        "center_xz": [29.900000000000002, -133.75],
+        "area_m2": 940.52,
+        "height_m": 16.3,
+        "edge_samples": 32,
+        "best_offset": [-10, 8],
+        "zero_contrast": -0.4099264544264649,
+        "best_contrast": 2.546816495963795
+      },
+      {
+        "id": "osm-way-56438169",
+        "center_xz": [124.95, -158.75],
+        "area_m2": 1259.5500000000002,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-2, 8],
+        "zero_contrast": 1.6005769348900152,
+        "best_contrast": 2.6109421673015643
+      },
+      {
+        "id": "osm-way-56724450",
+        "center_xz": [191.0111111111111, -63.099999999999994],
+        "area_m2": 555.1049999999991,
+        "height_m": 7,
+        "edge_samples": 14,
+        "best_offset": [4, 12],
+        "zero_contrast": 0.2898980919435011,
+        "best_contrast": 1.687664969425565
+      },
+      {
+        "id": "osm-way-648842803",
+        "center_xz": [205.42727272727276, -22.60909090909091],
+        "area_m2": 800.0199999999994,
+        "height_m": 31.8,
+        "edge_samples": 18,
+        "best_offset": [-12, 12],
+        "zero_contrast": -1.2495457725031858,
+        "best_contrast": 2.2436096729296935
+      },
+      {
+        "id": "osm-way-695880457",
+        "center_xz": [-237.72222222222223, -109.82222222222222],
+        "area_m2": 583.6900000000005,
+        "height_m": 28.7,
+        "edge_samples": 9,
+        "best_offset": [-20, 10],
+        "zero_contrast": 0.1455513305086116,
+        "best_contrast": 1.1750947535808
+      },
+      {
+        "id": "osm-way-696916495",
+        "center_xz": [153.5, -577.4],
+        "area_m2": 535.3399999999965,
+        "height_m": 19.4,
+        "edge_samples": 18,
+        "best_offset": [-12, 6],
+        "zero_contrast": 2.588056082024691,
+        "best_contrast": 5.2330112056889835
+      },
+      {
+        "id": "osm-way-696944805",
+        "center_xz": [49.75, -559.65],
+        "area_m2": 516.1500000000015,
+        "height_m": 19.4,
+        "edge_samples": 18,
+        "best_offset": [-8, -6],
+        "zero_contrast": 1.4015294621553285,
+        "best_contrast": 2.8982340350813525
+      },
+      {
+        "id": "osm-way-708040943",
+        "center_xz": [273.8166666666666, -52.80833333333334],
+        "area_m2": 3285.3550000000014,
+        "height_m": 16.3,
+        "edge_samples": 72,
+        "best_offset": [-12, 4],
+        "zero_contrast": 2.7988132167972504,
+        "best_contrast": 3.233935017771607
+      },
+      {
+        "id": "osm-way-713735800",
+        "center_xz": [-71.02499999999999, -528.825],
+        "area_m2": 478.0,
+        "height_m": 7,
+        "edge_samples": 18,
+        "best_offset": [-20, 6],
+        "zero_contrast": 0.9481968339198217,
+        "best_contrast": 1.3904443920155576
+      },
+      {
+        "id": "osm-way-713735801",
+        "center_xz": [-67.625, -551.625],
+        "area_m2": 590.5799999999963,
+        "height_m": 7,
+        "edge_samples": 20,
+        "best_offset": [-6, 2],
+        "zero_contrast": 1.5625744061761182,
+        "best_contrast": 2.325246601868794
+      },
+      {
+        "id": "osm-way-713735803",
+        "center_xz": [-116.125, -544.75],
+        "area_m2": 235.40500000000247,
+        "height_m": 16.3,
+        "edge_samples": 12,
+        "best_offset": [-4, 6],
+        "zero_contrast": 1.4890423464859808,
+        "best_contrast": 2.701498366445714
+      },
+      {
+        "id": "osm-way-713735804",
+        "center_xz": [-142.7375, -540.3125],
+        "area_m2": 929.6400000000176,
+        "height_m": 10.1,
+        "edge_samples": 16,
+        "best_offset": [8, -6],
+        "zero_contrast": 2.5672537735334,
+        "best_contrast": 3.6922691972621298
+      },
+      {
+        "id": "osm-way-85585732",
+        "center_xz": [-101.9, -403.2],
+        "area_m2": 1104.2400000000034,
+        "height_m": 16.3,
+        "edge_samples": 40,
+        "best_offset": [8, -16],
+        "zero_contrast": 0.03336542523063528,
+        "best_contrast": 1.6496147922316744
+      },
+      {
+        "id": "osm-way-85585733",
+        "center_xz": [7.15, -292.625],
+        "area_m2": 795.8949999999995,
+        "height_m": 7,
+        "edge_samples": 30,
+        "best_offset": [-12, -18],
+        "zero_contrast": 0.3029604150806392,
+        "best_contrast": 1.5857050272677051
+      },
+      {
+        "id": "osm-way-85585744",
+        "center_xz": [80.05, -338.6],
+        "area_m2": 909.3099999999995,
+        "height_m": 13.2,
+        "edge_samples": 30,
+        "best_offset": [2, -20],
+        "zero_contrast": 1.2402508941079267,
+        "best_contrast": 1.8926447165756608
+      },
+      {
+        "id": "osm-way-85585749",
+        "center_xz": [-5.725, -450.4],
+        "area_m2": 1206.5999999999995,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-18, 0],
+        "zero_contrast": -0.018635938959796386,
+        "best_contrast": 0.7632669111007745
+      },
+      {
+        "id": "osm-way-85585762",
+        "center_xz": [25.775000000000002, -384.75],
+        "area_m2": 862.9949999999999,
+        "height_m": 16.3,
+        "edge_samples": 28,
+        "best_offset": [-4, 8],
+        "zero_contrast": 0.5574502270319824,
+        "best_contrast": 1.2241504464494395
+      },
+      {
+        "id": "osm-way-85585763",
+        "center_xz": [-115.67499999999998, -301.54999999999995],
+        "area_m2": 1019.4950000000008,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-8, 4],
+        "zero_contrast": 1.3102522915111883,
+        "best_contrast": 3.4725821279093405
+      },
+      {
+        "id": "osm-way-85585785",
+        "center_xz": [162.8, -381.3],
+        "area_m2": 922.140000000003,
+        "height_m": 13.2,
+        "edge_samples": 30,
+        "best_offset": [20, 8],
+        "zero_contrast": 0.05103696556552961,
+        "best_contrast": 1.912149787625133
+      },
+      {
+        "id": "osm-way-85585795",
+        "center_xz": [-4.700000000000001, -201.75000000000003],
+        "area_m2": 1169.5300000000007,
+        "height_m": 16.3,
+        "edge_samples": 40,
+        "best_offset": [-10, 6],
+        "zero_contrast": 0.6897281237482396,
+        "best_contrast": 2.4783063636640428
+      },
+      {
+        "id": "osm-way-85585809",
+        "center_xz": [-34.62499999999999, -388.35],
+        "area_m2": 982.8950000000023,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-14, 8],
+        "zero_contrast": 0.6055650480836708,
+        "best_contrast": 0.931850755680192
+      },
+      {
+        "id": "osm-way-85585813",
+        "center_xz": [81.65, -291.2],
+        "area_m2": 1010.7999999999993,
+        "height_m": 13.2,
+        "edge_samples": 34,
+        "best_offset": [-6, 0],
+        "zero_contrast": 0.8881767729476818,
+        "best_contrast": 1.2261755173797306
+      },
+      {
+        "id": "osm-way-85585815",
+        "center_xz": [-17.5, -352.475],
+        "area_m2": 668.1399999999994,
+        "height_m": 16.3,
+        "edge_samples": 28,
+        "best_offset": [8, 0],
+        "zero_contrast": 1.0435549814261995,
+        "best_contrast": 1.155788105873505
+      },
+      {
+        "id": "osm-way-85585817",
+        "center_xz": [88.05, -230.97500000000002],
+        "area_m2": 1259.9050000000016,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-8, 0],
+        "zero_contrast": 0.8347024077392351,
+        "best_contrast": 2.058954407491109
+      },
+      {
+        "id": "osm-way-85585819",
+        "center_xz": [-151.875, -378.45],
+        "area_m2": 1095.1750000000065,
+        "height_m": 16.3,
+        "edge_samples": 40,
+        "best_offset": [-14, 0],
+        "zero_contrast": 0.5922614051026954,
+        "best_contrast": 3.2364624759298977
+      },
+      {
+        "id": "osm-way-92104475",
+        "center_xz": [-224.75, -280.15],
+        "area_m2": 598.8500000000058,
+        "height_m": 16.3,
+        "edge_samples": 24,
+        "best_offset": [-10, 8],
+        "zero_contrast": 0.5457119910175395,
+        "best_contrast": 1.281206473103899
+      },
+      {
+        "id": "osm-way-92104556",
+        "center_xz": [-185.925, -302.7],
+        "area_m2": 928.8899999999994,
+        "height_m": 16.3,
+        "edge_samples": 32,
+        "best_offset": [-4, 0],
+        "zero_contrast": 2.1459417104477865,
+        "best_contrast": 2.359469543250177
+      },
+      {
+        "id": "osm-way-92104637",
+        "center_xz": [-233.51, -190.26],
+        "area_m2": 948.8449999999939,
+        "height_m": 16.3,
+        "edge_samples": 22,
+        "best_offset": [-6, 4],
+        "zero_contrast": 1.2998914984651087,
+        "best_contrast": 2.0667809921959797
+      },
+      {
+        "id": "osm-way-92104657",
+        "center_xz": [-244.0, -435.3],
+        "area_m2": 909.3600000000006,
+        "height_m": 13.2,
+        "edge_samples": 18,
+        "best_offset": [20, 20],
+        "zero_contrast": 1.443244535561806,
+        "best_contrast": 2.7556441495066823
+      },
+      {
+        "id": "osm-way-92104707",
+        "center_xz": [-230.9, -366.79999999999995],
+        "area_m2": 1030.280000000006,
+        "height_m": 10,
+        "edge_samples": 21,
+        "best_offset": [-2, 2],
+        "zero_contrast": 2.781632273055033,
+        "best_contrast": 2.8878601742102767
+      },
+      {
+        "id": "osm-way-92104742",
+        "center_xz": [-175.0, -476.525],
+        "area_m2": 1087.5299999999988,
+        "height_m": 16.3,
+        "edge_samples": 38,
+        "best_offset": [-12, 6],
+        "zero_contrast": 0.4924774182023884,
+        "best_contrast": 2.482312554643187
+      }
+    ],
+    "highest_road_context": [
+      {
+        "x": 37.0,
+        "z": -639.0,
+        "dsmHeight": 146.015625,
+        "nearest_footprint_boundary_m": 13.889729601960282,
+        "nearest_building": "osm-way-109234380",
+        "local_20m_DSM_min_p10_median_max": [
+          143.14387053427114, 143.6345763415007, 145.40339833046616, 147.48604783633587
+        ]
+      },
+      {
+        "x": 49.0,
+        "z": -641.0,
+        "dsmHeight": 144.5546875,
+        "nearest_footprint_boundary_m": 12.467958934805624,
+        "nearest_building": "osm-way-110777694",
+        "local_20m_DSM_min_p10_median_max": [
+          142.81243431475488, 143.42017525622688, 144.46090187045087, 147.48604783633587
+        ]
+      },
+      {
+        "x": 233.0,
+        "z": -343.0,
+        "dsmHeight": 144.09375,
+        "nearest_footprint_boundary_m": 7.791909441057898,
+        "nearest_building": "osm-way-55717726",
+        "local_20m_DSM_min_p10_median_max": [
+          139.75052208170405, 140.5505397430132, 143.72476798494608, 148.12203435881864
+        ]
+      },
+      {
+        "x": 107.0,
+        "z": -281.0,
+        "dsmHeight": 141.5625,
+        "nearest_footprint_boundary_m": 11.894788833141257,
+        "nearest_building": "osm-way-85585813",
+        "local_20m_DSM_min_p10_median_max": [
+          138.36616912004646, 138.9100818160235, 140.76142942525638, 144.8381150186524
+        ]
+      },
+      {
+        "x": -31.0,
+        "z": -627.0,
+        "dsmHeight": 141.171875,
+        "nearest_footprint_boundary_m": 13.56642343863991,
+        "nearest_building": "osm-way-109234386",
+        "local_20m_DSM_min_p10_median_max": [
+          140.00357807747056, 140.37995740701626, 141.24610683961743, 143.1027811236162
+        ]
+      }
+    ]
+  },
+  "coarseReferenceCheck": {
+    "bbox_wgs84": [50.810860673, 61.662682561, 50.822216289, 61.670604918],
+    "sources": {
+      "gedtm30-3857": {
+        "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.3857.3855_v1.2.tif",
+        "status": "ok",
+        "headers": {
+          "Content-Length": "209083504295",
+          "Content-Type": "image/tiff",
+          "ETag": "\"30e095d0813ed499342ed44a46e4c554-9854\"",
+          "Last-Modified": "Thu, 11 Sep 2025 09:58:18 GMT",
+          "Accept-Ranges": "bytes"
+        },
+        "crs": "EPSG:3857",
+        "source_dimensions": [522753, 385879],
+        "source_dtype": ["float32"],
+        "source_scales": [1.0],
+        "source_offsets": [0.0],
+        "source_units": [null],
+        "source_tags": {
+          "VERTICAL_DATUM": "EGM2008/EPSG:3855",
+          "AREA_OR_POINT": "Area"
+        },
+        "source_band_tags": {},
+        "source_resolution": [76.66088349578423, 76.66176679267538],
+        "window": [335158, 145989, 23, 31],
+        "window_shape": [1, 31, 23],
+        "raw_min_max": [122.22946166992188, 137.80789184570312],
+        "artifact": {
+          "file": "gedtm30-3857-check-crop.tif",
+          "bytes": 3310,
+          "sha256": "99a6d2a90ea93ef135c1f70f18767ea8df5e1fb438e400baed150502145f5658"
+        }
+      },
+      "egm08-geoid": {
+        "url": "https://cdn.proj.org/us_nga_egm08_25.tif",
+        "status": "ok",
+        "headers": {
+          "Content-Length": "80585622",
+          "Content-Type": "image/tiff",
+          "ETag": "\"c873f04972c6df1749dc7295028a0882-10\"",
+          "Last-Modified": "Tue, 28 Jan 2020 14:45:44 GMT",
+          "Accept-Ranges": "bytes"
+        },
+        "crs": "EPSG:4979",
+        "source_dimensions": [8640, 4321],
+        "source_dtype": ["float32"],
+        "source_scales": [1.0],
+        "source_offsets": [0.0],
+        "source_units": ["metre"],
+        "source_tags": {
+          "TIFFTAG_IMAGEDESCRIPTION": "WGS 84 (EPSG:4979) to EGM2008 height (EPSG:3855). Converted from egm08_25.gtx (last modified at 2018/10/08)",
+          "TIFFTAG_DATETIME": "2019:12:27 00:00:00",
+          "TIFFTAG_COPYRIGHT": "Derived from work by NGA. Public Domain",
+          "area_of_use": "World",
+          "target_crs_epsg_code": "3855",
+          "TYPE": "VERTICAL_OFFSET_GEOGRAPHIC_TO_VERTICAL",
+          "AREA_OR_POINT": "Point"
+        },
+        "source_band_tags": {},
+        "source_resolution": [0.041666666666666664, 0.041666666666666664],
+        "window": [5536, 677, 8, 7],
+        "window_shape": [1, 7, 8],
+        "raw_min_max": [4.445158958435059, 5.490315914154053],
+        "artifact": {
+          "file": "egm08-geoid-check-crop.tif",
+          "bytes": 1420,
+          "sha256": "32e0e14fd7257d27a0d158e8718a55d520a5b4dd11e52141fabfce5d7c65766c"
+        }
+      }
+    },
+    "vertical_conversion": {
+      "formula": "h_ellipsoid = H_EGM2008 + N; H_EGM2008 = h_ellipsoid - N",
+      "pipeline": "proj=pipeline step proj=unitconvert xy_in=deg xy_out=rad step proj=vgridshift grids=/Users/ilia-may/Documents/local-repo/syktyvkar-underground/output/ring-terrain-stage0/egm08-geoid-check-crop.tif multiplier=1 step proj=unitconvert xy_in=rad xy_out=deg",
+      "points": [
+        {
+          "lon": 50.810860673,
+          "lat": 61.662682561,
+          "N_h_minus_H_m": 5.040187507456325,
+          "roundtrip_H0_m": 0.0
+        },
+        {
+          "lon": 50.822216289,
+          "lat": 61.662682561,
+          "N_h_minus_H_m": 5.016331800464952,
+          "roundtrip_H0_m": 0.0
+        },
+        {
+          "lon": 50.810860673,
+          "lat": 61.670604918,
+          "N_h_minus_H_m": 5.025333735326086,
+          "roundtrip_H0_m": 0.0
+        },
+        {
+          "lon": 50.822216289,
+          "lat": 61.670604918,
+          "N_h_minus_H_m": 5.001439237330173,
+          "roundtrip_H0_m": 0.0
+        },
+        {
+          "lon": 50.815951774241576,
+          "lat": 61.66386729706631,
+          "N_h_minus_H_m": 5.027349649119141,
+          "roundtrip_H0_m": -2.220446049250313e-14
+        }
+      ],
+      "source": "https://cdn.proj.org/us_nga_README.txt",
+      "note": "Bilinear interpolation of the official 2.5 arcminute EGM2008 geoid grid; datum conversion, not ground-truth validation."
+    },
+    "same_location_comparison": {
+      "sample_count": 609,
+      "official3857_raw_percentiles": {
+        "0": 122.83255291695939,
+        "5": 127.04855520582107,
+        "50": 131.7396969876151,
+        "95": 135.52916832245742,
+        "100": 137.60015529271863
+      },
+      "official3857_scaled_percentiles": {
+        "0": 122.83255291695939,
+        "5": 127.04855520582107,
+        "50": 131.7396969876151,
+        "95": 135.52916832245742,
+        "100": 137.60015529271863
+      },
+      "original4326_raw_percentiles": {
+        "0": 121.53995220922174,
+        "5": 126.2243582443172,
+        "50": 131.5761153305661,
+        "95": 136.19211997768315,
+        "100": 139.05177556927183
+      },
+      "diff_3857_scaled_minus_4326_raw": {
+        "0": -4.588452576375516,
+        "5": -1.3988671538844586,
+        "50": 0.05003783752559343,
+        "95": 1.33582729486306,
+        "100": 2.573693687931609
+      },
+      "diff_3857_scaled_minus_4326_scaled": {
+        "0": 110.67855769603722,
+        "5": 114.41678072097356,
+        "50": 118.55050552730889,
+        "95": 121.94151261467583,
+        "100": 123.77465273203069
+      }
+    }
+  },
+  "coarseComparison": {
+    "status": "diagnostic_cross_source_comparison_not_ground_truth",
+    "method": "Native GEDTM3857 pixel centers whose complete footprints lie inside world. Candidate ellipsoid heights averaged over 9x9 midpoint subpixels in each native GEDTM pixel. GEDTM EGM2008 converted with official PROJ EGM2008 geoid at center. Native GEDTM pixel ~76.66 projected m, about36.4ground m here.",
+    "bias_sign": "candidate ellipsoid height minus GEDTM ellipsoid height",
+    "dependencies": "Not fully independent: ArcticDEM mosaics aligned to Copernicus, GEDTM inputs include Copernicus. Comparison detects coarse inconsistency; validates neither ground truth nor geodetic accuracy.",
+    "inputs": {
+      "output/ring-terrain-stage0/ground-estimate-arrays.npz": "1f7f376052faa8f0827c4b3d4aadf87b8fa991b07591052be37090c2c7f14219",
+      "output/ring-terrain-stage0/ground-anchors.json": "dfc0785c8075651dd35dbc41b97dfa5d86991229782426817211fd2f69ebfba5",
+      "output/ring-terrain-stage0/gedtm30-3857-check-crop.tif": "99a6d2a90ea93ef135c1f70f18767ea8df5e1fb438e400baed150502145f5658",
+      "output/ring-terrain-stage0/egm08-geoid-check-crop.tif": "32e0e14fd7257d27a0d158e8718a55d520a5b4dd11e52141fabfce5d7c65766c"
+    },
+    "reference_source": {
+      "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.3857.3855_v1.2.tif",
+      "status": "ok",
+      "headers": {
+        "Content-Length": "209083504295",
+        "Content-Type": "image/tiff",
+        "ETag": "\"30e095d0813ed499342ed44a46e4c554-9854\"",
+        "Last-Modified": "Thu, 11 Sep 2025 09:58:18 GMT",
+        "Accept-Ranges": "bytes"
+      },
+      "crs": "EPSG:3857",
+      "source_dimensions": [522753, 385879],
+      "source_dtype": ["float32"],
+      "source_scales": [1.0],
+      "source_offsets": [0.0],
+      "source_units": [null],
+      "source_tags": {
+        "VERTICAL_DATUM": "EGM2008/EPSG:3855",
+        "AREA_OR_POINT": "Area"
+      },
+      "source_band_tags": {},
+      "source_resolution": [76.66088349578423, 76.66176679267538],
+      "window": [335158, 145989, 23, 31],
+      "window_shape": [1, 31, 23],
+      "raw_min_max": [122.22946166992188, 137.80789184570312],
+      "artifact": {
+        "file": "gedtm30-3857-check-crop.tif",
+        "bytes": 3310,
+        "sha256": "99a6d2a90ea93ef135c1f70f18767ea8df5e1fb438e400baed150502145f5658"
+      }
+    },
+    "geoid_source": {
+      "url": "https://cdn.proj.org/us_nga_egm08_25.tif",
+      "status": "ok",
+      "headers": {
+        "Content-Length": "80585622",
+        "Content-Type": "image/tiff",
+        "ETag": "\"c873f04972c6df1749dc7295028a0882-10\"",
+        "Last-Modified": "Tue, 28 Jan 2020 14:45:44 GMT",
+        "Accept-Ranges": "bytes"
+      },
+      "crs": "EPSG:4979",
+      "source_dimensions": [8640, 4321],
+      "source_dtype": ["float32"],
+      "source_scales": [1.0],
+      "source_offsets": [0.0],
+      "source_units": ["metre"],
+      "source_tags": {
+        "TIFFTAG_IMAGEDESCRIPTION": "WGS 84 (EPSG:4979) to EGM2008 height (EPSG:3855). Converted from egm08_25.gtx (last modified at 2018/10/08)",
+        "TIFFTAG_DATETIME": "2019:12:27 00:00:00",
+        "TIFFTAG_COPYRIGHT": "Derived from work by NGA. Public Domain",
+        "area_of_use": "World",
+        "target_crs_epsg_code": "3855",
+        "TYPE": "VERTICAL_OFFSET_GEOGRAPHIC_TO_VERTICAL",
+        "AREA_OR_POINT": "Point"
+      },
+      "source_band_tags": {},
+      "source_resolution": [0.041666666666666664, 0.041666666666666664],
+      "window": [5536, 677, 8, 7],
+      "window_shape": [1, 7, 8],
+      "raw_min_max": [4.445158958435059, 5.490315914154053],
+      "artifact": {
+        "file": "egm08-geoid-check-crop.tif",
+        "bytes": 1420,
+        "sha256": "32e0e14fd7257d27a0d158e8718a55d520a5b4dd11e52141fabfce5d7c65766c"
+      }
+    },
+    "world": {
+      "count": 345,
+      "candidate_ellipsoid_m": {
+        "0": 123.83626345694033,
+        "5": 125.13108584043327,
+        "25": 127.56174207178117,
+        "50": 131.98195024076833,
+        "75": 134.45071921989373,
+        "95": 137.59046017506572,
+        "100": 138.466140351288
+      },
+      "reference_ellipsoid_m": {
+        "0": 127.25527837277926,
+        "5": 132.1074515837327,
+        "25": 134.5463777771686,
+        "50": 137.00367294575886,
+        "75": 139.17588824046248,
+        "95": 140.93545694760817,
+        "100": 142.82789978613013
+      },
+      "signed_candidate_minus_reference_m": {
+        "0": -14.013240364831091,
+        "5": -10.659291528304937,
+        "25": -7.63690502852927,
+        "50": -5.517582863531203,
+        "75": -3.649698352335605,
+        "95": -0.0017589106841843574,
+        "100": 2.5114002105852364
+      },
+      "median_bias_m": -5.517582863531203,
+      "absolute_difference_m": {
+        "0": 0.016018539660620945,
+        "5": 0.5767682534388995,
+        "25": 3.649698352335605,
+        "50": 5.517582863531203,
+        "75": 7.63690502852927,
+        "95": 10.659291528304937,
+        "100": 14.013240364831091
+      },
+      "absolute_difference_after_median_bias_removal_m": {
+        "0": 0.0,
+        "5": 0.1572877338115404,
+        "25": 0.8730482308126284,
+        "50": 1.9833688939378078,
+        "75": 3.630294186530591,
+        "95": 6.152879778516923,
+        "100": 8.495657501299888
+      },
+      "rmse_after_median_bias_removal_m": 3.0899542036351413,
+      "pearson_r": 0.6453296504673892,
+      "spearman_r": 0.6201245492323069,
+      "regression_candidate_a_times_reference_plus_b": {
+        "a": 0.8713876688969319,
+        "b": 12.087677193873787
+      },
+      "residual_plane_m": {
+        "intercept": -7.535032119422906,
+        "x_slope": -0.0052191179927640816,
+        "z_slope": -0.007505829384341507,
+        "rms_after_plane": 2.374208966826277
+      }
+    },
+    "pilot": {
+      "count": 49,
+      "candidate_ellipsoid_m": {
+        "0": 124.99335433672941,
+        "5": 125.5979195567153,
+        "25": 126.99186163264301,
+        "50": 128.06336902330378,
+        "75": 129.7292188833307,
+        "95": 132.39879299760977,
+        "100": 134.26785527939379
+      },
+      "reference_ellipsoid_m": {
+        "0": 130.07172433591072,
+        "5": 131.75993198739212,
+        "25": 133.27204251468422,
+        "50": 134.99216437203563,
+        "75": 137.0085837892762,
+        "95": 139.6651344576475,
+        "100": 140.4931196448133
+      },
+      "signed_candidate_minus_reference_m": {
+        "0": -12.258556447235918,
+        "5": -10.604909381361995,
+        "25": -8.832219733196467,
+        "50": -6.495472165793885,
+        "75": -4.728196760215269,
+        "95": -3.6413228626893397,
+        "100": -2.8865197057174043
+      },
+      "median_bias_m": -6.495472165793885,
+      "absolute_difference_m": {
+        "0": 2.8865197057174043,
+        "5": 3.641322862689339,
+        "25": 4.728196760215269,
+        "50": 6.495472165793885,
+        "75": 8.832219733196467,
+        "95": 10.604909381361992,
+        "100": 12.258556447235918
+      },
+      "absolute_difference_after_median_bias_removal_m": {
+        "0": 0.0,
+        "5": 0.26284128281238,
+        "25": 1.2061456138203681,
+        "50": 1.8509375330753102,
+        "75": 2.7287588004089542,
+        "95": 4.109437215568108,
+        "100": 5.763084281442033
+      },
+      "rmse_after_median_bias_removal_m": 2.4059091490818005,
+      "pearson_r": 0.4751006916828989,
+      "spearman_r": 0.36479591836734687,
+      "regression_candidate_a_times_reference_plus_b": {
+        "a": 0.4251127148763901,
+        "b": 71.03072648010975
+      },
+      "residual_plane_m": {
+        "intercept": -9.457489587013663,
+        "x_slope": -0.016051165169796225,
+        "z_slope": -0.006635763340311936,
+        "rms_after_plane": 2.037837227846468
+      }
+    },
+    "road_support_cells": {
+      "count": 33,
+      "candidate_ellipsoid_m": {
+        "0": 123.83626345694033,
+        "5": 123.94318906131166,
+        "25": 125.38709404493397,
+        "50": 127.01913538699259,
+        "75": 129.056832634803,
+        "95": 133.98741364404734,
+        "100": 138.466140351288
+      },
+      "reference_ellipsoid_m": {
+        "0": 127.25527837277926,
+        "5": 128.7666794706836,
+        "25": 131.4715304346783,
+        "50": 132.9478081347113,
+        "75": 134.52068297852162,
+        "95": 137.90323680573292,
+        "100": 138.90587965622163
+      },
+      "signed_candidate_minus_reference_m": {
+        "0": -9.06217389306768,
+        "5": -8.444732291280166,
+        "25": -6.418866581962845,
+        "50": -5.5463158724294175,
+        "75": -4.744384616814855,
+        "95": -2.097933146903676,
+        "100": -0.43973930493362445
+      },
+      "median_bias_m": -5.5463158724294175,
+      "absolute_difference_m": {
+        "0": 0.43973930493362445,
+        "5": 2.097933146903674,
+        "25": 4.744384616814855,
+        "50": 5.5463158724294175,
+        "75": 6.418866581962845,
+        "95": 8.444732291280165,
+        "100": 9.06217389306768
+      },
+      "absolute_difference_after_median_bias_removal_m": {
+        "0": 0.0,
+        "5": 0.06551367095035518,
+        "25": 0.5471128211879801,
+        "50": 0.872550709533428,
+        "75": 2.242699728418799,
+        "95": 3.8732927609807337,
+        "100": 5.106576567495793
+      },
+      "rmse_after_median_bias_removal_m": 1.9143153312891972,
+      "pearson_r": 0.821335992081042,
+      "spearman_r": 0.8592914438502675,
+      "regression_candidate_a_times_reference_plus_b": {
+        "a": 0.9714786934254258,
+        "b": -1.5997284416114022
+      },
+      "residual_plane_m": {
+        "intercept": -5.823326051831358,
+        "x_slope": -0.0006919576776846378,
+        "z_slope": -0.003252418274269507,
+        "rms_after_plane": 1.770663744042083
+      }
+    },
+    "pilot_road_support_cells": {
+      "count": 4,
+      "candidate_ellipsoid_m": {
+        "0": 127.01913538699259,
+        "5": 127.19145222254386,
+        "25": 127.88071956474892,
+        "50": 128.86547609905878,
+        "75": 130.03786350947968,
+        "95": 131.17744495435113,
+        "100": 131.462340315569
+      },
+      "reference_ellipsoid_m": {
+        "0": 131.4715304346783,
+        "5": 131.81459864018015,
+        "25": 133.18687146218753,
+        "50": 134.52865063369063,
+        "75": 135.47984097140215,
+        "95": 135.91470059230977,
+        "100": 136.0234154975367
+      },
+      "signed_candidate_minus_reference_m": {
+        "0": -9.004280110544101,
+        "5": -8.282980178548595,
+        "25": -5.3977804505665645,
+        "50": -4.015961522181186,
+        "75": -3.7031358963438947,
+        "95": -3.383520094477274,
+        "100": -3.3036161440106184
+      },
+      "median_bias_m": -4.015961522181186,
+      "absolute_difference_m": {
+        "0": 3.3036161440106184,
+        "5": 3.383520094477274,
+        "25": 3.7031358963438947,
+        "50": 4.015961522181186,
+        "75": 5.3977804505665645,
+        "95": 8.282980178548593,
+        "100": 9.004280110544101
+      },
+      "absolute_difference_after_median_bias_removal_m": {
+        "0": 0.1796523750595327,
+        "5": 0.1796523750595327,
+        "25": 0.1796523750595327,
+        "50": 0.4459988766150502,
+        "75": 1.7813386807186546,
+        "95": 4.346922606834061,
+        "100": 4.988318588362915
+      },
+      "rmse_after_median_bias_removal_m": 2.522662691905966,
+      "pearson_r": 0.09763997793728134,
+      "spearman_r": -0.19999999999999998,
+      "regression_candidate_a_times_reference_plus_b": {
+        "a": 0.09281872721732763,
+        "b": 116.60258280750395
+      },
+      "residual_plane_m": {
+        "intercept": -19.473947661831108,
+        "x_slope": -0.1582572938403084,
+        "z_slope": 0.00736974459005807,
+        "rms_after_plane": 0.25542047874319307
+      }
+    },
+    "road_support_definition": "Native GEDTM cells containing >=1 diagnostic anchor whose coordinate falls inside current road polygons; cells counted once. Anchors are candidates, not proven ground.",
+    "road_anchor_count": 147,
+    "geoid_N_inside_world_m": {
+      "0": 5.003963018586017,
+      "5": 5.008630366184292,
+      "25": 5.015487024102717,
+      "50": 5.020996765949981,
+      "75": 5.026437731134,
+      "95": 5.033265557117587,
+      "100": 5.037718203996725
+    },
+    "samples": [
+      {
+        "x": -218.72527786759883,
+        "z": -692.8756825254295,
+        "candidate_h": 130.359933736741,
+        "reference_H_EGM2008": 129.19923400878906,
+        "geoid_N": 5.024248581878591,
+        "reference_h": 134.22348259066766,
+        "difference": -3.863548853926659,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -692.8756825254295,
+        "candidate_h": 132.90718759942416,
+        "reference_H_EGM2008": 129.59254455566406,
+        "geoid_N": 5.022799613071985,
+        "reference_h": 134.61534416873604,
+        "difference": -1.7081565693118819,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -692.8756825254295,
+        "candidate_h": 135.1630502733495,
+        "reference_H_EGM2008": 130.545654296875,
+        "geoid_N": 5.021350644265353,
+        "reference_h": 135.56700494114034,
+        "difference": -0.40395466779082767,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -692.8756825254295,
+        "candidate_h": 136.90219038390424,
+        "reference_H_EGM2008": 130.01783752441406,
+        "geoid_N": 5.0199016754587475,
+        "reference_h": 135.03773919987282,
+        "difference": 1.8644511840314237,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -692.8756825254295,
+        "candidate_h": 137.90608402382654,
+        "reference_H_EGM2008": 131.80775451660156,
+        "geoid_N": 5.018452706652141,
+        "reference_h": 136.8262072232537,
+        "difference": 1.0798768005728334,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -692.8756825254295,
+        "candidate_h": 137.98652043042983,
+        "reference_H_EGM2008": 132.30152893066406,
+        "geoid_N": 5.017003737845536,
+        "reference_h": 137.3185326685096,
+        "difference": 0.6679877619202443,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -692.8756825254295,
+        "candidate_h": 137.1341541071653,
+        "reference_H_EGM2008": 130.82286071777344,
+        "geoid_N": 5.015554769038916,
+        "reference_h": 135.83841548681235,
+        "difference": 1.2957386203529495,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -692.8756825254295,
+        "candidate_h": 135.86657284373646,
+        "reference_H_EGM2008": 131.36859130859375,
+        "geoid_N": 5.0141058002323105,
+        "reference_h": 136.38269710882605,
+        "difference": -0.5161242650895872,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -692.8756825254295,
+        "candidate_h": 134.5040450140329,
+        "reference_H_EGM2008": 133.75340270996094,
+        "geoid_N": 5.012656831425691,
+        "reference_h": 138.76605954138662,
+        "difference": -4.2620145273537275,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -692.8756825254295,
+        "candidate_h": 133.16305445839438,
+        "reference_H_EGM2008": 132.80714416503906,
+        "geoid_N": 5.011207862619072,
+        "reference_h": 137.81835202765814,
+        "difference": -4.655297569263752,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -692.8756825254295,
+        "candidate_h": 132.2197311702612,
+        "reference_H_EGM2008": 131.7781524658203,
+        "geoid_N": 5.009758893812466,
+        "reference_h": 136.78791135963277,
+        "difference": -4.56818018937156,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -692.8756825254295,
+        "candidate_h": 131.95014631856017,
+        "reference_H_EGM2008": 131.3601837158203,
+        "geoid_N": 5.008309925005861,
+        "reference_h": 136.36849364082616,
+        "difference": -4.418347322265987,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -692.8756825254295,
+        "candidate_h": 132.47952145819085,
+        "reference_H_EGM2008": 131.45237731933594,
+        "geoid_N": 5.006860956199228,
+        "reference_h": 136.45923827553517,
+        "difference": -3.9797168173443254,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -692.8756825254295,
+        "candidate_h": 133.481817642193,
+        "reference_H_EGM2008": 134.80123901367188,
+        "geoid_N": 5.005411987392636,
+        "reference_h": 139.80665100106452,
+        "difference": -6.32483335887153,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -692.8756825254295,
+        "candidate_h": 134.65042040057637,
+        "reference_H_EGM2008": 133.3649444580078,
+        "geoid_N": 5.003963018586017,
+        "reference_h": 138.36890747659382,
+        "difference": -3.7184870760174533,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -656.7397784366908,
+        "candidate_h": 129.67969609115474,
+        "reference_H_EGM2008": 129.8549041748047,
+        "geoid_N": 5.024884301772342,
+        "reference_h": 134.87978847657703,
+        "difference": -5.200092385422295,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -656.7397784366908,
+        "candidate_h": 132.31111833179227,
+        "reference_H_EGM2008": 130.2319793701172,
+        "geoid_N": 5.023435404175068,
+        "reference_h": 135.25541477429226,
+        "difference": -2.94429644249999,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -656.7397784366908,
+        "candidate_h": 134.78676692137404,
+        "reference_H_EGM2008": 131.65206909179688,
+        "geoid_N": 5.0219865065777665,
+        "reference_h": 136.67405559837465,
+        "difference": -1.8872886770006119,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -656.7397784366908,
+        "candidate_h": 136.75750117141348,
+        "reference_H_EGM2008": 131.70101928710938,
+        "geoid_N": 5.02053760898049,
+        "reference_h": 136.72155689608985,
+        "difference": 0.03594427532362943,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -656.7397784366908,
+        "candidate_h": 137.96793673281135,
+        "reference_H_EGM2008": 133.07794189453125,
+        "geoid_N": 5.019088711383216,
+        "reference_h": 138.09703060591445,
+        "difference": -0.12909387310310194,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -656.7397784366908,
+        "candidate_h": 138.2729283097651,
+        "reference_H_EGM2008": 133.15248107910156,
+        "geoid_N": 5.017639813785941,
+        "reference_h": 138.1701208928875,
+        "difference": 0.10280741687759587,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -656.7397784366908,
+        "candidate_h": 137.66050212112586,
+        "reference_H_EGM2008": 133.85195922851562,
+        "geoid_N": 5.016190916188654,
+        "reference_h": 138.8681501447043,
+        "difference": -1.2076480235784288,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -656.7397784366908,
+        "candidate_h": 136.54338763910414,
+        "reference_H_EGM2008": 136.10333251953125,
+        "geoid_N": 5.014742018591378,
+        "reference_h": 141.11807453812264,
+        "difference": -4.574686899018502,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -656.7397784366908,
+        "candidate_h": 135.24698134704465,
+        "reference_H_EGM2008": 133.76568603515625,
+        "geoid_N": 5.013293120994089,
+        "reference_h": 138.77897915615034,
+        "difference": -3.5319978091056896,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -656.7397784366908,
+        "candidate_h": 133.95713096473034,
+        "reference_H_EGM2008": 133.6027069091797,
+        "geoid_N": 5.011844223396802,
+        "reference_h": 138.61455113257648,
+        "difference": -4.657420167846141,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -656.7397784366908,
+        "candidate_h": 133.00491101082952,
+        "reference_H_EGM2008": 135.2877655029297,
+        "geoid_N": 5.010395325799527,
+        "reference_h": 140.2981608287292,
+        "difference": -7.293249817899692,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -656.7397784366908,
+        "candidate_h": 132.7013019157663,
+        "reference_H_EGM2008": 133.02481079101562,
+        "geoid_N": 5.008946428202252,
+        "reference_h": 138.03375721921788,
+        "difference": -5.332455303451582,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -656.7397784366908,
+        "candidate_h": 133.15779425634128,
+        "reference_H_EGM2008": 131.13414001464844,
+        "geoid_N": 5.00749753060495,
+        "reference_h": 136.1416375452534,
+        "difference": -2.9838432889121123,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -656.7397784366908,
+        "candidate_h": 134.13176394472447,
+        "reference_H_EGM2008": 132.75445556640625,
+        "geoid_N": 5.006048633007689,
+        "reference_h": 137.76050419941393,
+        "difference": -3.628740254689461,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -656.7397784366908,
+        "candidate_h": 135.37724817592408,
+        "reference_H_EGM2008": 135.2398681640625,
+        "geoid_N": 5.004599735410401,
+        "reference_h": 140.2444678994729,
+        "difference": -4.867219723548828,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -620.603492030967,
+        "candidate_h": 129.01290480706515,
+        "reference_H_EGM2008": 129.4199981689453,
+        "geoid_N": 5.025520028391996,
+        "reference_h": 134.44551819733732,
+        "difference": -5.4326133902721665,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -620.603492030967,
+        "candidate_h": 131.71365815554213,
+        "reference_H_EGM2008": 130.43759155273438,
+        "geoid_N": 5.024071202004804,
+        "reference_h": 135.46166275473917,
+        "difference": -3.7480045991970314,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -620.603492030967,
+        "candidate_h": 134.4064721110232,
+        "reference_H_EGM2008": 132.0165557861328,
+        "geoid_N": 5.022622375617586,
+        "reference_h": 137.03917816175039,
+        "difference": -2.6327060507271938,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -620.603492030967,
+        "candidate_h": 136.5822029360329,
+        "reference_H_EGM2008": 131.5315399169922,
+        "geoid_N": 5.021173549230397,
+        "reference_h": 136.5527134662226,
+        "difference": 0.02948946981030076,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -620.603492030967,
+        "candidate_h": 137.96317246172256,
+        "reference_H_EGM2008": 132.92742919921875,
+        "geoid_N": 5.019724722843206,
+        "reference_h": 137.94715392206194,
+        "difference": 0.016018539660620945,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -620.603492030967,
+        "candidate_h": 138.466140351288,
+        "reference_H_EGM2008": 133.88760375976562,
+        "geoid_N": 5.018275896456015,
+        "reference_h": 138.90587965622163,
+        "difference": -0.43973930493362445,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -620.603492030967,
+        "candidate_h": 138.03484862087905,
+        "reference_H_EGM2008": 134.89321899414062,
+        "geoid_N": 5.016827070068811,
+        "reference_h": 139.91004606420944,
+        "difference": -1.8751974433303928,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -620.603492030967,
+        "candidate_h": 137.00553649652892,
+        "reference_H_EGM2008": 135.641845703125,
+        "geoid_N": 5.015378243681621,
+        "reference_h": 140.65722394680662,
+        "difference": -3.6516874502777057,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -620.603492030967,
+        "candidate_h": 135.70977007288135,
+        "reference_H_EGM2008": 134.85252380371094,
+        "geoid_N": 5.013929417294418,
+        "reference_h": 139.86645322100534,
+        "difference": -4.156683148123989,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -620.603492030967,
+        "candidate_h": 134.37711801739647,
+        "reference_H_EGM2008": 134.4713134765625,
+        "geoid_N": 5.012480590907214,
+        "reference_h": 139.48379406746972,
+        "difference": -5.106676050073247,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -620.603492030967,
+        "candidate_h": 133.35741814451595,
+        "reference_H_EGM2008": 136.78741455078125,
+        "geoid_N": 5.011031764520024,
+        "reference_h": 141.79844631530128,
+        "difference": -8.44102817078533,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -620.603492030967,
+        "candidate_h": 132.98533066584875,
+        "reference_H_EGM2008": 135.5365753173828,
+        "geoid_N": 5.009582938132833,
+        "reference_h": 140.54615825551565,
+        "difference": -7.5608275896669,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -620.603492030967,
+        "candidate_h": 133.36040149162568,
+        "reference_H_EGM2008": 134.1669921875,
+        "geoid_N": 5.0081341117456155,
+        "reference_h": 139.17512629924562,
+        "difference": -5.814724807619939,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -620.603492030967,
+        "candidate_h": 134.3645023849532,
+        "reference_H_EGM2008": 135.46487426757812,
+        "geoid_N": 5.006685285358438,
+        "reference_h": 140.47155955293655,
+        "difference": -6.107057167983356,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -620.603492030967,
+        "candidate_h": 135.80495199383674,
+        "reference_H_EGM2008": 136.9518280029297,
+        "geoid_N": 5.005236458971235,
+        "reference_h": 141.95706446190093,
+        "difference": -6.152112468064189,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -584.466823308258,
+        "candidate_h": 128.59532005641347,
+        "reference_H_EGM2008": 128.56378173828125,
+        "geoid_N": 5.02615576173755,
+        "reference_h": 133.5899375000188,
+        "difference": -4.994617443605335,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -584.466823308258,
+        "candidate_h": 131.29668589061953,
+        "reference_H_EGM2008": 129.53794860839844,
+        "geoid_N": 5.024707006561196,
+        "reference_h": 134.56265561495962,
+        "difference": -3.2659697243400956,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -584.466823308258,
+        "candidate_h": 134.061789305434,
+        "reference_H_EGM2008": 134.1474151611328,
+        "geoid_N": 5.023258251384816,
+        "reference_h": 139.17067341251763,
+        "difference": -5.1088841070836395,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -584.466823308258,
+        "candidate_h": 136.3166649958605,
+        "reference_H_EGM2008": 134.42259216308594,
+        "geoid_N": 5.021809496208464,
+        "reference_h": 139.4444016592944,
+        "difference": -3.1277366634339216,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -584.466823308258,
+        "candidate_h": 137.78358277447248,
+        "reference_H_EGM2008": 132.6920623779297,
+        "geoid_N": 5.020360741032111,
+        "reference_h": 137.7124231189618,
+        "difference": 0.0711596555106837,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -584.466823308258,
+        "candidate_h": 138.37551715074548,
+        "reference_H_EGM2008": 133.42947387695312,
+        "geoid_N": 5.018911985855759,
+        "reference_h": 138.4483858628089,
+        "difference": -0.07286871206341061,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -584.466823308258,
+        "candidate_h": 138.07402510568804,
+        "reference_H_EGM2008": 134.9971923828125,
+        "geoid_N": 5.017463230679392,
+        "reference_h": 140.0146556134919,
+        "difference": -1.94063050780386,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -584.466823308258,
+        "candidate_h": 137.10173490416165,
+        "reference_H_EGM2008": 133.73146057128906,
+        "geoid_N": 5.01601447550304,
+        "reference_h": 138.7474750467921,
+        "difference": -1.6457401426304443,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -584.466823308258,
+        "candidate_h": 135.76830077912348,
+        "reference_H_EGM2008": 136.14137268066406,
+        "geoid_N": 5.014565720326674,
+        "reference_h": 141.15593840099075,
+        "difference": -5.38763762186727,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -584.466823308258,
+        "candidate_h": 134.33423149092408,
+        "reference_H_EGM2008": 136.97396850585938,
+        "geoid_N": 5.013116965150307,
+        "reference_h": 141.9870854710097,
+        "difference": -7.6528539800856095,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -584.466823308258,
+        "candidate_h": 133.21798862041294,
+        "reference_H_EGM2008": 134.69642639160156,
+        "geoid_N": 5.011668209973955,
+        "reference_h": 139.7080946015755,
+        "difference": -6.490105981162571,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -584.466823308258,
+        "candidate_h": 132.77947977741437,
+        "reference_H_EGM2008": 135.08270263671875,
+        "geoid_N": 5.010219454797602,
+        "reference_h": 140.09292209151636,
+        "difference": -7.313442314101991,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -584.466823308258,
+        "candidate_h": 133.11900990644597,
+        "reference_H_EGM2008": 131.16006469726562,
+        "geoid_N": 5.0087706996212225,
+        "reference_h": 136.16883539688683,
+        "difference": -3.049825490440867,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -584.466823308258,
+        "candidate_h": 134.1741011871975,
+        "reference_H_EGM2008": 131.73768615722656,
+        "geoid_N": 5.007321944444884,
+        "reference_h": 136.74500810167146,
+        "difference": -2.570906914473966,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -584.466823308258,
+        "candidate_h": 135.78295275719483,
+        "reference_H_EGM2008": 133.9752960205078,
+        "geoid_N": 5.0058731892685175,
+        "reference_h": 138.98116920977634,
+        "difference": -3.198216452581505,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -548.3297722654212,
+        "candidate_h": 128.90601936994625,
+        "reference_H_EGM2008": 129.1309051513672,
+        "geoid_N": 5.026791501809055,
+        "reference_h": 134.15769665317623,
+        "difference": -5.251677283229981,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -548.3297722654212,
+        "candidate_h": 131.4505262884951,
+        "reference_H_EGM2008": 129.11618041992188,
+        "geoid_N": 5.025342817844293,
+        "reference_h": 134.14152323776617,
+        "difference": -2.6909969492710673,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -548.3297722654212,
+        "candidate_h": 134.0577931201267,
+        "reference_H_EGM2008": 131.26141357421875,
+        "geoid_N": 5.023894133879504,
+        "reference_h": 136.28530770809826,
+        "difference": -2.2275145879715694,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -548.3297722654212,
+        "candidate_h": 136.18929434973924,
+        "reference_H_EGM2008": 132.07598876953125,
+        "geoid_N": 5.022445449914743,
+        "reference_h": 137.098434219446,
+        "difference": -0.9091398697067632,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -548.3297722654212,
+        "candidate_h": 137.5937613087897,
+        "reference_H_EGM2008": 131.21885681152344,
+        "geoid_N": 5.020996765949981,
+        "reference_h": 136.2398535774734,
+        "difference": 1.3539077313162977,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -548.3297722654212,
+        "candidate_h": 138.16659892733608,
+        "reference_H_EGM2008": 130.63565063476562,
+        "geoid_N": 5.019548081985219,
+        "reference_h": 135.65519871675085,
+        "difference": 2.5114002105852364,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -548.3297722654212,
+        "candidate_h": 137.88126796643093,
+        "reference_H_EGM2008": 134.4735565185547,
+        "geoid_N": 5.0180993980204445,
+        "reference_h": 139.49165591657513,
+        "difference": -1.6103879501442009,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -548.3297722654212,
+        "candidate_h": 136.8854220667552,
+        "reference_H_EGM2008": 134.0767822265625,
+        "geoid_N": 5.016650714055683,
+        "reference_h": 139.0934329406182,
+        "difference": -2.2080108738629747,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -548.3297722654212,
+        "candidate_h": 135.4616861707862,
+        "reference_H_EGM2008": 136.29844665527344,
+        "geoid_N": 5.015202030090909,
+        "reference_h": 141.31364868536434,
+        "difference": -5.851962514578133,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -548.3297722654212,
+        "candidate_h": 133.91859881859878,
+        "reference_H_EGM2008": 136.30177307128906,
+        "geoid_N": 5.013753346126134,
+        "reference_h": 141.31552641741519,
+        "difference": -7.396927598816404,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -548.3297722654212,
+        "candidate_h": 132.71635201532052,
+        "reference_H_EGM2008": 131.60488891601562,
+        "geoid_N": 5.012304662161371,
+        "reference_h": 136.617193578177,
+        "difference": -3.9008415628564705,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -548.3297722654212,
+        "candidate_h": 132.24017729725415,
+        "reference_H_EGM2008": 131.736083984375,
+        "geoid_N": 5.01085597819661,
+        "reference_h": 136.74693996257162,
+        "difference": -4.506762665317467,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -548.3297722654212,
+        "candidate_h": 132.56878191186067,
+        "reference_H_EGM2008": 130.10986328125,
+        "geoid_N": 5.0094072942318215,
+        "reference_h": 135.11927057548183,
+        "difference": -2.5504886636211666,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -548.3297722654212,
+        "candidate_h": 133.652763608888,
+        "reference_H_EGM2008": 130.189453125,
+        "geoid_N": 5.007958610267075,
+        "reference_h": 135.19741173526708,
+        "difference": -1.5446481263790872,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -548.3297722654212,
+        "candidate_h": 135.37086764286954,
+        "reference_H_EGM2008": 132.68218994140625,
+        "geoid_N": 5.006509926302299,
+        "reference_h": 137.68869986770855,
+        "difference": -2.317832224839009,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -512.1923389000997,
+        "candidate_h": 130.29552660902652,
+        "reference_H_EGM2008": 131.6869659423828,
+        "geoid_N": 5.0274272486065605,
+        "reference_h": 136.71439319098937,
+        "difference": -6.418866581962845,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -512.1923389000997,
+        "candidate_h": 132.41730314612815,
+        "reference_H_EGM2008": 133.65260314941406,
+        "geoid_N": 5.025978635854144,
+        "reference_h": 138.6785817852682,
+        "difference": -6.261278639140045,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -512.1923389000997,
+        "candidate_h": 134.5742129257267,
+        "reference_H_EGM2008": 130.65130615234375,
+        "geoid_N": 5.0245300231017005,
+        "reference_h": 135.67583617544545,
+        "difference": -1.101623249718756,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -512.1923389000997,
+        "candidate_h": 136.3567079878259,
+        "reference_H_EGM2008": 130.421142578125,
+        "geoid_N": 5.023081410349282,
+        "reference_h": 135.44422398847428,
+        "difference": 0.9124839993516218,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -512.1923389000997,
+        "candidate_h": 137.5286925282829,
+        "reference_H_EGM2008": 130.85691833496094,
+        "geoid_N": 5.021632797596865,
+        "reference_h": 135.8785511325578,
+        "difference": 1.6501413957251145,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -512.1923389000997,
+        "candidate_h": 137.9572502387952,
+        "reference_H_EGM2008": 131.06263732910156,
+        "geoid_N": 5.020184184844449,
+        "reference_h": 136.08282151394602,
+        "difference": 1.8744287248491958,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -512.1923389000997,
+        "candidate_h": 137.60382457216713,
+        "reference_H_EGM2008": 135.0737762451172,
+        "geoid_N": 5.0187355720920195,
+        "reference_h": 140.0925118172092,
+        "difference": -2.4886872450420867,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -512.1923389000997,
+        "candidate_h": 136.5754921907592,
+        "reference_H_EGM2008": 137.20445251464844,
+        "geoid_N": 5.017286959339601,
+        "reference_h": 142.22173947398804,
+        "difference": -5.646247283228831,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -512.1923389000997,
+        "candidate_h": 135.10297032238628,
+        "reference_H_EGM2008": 134.07061767578125,
+        "geoid_N": 5.015838346587171,
+        "reference_h": 139.08645602236842,
+        "difference": -3.9834856999821397,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -512.1923389000997,
+        "candidate_h": 133.49231209677083,
+        "reference_H_EGM2008": 132.3261260986328,
+        "geoid_N": 5.014389733834741,
+        "reference_h": 137.34051583246756,
+        "difference": -3.8482037356967282,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -512.1923389000997,
+        "candidate_h": 132.19864366957512,
+        "reference_H_EGM2008": 129.05430603027344,
+        "geoid_N": 5.012941121082324,
+        "reference_h": 134.06724715135576,
+        "difference": -1.8686034817806387,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -512.1923389000997,
+        "candidate_h": 131.67437165563084,
+        "reference_H_EGM2008": 129.61843872070312,
+        "geoid_N": 5.011492508329907,
+        "reference_h": 134.62993122903302,
+        "difference": -2.9555595734021836,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -512.1923389000997,
+        "candidate_h": 132.0024790226882,
+        "reference_H_EGM2008": 131.08572387695312,
+        "geoid_N": 5.010043895577462,
+        "reference_h": 136.0957677725306,
+        "difference": -4.093288749842401,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -512.1923389000997,
+        "candidate_h": 133.0855018877111,
+        "reference_H_EGM2008": 132.92178344726562,
+        "geoid_N": 5.008595282825059,
+        "reference_h": 137.9303787300907,
+        "difference": -4.844876842379591,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -512.1923389000997,
+        "candidate_h": 134.85872353920743,
+        "reference_H_EGM2008": 133.3465118408203,
+        "geoid_N": 5.007146670072629,
+        "reference_h": 138.35365851089296,
+        "difference": -3.494934971685524,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -476.0545232067936,
+        "candidate_h": 132.29166696238852,
+        "reference_H_EGM2008": 132.805908203125,
+        "geoid_N": 5.028063002130167,
+        "reference_h": 137.83397120525515,
+        "difference": -5.542304242866635,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -476.0545232067936,
+        "candidate_h": 133.87289102001992,
+        "reference_H_EGM2008": 135.04945373535156,
+        "geoid_N": 5.026614460590848,
+        "reference_h": 140.0760681959424,
+        "difference": -6.203177175922491,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -476.0545232067936,
+        "candidate_h": 135.42594614941333,
+        "reference_H_EGM2008": 130.7362060546875,
+        "geoid_N": 5.025165919051502,
+        "reference_h": 135.761371973739,
+        "difference": -0.3354258243256538,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -476.0545232067936,
+        "candidate_h": 136.72950718863083,
+        "reference_H_EGM2008": 130.38632202148438,
+        "geoid_N": 5.023717377512183,
+        "reference_h": 135.41003939899656,
+        "difference": 1.319467789634274,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -476.0545232067936,
+        "candidate_h": 137.5772556401698,
+        "reference_H_EGM2008": 131.7300567626953,
+        "geoid_N": 5.022268835972863,
+        "reference_h": 136.75232559866816,
+        "difference": 0.8249300415016307,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -476.0545232067936,
+        "candidate_h": 137.81303112134827,
+        "reference_H_EGM2008": 133.26666259765625,
+        "geoid_N": 5.020820294433546,
+        "reference_h": 138.2874828920898,
+        "difference": -0.4744517707415241,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -476.0545232067936,
+        "candidate_h": 137.3665417279869,
+        "reference_H_EGM2008": 137.49765014648438,
+        "geoid_N": 5.019371752894212,
+        "reference_h": 142.5170218993786,
+        "difference": -5.150480171391678,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -476.0545232067936,
+        "candidate_h": 136.32837320002227,
+        "reference_H_EGM2008": 137.73587036132812,
+        "geoid_N": 5.017923211354893,
+        "reference_h": 142.753793572683,
+        "difference": -6.425420372660739,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -476.0545232067936,
+        "candidate_h": 134.89903195004493,
+        "reference_H_EGM2008": 134.4634552001953,
+        "geoid_N": 5.01647466981556,
+        "reference_h": 139.47992987001086,
+        "difference": -4.580897919965935,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -476.0545232067936,
+        "candidate_h": 133.34255943149512,
+        "reference_H_EGM2008": 133.09060668945312,
+        "geoid_N": 5.015026128276229,
+        "reference_h": 138.10563281772934,
+        "difference": -4.763073386234225,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -476.0545232067936,
+        "candidate_h": 132.0340582071246,
+        "reference_H_EGM2008": 129.14710998535156,
+        "geoid_N": 5.01357758673691,
+        "reference_h": 134.16068757208848,
+        "difference": -2.1266293649638897,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -476.0545232067936,
+        "candidate_h": 131.47160111598623,
+        "reference_H_EGM2008": 129.31263732910156,
+        "geoid_N": 5.01212904519759,
+        "reference_h": 134.32476637429914,
+        "difference": -2.853165258312913,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -476.0545232067936,
+        "candidate_h": 131.7839915572932,
+        "reference_H_EGM2008": 130.83216857910156,
+        "geoid_N": 5.010680503658245,
+        "reference_h": 135.8428490827598,
+        "difference": -4.058857525466607,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -476.0545232067936,
+        "candidate_h": 132.79681421596197,
+        "reference_H_EGM2008": 132.89553833007812,
+        "geoid_N": 5.009231962118939,
+        "reference_h": 137.90477029219707,
+        "difference": -5.107956076235098,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -476.0545232067936,
+        "candidate_h": 134.44760073218654,
+        "reference_H_EGM2008": 133.95660400390625,
+        "geoid_N": 5.0077834205796075,
+        "reference_h": 138.96438742448586,
+        "difference": -4.51678669229932,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -439.91632518628876,
+        "candidate_h": 134.19359324978953,
+        "reference_H_EGM2008": 133.1984100341797,
+        "geoid_N": 5.028698762379848,
+        "reference_h": 138.22710879655955,
+        "difference": -4.033515546770019,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -439.91632518628876,
+        "candidate_h": 135.23791548820955,
+        "reference_H_EGM2008": 133.8919219970703,
+        "geoid_N": 5.027250292054379,
+        "reference_h": 138.9191722891247,
+        "difference": -3.6812568009151505,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -439.91632518628876,
+        "candidate_h": 136.22719782468417,
+        "reference_H_EGM2008": 131.12692260742188,
+        "geoid_N": 5.0258018217288845,
+        "reference_h": 136.15272442915077,
+        "difference": 0.07447339553340271,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -439.91632518628876,
+        "candidate_h": 137.0487069138266,
+        "reference_H_EGM2008": 131.6339874267578,
+        "geoid_N": 5.024353351403418,
+        "reference_h": 136.65834077816123,
+        "difference": 0.39036613566537426,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -439.91632518628876,
+        "candidate_h": 137.56993942956407,
+        "reference_H_EGM2008": 133.1009979248047,
+        "geoid_N": 5.0229048810779515,
+        "reference_h": 138.12390280588264,
+        "difference": -0.5539633763185634,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -439.91632518628876,
+        "candidate_h": 137.63978830707603,
+        "reference_H_EGM2008": 134.49610900878906,
+        "geoid_N": 5.021456410752483,
+        "reference_h": 139.51756541954154,
+        "difference": -1.877777112465509,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -439.91632518628876,
+        "candidate_h": 137.12245483619324,
+        "reference_H_EGM2008": 137.80789184570312,
+        "geoid_N": 5.020007940427002,
+        "reference_h": 142.82789978613013,
+        "difference": -5.70544494993689,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -439.91632518628876,
+        "candidate_h": 136.12753377133802,
+        "reference_H_EGM2008": 136.9278106689453,
+        "geoid_N": 5.018559470101534,
+        "reference_h": 141.94637013904685,
+        "difference": -5.818836367708826,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -439.91632518628876,
+        "candidate_h": 134.84583974045506,
+        "reference_H_EGM2008": 135.40631103515625,
+        "geoid_N": 5.017110999776053,
+        "reference_h": 140.42342203493232,
+        "difference": -5.577582294477253,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -439.91632518628876,
+        "candidate_h": 133.49150880779496,
+        "reference_H_EGM2008": 134.16458129882812,
+        "geoid_N": 5.015662529450571,
+        "reference_h": 139.1802438282787,
+        "difference": -5.688735020483733,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -439.91632518628876,
+        "candidate_h": 132.3456826688705,
+        "reference_H_EGM2008": 129.8505859375,
+        "geoid_N": 5.014214059125104,
+        "reference_h": 134.8647999966251,
+        "difference": -2.5191173277546,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -439.91632518628876,
+        "candidate_h": 131.79221721019118,
+        "reference_H_EGM2008": 130.1464080810547,
+        "geoid_N": 5.012765588799637,
+        "reference_h": 135.1591736698543,
+        "difference": -3.366956459663129,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -439.91632518628876,
+        "candidate_h": 131.98195024076833,
+        "reference_H_EGM2008": 130.53416442871094,
+        "geoid_N": 5.011317118474142,
+        "reference_h": 135.5454815471851,
+        "difference": -3.5635313064167633,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -439.91632518628876,
+        "candidate_h": 132.82361889671702,
+        "reference_H_EGM2008": 131.78111267089844,
+        "geoid_N": 5.0098686481486885,
+        "reference_h": 136.79098131904712,
+        "difference": -3.9673624223300976,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -439.91632518628876,
+        "candidate_h": 134.18044302718263,
+        "reference_H_EGM2008": 134.68960571289062,
+        "geoid_N": 5.008420177823207,
+        "reference_h": 139.69802589071384,
+        "difference": -5.517582863531203,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -403.77774483072835,
+        "candidate_h": 135.64358196838378,
+        "reference_H_EGM2008": 131.10018920898438,
+        "geoid_N": 5.0293345293557525,
+        "reference_h": 136.12952373834014,
+        "difference": -0.4859417699563551,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -403.77774483072835,
+        "candidate_h": 136.13834232403383,
+        "reference_H_EGM2008": 131.28794860839844,
+        "geoid_N": 5.027886130244889,
+        "reference_h": 136.31583473864333,
+        "difference": -0.17749241460950316,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -403.77774483072835,
+        "candidate_h": 136.61749308371125,
+        "reference_H_EGM2008": 135.2212371826172,
+        "geoid_N": 5.026437731134,
+        "reference_h": 140.24767491375118,
+        "difference": -3.6301818300399304,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -403.77774483072835,
+        "candidate_h": 136.9991310862495,
+        "reference_H_EGM2008": 134.61886596679688,
+        "geoid_N": 5.024989332023137,
+        "reference_h": 139.64385529882,
+        "difference": -2.644724212570509,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -403.77774483072835,
+        "candidate_h": 137.22408326423587,
+        "reference_H_EGM2008": 133.58642578125,
+        "geoid_N": 5.023540932912274,
+        "reference_h": 138.60996671416228,
+        "difference": -1.3858834499264105,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -403.77774483072835,
+        "candidate_h": 137.17215798365223,
+        "reference_H_EGM2008": 134.17054748535156,
+        "geoid_N": 5.022092533801413,
+        "reference_h": 139.19264001915298,
+        "difference": -2.0204820355007485,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -403.77774483072835,
+        "candidate_h": 136.67353800108953,
+        "reference_H_EGM2008": 135.9198455810547,
+        "geoid_N": 5.020644134690535,
+        "reference_h": 140.94048971574523,
+        "difference": -4.266951714655704,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -403.77774483072835,
+        "candidate_h": 135.81869672237065,
+        "reference_H_EGM2008": 134.1566925048828,
+        "geoid_N": 5.019195735579672,
+        "reference_h": 139.17588824046248,
+        "difference": -3.357191518091838,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -403.77774483072835,
+        "candidate_h": 134.76322955117607,
+        "reference_H_EGM2008": 134.88992309570312,
+        "geoid_N": 5.017747336468796,
+        "reference_h": 139.90767043217193,
+        "difference": -5.144440880995859,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -403.77774483072835,
+        "candidate_h": 133.6901645887093,
+        "reference_H_EGM2008": 135.23841857910156,
+        "geoid_N": 5.01629893735792,
+        "reference_h": 140.2547175164595,
+        "difference": -6.564552927750185,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -403.77774483072835,
+        "candidate_h": 132.77464268345824,
+        "reference_H_EGM2008": 133.1873016357422,
+        "geoid_N": 5.014850538247058,
+        "reference_h": 138.20215217398925,
+        "difference": -5.427509490531008,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -403.77774483072835,
+        "candidate_h": 132.2615663783282,
+        "reference_H_EGM2008": 132.7631378173828,
+        "geoid_N": 5.013402139136194,
+        "reference_h": 137.776539956519,
+        "difference": -5.514973578190791,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -403.77774483072835,
+        "candidate_h": 132.31995675628173,
+        "reference_H_EGM2008": 133.4182891845703,
+        "geoid_N": 5.011953740025305,
+        "reference_h": 138.43024292459563,
+        "difference": -6.110286168313905,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -403.77774483072835,
+        "candidate_h": 132.9344238746802,
+        "reference_H_EGM2008": 136.27593994140625,
+        "geoid_N": 5.010505340914456,
+        "reference_h": 141.2864452823207,
+        "difference": -8.352021407640507,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -403.77774483072835,
+        "candidate_h": 133.96804068686598,
+        "reference_H_EGM2008": 135.2515869140625,
+        "geoid_N": 5.009056941803579,
+        "reference_h": 140.26064385586608,
+        "difference": -6.2926031690001025,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -367.63878214246944,
+        "candidate_h": 136.4722145733104,
+        "reference_H_EGM2008": 132.4757080078125,
+        "geoid_N": 5.029970303057831,
+        "reference_h": 137.50567831087034,
+        "difference": -1.0334637375599414,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -367.63878214246944,
+        "candidate_h": 136.3992533991314,
+        "reference_H_EGM2008": 132.33848571777344,
+        "geoid_N": 5.0285219751623265,
+        "reference_h": 137.36700769293577,
+        "difference": -0.9677542938043757,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -367.63878214246944,
+        "candidate_h": 136.3637321264528,
+        "reference_H_EGM2008": 134.34625244140625,
+        "geoid_N": 5.027073647266795,
+        "reference_h": 139.37332608867305,
+        "difference": -3.009593962220265,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -367.63878214246944,
+        "candidate_h": 136.36025151603823,
+        "reference_H_EGM2008": 133.38003540039062,
+        "geoid_N": 5.025625319371291,
+        "reference_h": 138.40566071976193,
+        "difference": -2.0454092037236933,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -367.63878214246944,
+        "candidate_h": 136.34654032970164,
+        "reference_H_EGM2008": 133.11534118652344,
+        "geoid_N": 5.024176991475787,
+        "reference_h": 138.13951817799924,
+        "difference": -1.7929778482975962,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -367.63878214246944,
+        "candidate_h": 136.22212088741654,
+        "reference_H_EGM2008": 134.84909057617188,
+        "geoid_N": 5.022728663580281,
+        "reference_h": 139.87181923975214,
+        "difference": -3.649698352335605,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -367.63878214246944,
+        "candidate_h": 135.86371306793626,
+        "reference_H_EGM2008": 135.84182739257812,
+        "geoid_N": 5.021280335684763,
+        "reference_h": 140.8631077282629,
+        "difference": -4.9993946603266295,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -367.63878214246944,
+        "candidate_h": 135.24526418340466,
+        "reference_H_EGM2008": 135.18746948242188,
+        "geoid_N": 5.019832007789258,
+        "reference_h": 140.20730149021114,
+        "difference": -4.962037306806479,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -367.63878214246944,
+        "candidate_h": 134.45071921989373,
+        "reference_H_EGM2008": 135.28944396972656,
+        "geoid_N": 5.0183836798937405,
+        "reference_h": 140.3078276496203,
+        "difference": -5.857108429726566,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -367.63878214246944,
+        "candidate_h": 133.65129169631578,
+        "reference_H_EGM2008": 134.40306091308594,
+        "geoid_N": 5.016935351998222,
+        "reference_h": 139.41999626508417,
+        "difference": -5.768704568768385,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -367.63878214246944,
+        "candidate_h": 132.973766868043,
+        "reference_H_EGM2008": 134.180908203125,
+        "geoid_N": 5.015487024102717,
+        "reference_h": 139.19639522722773,
+        "difference": -6.222628359184739,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -367.63878214246944,
+        "candidate_h": 132.5464138908203,
+        "reference_H_EGM2008": 135.0997314453125,
+        "geoid_N": 5.014038696207213,
+        "reference_h": 140.11377014151972,
+        "difference": -7.567356250699419,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -367.63878214246944,
+        "candidate_h": 132.53368829062026,
+        "reference_H_EGM2008": 134.74282836914062,
+        "geoid_N": 5.012590368311683,
+        "reference_h": 139.75541873745232,
+        "difference": -7.221730446832055,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -367.63878214246944,
+        "candidate_h": 132.95992254448686,
+        "reference_H_EGM2008": 136.77426147460938,
+        "geoid_N": 5.011142040416191,
+        "reference_h": 141.78540351502556,
+        "difference": -8.825480970538706,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -367.63878214246944,
+        "candidate_h": 133.72365106629786,
+        "reference_H_EGM2008": 136.81546020507812,
+        "geoid_N": 5.009693712520674,
+        "reference_h": 141.8251539175988,
+        "difference": -8.10150285130095,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -331.49943711601236,
+        "candidate_h": 136.5310336665356,
+        "reference_H_EGM2008": 132.63729858398438,
+        "geoid_N": 5.030606083486181,
+        "reference_h": 137.66790466747057,
+        "difference": -1.136871000934974,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -331.49943711601236,
+        "candidate_h": 135.9393559961301,
+        "reference_H_EGM2008": 131.0411376953125,
+        "geoid_N": 5.02915782680679,
+        "reference_h": 136.0702955221193,
+        "difference": -0.13093952598919145,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -331.49943711601236,
+        "candidate_h": 135.45379835073103,
+        "reference_H_EGM2008": 133.22132873535156,
+        "geoid_N": 5.027709570127369,
+        "reference_h": 138.24903830547893,
+        "difference": -2.795239954747899,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -331.49943711601236,
+        "candidate_h": 135.13537771276683,
+        "reference_H_EGM2008": 133.9700469970703,
+        "geoid_N": 5.026261313447977,
+        "reference_h": 138.9963083105183,
+        "difference": -3.8609305977514623,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -331.49943711601236,
+        "candidate_h": 134.96484326314913,
+        "reference_H_EGM2008": 134.38140869140625,
+        "geoid_N": 5.024813056768584,
+        "reference_h": 139.40622174817483,
+        "difference": -4.4413784850256945,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -331.49943711601236,
+        "candidate_h": 134.84733790513977,
+        "reference_H_EGM2008": 135.53028869628906,
+        "geoid_N": 5.023364800089192,
+        "reference_h": 140.55365349637825,
+        "difference": -5.706315591238479,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -331.49943711601236,
+        "candidate_h": 134.66171505724046,
+        "reference_H_EGM2008": 135.68780517578125,
+        "geoid_N": 5.021916543409784,
+        "reference_h": 140.70972171919104,
+        "difference": -6.048006661950581,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -331.49943711601236,
+        "candidate_h": 134.30530708941217,
+        "reference_H_EGM2008": 135.8572998046875,
+        "geoid_N": 5.020468286730392,
+        "reference_h": 140.8777680914179,
+        "difference": -6.572461002005724,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -331.49943711601236,
+        "candidate_h": 133.78598006890985,
+        "reference_H_EGM2008": 135.35206604003906,
+        "geoid_N": 5.019020030050986,
+        "reference_h": 140.37108607009006,
+        "difference": -6.585106001180208,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -331.49943711601236,
+        "candidate_h": 133.2462715236582,
+        "reference_H_EGM2008": 134.12890625,
+        "geoid_N": 5.0175717733715794,
+        "reference_h": 139.14647802337157,
+        "difference": -5.900206499713363,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -331.49943711601236,
+        "candidate_h": 132.78986165156607,
+        "reference_H_EGM2008": 133.3205108642578,
+        "geoid_N": 5.016123516692187,
+        "reference_h": 138.33663438095,
+        "difference": -5.5467727293839175,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -331.49943711601236,
+        "candidate_h": 132.4900723794969,
+        "reference_H_EGM2008": 134.97634887695312,
+        "geoid_N": 5.014675260012792,
+        "reference_h": 139.9910241369659,
+        "difference": -7.500951757469011,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -331.49943711601236,
+        "candidate_h": 132.490614366239,
+        "reference_H_EGM2008": 135.5743865966797,
+        "geoid_N": 5.013227003333374,
+        "reference_h": 140.58761360001307,
+        "difference": -8.096999233774085,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -331.49943711601236,
+        "candidate_h": 132.82873307659645,
+        "reference_H_EGM2008": 134.95623779296875,
+        "geoid_N": 5.011778746653993,
+        "reference_h": 139.96801653962274,
+        "difference": -7.139283463026288,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -331.49943711601236,
+        "candidate_h": 133.43816167400553,
+        "reference_H_EGM2008": 134.41213989257812,
+        "geoid_N": 5.010330489974588,
+        "reference_h": 139.42247038255272,
+        "difference": -5.984308708547189,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -295.35970974978574,
+        "candidate_h": 135.71986408702713,
+        "reference_H_EGM2008": 133.5127716064453,
+        "geoid_N": 5.031224044751894,
+        "reference_h": 138.5439956511972,
+        "difference": -2.8241315641700737,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -295.35970974978574,
+        "candidate_h": 134.78431296258273,
+        "reference_H_EGM2008": 132.07078552246094,
+        "geoid_N": 5.029775879439689,
+        "reference_h": 137.10056140190062,
+        "difference": -2.3162484393178886,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -295.35970974978574,
+        "candidate_h": 133.97532144200616,
+        "reference_H_EGM2008": 131.54627990722656,
+        "geoid_N": 5.028327714127457,
+        "reference_h": 136.574607621354,
+        "difference": -2.5992861793478426,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -295.35970974978574,
+        "candidate_h": 133.4340959542298,
+        "reference_H_EGM2008": 132.4891815185547,
+        "geoid_N": 5.026879548815251,
+        "reference_h": 137.51606106736995,
+        "difference": -4.081965113140143,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -295.35970974978574,
+        "candidate_h": 133.1928522285877,
+        "reference_H_EGM2008": 133.5367431640625,
+        "geoid_N": 5.025431383503046,
+        "reference_h": 138.56217454756555,
+        "difference": -5.369322318977851,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -295.35970974978574,
+        "candidate_h": 133.13614343001677,
+        "reference_H_EGM2008": 132.5226287841797,
+        "geoid_N": 5.023983218190841,
+        "reference_h": 137.54661200237052,
+        "difference": -4.41046857235375,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -295.35970974978574,
+        "candidate_h": 133.10470275984494,
+        "reference_H_EGM2008": 133.66213989257812,
+        "geoid_N": 5.022535052878622,
+        "reference_h": 138.68467494545675,
+        "difference": -5.579972185611808,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -295.35970974978574,
+        "candidate_h": 132.97826290530188,
+        "reference_H_EGM2008": 134.53355407714844,
+        "geoid_N": 5.021086887566416,
+        "reference_h": 139.55464096471485,
+        "difference": -6.576378059412974,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -295.35970974978574,
+        "candidate_h": 132.72628380777854,
+        "reference_H_EGM2008": 135.14047241210938,
+        "geoid_N": 5.019638722254198,
+        "reference_h": 140.16011113436358,
+        "difference": -7.433827326585032,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -295.35970974978574,
+        "candidate_h": 132.42542557418244,
+        "reference_H_EGM2008": 134.1641845703125,
+        "geoid_N": 5.018190556941979,
+        "reference_h": 139.1823751272545,
+        "difference": -6.756949553072047,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -295.35970974978574,
+        "candidate_h": 132.1694673402703,
+        "reference_H_EGM2008": 132.52894592285156,
+        "geoid_N": 5.016742391629774,
+        "reference_h": 137.54568831448134,
+        "difference": -5.376220974211037,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -295.35970974978574,
+        "candidate_h": 132.04062665787748,
+        "reference_H_EGM2008": 134.2696533203125,
+        "geoid_N": 5.015294226317568,
+        "reference_h": 139.28494754663006,
+        "difference": -7.244320888752583,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -295.35970974978574,
+        "candidate_h": 132.1459086685316,
+        "reference_H_EGM2008": 134.2878875732422,
+        "geoid_N": 5.013846061005337,
+        "reference_h": 139.3017336342475,
+        "difference": -7.155824965715908,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -295.35970974978574,
+        "candidate_h": 132.5194311616966,
+        "reference_H_EGM2008": 134.09115600585938,
+        "geoid_N": 5.0123978956931445,
+        "reference_h": 139.10355390155252,
+        "difference": -6.584122739855928,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -295.35970974978574,
+        "candidate_h": 133.14610365105145,
+        "reference_H_EGM2008": 133.13046264648438,
+        "geoid_N": 5.010949730380926,
+        "reference_h": 138.1414123768653,
+        "difference": -4.995308725813857,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -259.21960003907554,
+        "candidate_h": 134.26785527939379,
+        "reference_H_EGM2008": 134.97735595703125,
+        "geoid_N": 5.031814391636328,
+        "reference_h": 140.00917034866757,
+        "difference": -5.7413150692737815,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -259.21960003907554,
+        "candidate_h": 133.1591813936301,
+        "reference_H_EGM2008": 135.46275329589844,
+        "geoid_N": 5.030366348914867,
+        "reference_h": 140.4931196448133,
+        "difference": -7.333938251183213,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -259.21960003907554,
+        "candidate_h": 132.14710952999363,
+        "reference_H_EGM2008": 131.16807556152344,
+        "geoid_N": 5.028918306193379,
+        "reference_h": 136.19699386771683,
+        "difference": -4.049884337723199,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -259.21960003907554,
+        "candidate_h": 131.462340315569,
+        "reference_H_EGM2008": 130.27117919921875,
+        "geoid_N": 5.027470263471918,
+        "reference_h": 135.29864946269066,
+        "difference": -3.8363091471216535,
+        "pilot": true,
+        "road_support": true
+      },
+      {
+        "x": -73.178319143223,
+        "z": -259.21960003907554,
+        "candidate_h": 131.22975825233775,
+        "reference_H_EGM2008": 129.0902557373047,
+        "geoid_N": 5.026022220750457,
+        "reference_h": 134.11627795805515,
+        "difference": -2.8865197057174043,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -259.21960003907554,
+        "candidate_h": 131.27545761800903,
+        "reference_H_EGM2008": 130.9790802001953,
+        "geoid_N": 5.024574178028996,
+        "reference_h": 136.0036543782243,
+        "difference": -4.728196760215269,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -259.21960003907554,
+        "candidate_h": 131.38891333756052,
+        "reference_H_EGM2008": 134.11952209472656,
+        "geoid_N": 5.023126135307522,
+        "reference_h": 139.1426482300341,
+        "difference": -7.753734892473574,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -259.21960003907554,
+        "candidate_h": 131.445375154974,
+        "reference_H_EGM2008": 134.37315368652344,
+        "geoid_N": 5.021678092586061,
+        "reference_h": 139.3948317791095,
+        "difference": -7.949456624135507,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -259.21960003907554,
+        "candidate_h": 131.4046943523904,
+        "reference_H_EGM2008": 135.8950958251953,
+        "geoid_N": 5.020230049864587,
+        "reference_h": 140.9153258750599,
+        "difference": -9.510631522669485,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -259.21960003907554,
+        "candidate_h": 131.30023874968526,
+        "reference_H_EGM2008": 134.7312774658203,
+        "geoid_N": 5.018782007143113,
+        "reference_h": 139.75005947296341,
+        "difference": -8.449820723278151,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -259.21960003907554,
+        "candidate_h": 131.20419945253047,
+        "reference_H_EGM2008": 134.9535675048828,
+        "geoid_N": 5.017333964421652,
+        "reference_h": 139.97090146930447,
+        "difference": -8.76670201677399,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -259.21960003907554,
+        "candidate_h": 131.22377682615306,
+        "reference_H_EGM2008": 136.8687744140625,
+        "geoid_N": 5.015885921700191,
+        "reference_h": 141.8846603357627,
+        "difference": -10.660883509609647,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -259.21960003907554,
+        "candidate_h": 131.47505410828336,
+        "reference_H_EGM2008": 135.265869140625,
+        "geoid_N": 5.014437878978703,
+        "reference_h": 140.2803070196037,
+        "difference": -8.805252911320338,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -259.21960003907554,
+        "candidate_h": 132.00197850838134,
+        "reference_H_EGM2008": 134.66151428222656,
+        "geoid_N": 5.012989836257256,
+        "reference_h": 139.6745041184838,
+        "difference": -7.672525610102468,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -259.21960003907554,
+        "candidate_h": 132.8856038622586,
+        "reference_H_EGM2008": 131.3663330078125,
+        "geoid_N": 5.011541793535781,
+        "reference_h": 136.37787480134827,
+        "difference": -3.4922709390896784,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -223.07910798152483,
+        "candidate_h": 132.56658197602053,
+        "reference_H_EGM2008": 132.0386962890625,
+        "geoid_N": 5.032404744766373,
+        "reference_h": 137.07110103382888,
+        "difference": -4.504519057808352,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -223.07910798152483,
+        "candidate_h": 131.43121899376504,
+        "reference_H_EGM2008": 133.08140563964844,
+        "geoid_N": 5.030956824636953,
+        "reference_h": 138.11236246428538,
+        "difference": -6.68114347052034,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -223.07910798152483,
+        "candidate_h": 130.33310837792462,
+        "reference_H_EGM2008": 130.59292602539062,
+        "geoid_N": 5.029508904507507,
+        "reference_h": 135.62243492989813,
+        "difference": -5.289326551973517,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -223.07910798152483,
+        "candidate_h": 129.56303790744988,
+        "reference_H_EGM2008": 128.7305908203125,
+        "geoid_N": 5.0280609843780875,
+        "reference_h": 133.7586518046906,
+        "difference": -4.195613897240719,
+        "pilot": true,
+        "road_support": true
+      },
+      {
+        "x": -73.178319143223,
+        "z": -223.07910798152483,
+        "candidate_h": 129.37410444350672,
+        "reference_H_EGM2008": 128.8850555419922,
+        "geoid_N": 5.026613064248668,
+        "reference_h": 133.91166860624085,
+        "difference": -4.537564162734128,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -223.07910798152483,
+        "candidate_h": 129.5127519030964,
+        "reference_H_EGM2008": 131.1963348388672,
+        "geoid_N": 5.025165144119248,
+        "reference_h": 136.22149998298644,
+        "difference": -6.708748079890057,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -223.07910798152483,
+        "candidate_h": 129.7292188833307,
+        "reference_H_EGM2008": 135.02857971191406,
+        "geoid_N": 5.023717223989816,
+        "reference_h": 140.05229693590388,
+        "difference": -10.32307805257318,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -223.07910798152483,
+        "candidate_h": 129.91011340311394,
+        "reference_H_EGM2008": 134.55828857421875,
+        "geoid_N": 5.022269303860396,
+        "reference_h": 139.58055787807913,
+        "difference": -9.670444474965194,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -223.07910798152483,
+        "candidate_h": 130.0126273949027,
+        "reference_H_EGM2008": 135.6447296142578,
+        "geoid_N": 5.020821383730963,
+        "reference_h": 140.6655509979888,
+        "difference": -10.652923603086094,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -223.07910798152483,
+        "candidate_h": 130.04440218473235,
+        "reference_H_EGM2008": 134.71461486816406,
+        "geoid_N": 5.01937346360153,
+        "reference_h": 139.7339883317656,
+        "difference": -9.689586147033253,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -223.07910798152483,
+        "candidate_h": 130.0446259634713,
+        "reference_H_EGM2008": 133.10812377929688,
+        "geoid_N": 5.017925543472111,
+        "reference_h": 138.12604932276898,
+        "difference": -8.081423359297673,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -223.07910798152483,
+        "candidate_h": 130.11154569786135,
+        "reference_H_EGM2008": 134.07687377929688,
+        "geoid_N": 5.016477623342691,
+        "reference_h": 139.09335140263957,
+        "difference": -8.981805704778225,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -223.07910798152483,
+        "candidate_h": 130.43559549325954,
+        "reference_H_EGM2008": 134.11224365234375,
+        "geoid_N": 5.015029703213245,
+        "reference_h": 139.127273355557,
+        "difference": -8.691677862297468,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -223.07910798152483,
+        "candidate_h": 131.17603437112416,
+        "reference_H_EGM2008": 133.93557739257812,
+        "geoid_N": 5.01358178308384,
+        "reference_h": 138.94915917566198,
+        "difference": -7.773124804537815,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -223.07910798152483,
+        "candidate_h": 132.47216972651773,
+        "reference_H_EGM2008": 134.57424926757812,
+        "geoid_N": 5.012133862954407,
+        "reference_h": 139.58638313053254,
+        "difference": -7.114213404014805,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -186.93823357713356,
+        "candidate_h": 130.96977467812042,
+        "reference_H_EGM2008": 129.5097198486328,
+        "geoid_N": 5.032995104142031,
+        "reference_h": 134.54271495277484,
+        "difference": -3.572940274654428,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -186.93823357713356,
+        "candidate_h": 129.94655008777008,
+        "reference_H_EGM2008": 129.9606170654297,
+        "geoid_N": 5.031547306605949,
+        "reference_h": 134.99216437203563,
+        "difference": -5.045614284265554,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -186.93823357713356,
+        "candidate_h": 128.92432717641952,
+        "reference_H_EGM2008": 129.7054901123047,
+        "geoid_N": 5.030099509069841,
+        "reference_h": 134.73558962137452,
+        "difference": -5.811262444954991,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -186.93823357713356,
+        "candidate_h": 128.16791429066768,
+        "reference_H_EGM2008": 126.44287872314453,
+        "geoid_N": 5.02865171153376,
+        "reference_h": 131.4715304346783,
+        "difference": -3.3036161440106184,
+        "pilot": true,
+        "road_support": true
+      },
+      {
+        "x": -73.178319143223,
+        "z": -186.93823357713356,
+        "candidate_h": 127.94871497145655,
+        "reference_H_EGM2008": 131.23631286621094,
+        "geoid_N": 5.0272039139976785,
+        "reference_h": 136.26351678020862,
+        "difference": -8.314801808752065,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -186.93823357713356,
+        "candidate_h": 128.06336902330378,
+        "reference_H_EGM2008": 132.32496643066406,
+        "geoid_N": 5.025756116461598,
+        "reference_h": 137.35072254712566,
+        "difference": -9.287353523821878,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -186.93823357713356,
+        "candidate_h": 128.28972389833288,
+        "reference_H_EGM2008": 132.2729949951172,
+        "geoid_N": 5.024308318925503,
+        "reference_h": 137.2973033140427,
+        "difference": -9.007579415709813,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -186.93823357713356,
+        "candidate_h": 128.51965201577994,
+        "reference_H_EGM2008": 132.9505615234375,
+        "geoid_N": 5.022860521389423,
+        "reference_h": 137.97342204482692,
+        "difference": -9.453770029046979,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -186.93823357713356,
+        "candidate_h": 128.69851465241584,
+        "reference_H_EGM2008": 134.4581756591797,
+        "geoid_N": 5.021412723853327,
+        "reference_h": 139.47958838303302,
+        "difference": -10.78107373061718,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -186.93823357713356,
+        "candidate_h": 128.81067100747515,
+        "reference_H_EGM2008": 135.0424346923828,
+        "geoid_N": 5.0199649263172335,
+        "reference_h": 140.06239961870006,
+        "difference": -11.251728611224905,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -186.93823357713356,
+        "candidate_h": 128.86079911197064,
+        "reference_H_EGM2008": 131.47918701171875,
+        "geoid_N": 5.018517128781152,
+        "reference_h": 136.4977041404999,
+        "difference": -7.63690502852927,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -186.93823357713356,
+        "candidate_h": 128.9128269425716,
+        "reference_H_EGM2008": 129.3197784423828,
+        "geoid_N": 5.017069331245072,
+        "reference_h": 134.33684777362788,
+        "difference": -5.424020831056282,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -186.93823357713356,
+        "candidate_h": 129.2368993717562,
+        "reference_H_EGM2008": 128.0685577392578,
+        "geoid_N": 5.015621533708964,
+        "reference_h": 133.08417927296676,
+        "difference": -3.8472799012105554,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -186.93823357713356,
+        "candidate_h": 130.08612736998657,
+        "reference_H_EGM2008": 129.05313110351562,
+        "geoid_N": 5.0141737361728955,
+        "reference_h": 134.06730483968852,
+        "difference": -3.9811774697019473,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -186.93823357713356,
+        "candidate_h": 131.70577335626717,
+        "reference_H_EGM2008": 131.24302673339844,
+        "geoid_N": 5.012725938636802,
+        "reference_h": 136.25575267203524,
+        "difference": -4.54997931576807,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -150.796976818045,
+        "candidate_h": 129.67205872013892,
+        "reference_H_EGM2008": 128.3823699951172,
+        "geoid_N": 5.0335854697634375,
+        "reference_h": 133.41595546488062,
+        "difference": -3.743896744741704,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -150.796976818045,
+        "candidate_h": 128.8691112779117,
+        "reference_H_EGM2008": 129.71966552734375,
+        "geoid_N": 5.032137794821992,
+        "reference_h": 134.75180332216576,
+        "difference": -5.882692044254043,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -150.796976818045,
+        "candidate_h": 128.03846512958057,
+        "reference_H_EGM2008": 132.17510986328125,
+        "geoid_N": 5.03069011988052,
+        "reference_h": 137.20579998316177,
+        "difference": -9.167334853581195,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -150.796976818045,
+        "candidate_h": 127.35405507108167,
+        "reference_H_EGM2008": 129.94810485839844,
+        "geoid_N": 5.029242444939073,
+        "reference_h": 134.97734730333752,
+        "difference": -7.623292232255849,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -150.796976818045,
+        "candidate_h": 127.01913538699259,
+        "reference_H_EGM2008": 130.99562072753906,
+        "geoid_N": 5.0277947699976275,
+        "reference_h": 136.0234154975367,
+        "difference": -9.004280110544101,
+        "pilot": true,
+        "road_support": true
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -150.796976818045,
+        "candidate_h": 126.99186163264301,
+        "reference_H_EGM2008": 131.897705078125,
+        "geoid_N": 5.026347095056182,
+        "reference_h": 136.9240521731812,
+        "difference": -9.932190540538187,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -150.796976818045,
+        "candidate_h": 127.13982104845331,
+        "reference_H_EGM2008": 129.55482482910156,
+        "geoid_N": 5.024899420114723,
+        "reference_h": 134.5797242492163,
+        "difference": -7.439903200762984,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -150.796976818045,
+        "candidate_h": 127.355616970102,
+        "reference_H_EGM2008": 130.5552215576172,
+        "geoid_N": 5.023451745173277,
+        "reference_h": 135.57867330279046,
+        "difference": -8.223056332688458,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -150.796976818045,
+        "candidate_h": 127.56174207178117,
+        "reference_H_EGM2008": 134.07943725585938,
+        "geoid_N": 5.0220040702318185,
+        "reference_h": 139.1014413260912,
+        "difference": -11.539699254310023,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -150.796976818045,
+        "candidate_h": 127.71315196919731,
+        "reference_H_EGM2008": 135.6886749267578,
+        "geoid_N": 5.020556395290359,
+        "reference_h": 140.70923132204817,
+        "difference": -12.996079352850856,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -150.796976818045,
+        "candidate_h": 127.79673295687141,
+        "reference_H_EGM2008": 132.44528198242188,
+        "geoid_N": 5.019108720348913,
+        "reference_h": 137.4643907027708,
+        "difference": -9.66765774589939,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -150.796976818045,
+        "candidate_h": 127.89093963297826,
+        "reference_H_EGM2008": 128.24105834960938,
+        "geoid_N": 5.0176610454074675,
+        "reference_h": 133.25871939501684,
+        "difference": -5.36777976203858,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -150.796976818045,
+        "candidate_h": 128.2266345004747,
+        "reference_H_EGM2008": 127.56330108642578,
+        "geoid_N": 5.016213370465995,
+        "reference_h": 132.5795144568918,
+        "difference": -4.352879956417098,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -150.796976818045,
+        "candidate_h": 129.056832634803,
+        "reference_H_EGM2008": 127.51640319824219,
+        "geoid_N": 5.014765695524563,
+        "reference_h": 132.53116889376676,
+        "difference": -3.474336258963774,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -150.796976818045,
+        "candidate_h": 130.7357037449268,
+        "reference_H_EGM2008": 128.79820251464844,
+        "geoid_N": 5.013318020583104,
+        "reference_h": 133.81152053523155,
+        "difference": -3.075816790304742,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -114.6553377050449,
+        "candidate_h": 128.72411225651908,
+        "reference_H_EGM2008": 127.45664978027344,
+        "geoid_N": 5.034175841630573,
+        "reference_h": 132.490825621904,
+        "difference": -3.7667133653849305,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -114.6553377050449,
+        "candidate_h": 128.1905072286994,
+        "reference_H_EGM2008": 127.91118621826172,
+        "geoid_N": 5.032728289285059,
+        "reference_h": 132.94391450754676,
+        "difference": -4.753407278847362,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -114.6553377050449,
+        "candidate_h": 127.55111352554947,
+        "reference_H_EGM2008": 132.9047393798828,
+        "geoid_N": 5.031280736939518,
+        "reference_h": 137.93602011682233,
+        "difference": -10.384906591272866,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -114.6553377050449,
+        "candidate_h": 126.89052417388152,
+        "reference_H_EGM2008": 134.11924743652344,
+        "geoid_N": 5.029833184594005,
+        "reference_h": 139.14908062111743,
+        "difference": -12.258556447235918,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -114.6553377050449,
+        "candidate_h": 126.41703687073172,
+        "reference_H_EGM2008": 130.2208709716797,
+        "geoid_N": 5.028385632248492,
+        "reference_h": 135.2492566039282,
+        "difference": -8.832219733196467,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -114.6553377050449,
+        "candidate_h": 126.21850594080435,
+        "reference_H_EGM2008": 129.51943969726562,
+        "geoid_N": 5.026938079902978,
+        "reference_h": 134.5463777771686,
+        "difference": -8.327871836364253,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -114.6553377050449,
+        "candidate_h": 126.25700588118812,
+        "reference_H_EGM2008": 131.98309326171875,
+        "geoid_N": 5.0254905275574515,
+        "reference_h": 137.0085837892762,
+        "difference": -10.75157790808808,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -114.6553377050449,
+        "candidate_h": 126.43522470043817,
+        "reference_H_EGM2008": 132.2488555908203,
+        "geoid_N": 5.024042975211938,
+        "reference_h": 137.27289856603224,
+        "difference": -10.83767386559407,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -114.6553377050449,
+        "candidate_h": 126.65710347740571,
+        "reference_H_EGM2008": 133.74853515625,
+        "geoid_N": 5.022595422866411,
+        "reference_h": 138.7711305791164,
+        "difference": -12.11402710171069,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -114.6553377050449,
+        "candidate_h": 126.85453851859916,
+        "reference_H_EGM2008": 133.92201232910156,
+        "geoid_N": 5.021147870520885,
+        "reference_h": 138.94316019962244,
+        "difference": -12.088621681023284,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -114.6553377050449,
+        "candidate_h": 127.01288924115954,
+        "reference_H_EGM2008": 129.02651977539062,
+        "geoid_N": 5.019700318175371,
+        "reference_h": 134.046220093566,
+        "difference": -7.033330852406465,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -114.6553377050449,
+        "candidate_h": 127.20376456928483,
+        "reference_H_EGM2008": 126.84269714355469,
+        "geoid_N": 5.018252765829858,
+        "reference_h": 131.86094990938454,
+        "difference": -4.657185340099716,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -114.6553377050449,
+        "candidate_h": 127.60483089865372,
+        "reference_H_EGM2008": 127.55319213867188,
+        "geoid_N": 5.016805213484318,
+        "reference_h": 132.56999735215618,
+        "difference": -4.965166453502462,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -114.6553377050449,
+        "candidate_h": 128.42725428490422,
+        "reference_H_EGM2008": 129.5053253173828,
+        "geoid_N": 5.015357661138817,
+        "reference_h": 134.52068297852162,
+        "difference": -6.093428693617398,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -114.6553377050449,
+        "candidate_h": 129.93543479467866,
+        "reference_H_EGM2008": 132.99322509765625,
+        "geoid_N": 5.013910108793291,
+        "reference_h": 138.00713520644953,
+        "difference": -8.071700411770877,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -78.51331623420484,
+        "candidate_h": 128.10304120035724,
+        "reference_H_EGM2008": 127.51364135742188,
+        "geoid_N": 5.034766219743503,
+        "reference_h": 132.5484075771654,
+        "difference": -4.445366376808153,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -78.51331623420484,
+        "candidate_h": 127.8117973432107,
+        "reference_H_EGM2008": 127.60555267333984,
+        "geoid_N": 5.033318789995218,
+        "reference_h": 132.63887146333505,
+        "difference": -4.827074120124351,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -78.51331623420484,
+        "candidate_h": 127.30001630095943,
+        "reference_H_EGM2008": 131.31015014648438,
+        "geoid_N": 5.031871360246908,
+        "reference_h": 136.34202150673127,
+        "difference": -9.042005205771844,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -78.51331623420484,
+        "candidate_h": 126.61471093824571,
+        "reference_H_EGM2008": 132.93519592285156,
+        "geoid_N": 5.030423930498624,
+        "reference_h": 137.96561985335018,
+        "difference": -11.350908915104469,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -78.51331623420484,
+        "candidate_h": 125.99840208047225,
+        "reference_H_EGM2008": 128.79031372070312,
+        "geoid_N": 5.028976500750339,
+        "reference_h": 133.81929022145346,
+        "difference": -7.820888140981211,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -78.51331623420484,
+        "candidate_h": 125.63873395036573,
+        "reference_H_EGM2008": 127.64381408691406,
+        "geoid_N": 5.027529071002055,
+        "reference_h": 132.6713431579161,
+        "difference": -7.032609207550379,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -78.51331623420484,
+        "candidate_h": 125.57070996094835,
+        "reference_H_EGM2008": 130.57041931152344,
+        "geoid_N": 5.026081641253758,
+        "reference_h": 135.5965009527772,
+        "difference": -10.025790991828856,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -78.51331623420484,
+        "candidate_h": 125.71871451981023,
+        "reference_H_EGM2008": 132.03114318847656,
+        "geoid_N": 5.024634211505473,
+        "reference_h": 137.05577739998205,
+        "difference": -11.337062880171814,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -78.51331623420484,
+        "candidate_h": 125.97523262334286,
+        "reference_H_EGM2008": 132.72337341308594,
+        "geoid_N": 5.023186781757176,
+        "reference_h": 137.7465601948431,
+        "difference": -11.771327571500251,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -78.51331623420484,
+        "candidate_h": 126.24566126430256,
+        "reference_H_EGM2008": 131.98193359375,
+        "geoid_N": 5.021739352008879,
+        "reference_h": 137.00367294575886,
+        "difference": -10.75801168145631,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -78.51331623420484,
+        "candidate_h": 126.51862575227871,
+        "reference_H_EGM2008": 128.71450805664062,
+        "geoid_N": 5.020291922260594,
+        "reference_h": 133.7347999789012,
+        "difference": -7.216174226622499,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -78.51331623420484,
+        "candidate_h": 126.83421229123026,
+        "reference_H_EGM2008": 127.81602478027344,
+        "geoid_N": 5.018844492512311,
+        "reference_h": 132.83486927278574,
+        "difference": -6.00065698155548,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -78.51331623420484,
+        "candidate_h": 127.33609780348537,
+        "reference_H_EGM2008": 131.38087463378906,
+        "geoid_N": 5.017397062764,
+        "reference_h": 136.39827169655305,
+        "difference": -9.06217389306768,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -78.51331623420484,
+        "candidate_h": 128.164167327693,
+        "reference_H_EGM2008": 133.6273956298828,
+        "geoid_N": 5.015949633015729,
+        "reference_h": 138.64334526289855,
+        "difference": -10.479177935205541,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -78.51331623420484,
+        "candidate_h": 129.42156106544684,
+        "reference_H_EGM2008": 134.32965087890625,
+        "geoid_N": 5.014502203267432,
+        "reference_h": 139.34415308217368,
+        "difference": -9.922592016726838,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -42.37091240316786,
+        "candidate_h": 127.74608930577071,
+        "reference_H_EGM2008": 127.45928192138672,
+        "geoid_N": 5.035356604102275,
+        "reference_h": 132.494638525489,
+        "difference": -4.748549219718285,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -42.37091240316786,
+        "candidate_h": 127.59613125603082,
+        "reference_H_EGM2008": 127.20675659179688,
+        "geoid_N": 5.033909296952517,
+        "reference_h": 132.2406658887494,
+        "difference": -4.644534632718575,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -42.37091240316786,
+        "candidate_h": 127.15537906221803,
+        "reference_H_EGM2008": 127.16007232666016,
+        "geoid_N": 5.032461989802733,
+        "reference_h": 132.19253431646288,
+        "difference": -5.037155254244851,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -42.37091240316786,
+        "candidate_h": 126.43938101300364,
+        "reference_H_EGM2008": 128.24102783203125,
+        "geoid_N": 5.031014682652975,
+        "reference_h": 133.27204251468422,
+        "difference": -6.832661501680576,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -42.37091240316786,
+        "candidate_h": 125.70453588353745,
+        "reference_H_EGM2008": 127.17044067382812,
+        "geoid_N": 5.029567375503217,
+        "reference_h": 132.20000804933133,
+        "difference": -6.495472165793885,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -42.37091240316786,
+        "candidate_h": 125.18644614910586,
+        "reference_H_EGM2008": 126.20658111572266,
+        "geoid_N": 5.028120068353459,
+        "reference_h": 131.23470118407613,
+        "difference": -6.048255034970268,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -42.37091240316786,
+        "candidate_h": 124.99335433672941,
+        "reference_H_EGM2008": 125.04505157470703,
+        "geoid_N": 5.026672761203688,
+        "reference_h": 130.07172433591072,
+        "difference": -5.078369999181305,
+        "pilot": true,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -42.37091240316786,
+        "candidate_h": 125.11724576326513,
+        "reference_H_EGM2008": 125.63833618164062,
+        "geoid_N": 5.02522545405393,
+        "reference_h": 130.66356163569455,
+        "difference": -5.5463158724294175,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -42.37091240316786,
+        "candidate_h": 125.43761893700503,
+        "reference_H_EGM2008": 128.37371826171875,
+        "geoid_N": 5.023778146904159,
+        "reference_h": 133.3974964086229,
+        "difference": -7.959877471617887,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -42.37091240316786,
+        "candidate_h": 125.80706962768744,
+        "reference_H_EGM2008": 128.9018096923828,
+        "geoid_N": 5.022330839754388,
+        "reference_h": 133.9241405321372,
+        "difference": -8.117070904449747,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -42.37091240316786,
+        "candidate_h": 126.21471073262163,
+        "reference_H_EGM2008": 130.4913330078125,
+        "geoid_N": 5.02088353260463,
+        "reference_h": 135.51221654041714,
+        "difference": -9.297505807795517,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -42.37091240316786,
+        "candidate_h": 126.67277699106768,
+        "reference_H_EGM2008": 130.1170654296875,
+        "geoid_N": 5.019436225454872,
+        "reference_h": 135.13650165514238,
+        "difference": -8.463724664074704,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -42.37091240316786,
+        "candidate_h": 127.24897048512256,
+        "reference_H_EGM2008": 134.78982543945312,
+        "geoid_N": 5.017988918305088,
+        "reference_h": 139.80781435775822,
+        "difference": -12.558843872635663,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -42.37091240316786,
+        "candidate_h": 128.03870163694924,
+        "reference_H_EGM2008": 137.035400390625,
+        "geoid_N": 5.016541611155343,
+        "reference_h": 142.05194200178033,
+        "difference": -14.013240364831091,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -42.37091240316786,
+        "candidate_h": 129.09173219572617,
+        "reference_H_EGM2008": 131.35784912109375,
+        "geoid_N": 5.015094304005573,
+        "reference_h": 136.37294342509932,
+        "difference": -7.281211229373156,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": -6.22812620643424,
+        "candidate_h": 127.52350350028259,
+        "reference_H_EGM2008": 127.9050521850586,
+        "geoid_N": 5.035946994706958,
+        "reference_h": 132.94099917976556,
+        "difference": -5.417495679482968,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": -6.22812620643424,
+        "candidate_h": 127.43965078170086,
+        "reference_H_EGM2008": 128.45201110839844,
+        "geoid_N": 5.0344998101570235,
+        "reference_h": 133.48651091855547,
+        "difference": -6.046860136854605,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": -6.22812620643424,
+        "candidate_h": 127.03816746505184,
+        "reference_H_EGM2008": 131.21949768066406,
+        "geoid_N": 5.033052625607063,
+        "reference_h": 136.25255030627113,
+        "difference": -9.21438284121929,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": -6.22812620643424,
+        "candidate_h": 126.3115393572102,
+        "reference_H_EGM2008": 131.87704467773438,
+        "geoid_N": 5.0316054410571285,
+        "reference_h": 136.9086501187915,
+        "difference": -10.59711076158132,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": -6.22812620643424,
+        "candidate_h": 125.48579822288184,
+        "reference_H_EGM2008": 127.05602264404297,
+        "geoid_N": 5.030158256507193,
+        "reference_h": 132.08618090055018,
+        "difference": -6.600382677668335,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": -6.22812620643424,
+        "candidate_h": 124.79885203053198,
+        "reference_H_EGM2008": 124.84223175048828,
+        "geoid_N": 5.028711071957259,
+        "reference_h": 129.87094282244553,
+        "difference": -5.072090791913553,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": -6.22812620643424,
+        "candidate_h": 124.44013934945379,
+        "reference_H_EGM2008": 123.24845123291016,
+        "geoid_N": 5.027263887407312,
+        "reference_h": 128.27571512031747,
+        "difference": -3.8355757708636844,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": -6.22812620643424,
+        "candidate_h": 124.51663712856312,
+        "reference_H_EGM2008": 122.22946166992188,
+        "geoid_N": 5.025816702857377,
+        "reference_h": 127.25527837277926,
+        "difference": -2.73864124421614,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 72.36863958115282,
+        "z": -6.22812620643424,
+        "candidate_h": 124.93044727993917,
+        "reference_H_EGM2008": 128.81544494628906,
+        "geoid_N": 5.024369518307429,
+        "reference_h": 133.8398144645965,
+        "difference": -8.909367184657313,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": -6.22812620643424,
+        "candidate_h": 125.47258850268972,
+        "reference_H_EGM2008": 129.6970672607422,
+        "geoid_N": 5.0229223337574815,
+        "reference_h": 134.71998959449968,
+        "difference": -9.247401091809962,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": -6.22812620643424,
+        "candidate_h": 126.06488107399643,
+        "reference_H_EGM2008": 129.1519775390625,
+        "geoid_N": 5.021475149207547,
+        "reference_h": 134.17345268827006,
+        "difference": -8.108571614273629,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": -6.22812620643424,
+        "candidate_h": 126.67339072503125,
+        "reference_H_EGM2008": 131.04367065429688,
+        "geoid_N": 5.020027964657612,
+        "reference_h": 136.06369861895448,
+        "difference": -9.390307893923222,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": -6.22812620643424,
+        "candidate_h": 127.30388297393117,
+        "reference_H_EGM2008": 133.1632080078125,
+        "geoid_N": 5.018580780107651,
+        "reference_h": 138.18178878792014,
+        "difference": -10.877905813988974,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": -6.22812620643424,
+        "candidate_h": 128.03524699799152,
+        "reference_H_EGM2008": 133.3252410888672,
+        "geoid_N": 5.0171335955577305,
+        "reference_h": 138.34237468442493,
+        "difference": -10.307127686433404,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": -6.22812620643424,
+        "candidate_h": 128.92514185976992,
+        "reference_H_EGM2008": 133.65855407714844,
+        "geoid_N": 5.015686411007783,
+        "reference_h": 138.67424048815622,
+        "difference": -9.749098628386292,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": 29.91504235442466,
+        "candidate_h": 127.280175234258,
+        "reference_H_EGM2008": 131.5143585205078,
+        "geoid_N": 5.036537391557552,
+        "reference_h": 136.55089591206536,
+        "difference": -9.270720677807361,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": 29.91504235442466,
+        "candidate_h": 127.2608900607403,
+        "reference_H_EGM2008": 131.1442413330078,
+        "geoid_N": 5.035090329608738,
+        "reference_h": 136.17933166261656,
+        "difference": -8.918441601876268,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -145.9517985052232,
+        "z": 29.91504235442466,
+        "candidate_h": 126.91728517693035,
+        "reference_H_EGM2008": 131.04498291015625,
+        "geoid_N": 5.0336432676598974,
+        "reference_h": 136.07862617781615,
+        "difference": -9.161341000885798,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": 29.91504235442466,
+        "candidate_h": 126.23696562473809,
+        "reference_H_EGM2008": 129.38882446289062,
+        "geoid_N": 5.032196205711083,
+        "reference_h": 134.4210206686017,
+        "difference": -8.184055043863609,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": 29.91504235442466,
+        "candidate_h": 125.38709404493397,
+        "reference_H_EGM2008": 126.67044830322266,
+        "geoid_N": 5.030749143762269,
+        "reference_h": 131.70119744698493,
+        "difference": -6.314103402050961,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -36.791579462222906,
+        "z": 29.91504235442466,
+        "candidate_h": 124.54882256438268,
+        "reference_H_EGM2008": 125.98834991455078,
+        "geoid_N": 5.029302081813455,
+        "reference_h": 131.01765199636424,
+        "difference": -6.468829431981561,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": 29.91504235442466,
+        "candidate_h": 123.98738886008103,
+        "reference_H_EGM2008": 123.70391845703125,
+        "geoid_N": 5.027855019864628,
+        "reference_h": 128.73177347689588,
+        "difference": -4.744384616814855,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 35.98189989977729,
+        "z": 29.91504235442466,
+        "candidate_h": 124.00740921687454,
+        "reference_H_EGM2008": 123.76354217529297,
+        "geoid_N": 5.026407957915813,
+        "reference_h": 128.78995013320878,
+        "difference": -4.782540916334241,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 72.36863958115282,
+        "z": 29.91504235442466,
+        "candidate_h": 124.53926362639884,
+        "reference_H_EGM2008": 128.640869140625,
+        "geoid_N": 5.024960895966986,
+        "reference_h": 133.66583003659198,
+        "difference": -9.12656641019315,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": 29.91504235442466,
+        "candidate_h": 125.29157117469073,
+        "reference_H_EGM2008": 131.52320861816406,
+        "geoid_N": 5.023513834018159,
+        "reference_h": 136.54672245218222,
+        "difference": -11.255151277491493,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": 29.91504235442466,
+        "candidate_h": 126.09024157458741,
+        "reference_H_EGM2008": 129.30860900878906,
+        "geoid_N": 5.022066772069344,
+        "reference_h": 134.3306757808584,
+        "difference": -8.24043420627099,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": 29.91504235442466,
+        "candidate_h": 126.84434942853075,
+        "reference_H_EGM2008": 129.59890747070312,
+        "geoid_N": 5.02061971012053,
+        "reference_h": 134.61952718082367,
+        "difference": -7.775177752292919,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": 29.91504235442466,
+        "candidate_h": 127.51394068630341,
+        "reference_H_EGM2008": 128.51698303222656,
+        "geoid_N": 5.01917264817169,
+        "reference_h": 133.53615568039825,
+        "difference": -6.022214994094838,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": 29.91504235442466,
+        "candidate_h": 128.18539512860906,
+        "reference_H_EGM2008": 128.07566833496094,
+        "geoid_N": 5.017725586222889,
+        "reference_h": 133.09339392118383,
+        "difference": -4.907998792574773,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": 29.91504235442466,
+        "candidate_h": 128.91629386135054,
+        "reference_H_EGM2008": 130.01028442382812,
+        "geoid_N": 5.016278524274062,
+        "reference_h": 135.0265629481022,
+        "difference": -6.110269086751657,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": 66.05859328412286,
+        "candidate_h": 126.9403633003648,
+        "reference_H_EGM2008": 130.24880981445312,
+        "geoid_N": 5.0371277946541255,
+        "reference_h": 135.28593760910724,
+        "difference": -8.345574308742442,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -182.33853818659873,
+        "z": 66.05859328412286,
+        "candidate_h": 127.07814067519095,
+        "reference_H_EGM2008": 128.7628936767578,
+        "geoid_N": 5.035680855307729,
+        "reference_h": 133.79857453206554,
+        "difference": -6.7204338568745925,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -145.9517985052232,
+        "z": 66.05859328412286,
+        "candidate_h": 126.84356637052456,
+        "reference_H_EGM2008": 127.91357421875,
+        "geoid_N": 5.034233915961305,
+        "reference_h": 132.9478081347113,
+        "difference": -6.104241764186739,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -109.5650588242231,
+        "z": 66.05859328412286,
+        "candidate_h": 126.21096238679243,
+        "reference_H_EGM2008": 127.4570083618164,
+        "geoid_N": 5.032786976614909,
+        "reference_h": 132.48979533843132,
+        "difference": -6.27883295163889,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -73.178319143223,
+        "z": 66.05859328412286,
+        "candidate_h": 125.37653794624791,
+        "reference_H_EGM2008": 128.71383666992188,
+        "geoid_N": 5.031340037268512,
+        "reference_h": 133.74517670719038,
+        "difference": -8.368638760942474,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": 66.05859328412286,
+        "candidate_h": 124.50735360398915,
+        "reference_H_EGM2008": 128.2133026123047,
+        "geoid_N": 5.029893097922116,
+        "reference_h": 133.24319571022681,
+        "difference": -8.73584210623767,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": 66.05859328412286,
+        "candidate_h": 123.87688936315762,
+        "reference_H_EGM2008": 124.50127410888672,
+        "geoid_N": 5.028446158575706,
+        "reference_h": 129.52972026746244,
+        "difference": -5.652830904304821,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 35.98189989977729,
+        "z": 66.05859328412286,
+        "candidate_h": 123.83626345694033,
+        "reference_H_EGM2008": 125.23094940185547,
+        "geoid_N": 5.0269992192293085,
+        "reference_h": 130.25794862108478,
+        "difference": -6.421685164144449,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": 72.36863958115282,
+        "z": 66.05859328412286,
+        "candidate_h": 124.42199001873047,
+        "reference_H_EGM2008": 127.44293975830078,
+        "geoid_N": 5.025552279882898,
+        "reference_h": 132.46849203818368,
+        "difference": -8.046502019453214,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": 66.05859328412286,
+        "candidate_h": 125.3375577111198,
+        "reference_H_EGM2008": 129.64163208007812,
+        "geoid_N": 5.024105340536489,
+        "reference_h": 134.66573742061462,
+        "difference": -9.328179709494819,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": 66.05859328412286,
+        "candidate_h": 126.31486462124215,
+        "reference_H_EGM2008": 129.75543212890625,
+        "geoid_N": 5.0226584011900925,
+        "reference_h": 134.77809053009634,
+        "difference": -8.463225908854184,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": 66.05859328412286,
+        "candidate_h": 127.20652404539906,
+        "reference_H_EGM2008": 129.28065490722656,
+        "geoid_N": 5.021211461843696,
+        "reference_h": 134.30186636907027,
+        "difference": -7.095342323671204,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": 66.05859328412286,
+        "candidate_h": 127.93359087233542,
+        "reference_H_EGM2008": 129.33718872070312,
+        "geoid_N": 5.0197645224972725,
+        "reference_h": 134.3569532432004,
+        "difference": -6.423362370864979,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": 66.05859328412286,
+        "candidate_h": 128.53931804862492,
+        "reference_H_EGM2008": 128.7487335205078,
+        "geoid_N": 5.018317583150889,
+        "reference_h": 133.7670511036587,
+        "difference": -5.227733055033781,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": 66.05859328412286,
+        "candidate_h": 128.9906953731427,
+        "reference_H_EGM2008": 128.88558959960938,
+        "geoid_N": 5.016870643804479,
+        "reference_h": 133.90246024341386,
+        "difference": -4.911764870271156,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -218.72527786759883,
+        "z": 102.20252658658872,
+        "candidate_h": 126.56257842029157,
+        "reference_H_EGM2008": 127.41548156738281,
+        "geoid_N": 5.037718203996725,
+        "reference_h": 132.45319977137953,
+        "difference": -5.890621351087958,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -182.33853818659873,
+        "z": 102.20252658658872,
+        "candidate_h": 126.913446431046,
+        "reference_H_EGM2008": 127.24093627929688,
+        "geoid_N": 5.036271387254042,
+        "reference_h": 132.2772076665509,
+        "difference": -5.36376123550491,
+        "pilot": false,
+        "road_support": true
+      },
+      {
+        "x": -145.9517985052232,
+        "z": 102.20252658658872,
+        "candidate_h": 126.79862433646099,
+        "reference_H_EGM2008": 127.45445251464844,
+        "geoid_N": 5.034824570511334,
+        "reference_h": 132.48927708515978,
+        "difference": -5.6906527486987954,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -109.5650588242231,
+        "z": 102.20252658658872,
+        "candidate_h": 126.17991596816543,
+        "reference_H_EGM2008": 127.87004852294922,
+        "geoid_N": 5.033377753768652,
+        "reference_h": 132.90342627671788,
+        "difference": -6.723510308552449,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -73.178319143223,
+        "z": 102.20252658658872,
+        "candidate_h": 125.37920269029652,
+        "reference_H_EGM2008": 128.20693969726562,
+        "geoid_N": 5.031930937025969,
+        "reference_h": 133.2388706342916,
+        "difference": -7.859667943995078,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -36.791579462222906,
+        "z": 102.20252658658872,
+        "candidate_h": 124.57391904412032,
+        "reference_H_EGM2008": 127.50103759765625,
+        "geoid_N": 5.030484120283287,
+        "reference_h": 132.53152171793954,
+        "difference": -7.957602673819224,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": -0.40483978122280995,
+        "z": 102.20252658658872,
+        "candidate_h": 124.00475408962976,
+        "reference_H_EGM2008": 126.89445495605469,
+        "geoid_N": 5.0290373035405915,
+        "reference_h": 131.9234922595953,
+        "difference": -7.918738169965536,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 35.98189989977729,
+        "z": 102.20252658658872,
+        "candidate_h": 123.95726212485766,
+        "reference_H_EGM2008": 126.37062072753906,
+        "geoid_N": 5.0275904867979095,
+        "reference_h": 131.39821121433698,
+        "difference": -7.440949089479318,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 72.36863958115282,
+        "z": 102.20252658658872,
+        "candidate_h": 124.54881759628645,
+        "reference_H_EGM2008": 126.3585205078125,
+        "geoid_N": 5.026143670055214,
+        "reference_h": 131.3846641778677,
+        "difference": -6.835846581581251,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 108.75537926215291,
+        "z": 102.20252658658872,
+        "candidate_h": 125.58408353281642,
+        "reference_H_EGM2008": 127.76156616210938,
+        "geoid_N": 5.024696853312518,
+        "reference_h": 132.7862630154219,
+        "difference": -7.202179482605473,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 145.142118943153,
+        "z": 102.20252658658872,
+        "candidate_h": 126.68905052324125,
+        "reference_H_EGM2008": 128.73988342285156,
+        "geoid_N": 5.023250036569836,
+        "reference_h": 133.7631334594214,
+        "difference": -7.074082936180147,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 181.52885862415312,
+        "z": 102.20252658658872,
+        "candidate_h": 127.6986181748386,
+        "reference_H_EGM2008": 129.01934814453125,
+        "geoid_N": 5.021803219827154,
+        "reference_h": 134.0411513643584,
+        "difference": -6.3425331895197985,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 217.91559830552865,
+        "z": 102.20252658658872,
+        "candidate_h": 128.46315967652606,
+        "reference_H_EGM2008": 130.45159912109375,
+        "geoid_N": 5.020356403084445,
+        "reference_h": 135.47195552417818,
+        "difference": -7.008795847652124,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 254.3023379861533,
+        "z": 102.20252658658872,
+        "candidate_h": 128.88426635638362,
+        "reference_H_EGM2008": 128.93539428710938,
+        "geoid_N": 5.018909586341776,
+        "reference_h": 133.95430387345115,
+        "difference": -5.070037517067533,
+        "pilot": false,
+        "road_support": false
+      },
+      {
+        "x": 290.68907766752886,
+        "z": 102.20252658658872,
+        "candidate_h": 128.92259823293068,
+        "reference_H_EGM2008": 128.4698028564453,
+        "geoid_N": 5.0174627695990806,
+        "reference_h": 133.4872656260444,
+        "difference": -4.564667393113723,
+        "pilot": false,
+        "road_support": false
+      }
+    ]
+  },
+  "hardwareBaseline": {
+    "source": "output/ring-terrain-stage0/hardware-baseline/result.json",
+    "bytes": 5037666,
+    "sha256": "7637495d8dfa9745a82361529151c93df25dbbe15cf6f2b04e1db0fe35034a5c",
+    "status": "measured",
+    "host": {
+      "platform": "darwin",
+      "cpu": "Apple M3 Pro",
+      "logicalCpus": 12,
+      "memoryBytes": 38654705664,
+      "node": "v26.3.1"
+    },
+    "browser": "158.0.8127.18",
+    "renderer": {
+      "vendor": "Google Inc. (Apple)",
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "warmupElapsedMs": 60002.59999999404,
+    "mapVersion": "7e0e072b2aea003323fa50ab7b624e67b64876ffcb9668bde63a35a6957b5b52",
+    "layoutRevision": 5214,
+    "benchmarkSha256": "a8a02e3f711848a1db8db61ab55ddca9110142598bff717b6a5d2b49e9daf942",
+    "unchanged": {
+      "layout": true,
+      "oldDistManifest": true
+    },
+    "phases": [
+      {
+        "summary": {
+          "kind": "steady-ring",
+          "elapsedMs": 60001.29999998212,
+          "frameMs": {
+            "count": 3600,
+            "mean": 16.66605555555059,
+            "p50": 16.69999998807907,
+            "p95": 17.400000005960464,
+            "p99": 17.600000023841858,
+            "max": 18
+          },
+          "averageFps": 60.00220008068751,
+          "sceneRenderCpuMs": {
+            "count": 3600,
+            "mean": 2.992527777883742,
+            "p50": 3.2000000178813934,
+            "p95": 3.9000000059604645,
+            "p99": 4.0999999940395355,
+            "max": 4.5999999940395355
+          },
+          "physicsStepMs": {
+            "count": 3600,
+            "mean": 0.3508055557393365,
+            "p50": 0.3999999761581421,
+            "p95": 0.5,
+            "p99": 0.5999999940395355,
+            "max": 0.7000000178813934
+          },
+          "drawCalls": {
+            "count": 233,
+            "mean": 48,
+            "p50": 48,
+            "p95": 48,
+            "p99": 48,
+            "max": 48
+          },
+          "framesAboveNominalBudget": 1917,
+          "framesAbove20Ms": 0,
+          "p95Within20Ms": true,
+          "p95Within16_7Ms": false
+        },
+        "graphicsActiveBefore": 30,
+        "graphicsActiveAfter": 30,
+        "graphicsActiveMax": 30,
+        "physicsActiveBefore": 30,
+        "physicsActiveAfter": 30,
+        "downloadsBefore": 307,
+        "downloadsAfter": 307,
+        "cacheBytesMax": 8567268,
+        "meshesMax": 560,
+        "bodiesMax": 2492,
+        "activeTrianglesMax": 71177.0,
+        "controllerStart": {
+          "x": -3,
+          "y": 0.92,
+          "z": 13
+        },
+        "controllerEnd": {
+          "x": -3,
+          "y": 0.92,
+          "z": 13
+        },
+        "groundedAfter": true,
+        "hidden": false
+      },
+      {
+        "summary": {
+          "kind": "camera-route",
+          "elapsedMs": 60001.69999998808,
+          "frameMs": {
+            "count": 3569,
+            "mean": 16.810703278230864,
+            "p50": 16.69999998807907,
+            "p95": 17.399999976158142,
+            "p99": 17.900000005960464,
+            "max": 80.19999998807907
+          },
+          "averageFps": 59.485911056139855,
+          "sceneRenderCpuMs": {
+            "count": 3569,
+            "mean": 2.6963014850665887,
+            "p50": 2.0999999940395355,
+            "p95": 4.0999999940395355,
+            "p99": 13.200000017881393,
+            "max": 74.59999999403954
+          },
+          "physicsStepMs": {
+            "count": 3600,
+            "mean": 0.2538611112286647,
+            "p50": 0.20000001788139343,
+            "p95": 0.4000000059604645,
+            "p99": 0.5,
+            "max": 1
+          },
+          "drawCalls": {
+            "count": 234,
+            "mean": 33.82051282051282,
+            "p50": 26,
+            "p95": 77,
+            "p99": 109,
+            "max": 110
+          },
+          "framesAboveNominalBudget": 1990,
+          "framesAbove20Ms": 30,
+          "p95Within20Ms": true,
+          "p95Within16_7Ms": false
+        },
+        "graphicsActiveBefore": 30,
+        "graphicsActiveAfter": 39,
+        "graphicsActiveMax": 40,
+        "physicsActiveBefore": 30,
+        "physicsActiveAfter": 30,
+        "downloadsBefore": 307,
+        "downloadsAfter": 338,
+        "cacheBytesMax": 10668588,
+        "meshesMax": 763,
+        "bodiesMax": 2492,
+        "activeTrianglesMax": 123305.0,
+        "controllerStart": {
+          "x": -3,
+          "y": 0.92,
+          "z": 13
+        },
+        "controllerEnd": {
+          "x": -3,
+          "y": 0.92,
+          "z": 13
+        },
+        "groundedAfter": true,
+        "hidden": false
+      }
+    ],
+    "cleanup": {
+      "staticEntities": 0,
+      "cacheBytes": 0
+    },
+    "scope": "Real WorldView, CellStreamer and browser Havok over the current exported static layout. Stationary local neutral controller, no visible avatars or items, no room/network/database. Camera route is not a verified walking route. Not full city gameplay acceptance.",
+    "nominalFrameBudgetMs": 16.666666666666668,
+    "existingFrameP95BudgetMs": 20,
+    "strictFrameP95BudgetMs": 16.7,
+    "fullGameplayAcceptance": {
+      "assessed": false,
+      "passed": false
+    },
+    "gates": {
+      "strictFrameP95Passed": false,
+      "existingFrameP95Passed": true,
+      "fullGameplayAssessed": false,
+      "fullGameplayPassed": false
+    },
+    "gatePostprocessing": {
+      "method": "Recomputed nearest-rank p95 gates from the same recorded raw frame arrays; no new benchmark run",
+      "strictBudgetMs": 16.7,
+      "referenceBudgetMs": 20,
+      "rawTimingArraysSha256": "75604976e8392d80566ba055459da9b5e8afd4ca8d8de11559b1922367f7d303",
+      "updatedBenchmarkSha256": "8818e869becdc3266af1f9d3306532cd322511f76f8dc2d64da5e293453bef58"
+    },
+    "benchmarkSourceArtifact": "output/ring-terrain-stage0/hardware-baseline/measured-benchmark.ts",
+    "measurementMode": "headless Chromium with hardware Metal; render-loop intervals, not physical display presentation"
+  },
+  "objectMasks": {
+    "path": "output/ring-terrain-stage0/object-masks.json",
+    "sha256": "cae0e239dc01e3d22d4a292feb95de6a3c2e7a4d705d0643d078de2678b5287d",
+    "featureCounts": {
+      "other-structure": 2467,
+      "vegetation": 1107,
+      "building": 136
+    },
+    "representedInstanceCount": 3709,
+    "omissions": []
+  },
+  "decisions": {
+    "groundCandidateApproved": false,
+    "georeferenceTranslationApplied": false,
+    "heightReferenceMetersWgs84Ellipsoid": 124,
+    "strictFrameP95BudgetMs": 16.7,
+    "strictBaselinePassed": false,
+    "fullGameplayAssessed": false,
+    "userAcceptedApproximateGeographicTerrain": true,
+    "manualPilotReviewRequired": true,
+    "geodeticAccuracyClaim": false,
+    "workingHeightEnvelopeY": [-1, 15],
+    "workingCandidatePendingPilotAcceptance": true,
+    "fixed40mPilotTransitionAccepted": false
+  },
+  "scripts": {
+    "tools/estimate-ring-ground.py": "d6b8aca6f6430da89b9f2d673ef7074dc5982796cbb9f4e43dea3dc39016196a",
+    "tools/build-ring-object-masks.py": "5deba33a617f71009acc90ce755ec40935753391d86b40ed9d5bb8e1e19d12a3",
+    "tools/check-ring-elevation-alignment.py": "fe410c4ef4657d02675bbcf369149a501d19a41c28f82c4bf8d8d20216afd43c",
+    "tests/ring-terrain-baseline.ts": "8818e869becdc3266af1f9d3306532cd322511f76f8dc2d64da5e293453bef58"
+  },
+  "pilotTransitionCheck": {
+    "status": "diagnostic_only_not_applied",
+    "blend": "40m Chebyshev rectangle distance, smoothstep to zero outside pilot",
+    "maxTriangleSlopeDegrees": 25.5415552755921,
+    "p95TriangleSlopeDegrees": 4.618754096746865,
+    "note": "40m transition creates slopes unlike the macro terrain; design must be revised for the pilot"
+  }
+}

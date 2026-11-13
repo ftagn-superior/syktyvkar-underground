@@ -259,6 +259,9 @@ importers:
       '@su/simulation':
         specifier: workspace:*
         version: link:../../packages/simulation
+      '@su/terrain-build':
+        specifier: workspace:*
+        version: link:../../packages/terrain-build
       '@su/world-release':
         specifier: workspace:*
         version: link:../../packages/world-release
@@ -295,6 +298,15 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/terrain-build:
+    dependencies:
+      '@su/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@su/world-release':
+        specifier: workspace:*
+        version: link:../world-release
+
   packages/world-release:
     dependencies:
       '@su/contracts':
@@ -318,6 +330,9 @@ importers:
       '@su/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@su/terrain-build':
+        specifier: workspace:*
+        version: link:../../packages/terrain-build
       '@su/world-release':
         specifier: workspace:*
         version: link:../../packages/world-release

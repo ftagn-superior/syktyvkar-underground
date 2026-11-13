@@ -84,6 +84,34 @@ const digest = (value: PlacementCatalog) =>
     .update(canonicalJson(placementCatalogIdentity(value)))
     .digest('hex');
 describe('placement catalog', () => {
+  it('requires explicit terrain bodies and model support metadata, all bound into identity', () => {
+    const { placement } = fixture();
+    const terrain: PlacementCatalog = {
+      ...placement,
+      groundY: null,
+      terrain: { groundEntityIds: ['tile-0'] },
+      models: [
+        {
+          ...placement.models[0],
+          placement: { kind: 'foundation', heightSamples: [{ x: 0, z: 0, offsetY: 0.08 }] },
+        },
+      ],
+    };
+    expect(validatePlacementCatalog(terrain, manifest)).toEqual(terrain);
+    expect(digest(terrain)).not.toBe(digest(placement));
+    expect(() => validatePlacementCatalog({ ...terrain, terrain: undefined })).toThrow();
+    expect(() => validatePlacementCatalog({ ...terrain, models: placement.models })).toThrow(
+      'support',
+    );
+    expect(() =>
+      validatePlacementCatalog({ ...terrain, terrain: { groundEntityIds: ['tile-0', 'tile-0'] } }),
+    ).toThrow('ground IDs');
+    const invalid = structuredClone(terrain);
+    (
+      invalid.models[0].placement as { heightSamples: Array<{ offsetY: number }> }
+    ).heightSamples[0].offsetY = NaN;
+    expect(() => validatePlacementCatalog(invalid)).toThrow('height sample');
+  });
   it('accepts an explicit unique nonempty authoring list and rejects extra copies of metadata', () => {
     expect(validateWorldPlacementPolicySource({ formatVersion: 1, assetIds: ['bench'] })).toEqual({
       formatVersion: 1,

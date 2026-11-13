@@ -1,0 +1,20 @@
+{
+  "name": "@su/terrain-build",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./terrain": "./src/terrain.ts",
+    "./triangulate": "./src/triangulate.ts",
+    "./mesh": "./src/mesh.ts",
+    "./assets": "./src/assets.ts",
+    "./glb": "./src/glb.ts",
+    "./private-data": "./src/private-data.ts",
+    "./supports": "./src/supports.ts"
+  },
+  "dependencies": {
+    "@su/contracts": "workspace:*",
+    "@su/world-release": "workspace:*"
+  }
+}

@@ -49,6 +49,10 @@ export interface WorldPublication {
   manifest: WorldManifest;
   payloads: Map<string, Uint8Array>;
 }
+export interface WorldPublicationOptions {
+  /** Explicit transport opt-in; old authored publications remain byte-identical by default. */
+  physicsPacks?: boolean;
+}
 export const hash = (input: string | Uint8Array) =>
   createHash('sha256').update(input).digest('hex');
 export const jsonBytes = (value: unknown) => new TextEncoder().encode(canonicalJson(value) + '\n');
@@ -60,6 +64,7 @@ export function createWorldPublication(
   world: WorldDefinition,
   grid: WorldGrid,
   compiled: Record<string, CompiledWorldAsset>,
+  options: WorldPublicationOptions = {},
 ): WorldPublication {
   // Keep the existing format and client budgets; validate before any files or DB are written.
   if (world.buildings.length > 10_000)
@@ -161,28 +166,17 @@ export function createWorldPublication(
     if (!group) groups.set(key, (group = { owners, assetIds: [] }));
     group.assetIds.push(id);
   }
-  for (const { owners, assetIds } of groups.values()) {
-    const paths = [
-      // Instanced trees have only parameters; other assets include their GLB.
-      ...new Set(
-        assetIds
-          .sort()
-          .flatMap((id) =>
-            assets[id].modelFile
-              ? [assets[id].modelFile!, assets[id].partsFile]
-              : [assets[id].partsFile],
-          ),
-      ),
-    ];
+  const pack = (owners: WorldCellManifest[], paths: string[], kind: 'graphics' | 'physics') => {
+    const field = kind === 'graphics' ? 'graphicsPacks' : 'physicsPacks';
     let pending: [string, Uint8Array][] = [];
     let pendingBytes = 10; // magic, header length, JSON brackets
     const flush = () => {
       if (!pending.length) return;
       const packed = encodeGraphicsPack(pending);
-      const path = put(`graphics/${hash(packed)}.pack`, packed, GRAPHICS_PACK_LIMITS.bytes);
+      const path = put(`${kind}/${hash(packed)}.pack`, packed, GRAPHICS_PACK_LIMITS.bytes);
       for (const cell of owners) {
-        cell.graphicsPacks ??= [];
-        if (!cell.graphicsPacks.includes(path)) cell.graphicsPacks.push(path);
+        cell[field] ??= [];
+        if (!cell[field].includes(path)) cell[field].push(path);
       }
       pending = [];
       pendingBytes = 10;
@@ -200,6 +194,23 @@ export function createWorldPublication(
       pendingBytes += entryBytes;
     }
     flush();
+  };
+  for (const { owners, assetIds } of groups.values()) {
+    const paths = [
+      // Instanced trees have only parameters; other assets include their GLB.
+      ...new Set(
+        assetIds
+          .sort()
+          .flatMap((id) =>
+            assets[id].modelFile
+              ? [assets[id].modelFile!, assets[id].partsFile]
+              : [assets[id].partsFile],
+          ),
+      ),
+    ];
+    pack(owners, paths, 'graphics');
+    if (options.physicsPacks)
+      pack(owners, [...new Set(assetIds.map((id) => assets[id].collisionFile))], 'physics');
   }
   const manifest: WorldManifest = {
     formatVersion: WORLD_FORMAT_VERSION,
@@ -250,7 +261,7 @@ export async function pruneWorldPublication(outputDirectory: string) {
       const path = relative ? `${relative}/${entry.name}` : entry.name;
       if (
         !relative &&
-        !['assets', 'cells', 'graphics', 'layouts'].includes(entry.name) &&
+        !['assets', 'cells', 'graphics', 'physics', 'layouts'].includes(entry.name) &&
         !/^header\.[a-f0-9]{64}\.json$/.test(entry.name)
       )
         continue;
@@ -280,13 +291,35 @@ export interface AuthoringMetadata {
   assetReleaseVersion: string;
   seedVersion: string;
   fixedInstanceIds: string[];
+  terrain?: PrivateTerrainReference;
+}
+
+export interface PrivateTerrainReference {
+  file: string;
+  sha256: string;
+}
+export const PRIVATE_TERRAIN_MAX_BYTES = 64 * 1024 * 1024;
+export function validatePrivateTerrainReference(value: unknown): PrivateTerrainReference {
+  const ref = value as PrivateTerrainReference;
+  if (
+    !ref ||
+    typeof ref !== 'object' ||
+    Object.keys(ref).length !== 2 ||
+    typeof ref.sha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(ref.sha256) ||
+    ref.file !== `private/terrain.${ref.sha256}.json`
+  )
+    throw new Error('Invalid private terrain reference');
+  return ref;
 }
 
 export function authoringMetadata(
   world: WorldDefinition,
   manifest: WorldManifest,
   fixedInstanceIds: string[],
+  terrain?: PrivateTerrainReference,
 ): AuthoringMetadata {
+  if (terrain) validatePrivateTerrainReference(terrain);
   const ids = new Set(fixedInstanceIds);
   if (
     ids.size !== fixedInstanceIds.length ||
@@ -305,10 +338,12 @@ export function authoringMetadata(
         assets: manifest.assets,
         statics: [...world.entities].sort(byId),
         fixed,
+        ...(terrain ? { terrain } : {}),
       }),
     ),
     seedVersion: hash(canonicalJson(seed)),
     fixedInstanceIds: [...fixedInstanceIds].sort(),
+    ...(terrain ? { terrain } : {}),
   };
 }
 export async function writeAuthoringMetadata(
@@ -316,8 +351,23 @@ export async function writeAuthoringMetadata(
   manifest: WorldManifest,
   fixedIds: string[],
   directory: string,
+  terrainBytes?: Uint8Array,
 ) {
-  const metadata = authoringMetadata(world, manifest, fixedIds);
+  let terrain: PrivateTerrainReference | undefined;
+  if (terrainBytes !== undefined) {
+    if (terrainBytes.byteLength > PRIVATE_TERRAIN_MAX_BYTES)
+      throw new Error('Private terrain byte limit');
+    const sha256 = hash(terrainBytes);
+    terrain = { file: `private/terrain.${sha256}.json`, sha256 };
+  }
+  const metadata = authoringMetadata(world, manifest, fixedIds, terrain);
+  if (terrain && terrainBytes) {
+    await mkdir(resolve(directory, 'private'), { recursive: true });
+    // Write and close the immutable payload before publishing its metadata reference.
+    const pending = resolve(directory, 'private/.terrain.tmp');
+    await writeFile(pending, terrainBytes);
+    await rename(pending, resolve(directory, terrain.file));
+  }
   const temporary = resolve(directory, '.authoring.tmp');
   await writeFile(temporary, JSON.stringify(metadata, null, 2) + '\n');
   await rename(temporary, resolve(directory, 'authoring.json'));

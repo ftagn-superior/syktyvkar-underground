@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import { staticLayoutSchema, gameStaticLayoutSchema } from './layout/schema.js';
 
-export const DATABASE_SCHEMA_VERSION = 6;
+export const DATABASE_SCHEMA_VERSION = 7;
 
 /** Kept in the server bundle so source and built migration commands use identical SQL. */
 const migrations = [
@@ -138,6 +138,20 @@ const migrations = [
       CHECK (color_id ~ '^([a-z]{3,16}|#[0-9A-Fa-f]{6})$');`,
   },
   { version: 6, sql: gameStaticLayoutSchema },
+  {
+    version: 7,
+    sql: `CREATE TABLE player_positions (
+      account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      world_id text NOT NULL REFERENCES persistent_worlds(id) ON DELETE CASCADE,
+      x double precision NOT NULL CHECK (x > '-Infinity'::double precision AND x < 'Infinity'::double precision),
+      y double precision NOT NULL CHECK (y > '-Infinity'::double precision AND y < 'Infinity'::double precision),
+      z double precision NOT NULL CHECK (z > '-Infinity'::double precision AND z < 'Infinity'::double precision),
+      write_epoch uuid NOT NULL,
+      write_sequence bigint NOT NULL CHECK (write_sequence >= 0),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (account_id, world_id)
+    );`,
+  },
 ];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

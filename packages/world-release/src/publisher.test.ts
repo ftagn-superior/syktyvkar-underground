@@ -116,6 +116,25 @@ it('feeds a dense cell with 700 unique collision dependencies through a bounded 
   expect(reads).toBe(701);
   expect(peak).toBeLessThanOrEqual(8);
   expect(active).toBe(0);
+  // Opt-in changes transport identity only; every original byte and simulation hash survives.
+  const packedPhysics = createWorldPublication(world, manifest.grid, assets, {
+    physicsPacks: true,
+  });
+  expect(packedPhysics.manifest.mapVersion).not.toBe(manifest.mapVersion);
+  expect(packedPhysics.manifest.simulationConfigHash).toBe(manifest.simulationConfigHash);
+  expect(packedPhysics.manifest.assets).toEqual(manifest.assets);
+  for (const [path, bytes] of payloads) expect(packedPhysics.payloads.get(path)).toEqual(bytes);
+  const physicsPacks = packedPhysics.manifest.cells[0].physicsPacks!;
+  expect(physicsPacks).toHaveLength(1);
+  const colliders = decodeGraphicsPack(packedPhysics.payloads.get(physicsPacks[0])!);
+  expect(colliders.size).toBe(700);
+  for (const [path, bytes] of colliders) {
+    expect(path.endsWith('/colliders.json')).toBe(true);
+    expect(bytes).toEqual(payloads.get(path));
+  }
+  expect(
+    createWorldPublication(world, manifest.grid, assets, { physicsPacks: false }).manifest,
+  ).toEqual(manifest);
 });
 
 it('splits large graphics packs deterministically without changing individual files', async () => {

@@ -275,7 +275,6 @@ export class StaticLayoutStore {
       after.enabled !== true ||
       after.asset_id !== i.assetId ||
       after.position_x !== i.position.x ||
-      after.position_y !== i.position.y ||
       after.position_z !== i.position.z ||
       after.rotation_x !== i.rotation.x ||
       after.rotation_y !== i.rotation.y ||
@@ -333,6 +332,7 @@ export class StaticLayoutStore {
     request: PlaceStaticRequest,
     validatedHash: string,
     compatibilityHash: string,
+    acceptedInstance = placedStaticInstance(request),
   ) {
     const db = this.db;
     try {
@@ -345,7 +345,7 @@ export class StaticLayoutStore {
         await db.query('ROLLBACK');
         return undefined;
       }
-      const i = placedStaticInstance(request);
+      const i = acceptedInstance;
       await db.query(
         `SELECT set_config('su.layout_operation',$1,true),set_config('su.layout_source','game',true),set_config('su.layout_account',$2,true)`,
         [request.operationId, accountId],

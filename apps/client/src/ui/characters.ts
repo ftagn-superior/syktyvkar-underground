@@ -15,5 +15,5 @@ export const CHARACTERS: readonly CharacterEntry[] = AVATAR_SKINS.map((skin) => 
   skinId: skin.id,
 }));
 /** Закрытые персонажи показываются одной строкой «ещё N появятся с обновлениями». */
-export const UPCOMING_CHARACTERS = 10;
+export const UPCOMING_CHARACTERS = 4;
 export const availableCharacters = (): readonly CharacterEntry[] => CHARACTERS;

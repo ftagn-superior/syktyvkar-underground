@@ -16,7 +16,7 @@ describe('shared day clock wire', () => {
     const decoder = new Decoder(target);
     const now = 1_800_000_123_456;
     expect(source.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(PROTOCOL_VERSION).toBe(16);
+    expect(PROTOCOL_VERSION).toBe(17);
     for (const clock of [
       applyDayClockAction(DEFAULT_DAY_CLOCK, { kind: 'set', hour: 18.5 }, now),
       { offsetMs: 1234, frozenHour: 0 },
@@ -32,6 +32,20 @@ describe('shared day clock wire', () => {
       expect(
         dayClockHour({ offsetMs: target.dayOffsetMs, frozenHour: target.dayFrozenHour }, now),
       ).toBeCloseTo(dayClockHour(clock, now), 5);
+    }
+  });
+
+  it('replicates the room weather', () => {
+    const source = new WorldState();
+    const target = new WorldState();
+    const encoder = new Encoder(source);
+    const decoder = new Decoder(target);
+    expect(target.weatherClouds).toBe(true);
+    for (const clouds of [false, true]) {
+      source.weatherClouds = clouds;
+      decoder.decode(encoder.encode());
+      encoder.discardChanges();
+      expect(target.weatherClouds).toBe(clouds);
     }
   });
 });

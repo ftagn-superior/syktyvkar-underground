@@ -35,7 +35,7 @@ import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldEnvironment } from './environment/world-environment';
-import type { DayClock } from '@su/contracts';
+import type { DayClock, WorldWeather } from '@su/contracts';
 import { BuildingViews } from './buildings';
 import {
   CameraOrbit,
@@ -333,6 +333,10 @@ export class WorldView {
   /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
   setDayClock(clock: DayClock): void {
     this.environment.setDayClock(clock);
+  }
+  /** Погода комнаты, которой управляет `/weather`. */
+  setWeather(weather: WorldWeather): void {
+    this.environment.setWeather(weather);
   }
   get cameraAngle(): number {
     return this.firstPerson ? orbitFromYaw(this.yaw) : this.cameraOrbit.angle;

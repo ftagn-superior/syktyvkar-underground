@@ -45,6 +45,8 @@ export type CloudFrame = {
   zoom: number;
   /** Streamed-in part of the world; clouds end where the city does. */
   visible: RadialState;
+  /** 0..1: overcast weather closes the gaps between clouds in the visible layer. */
+  overcast?: number;
 };
 
 /** Values the shadow plugins of every material read when they bind. */
@@ -150,9 +152,11 @@ const LAYER_FRAGMENT = `
   uniform vec4 cloud;
   uniform vec4 visible;
   uniform vec3 tint;
+  uniform float overcast;
   varying vec2 vField;
   void main() {
     float cover = texture2D(cloudMap, vField * cloud.z + cloud.xy).r;
+    cover = mix(cover, max(cover, 0.6), overcast);
     float inside = 1.0 - smoothstep(max(0.0, visible.z - visible.w), max(0.001, visible.z), length(vField - visible.xy));
     // Thick middles read slightly darker than the lit rim: enough volume for a flat layer.
     gl_FragColor = vec4(tint * mix(1.0, 0.84, cover * cover), cover * cloud.w * inside);
@@ -211,7 +215,7 @@ export class WorldClouds {
       { vertexSource: LAYER_VERTEX, fragmentSource: LAYER_FRAGMENT },
       {
         attributes: ['position'],
-        uniforms: ['world', 'viewProjection', 'cloud', 'visible', 'tint'],
+        uniforms: ['world', 'viewProjection', 'cloud', 'visible', 'tint', 'overcast'],
         samplers: ['cloudMap'],
         needAlphaBlending: true,
       },
@@ -280,7 +284,8 @@ export class WorldClouds {
           75,
         ),
       )
-      .setColor3('tint', frame.tint);
+      .setColor3('tint', frame.tint)
+      .setFloat('overcast', frame.overcast ?? 0);
   }
 
   dispose(): void {

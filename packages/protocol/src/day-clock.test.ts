@@ -16,7 +16,7 @@ describe('shared day clock wire', () => {
     const decoder = new Decoder(target);
     const now = 1_800_000_123_456;
     expect(source.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(PROTOCOL_VERSION).toBe(19);
+    expect(PROTOCOL_VERSION).toBe(20);
     for (const clock of [
       applyDayClockAction(DEFAULT_DAY_CLOCK, { kind: 'set', hour: 18.5 }, now),
       { offsetMs: 1234, frozenHour: 0 },
@@ -41,11 +41,21 @@ describe('shared day clock wire', () => {
     const encoder = new Encoder(source);
     const decoder = new Decoder(target);
     expect(target.weatherClouds).toBe(true);
-    for (const clouds of [false, true]) {
+    expect(target.weatherPrecipitation).toBe(0);
+    expect(target.weatherFog).toBe(false);
+    for (const [clouds, precipitation, fog] of [
+      [false, 1, true],
+      [true, 2, false],
+      [true, 0, false],
+    ] as const) {
       source.weatherClouds = clouds;
+      source.weatherPrecipitation = precipitation;
+      source.weatherFog = fog;
       decoder.decode(encoder.encode());
       encoder.discardChanges();
       expect(target.weatherClouds).toBe(clouds);
+      expect(target.weatherPrecipitation).toBe(precipitation);
+      expect(target.weatherFog).toBe(fog);
     }
   });
 });

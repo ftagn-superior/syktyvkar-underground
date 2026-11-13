@@ -1,6 +1,10 @@
+import type { PlacementCatalogReference } from './placement-catalog.js';
 import type { Quat } from './simulation.js';
 import type { StaticObjectInstance } from './world-types.js';
 
+export const MAX_EDITABLE_STATIC_INSTANCES = 10_000;
+export const LEGACY_PLACEMENT_CATALOG_VERSION = '0'.repeat(64);
+/** Only for reconciling persisted v13 requests. New placements always select an asset. */
 export const STATIC_PLACEMENT_ASSET_ID = 'bench-0152a250d22ef0a9';
 export const STATIC_PLACEMENT_GROUND_Y = 0;
 export const STATIC_PLACEMENT_YAW_STEPS = 24;
@@ -15,6 +19,8 @@ export interface WorldPublicationInfo {
   manifestUrl: string;
 }
 export interface PlaceStaticRequest {
+  assetId: string;
+  placementCatalogVersion: string;
   operationId: string;
   worldEpoch: string;
   assetReleaseVersion: string;
@@ -23,6 +29,8 @@ export interface PlaceStaticRequest {
   yawStep: number;
 }
 export type StaticPlacementError =
+  | 'CATALOG_CHANGED'
+  | 'ASSET_NOT_ALLOWED'
   | 'AUTH_REQUIRED'
   | 'COMMAND_DISABLED'
   | 'WORLD_NOT_READY'
@@ -41,9 +49,7 @@ export type PlaceStaticResult =
   | { operationId: string; ok: false; code: StaticPlacementError; message?: string };
 export interface StaticPlacementEffect {
   kind: 'staticPlacement';
-  assetId: string;
-  groundY: number;
-  yawSteps: number;
+  catalog: PlacementCatalogReference;
   publication: WorldPublicationInfo;
 }
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -52,10 +58,14 @@ export function parsePlaceStaticRequest(v: unknown): PlaceStaticRequest | undefi
   if (
     !record(v) ||
     Object.keys(v).sort().join(',') !==
-      'assetReleaseVersion,expectedLayoutRevision,operationId,position,worldEpoch,yawStep'
+      'assetId,assetReleaseVersion,expectedLayoutRevision,operationId,placementCatalogVersion,position,worldEpoch,yawStep'
   )
     return;
   if (
+    typeof v.assetId !== 'string' ||
+    !/^[a-z0-9][a-z0-9-]{0,79}$/.test(v.assetId) ||
+    typeof v.placementCatalogVersion !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(v.placementCatalogVersion) ||
     typeof v.operationId !== 'string' ||
     !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v.operationId) ||
     typeof v.worldEpoch !== 'string' ||
@@ -85,10 +95,27 @@ export function staticPlacementRotation(step: number): Quat {
 export function placedStaticInstance(request: PlaceStaticRequest): StaticObjectInstance {
   return {
     entityId: `placed_${request.operationId}`,
-    assetId: STATIC_PLACEMENT_ASSET_ID,
+    assetId: request.assetId,
     position: { x: request.position.x, y: STATIC_PLACEMENT_GROUND_Y, z: request.position.z },
     rotation: staticPlacementRotation(request.yawStep),
     instanceRevision: 1,
     enabled: true,
   };
+}
+
+/** Local persistence adapter only: the v13 wire format remains invalid. */
+export function parseStoredPlaceStaticRequest(value: unknown): PlaceStaticRequest | undefined {
+  const current = parsePlaceStaticRequest(value);
+  if (current) return current;
+  if (
+    !record(value) ||
+    Object.keys(value).sort().join(',') !==
+      'assetReleaseVersion,expectedLayoutRevision,operationId,position,worldEpoch,yawStep'
+  )
+    return;
+  return parsePlaceStaticRequest({
+    ...value,
+    assetId: STATIC_PLACEMENT_ASSET_ID,
+    placementCatalogVersion: LEGACY_PLACEMENT_CATALOG_VERSION,
+  });
 }

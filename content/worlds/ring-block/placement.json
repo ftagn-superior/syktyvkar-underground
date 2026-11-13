@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "assetIds": [
+    "bench-0152a250d22ef0a9",
+    "bollard-a5341277dcd4ed93",
+    "bush-large-high",
+    "bush-large-low",
+    "bush-medium-high",
+    "bush-medium-low",
+    "bush-small-high",
+    "bush-small-low",
+    "fence-long",
+    "fence-short",
+    "lamp-five-globe",
+    "lamp-street",
+    "traffic-light-standard",
+    "tree-birch-large",
+    "tree-birch-medium",
+    "tree-birch-small",
+    "tree-leaf-large",
+    "tree-leaf-medium",
+    "tree-leaf-small",
+    "tree-spruce-large",
+    "tree-spruce-medium",
+    "tree-spruce-small"
+  ]
+}

@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
-import { createWorldPublication, hash, jsonBytes, type CompiledWorldAsset } from './index.js';
+import {
+  createWorldPublication,
+  hash,
+  jsonBytes,
+  WorldPublicationContentLimitError,
+  type CompiledWorldAsset,
+} from './index.js';
 import {
   createWorldGrid,
   loadCellPhysics,
@@ -8,6 +14,42 @@ import {
   GRAPHICS_PACK_LIMITS,
   type WorldDefinition,
 } from '@su/contracts';
+
+it('reports deterministic publication budgets with a typed error before writing resources', async () => {
+  const authored = JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8'));
+  const itemCatalog = JSON.parse(await readFile('content/items/catalog.json', 'utf8'));
+  const bounds = { min: { x: -0.5, y: 0, z: -0.5 }, max: { x: 0.5, y: 1, z: 0.5 } };
+  const physics = { assetId: 'bench', bounds, colliders: [] };
+  const asset: CompiledWorldAsset = {
+    version: hash('bench'),
+    bounds,
+    physics,
+    model: new Uint8Array(),
+    parts: jsonBytes({}),
+    collision: jsonBytes(physics),
+  };
+  const world: WorldDefinition = {
+    ...authored,
+    itemCatalog,
+    buildingAssets: { bench: physics },
+    buildings: Array.from({ length: 4000 }, (_, index) => ({
+      entityId: `placed_${String(index).padStart(36, '0')}`,
+      assetId: 'bench',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    })),
+  };
+  const publish = () =>
+    createWorldPublication(world, createWorldGrid(world.bounds, 125), { bench: asset });
+  expect(publish).toThrow(WorldPublicationContentLimitError);
+  expect(publish).toThrow('cells/');
+  world.buildings = Array.from({ length: 10_001 }, (_, index) => ({
+    ...world.buildings[0],
+    entityId: `object_${index}`,
+  }));
+  expect(publish).toThrow(WorldPublicationContentLimitError);
+  expect(publish).toThrow('world building references');
+});
 
 it('feeds a dense cell with 700 unique collision dependencies through a bounded producer', async () => {
   const authored = JSON.parse(await readFile('content/worlds/physics-lab/world.json', 'utf8'));

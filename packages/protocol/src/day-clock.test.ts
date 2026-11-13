@@ -16,7 +16,7 @@ describe('shared day clock wire', () => {
     const decoder = new Decoder(target);
     const now = 1_800_000_123_456;
     expect(source.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(PROTOCOL_VERSION).toBe(13);
+    expect(PROTOCOL_VERSION).toBe(14);
     for (const clock of [
       applyDayClockAction(DEFAULT_DAY_CLOCK, { kind: 'set', hour: 18.5 }, now),
       { offsetMs: 1234, frozenHour: 0 },

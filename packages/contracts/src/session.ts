@@ -1,9 +1,10 @@
+import type { PlacementCatalogReference } from './placement-catalog.js';
 import type { StaticPlacementEffect } from './static-placement.js';
 import { PROFILE_COLORS } from './accounts.js';
 import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -13,6 +14,7 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
+  placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;
   layoutRevision: number;
   layoutHash: string;

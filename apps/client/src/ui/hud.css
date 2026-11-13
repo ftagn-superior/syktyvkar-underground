@@ -309,6 +309,154 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   justify-content: center;
   text-align: left;
 }
+
+/* A single modal catalog, using the same paper panels and controls as the HUD. */
+.placement-catalog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: max(12px, 2vh) max(12px, 2vw);
+  background: color-mix(in srgb, var(--hard) 65%, transparent);
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+.placement-catalog-backdrop[hidden] {
+  display: none;
+}
+.placement-catalog-dialog {
+  width: min(960px, 100%);
+  max-height: 94dvh;
+  overflow: auto;
+  padding: 1.2rem;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+.placement-catalog-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.placement-catalog-dialog h2 {
+  margin: 0;
+  font: 800 1.35em var(--font-display);
+}
+.placement-catalog-dialog h3 {
+  margin: 0;
+  font: 800 1.1em var(--font-display);
+}
+.placement-catalog-dialog input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65em 0.8em;
+  color: var(--ink);
+  background: var(--p2);
+  border: 2px solid var(--ln);
+  border-radius: 0.65em;
+  font: inherit;
+}
+.placement-catalog-dialog input::placeholder {
+  color: var(--mut);
+  opacity: 1;
+}
+.placement-catalog-categories,
+.placement-catalog-preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin: 0.8em 0;
+}
+.placement-catalog-categories .ui-btn {
+  font-size: 0.85em;
+  padding: 0.45em 0.7em;
+}
+.placement-catalog-status {
+  color: var(--mut);
+  font-weight: 500;
+  margin: 0.8em 0;
+}
+.placement-catalog-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.2rem;
+}
+.placement-catalog-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  max-height: 390px;
+  overflow: auto;
+  padding: 0.2em 0.3em 0.4em;
+}
+.placement-catalog-card {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  flex-shrink: 0;
+}
+.placement-catalog-card[aria-pressed='true']::after {
+  content: '✓';
+  margin-left: auto;
+}
+.placement-catalog-icon {
+  font-size: 1.6em;
+  min-width: 1em;
+  text-align: center;
+}
+.placement-catalog-details {
+  min-width: 0;
+}
+.placement-catalog-details canvas {
+  display: block;
+  width: min(100%, 320px);
+  height: min(28vh, 250px);
+  max-height: 320px;
+  touch-action: none;
+  margin: 0.6em auto;
+  border-radius: 0.5em;
+  background: var(--p2);
+}
+.placement-catalog-details canvas[hidden] {
+  display: none;
+}
+.placement-catalog-details p {
+  font-size: 0.9em;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.placement-catalog-dimensions {
+  color: var(--mut);
+}
+.placement-catalog-preview-controls .ui-btn {
+  font-size: 0.85em;
+}
+#placement-catalog-place {
+  width: 100%;
+}
+.placement-catalog-dialog :focus-visible {
+  outline: 3px solid var(--vychegda);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .placement-catalog-content {
+    grid-template-columns: 1fr;
+  }
+  .placement-catalog-results {
+    max-height: 200px;
+  }
+  .placement-catalog-dialog {
+    padding: 1rem;
+  }
+  .placement-catalog-details canvas {
+    height: 220px;
+  }
+}
 .place-pill .ic {
   flex: none;
   font-size: 1.6em;

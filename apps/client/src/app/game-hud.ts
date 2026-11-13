@@ -115,7 +115,7 @@ export class GameHud {
     this.element('first-person-camera-controls').hidden = !firstPerson;
     this.element('controls-title').textContent = placing
       ? placement === 'static'
-        ? 'Размещение скамейки'
+        ? 'Размещение объекта'
         : 'Поворот предмета'
       : firstPerson
         ? 'От первого лица'

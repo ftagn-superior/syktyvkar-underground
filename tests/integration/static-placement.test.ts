@@ -67,6 +67,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
       operationId: randomUUID(),
       worldEpoch: info.worldEpoch,
       assetReleaseVersion: info.assetReleaseVersion!,
+      assetId: 'bench-0152a250d22ef0a9',
+      placementCatalogVersion: info.placementCatalog!.placementCatalogVersion,
       expectedLayoutRevision: info.layoutRevision!,
       position: { x: 10, z: 10 },
       yawStep: 6,
@@ -333,6 +335,9 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     for (const override of [
       { worldEpoch: 'old' },
       { expectedLayoutRevision: 999 },
+      { placementCatalogVersion: 'a'.repeat(64) },
+      { assetId: 'tree-birch-small' },
+      { placementCatalogVersion: '0'.repeat(64) },
       { position: { x: 5, z: 0 } },
       { position: { x: 0, z: -10 } },
       { position: { x: 20, z: 10 } },

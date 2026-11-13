@@ -36,12 +36,13 @@ export class KeyboardInput {
     onChat?: (initialText: string) => void,
     onAnimations?: () => void,
     onPlacementRotate?: (axis: 'x' | 'y' | 'z', direction: -1 | 1) => void,
+    private readonly modal: () => boolean = () => false,
   ) {
     const options = { signal: this.controller.signal };
     window.addEventListener(
       'keydown',
       (event) => {
-        if (!this.enabled || event.repeat) return;
+        if (!this.enabled || event.repeat || this.modal()) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         if (isTextInput(event.target)) return;
         if (this.placementMode) {
@@ -118,14 +119,15 @@ export class KeyboardInput {
     );
   }
   get cameraEnabled(): boolean {
-    return this.enabled && !this.placementMode && !document.hidden;
+    return this.enabled && !this.placementMode && !this.modal() && !document.hidden;
   }
   private publishRotation(): void {
     const direction = Number(this.held.has('KeyE')) - Number(this.held.has('KeyQ'));
     this.onRotate?.(direction as -1 | 0 | 1);
   }
   read(cameraAngle = INITIAL_CAMERA_ANGLE): MoveInput {
-    if (!this.enabled || this.placementMode || document.hidden) return { ...NEUTRAL_INPUT };
+    if (!this.enabled || this.placementMode || this.modal() || document.hidden)
+      return { ...NEUTRAL_INPUT };
     const right =
       Number(this.held.has('KeyD') || this.held.has('ArrowRight')) -
       Number(this.held.has('KeyA') || this.held.has('ArrowLeft'));

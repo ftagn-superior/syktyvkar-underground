@@ -32,10 +32,12 @@ export const messages: Record<string, string> = {
   ACCOUNTS_UNAVAILABLE: 'Хранилище аккаунтов временно недоступно. Повторите вход позже.',
 };
 export const staticPlacementMessages: Partial<Record<StaticPlacementError, string>> = {
-  RATE_LIMITED: `Размещать скамейки можно раз в ${STATIC_PLACEMENT_COOLDOWN_MS / 1000} секунды.`,
-  AUTH_REQUIRED: 'Чтобы размещать скамейки, войдите через Telegram.',
-  COMMAND_DISABLED: 'Размещение скамейки недоступно в этом мире.',
-  OUT_OF_BOUNDS: 'Скамейка должна целиком находиться в границах мира.',
+  RATE_LIMITED: `Размещать объекты можно раз в ${STATIC_PLACEMENT_COOLDOWN_MS / 1000} секунды.`,
+  AUTH_REQUIRED: 'Чтобы размещать объекты, войдите через Telegram.',
+  COMMAND_DISABLED: 'Размещение объектов недоступно в этом мире.',
+  OUT_OF_BOUNDS: 'Объект должен целиком находиться в границах мира.',
+  CATALOG_CHANGED: 'Каталог обновлён. Выберите модель и подтвердите размещение заново.',
+  ASSET_NOT_ALLOWED: 'Эта модель больше недоступна для размещения. Выберите другую.',
 };
 export function readableError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);

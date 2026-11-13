@@ -80,6 +80,9 @@ export class WorldEnvironment {
   shadowDiagnostics() {
     return this.lighting.shadowDiagnostics();
   }
+  bloomDiagnostics() {
+    return this.lighting.bloomDiagnostics();
+  }
   dispose(): void {
     this.nightLights.dispose();
     this.clouds.dispose();

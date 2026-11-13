@@ -14,6 +14,7 @@ import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imagePro
 import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { REFERENCE_HOUR, skyAt, type Sky } from './day-cycle';
+import { darkness } from './night-schedule';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -30,6 +31,19 @@ const SHADOW_SNAP = (SHADOW_EXTENT / SHADOW_MAP_SIZE) * 128;
  * и требует перерисовать карту неподвижного мира. Шаг в 0,1° на глаз незаметен.
  */
 const LIGHT_STEP_COS = Math.cos((0.1 * Math.PI) / 180);
+/**
+ * Ореол ночных огней. Порог яркости (с учётом экспозиции) выше освещённых луной стен
+ * и травы, но ниже окон, витрин, вывесок и плафонов. Пятна под фонарями тоже чуть
+ * светятся, как на ночной фотографии. Подобрано по снимкам в браузере.
+ * Днём ореол выключен целиком: солнечные стены превысили бы порог, а проходы размытия
+ * стоили бы кадра впустую.
+ */
+const BLOOM_THRESHOLD = 0.2;
+const BLOOM_WEIGHT = 0.7;
+const BLOOM_KERNEL = 64;
+const BLOOM_SCALE = 0.5;
+/** Темнота, с которой включается ореол; ниже неё его вес и так незаметен. */
+const BLOOM_MIN_DARK = 0.05;
 
 /** Both game cameras sample the same composed map, with one fixed light-space projection. */
 class WorldSun extends DirectionalLight {
@@ -115,6 +129,8 @@ export class WorldLighting {
   private readonly fill: HemisphericLight;
   private readonly sun: DirectionalLight;
   private pipeline?: DefaultRenderingPipeline;
+  /** 0 днём, 1 ночью; управляет ореолом огней. */
+  private dark = 0;
   private readonly forward = new Vector3();
   private readonly right = new Vector3();
   private readonly up = new Vector3();
@@ -182,6 +198,8 @@ export class WorldLighting {
     this.fill.groundColor.set(...sky.groundColor);
     this.sun.intensity = sky.lightIntensity;
     this.sun.diffuse.set(...sky.lightColor);
+    this.dark = darkness(hour);
+    this.applyBloom();
     const { x, y, z } = sky.lightDirection;
     const direction = this.direction.set(x, y, z);
     if (Vector3.Dot(direction, this.sun.direction) < LIGHT_STEP_COS) {
@@ -243,8 +261,33 @@ export class WorldLighting {
     ]);
     pipeline.samples = 4;
     pipeline.fxaaEnabled = false;
+    pipeline.bloomThreshold = BLOOM_THRESHOLD;
+    pipeline.bloomKernel = BLOOM_KERNEL;
+    pipeline.bloomScale = BLOOM_SCALE;
     pipeline.bloomEnabled = false;
     this.pipeline = pipeline;
+    this.applyBloom();
+  }
+
+  /**
+   * Ореол растёт вместе с темнотой. Включение пересобирает цепочку постобработки,
+   * поэтому оно происходит дважды за игровые сутки, а не каждый кадр.
+   */
+  private applyBloom(): void {
+    const pipeline = this.pipeline;
+    if (!pipeline) return;
+    const enabled = this.dark >= BLOOM_MIN_DARK;
+    if (pipeline.bloomEnabled !== enabled) pipeline.bloomEnabled = enabled;
+    if (enabled) pipeline.bloomWeight = BLOOM_WEIGHT * this.dark;
+  }
+
+  /** Состояние ореола для диагностики и тестов. */
+  bloomDiagnostics() {
+    const pipeline = this.pipeline;
+    return {
+      enabled: pipeline?.bloomEnabled ?? false,
+      weight: pipeline?.bloomEnabled ? pipeline.bloomWeight : 0,
+    };
   }
 
   /**

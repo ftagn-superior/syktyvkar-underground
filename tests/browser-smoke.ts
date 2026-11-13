@@ -33,12 +33,15 @@ try {
       consoleMessages.push({ page: index, type: message.type(), text: message.text() });
       if (consoleMessages.length > 80) consoleMessages.shift();
     });
+    await page.bringToFront();
     await page.goto(`${url}/?diagnostics=1`);
+    await page.bringToFront();
     await page.locator('#join:not([disabled])').waitFor();
   }
   await mkdir('output/playwright', { recursive: true });
   await pages[0].screenshot({ path: 'output/playwright/welcome.png' });
   for (const page of pages) {
+    await page.bringToFront();
     await page.locator('#join').click();
     await playing(page);
   }
@@ -52,6 +55,7 @@ try {
     const fullContext = await fullBrowser.newContext();
     const fullPage = await fullContext.newPage();
     fullPage.on('pageerror', (error) => errors.push(error.message));
+    await fullPage.bringToFront();
     await fullPage.goto(`${url}/?diagnostics=1`);
     await fullPage.locator('#join:not([disabled])').waitFor();
     for (let index = 0; index < 6; index++) {
@@ -59,6 +63,7 @@ try {
       prepareSdk(room);
       fillers.push(room);
     }
+    await fullPage.bringToFront();
     await fullPage.locator('#join').click();
     await fullPage.waitForFunction(() =>
       document.querySelector('#notice')?.textContent?.includes('8 игроков'),
@@ -108,6 +113,7 @@ try {
   );
   const identity = (await snapshot(pages[0])).authoritative.entityId;
   const reloadStartedAt = performance.now();
+  await pages[0].bringToFront();
   await pages[0].reload();
   // Recreating a standard-quality SwiftShader scene includes cold shader compilation.
   // Server reconnect and area-preparation deadlines still bound actual recovery.
@@ -136,6 +142,7 @@ try {
   await pages[0].screenshot({ path: 'output/playwright/two-players.png' });
   const final = await snapshot(pages[0]);
   await hudClick(pages[0], '#leave');
+  await pages[1].bringToFront();
   await pages[1].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 1);
   await hudClick(pages[1], '#leave');
   assert.deepEqual(errors, [], 'no uncaught browser errors');

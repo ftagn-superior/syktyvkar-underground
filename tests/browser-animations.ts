@@ -59,6 +59,7 @@ try {
   for (const [index, page] of pages.entries()) {
     page.setDefaultTimeout(15000);
     page.on('pageerror', (error) => errors.push(error.message));
+    await page.bringToFront();
     await page.goto(`${index ? relay.url : app.url}/?diagnostics=1`);
     await page
       .locator(`input[name="avatar-skin"][value="${index ? 'standard' : 'minifigure'}"]`)
@@ -69,6 +70,7 @@ try {
     );
   }
   for (const [index, sender] of pages.entries()) {
+    await sender.bringToFront();
     const observer = pages[1 - index];
     const id = (await snapshot(sender)).authoritative.entityId;
     await idle(sender);

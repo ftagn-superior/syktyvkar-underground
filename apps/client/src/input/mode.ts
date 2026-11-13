@@ -1,21 +1,22 @@
 import { isMovementKey, isTextInput } from './keyboard';
 
-export type InputMode = 'desktop' | 'touch';
+export type InputMode = 'desktop' | 'touch' | 'gamepad';
 
 /** Only deliberate game input changes mode; the switching press is consumed. */
 export class GameInputMode {
   private readonly controller = new AbortController();
+  private readonly onChange: (mode: InputMode) => void;
   value: InputMode =
     matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0 ? 'touch' : 'desktop';
 
   constructor(canvas: HTMLCanvasElement, stick: HTMLElement, onChange: (mode: InputMode) => void) {
+    this.onChange = onChange;
     const options = { capture: true, signal: this.controller.signal };
     const switchTo = (mode: InputMode, event: Event) => {
       if (mode === this.value) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      this.value = mode;
-      onChange(mode);
+      this.select(mode);
     };
     window.addEventListener(
       'pointerdown',
@@ -46,6 +47,12 @@ export class GameInputMode {
       },
       options,
     );
+  }
+
+  select(mode: InputMode): void {
+    if (mode === this.value) return;
+    this.value = mode;
+    this.onChange(mode);
   }
 
   dispose(): void {

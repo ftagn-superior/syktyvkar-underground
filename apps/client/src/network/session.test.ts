@@ -186,6 +186,56 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('static removal confirmation', () => {
+  it('requires the selected publication and never silently retargets a newer layout', () => {
+    const instance = session();
+    instance.info = { ...info };
+    instance.accountId = 'account';
+    instance.state = 'playing';
+    const send = vi.fn();
+    instance.room = { send } as unknown as NonNullable<GameSession['room']>;
+    const selectedPublication = { ...info };
+    instance.info.layoutRevision++;
+    expect(instance.removeStatic('seed-building', selectedPublication)).toBe(false);
+    expect(instance.staticRemovalPending).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    // A selection made in the current publication sends one durable request.
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(true);
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      'removeStatic',
+      expect.objectContaining({
+        entityId: 'seed-building',
+        expectedLayoutRevision: instance.info.layoutRevision,
+        worldEpoch: info.worldEpoch,
+      }),
+    );
+    expect(instance.removeStatic('second-building', instance.info)).toBe(false);
+    expect(instance.placeStatic({ x: 1, z: 2 }, 0, 'bench', 'c'.repeat(64))).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionStorage.getItem('su:static-removal:account')!)).toMatchObject({
+      entityId: 'seed-building',
+      expectedLayoutRevision: instance.info.layoutRevision,
+    });
+    instance.room = undefined;
+  });
+  it('does not send a removal as a guest, during pause or without a room', () => {
+    const instance = session();
+    instance.info = { ...info };
+    instance.state = 'playing';
+    const send = vi.fn();
+    instance.room = { send } as unknown as NonNullable<GameSession['room']>;
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(false);
+    instance.accountId = 'account';
+    (instance as unknown as { persistencePaused: boolean }).persistencePaused = true;
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(false);
+    (instance as unknown as { persistencePaused: boolean }).persistencePaused = false;
+    instance.room = undefined;
+    expect(instance.removeStatic('seed-building', instance.info)).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(instance.staticRemovalPending).toBe(false);
+  });
+});
+
 describe('lazy gameplay physics', () => {
   it('ignores initial metadata arriving after disposal', async () => {
     const instance = session();

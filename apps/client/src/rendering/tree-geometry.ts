@@ -118,7 +118,12 @@ export function treeTemplate(
 }
 
 /** Convex clipping against the same crown lobes/cones and trunk used in both render paths. */
-export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
+function treeIntersection(
+  recipe: TreeRenderRecipe,
+  ray: Ray,
+  firstHit: boolean,
+): number | undefined {
+  let nearest = Infinity;
   const clip = (planes: number[][], origin = ray.origin, direction = ray.direction) => {
     let near = 0,
       far = ray.length;
@@ -126,12 +131,12 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
       const distance = offset - x * origin.x - y * origin.y - z * origin.z;
       const speed = x * direction.x + y * direction.y + z * direction.z;
       if (Math.abs(speed) < 1e-10) {
-        if (distance < -1e-8) return false;
+        if (distance < -1e-8) return;
       } else if (speed > 0) far = Math.min(far, distance / speed);
       else near = Math.max(near, distance / speed);
-      if (near > far) return false;
+      if (near > far) return;
     }
-    return far >= 0 && near < ray.length;
+    return far >= 0 && near < ray.length ? near : undefined;
   };
   if (recipe.foliage === 'broadleaf') {
     const [lower, upper] = recipe.crowns;
@@ -147,7 +152,10 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
       ray.direction.y / height,
       ray.direction.z / radius,
     );
-    for (const planes of BROADLEAF_HULLS) if (clip(planes, origin, direction)) return true;
+    for (const planes of BROADLEAF_HULLS) {
+      nearest = Math.min(nearest, clip(planes, origin, direction) ?? Infinity);
+      if (firstHit && Number.isFinite(nearest)) return nearest;
+    }
   }
   for (const [bottom, top, base, height] of recipe.foliage === 'spruce' ? recipe.crowns : []) {
     const slope = ((top - bottom) * APOTHEM) / height;
@@ -159,13 +167,14 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
       const a = ((k + 0.5) * Math.PI * 2) / SIDES;
       planes.push([Math.cos(a), -slope, Math.sin(a), bottom * APOTHEM - slope * base]);
     }
-    if (clip(planes)) return true;
+    nearest = Math.min(nearest, clip(planes) ?? Infinity);
+    if (firstHit && Number.isFinite(nearest)) return nearest;
   }
   const [x, y, z, yaw] = recipe.trunk;
   const c = Math.cos(yaw),
     s = Math.sin(yaw);
   const unrotate = (v: Vector3) => new Vector3(c * v.x - s * v.z, v.y, s * v.x + c * v.z);
-  return clip(
+  const trunk = clip(
     [
       [1, 0, 0, x / 2],
       [-1, 0, 0, x / 2],
@@ -177,4 +186,14 @@ export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
     unrotate(ray.origin),
     unrotate(ray.direction),
   );
+  nearest = Math.min(nearest, trunk ?? Infinity);
+  return Number.isFinite(nearest) ? nearest : undefined;
+}
+
+export function treeRayDistance(recipe: TreeRenderRecipe, ray: Ray): number | undefined {
+  return treeIntersection(recipe, ray, false);
+}
+
+export function treeIntersectsRay(recipe: TreeRenderRecipe, ray: Ray): boolean {
+  return treeIntersection(recipe, ray, true) !== undefined;
 }

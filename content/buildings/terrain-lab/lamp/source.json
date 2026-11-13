@@ -1,0 +1,91 @@
+{
+  "formatVersion": 1,
+  "parts": [
+    {
+      "id": "pole",
+      "role": "detail",
+      "fade": false,
+      "color": "#2b2d2f",
+      "shapes": [
+        {
+          "box": {
+            "center": [0, 2.1, 0],
+            "size": [0.18, 4.2, 0.18]
+          }
+        },
+        {
+          "box": {
+            "center": [0, 4.05, 0],
+            "size": [1.6, 0.1, 0.1]
+          }
+        },
+        {
+          "box": {
+            "center": [0, 4.05, 0],
+            "size": [0.1, 0.1, 1.6]
+          }
+        }
+      ]
+    },
+    {
+      "id": "globes",
+      "role": "detail",
+      "fade": false,
+      "color": "#f4f1e6",
+      "shapes": [
+        {
+          "cylinder": {
+            "center": [0, 4.55, 0],
+            "radius": 0.27,
+            "length": 0.5,
+            "axis": "y",
+            "sides": 8
+          }
+        },
+        {
+          "cylinder": {
+            "center": [0.75, 4.3, 0],
+            "radius": 0.24,
+            "length": 0.45,
+            "axis": "y",
+            "sides": 8
+          }
+        },
+        {
+          "cylinder": {
+            "center": [-0.75, 4.3, 0],
+            "radius": 0.24,
+            "length": 0.45,
+            "axis": "y",
+            "sides": 8
+          }
+        },
+        {
+          "cylinder": {
+            "center": [0, 4.3, 0.75],
+            "radius": 0.24,
+            "length": 0.45,
+            "axis": "y",
+            "sides": 8
+          }
+        },
+        {
+          "cylinder": {
+            "center": [0, 4.3, -0.75],
+            "radius": 0.24,
+            "length": 0.45,
+            "axis": "y",
+            "sides": 8
+          }
+        }
+      ]
+    }
+  ],
+  "colliders": [
+    {
+      "id": "pole",
+      "center": [0, 2.1, 0],
+      "size": [0.25, 4.2, 0.25]
+    }
+  ]
+}

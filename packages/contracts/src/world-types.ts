@@ -1,5 +1,6 @@
 import type { ItemCatalog, InitialItem } from './items.js';
 import type { Bounds, Quat, SimulationConfig, Vec3 } from './simulation.js';
+import type { TerrainSource } from './terrain.js';
 
 export const WORLD_FORMAT_VERSION = 5;
 export interface BuildingInstance {
@@ -132,6 +133,8 @@ export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
   cells: string[];
   assetCatalog: string;
   generator?: { kind: 'streaming-lab'; seed: number };
+  /** Build-time only; resolved to ordinary absolute poses and static assets. */
+  terrain?: TerrainSource;
 }
 export interface LocalStaticSet {
   cell: WorldCell;

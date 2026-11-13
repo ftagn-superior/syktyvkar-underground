@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "assetId": "tree-terrain-lab",
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  }
+}

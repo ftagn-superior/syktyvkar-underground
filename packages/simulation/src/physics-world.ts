@@ -439,11 +439,41 @@ export class PhysicsWorld {
       this.teleport(remote.body, remote.node, player.position, player.rotation);
     }
   }
-  spawnPosition(point: Vec3): Vec3 {
+  spawnPosition(point: Vec3, excludeId?: string): Vec3 {
+    return this.spawnCandidate(point, excludeId).position;
+  }
+  private spawnCandidate(point: Vec3, excludeId?: string) {
+    let normal = this.surfaceRay(
+      { ...point, y: point.y + 0.1 },
+      { ...point, y: point.y - 0.1 },
+      excludeId,
+    )?.normal;
+    // A ray exactly on the shared edge of two legacy box slabs can miss both
+    // faces in Havok. Probe inside the capsule footprint, one millimetre away.
+    if (!normal)
+      for (const [dx, dz] of [
+        [0.001, 0],
+        [-0.001, 0],
+        [0, 0.001],
+        [0, -0.001],
+      ]) {
+        normal = this.surfaceRay(
+          { x: point.x + dx, y: point.y + 0.1, z: point.z + dz },
+          { x: point.x + dx, y: point.y - 0.1, z: point.z + dz },
+          excludeId,
+        )?.normal;
+        if (normal) break;
+      }
+    const radius = this.definition.simulation.character.radius;
+    // A vertical capsule's spherical foot needs extra clearance on a slope.
+    const slopeClearance = normal && normal.y > 0.5 ? radius * (1 / normal.y - 1) : 0;
     return {
-      x: point.x,
-      y: point.y + this.definition.simulation.character.height / 2 + 0.02,
-      z: point.z,
+      supported: !!normal && normal.y >= 0.5,
+      position: {
+        x: point.x,
+        y: point.y + this.definition.simulation.character.height / 2 + 0.02 + slopeClearance,
+        z: point.z,
+      },
     };
   }
   overlaps(shape: PhysicsShape, position: Vec3, ignoreBody?: PhysicsBody): boolean {
@@ -468,8 +498,8 @@ export class PhysicsWorld {
     const points = requested ? [requested] : this.definition.spawnPoints;
     const selfBody = excludeId ? this.characters.get(excludeId)?.body : undefined;
     for (const point of points) {
-      const position = this.spawnPosition(point);
-      if (!this.overlaps(this.spawnShape, position, selfBody)) return position;
+      const { position, supported } = this.spawnCandidate(point, excludeId);
+      if (supported && !this.overlaps(this.spawnShape, position, selfBody)) return position;
     }
   }
   advance(dt: number) {
@@ -489,11 +519,15 @@ export class PhysicsWorld {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
       const config = this.definition.simulation.character;
       const speed = input.sprint ? config.sprintSpeed : config.speed;
+      const wasGrounded = record.grounded;
       const support = record.controller.checkSupport(dt, down);
       record.grounded = support.supportedState === CharacterSupportedState.SUPPORTED;
-      const vertical = record.grounded
-        ? Math.min(0, support.averageSurfaceVelocity.y)
-        : record.controller.getVelocity().y + this.gravity.y * dt;
+      const normal = support.averageSurfaceNormal;
+      const vertical =
+        record.grounded && normal.y >= record.controller.maxSlopeCosine
+          ? support.averageSurfaceVelocity.y -
+            ((normal.x * input.moveX + normal.z * input.moveZ) * speed) / normal.y
+          : record.controller.getVelocity().y + this.gravity.y * dt;
       record.controller.setVelocity(
         new Vector3(input.moveX * speed, vertical, input.moveZ * speed),
       );
@@ -507,6 +541,39 @@ export class PhysicsWorld {
       else if (Math.hypot(input.moveX, input.moveZ) > 0.001)
         record.yaw = Math.atan2(input.moveX, input.moveZ);
       record.controller.integrate(dt, support, this.gravity);
+      // At a convex change of slope a tangent velocity can leave the ground even
+      // without a jump. Sweep the whole capsule down over at most one walkable
+      // step, using the same colliders on the server and during prediction.
+      if (
+        (wasGrounded || record.grounded) &&
+        !support.isSurfaceDynamic &&
+        (vertical < -0.001 || !record.grounded)
+      ) {
+        const position = record.controller.getPosition();
+        const distance = speed * Math.hypot(input.moveX, input.moveZ) * dt * 0.6 + 0.05;
+        const hit = new ShapeCastResult();
+        this.plugin.shapeCast(
+          {
+            shape: record.controller.shape,
+            rotation: Quaternion.Identity(),
+            startPosition: position,
+            endPosition: position.add(new Vector3(0, -distance, 0)),
+            shouldHitTriggers: false,
+            ignoreBody: record.body,
+          },
+          new ShapeCastResult(),
+          hit,
+        );
+        if (
+          hit.hasHit &&
+          hit.hitNormal.y >= record.controller.maxSlopeCosine &&
+          hit.body?.getMotionType() === PhysicsMotionType.STATIC
+        ) {
+          const drop = hit.hitFraction * distance - record.controller.keepDistance;
+          if (drop > 0.001) record.controller.setPosition(position.add(new Vector3(0, -drop, 0)));
+          record.grounded = true;
+        }
+      }
     }
     this.plugin.executeStep(dt, this.physics.getBodies());
     if (!this.prediction) this.returnLostItems();

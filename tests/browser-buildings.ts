@@ -89,6 +89,7 @@ try {
     );
   }
   checks.push('three placed buildings reuse two verified GLB models per client');
+  await pages[0].bringToFront();
   await pages[0].waitForFunction(
     (id) =>
       (window as any).__SU_DEBUG__.buildings().buildings.find((b: any) => b.entityId === id)

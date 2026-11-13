@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "assets": {
+    "terrain-house": "house/asset.json",
+    "terrain-lamp": "lamp/asset.json",
+    "terrain-bench": "bench/asset.json",
+    "tree-terrain-lab": "tree/asset.json"
+  }
+}

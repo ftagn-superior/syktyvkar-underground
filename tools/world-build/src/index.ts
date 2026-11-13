@@ -42,9 +42,10 @@ import {
 } from './city.js';
 import { generateKit, type KitRecipe } from './kit.js';
 import { treeRenderRecipe } from './tree-instances.js';
+import { buildTerrainAuthoring } from './terrain-authoring.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
-export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab'] as const;
+export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab', 'terrain-lab'] as const;
 const generators = {
   house: (id: string, recipe: unknown) => generateHouse(id, recipe as HouseRecipe),
   footprint: (id: string, recipe: unknown) => generateFootprint(id, recipe as FootprintRecipe),
@@ -111,6 +112,16 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     );
     if (physics.assetId !== assetId) throw new Error('Imported collision asset ID mismatch');
   } else throw new Error(`Unsupported asset source: ${assetId}`);
+  return compileBytes(assetId, model, physics, treeParts, descriptor.renderMode);
+}
+
+async function compileBytes(
+  assetId: string,
+  model: Uint8Array | undefined,
+  physics: BuildingPhysicsAsset,
+  treeParts?: BuildingParts,
+  renderMode?: BuildingParts['renderMode'],
+) {
   let inspected: { parts: BuildingParts; bounds: BuildingPhysicsAsset['bounds'] };
   if (model !== undefined) {
     if (model.byteLength > WORLD_RESOURCE_LIMITS.modelBytes)
@@ -124,10 +135,10 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
           .map((m) => m.message)
           .join('; ')}`,
       );
-    inspected = inspectStaticGlb(model, assetId, descriptor.renderMode);
+    inspected = inspectStaticGlb(model, assetId, renderMode);
   } else {
     if (!treeParts) throw new Error(`Missing tree representation: ${assetId}`);
-    if (descriptor.renderMode !== undefined)
+    if (renderMode !== undefined)
       throw new Error(`GLB render mode cannot contain a tree recipe: ${assetId}`);
     inspected = { parts: treeParts, bounds: physics.bounds };
   }
@@ -161,6 +172,7 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
 export async function buildWorld(
   source = 'content/worlds/ring-block/world.json',
   output?: string,
+  options: { terrainVariant?: 'hill' | 'flat' } = {},
 ): Promise<WorldManifest> {
   const authored = (await readJson(source)) as WorldSource;
   if (
@@ -170,34 +182,53 @@ export async function buildWorld(
     typeof authored.assetCatalog !== 'string' ||
     typeof authored.itemCatalog !== 'string'
   )
-    throw new Error('World source must use formatVersion 4, cells, itemCatalog and assetCatalog');
+    throw new Error(
+      `World source must use formatVersion ${WORLD_FORMAT_VERSION}, cells, itemCatalog and assetCatalog`,
+    );
+  const sourceDirectory = dirname(resolve(source));
+  if (authored.terrain && authored.generator)
+    throw new Error('Terrain and world generators cannot compete');
+  const itemCatalog = await readJson(resolve(sourceDirectory, authored.itemCatalog));
+  const grid = createWorldGrid(authored.bounds, authored.cellSize ?? 125);
+  const terrain = authored.terrain
+    ? buildTerrainAuthoring(
+        authored,
+        grid,
+        itemCatalog,
+        await readJson(sourceFile(sourceDirectory, authored.terrain.heightfield)),
+        await readJson(sourceFile(sourceDirectory, authored.terrain.surfaces)),
+        await readJson(sourceFile(sourceDirectory, authored.terrain.anchors)),
+        options.terrainVariant ?? 'hill',
+      )
+    : undefined;
   const base: WorldHeader = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: authored.worldId,
     bounds: authored.bounds,
     simulation: authored.simulation,
-    spawnPoints: authored.spawnPoints,
-    itemCatalog: await readJson(resolve(dirname(resolve(source)), authored.itemCatalog)),
-    initialItems: authored.initialItems,
+    spawnPoints: terrain?.spawnPoints ?? authored.spawnPoints,
+    itemCatalog,
+    initialItems: terrain?.initialItems ?? authored.initialItems,
     // Необязательное поле не записывается вовсе, чтобы не менять хеши миров без подписей.
     ...(authored.landmarks ? { landmarks: authored.landmarks } : {}),
     ...(authored.routes ? { routes: authored.routes } : {}),
   };
   validateWorldHeader(base);
-  const grid = createWorldGrid(base.bounds, authored.cellSize ?? 125);
   const outputDirectory = output ?? `dist/worlds/${base.worldId}`;
-  const sourceDirectory = dirname(resolve(source));
   const catalogPath = resolve(sourceDirectory, authored.assetCatalog);
   const catalog = await readJson(catalogPath);
   if (catalog.formatVersion !== 1 || !catalog.assets || typeof catalog.assets !== 'object')
     throw new Error('Invalid building asset catalog');
+  for (const id of terrain?.assets.keys() ?? [])
+    if (Object.hasOwn(catalog.assets, id))
+      throw new Error(`Terrain asset conflicts with catalog: ${id}`);
   let authoredCells: WorldCell[];
   if (authored.generator) {
     if (authored.generator.kind !== 'streaming-lab' || authored.cells.length !== 0)
       throw new Error('A generated world must use only the streaming-lab generator');
     authoredCells = generateStreamingCells(authored);
   } else {
-    if (authored.cells.length === 0) throw new Error('World source requires cells');
+    if (authored.cells.length === 0 && !terrain) throw new Error('World source requires cells');
     authoredCells = await Promise.all(
       authored.cells.map(async (path) =>
         validateWorldCell(await readJson(sourceFile(sourceDirectory, path))),
@@ -215,9 +246,15 @@ export async function buildWorld(
     });
   const merged = mergeWorldCells(authoredCells);
   const buildings: WorldDefinition['buildings'] = [];
-  const fixedInstanceIds: string[] = [];
+  const fixedInstanceIds: string[] = [...(terrain?.fixed ?? [])];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
-  for (const instance of merged.buildings) {
+  for (const [id, asset] of terrain?.assets ?? [])
+    compiled.set(id, await compileBytes(id, encodeStaticGlb(asset.parts), asset.physics));
+  for (const instance of [...merged.buildings, ...(terrain?.buildings ?? [])]) {
+    if (terrain?.assets.has(instance.assetId)) {
+      buildings.push(instance);
+      continue;
+    }
     if (!Object.hasOwn(catalog.assets, instance.assetId))
       throw new Error(`Unknown building asset ${instance.assetId}`);
     const descriptorPath = sourceFile(dirname(catalogPath), catalog.assets[instance.assetId]);

@@ -1,0 +1,105 @@
+{
+  "formatVersion": 5,
+  "worldId": "terrain-lab",
+  "bounds": {
+    "min": {
+      "x": -20,
+      "y": -10,
+      "z": -20
+    },
+    "max": {
+      "x": 20,
+      "y": 20,
+      "z": 20
+    }
+  },
+  "simulation": {
+    "tickRate": 60,
+    "gravity": {
+      "x": 0,
+      "y": -9.81,
+      "z": 0
+    },
+    "character": {
+      "height": 1.8,
+      "radius": 0.35,
+      "speed": 4,
+      "sprintSpeed": 14,
+      "mass": 70
+    }
+  },
+  "spawnPoints": [],
+  "entities": [],
+  "cells": [],
+  "assetCatalog": "../../buildings/terrain-lab/catalog.json",
+  "itemCatalog": "../../items/catalog.json",
+  "initialItems": [],
+  "cellSize": 20,
+  "terrain": {
+    "heightfield": "terrain.json",
+    "surfaces": "surfaces.json",
+    "anchors": "anchors.json"
+  },
+  "routes": {
+    "walk": [
+      {
+        "x": -4,
+        "z": 17
+      },
+      {
+        "x": -4,
+        "z": 5
+      },
+      {
+        "x": -2,
+        "z": 2
+      },
+      {
+        "x": 6,
+        "z": -2
+      },
+      {
+        "x": 8,
+        "z": -6
+      },
+      {
+        "x": 8,
+        "z": -17
+      },
+      {
+        "x": 1,
+        "z": -17
+      },
+      {
+        "x": 1,
+        "z": -15
+      },
+      {
+        "x": 1,
+        "z": -8.5
+      }
+    ],
+    "summit": [
+      {
+        "x": 8,
+        "z": -17
+      },
+      {
+        "x": 8,
+        "z": -19
+      },
+      {
+        "x": 19,
+        "z": -19
+      },
+      {
+        "x": 19,
+        "z": -10
+      },
+      {
+        "x": 18,
+        "z": -10
+      }
+    ]
+  }
+}

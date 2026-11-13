@@ -8,8 +8,7 @@ import {
   REACTION_COOLDOWN_MS,
   CHAT_MAX_LENGTH,
   WORLD_ACTIVITY_MOVE_DURATION_MS,
-  CHAT_MIN_COOLDOWN_MS,
-  CHAT_MAX_COOLDOWN_MS,
+  CHAT_COOLDOWN_MS,
   TICK_RATE,
   type ActionResult,
   type WorldInfo,
@@ -398,7 +397,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     const expires = player.chatExpiresAtTick;
     expect(player.chatText).toBe('Привет, <b>сосед</b>! 🙂');
     expect(observer.state.players.get(observer.sessionId)!.chatText).toBe('');
-    expect(results[0]).toMatchObject({ ok: true, retryAfterMs: CHAT_MIN_COOLDOWN_MS });
+    expect(results[0]).toMatchObject({ ok: true, retryAfterMs: CHAT_COOLDOWN_MS });
     expect(expires).toBe(0);
     send(1, 'Повтор');
     send(2, 'Следующее');
@@ -424,7 +423,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     const late = await join();
     expect(late.state.players.get(sender.sessionId)!.chatExpiresAtTick).toBe(expires);
     expect(late.state.players.get(sender.sessionId)!.chatText).toBe(player.chatText);
-    await sleep(CHAT_MIN_COOLDOWN_MS + 200);
+    await sleep(CHAT_COOLDOWN_MS + 200);
     expect(player.chatText).toBe('Привет, <b>сосед</b>! 🙂');
     expect(player.chatExpiresAtTick).toBe(0);
     send(10, 'Новое сообщение без движения');
@@ -466,7 +465,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     send(11, 'я'.repeat(CHAT_MAX_LENGTH));
     await until(() => player.chatSequence === 3 && player.chatExpiresAtTick > 0);
     expect(player.chatText).toHaveLength(CHAT_MAX_LENGTH);
-    expect(results.at(-1)).toMatchObject({ ok: true, retryAfterMs: CHAT_MAX_COOLDOWN_MS });
+    expect(results.at(-1)).toMatchObject({ ok: true, retryAfterMs: CHAT_COOLDOWN_MS });
     expect(player.chatExpiresAtTick - observer.state.serverTick).toBeLessThanOrEqual(
       (WORLD_ACTIVITY_MOVE_DURATION_MS * TICK_RATE) / 1000,
     );

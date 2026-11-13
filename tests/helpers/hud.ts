@@ -25,13 +25,13 @@ export async function openChat(page: Page): Promise<void> {
 }
 
 /**
- * The chat field stays open after sending: an accepted message clears it. Waits for that, then
- * collapses the field with Escape.
+ * An accepted message clears the field. Waits for that, then makes sure the field is collapsed:
+ * Enter already collapses it by default, Escape covers Shift+Enter and the «never» setting.
  */
 export async function chatSent(page: Page): Promise<void> {
   await page.waitForFunction(
     () => (document.getElementById('chat-input') as HTMLInputElement).value === '',
   );
-  await page.keyboard.press('Escape');
+  if (await page.locator('#chat-console').isVisible()) await page.keyboard.press('Escape');
   await page.locator('#chat-console').waitFor({ state: 'hidden' });
 }

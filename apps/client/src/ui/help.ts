@@ -1,6 +1,7 @@
 import { isTextInput } from '../input/keyboard';
 import type { UiThemeController, UiThemeMode } from './ui-theme';
 import type { GamepadNavigationItem } from './gamepad-navigation';
+import { isChatCloseMode, type ChatSettings } from './chat-settings';
 
 const TIP_KEY = 'su:help-tip:v1';
 const TIP_MS = 9000;
@@ -33,6 +34,7 @@ export class HelpMenu {
     private readonly focusWorld: () => void,
     private readonly onOpen?: () => void,
     theme?: UiThemeController,
+    chat?: ChatSettings,
   ) {
     const options = { signal: this.controller.signal };
     for (const element of [this.audio, this.respawn, this.leave]) {
@@ -68,6 +70,27 @@ export class HelpMenu {
       options,
     );
     this.quality.addEventListener('change', () => this.renderQuality(), options);
+    if (chat) {
+      const buttons = Array.from(
+        this.panel.querySelectorAll<HTMLButtonElement>('[data-chat-close]'),
+      );
+      const render = () => {
+        for (const button of buttons)
+          button.setAttribute('aria-pressed', String(button.dataset.chatClose === chat.closeMode));
+      };
+      for (const button of buttons)
+        button.addEventListener(
+          'click',
+          () => {
+            const mode = button.dataset.chatClose;
+            if (isChatCloseMode(mode)) chat.setCloseMode(mode);
+          },
+          options,
+        );
+      const unsubscribe = chat.onChange(render);
+      this.controller.signal.addEventListener('abort', unsubscribe);
+      render();
+    }
     if (theme) {
       const buttons = Array.from(
         this.panel.querySelectorAll<HTMLButtonElement>('[data-theme-mode]'),

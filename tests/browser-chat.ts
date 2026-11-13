@@ -150,29 +150,35 @@ try {
   await input.press('Enter');
   const bubble = `.player-chat[data-entity-id="${senderId}"]`;
   await Promise.all([sender.locator(bubble).waitFor(), observer.locator(bubble).waitFor()]);
-  // The field stays open after sending, empty and focused, until the player collapses it.
-  await sender.locator('#chat-input:focus').waitFor();
-  assert.equal(await input.inputValue(), '');
-  assert.equal(await sender.locator('#chat-console').isVisible(), true);
+  // By default Enter sends and collapses the field, returning focus to the world.
+  await sender.locator('#chat-console').waitFor({ state: 'hidden' });
+  await sender.locator('#world:focus').waitFor();
+  await sender.waitForFunction(
+    () => (document.getElementById('chat-input') as HTMLInputElement).value === '',
+  );
   assert.equal(await observer.locator(bubble).textContent(), message);
   assert.equal(await observer.locator(`${bubble} b`).count(), 0);
   await observer.locator('#chat-log .chat-line').filter({ hasText: message }).waitFor();
   await sender.locator('#chat-log .chat-line').filter({ hasText: 'Вы:' }).waitFor();
+  // Shift+Enter sends after the one-second cooldown and keeps the field open, empty and focused;
+  // the new message replaces the one still above the head.
+  await sender.keyboard.press('t');
+  await input.fill('Следующее');
+  await sender.locator('#chat-send:not([disabled])').waitFor({ timeout: 2000 });
+  await input.press('Shift+Enter');
+  await observer.locator(bubble).filter({ hasText: 'Следующее' }).waitFor();
+  await sender.locator('#chat-input:focus').waitFor();
+  assert.equal(await input.inputValue(), '');
+  assert.equal(await sender.locator('#chat-console').isVisible(), true);
   await sender.keyboard.press('Escape');
   assert.equal(await sender.locator('#chat-console').isVisible(), false);
   assert.equal(await sender.locator('#world:focus').count(), 1);
-  await sender.keyboard.press('t');
-  await input.fill('Следующее');
-  assert.equal(await sender.locator('#chat-send').isDisabled(), true);
-  await sender.keyboard.press('Escape');
   await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 300);
-  assert.equal(await sender.locator(bubble).textContent(), message);
-  assert.equal(await observer.locator(bubble).textContent(), message);
-  await sender.keyboard.press('t');
-  await input.fill('Следующее');
-  assert.equal(await sender.locator('#chat-send').isDisabled(), false);
-  await sender.keyboard.press('Escape');
-  checks.push('stationary messages outlive five seconds and do not block the next message forever');
+  assert.equal(await sender.locator(bubble).textContent(), 'Следующее');
+  assert.equal(await observer.locator(bubble).textContent(), 'Следующее');
+  checks.push(
+    'Enter sends and collapses, Shift+Enter sends and keeps the field open, a new message replaces the visible one, and stationary messages outlive five seconds',
+  );
   await sender.keyboard.press('r');
   await sender.locator('.reaction-choice[data-reaction-id="hello"]').click();
   await observer.locator(`.player-reaction[data-entity-id="${senderId}"]`).waitFor();
@@ -222,7 +228,7 @@ try {
   await sender.locator('#chat-send:not([disabled])').waitFor();
   await input.press('Enter');
   await observer.locator(bubble).waitFor();
-  await sender.keyboard.press('Escape');
+  await sender.locator('#chat-console').waitFor({ state: 'hidden' });
   assert.equal((await observer.locator(bubble).textContent())!.length, CHAT_MAX_LENGTH);
   for (const page of [sender, observer]) {
     assert.equal(

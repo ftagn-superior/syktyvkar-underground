@@ -42,8 +42,7 @@ import {
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
   RESPAWN_COOLDOWN_MS,
-  REACTION_COOLDOWN_MS,
-  CHAT_MAX_COOLDOWN_MS,
+  ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
   DEFAULT_DAY_CLOCK,
   type DayClock,
@@ -740,24 +739,29 @@ export class GameSession {
           this.onActionFeedback?.(result.ok ? 'click' : 'error');
           return;
         }
-        if (this.chatRequest.settle(result, this.pendingChatCommand ? 0 : CHAT_MAX_COOLDOWN_MS)) {
+        if (
+          this.chatRequest.settle(
+            result,
+            this.pendingChatCommand ? 0 : ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
+          )
+        ) {
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(
               result.code === 'RATE_LIMITED'
-                ? 'Дождитесь окончания показа текущего сообщения.'
+                ? 'Слишком часто — подождите немного.'
                 : (messages[result.code] ?? result.code),
             );
           this.onChatResult?.(result);
           if (!result.ok) this.onActionFeedback?.('error');
           return;
         }
-        if (this.reactionRequest.settle(result, REACTION_COOLDOWN_MS)) {
+        if (this.reactionRequest.settle(result, ACTIVITY_FLOOD_MAX_COOLDOWN_MS)) {
           if (!result.ok) this.onActionFeedback?.('error');
           if (!result.ok && result.code)
             this.onNotice(
               result.code === 'RATE_LIMITED'
-                ? 'Дождитесь окончания текущей реакции.'
+                ? 'Слишком часто — подождите немного.'
                 : (messages[result.code] ?? result.code),
             );
           return;
@@ -1502,14 +1506,9 @@ export class GameSession {
     );
   }
   reactionStatus(): { pending: boolean; remainingMs: number; available: boolean } {
-    const self = this.room?.state?.players?.get(this.room.sessionId);
     return {
       pending: this.reactionRequest.pending,
-      remainingMs: Math.max(
-        0,
-        this.reactionRequest.remainingMs(),
-        this.displayRemainingMs(self?.reactionExpiresAtTick ?? 0),
-      ),
+      remainingMs: this.reactionRequest.remainingMs(),
       available: this.state === 'playing' && this.inputEnabled && !this.stalled,
     };
   }
@@ -1522,13 +1521,10 @@ export class GameSession {
     const playback = presentation?.animation;
     const definition = findAnimation(playback?.animationId);
     const busy =
-      !!definition &&
-      !!playback &&
-      playback.displayTick <
-        Math.max(
-          playback.startedAtTick + (definition.cooldownMs * TICK_RATE) / 1000,
-          playback.endsAtTick,
-        );
+      this.animationRequest.remainingMs() > 0 ||
+      (!!definition &&
+        !!playback &&
+        playback.displayTick < playback.startedAtTick + (definition.cooldownMs * TICK_RATE) / 1000);
     const state = player && this.simulation ? this.physics?.getState() : undefined;
     return {
       available: this.state === 'playing' && this.inputEnabled && !this.stalled,
@@ -1592,14 +1588,9 @@ export class GameSession {
     } satisfies ReactionRequest);
   }
   chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
-    const self = this.room?.state?.players?.get(this.room.sessionId);
     return {
       pending: this.chatRequest.pending,
-      remainingMs: Math.max(
-        0,
-        this.chatRequest.remainingMs(),
-        this.displayRemainingMs(self?.chatExpiresAtTick ?? 0),
-      ),
+      remainingMs: this.chatRequest.remainingMs(),
       available:
         this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused,
     };
@@ -1693,6 +1684,7 @@ export class GameSession {
     this.onInventoryChange?.();
     this.respawnRequest.reset();
     this.reactionRequest.reset();
+    this.animationRequest.reset();
     this.chatRequest.reset();
     if (!preserveRecovery) this.stopRecoveryCheck();
     this.predictor?.dispose();

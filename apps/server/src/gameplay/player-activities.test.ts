@@ -60,32 +60,63 @@ describe('authoritative player activities', () => {
     expect(player.animationSequence).toBe(1);
   });
 
-  it('keeps selection cooldowns independent and limits replacements until movement expiry', () => {
+  it('keeps one-second selection cooldowns independent and replaces activities on screen', () => {
     const { player, actual, activities } = fixture();
-    expect(activities.react(player, 'hello', 0)).toEqual({ ok: true, retryAfterMs: 3000 });
+    expect(activities.react(player, 'hello', 0)).toEqual({ ok: true, retryAfterMs: 1000 });
     expect(activities.react(player, 'love', 1)).toEqual({
       ok: false,
       code: 'RATE_LIMITED',
-      retryAfterMs: 2984,
+      retryAfterMs: 984,
     });
-    expect(activities.chat(player, 'Привет', 1)).toEqual({ ok: true, retryAfterMs: 5000 });
-    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 1)).toEqual({ ok: true });
-    expect(activities.react(player, 'love', 180).ok).toBe(true);
+    expect(activities.chat(player, 'Привет', 1)).toEqual({ ok: true, retryAfterMs: 1000 });
+    expect(activities.chat(player, 'я'.repeat(200), 2).code).toBe('RATE_LIMITED');
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 1)).toEqual({
+      ok: true,
+      retryAfterMs: 1000,
+    });
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'clap', 30)).toEqual({
+      ok: false,
+      code: 'RATE_LIMITED',
+      retryAfterMs: 517,
+    });
+    expect(activities.react(player, 'love', 60).ok).toBe(true);
     actual.velocity.x = 4;
-    updatePlayerActivities(player, actual, 181);
-    expect(activities.react(player, 'hello', 400)).toEqual({
-      ok: false,
-      code: 'RATE_LIMITED',
-      retryAfterMs: 1350,
-    });
-    expect(activities.chat(player, 'Ещё', 400)).toEqual({
-      ok: false,
-      code: 'RATE_LIMITED',
-      retryAfterMs: 1350,
-    });
-    updatePlayerActivities(player, actual, 481);
-    expect(activities.react(player, 'hello', 481).ok).toBe(true);
-    expect(activities.chat(player, 'Ещё', 481).ok).toBe(true);
+    updatePlayerActivities(player, actual, 61);
+    expect(player.chatExpiresAtTick).toBe(361);
+    // A still-visible reaction, animation or message is replaced instead of blocking the next one.
+    expect(activities.react(player, 'hello', 300).ok).toBe(true);
+    expect(activities.chat(player, 'Ещё', 300).ok).toBe(true);
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'clap', 300).ok).toBe(true);
+    expect([player.reactionId, player.chatText, player.animationId]).toEqual([
+      'hello',
+      'Ещё',
+      'clap',
+    ]);
+    expect([
+      player.reactionExpiresAtTick,
+      player.chatExpiresAtTick,
+      player.animationEndsAtTick,
+    ]).toEqual([0, 0, 0]);
+  });
+
+  it('grows the cooldown of a session that keeps spamming and forgives it after a pause', () => {
+    const { player, actual, activities } = fixture();
+    const waits: number[] = [];
+    let tick = 0;
+    for (let i = 0; i < 10; i++) {
+      const sent = activities.chat(player, `Спам ${i}`, tick);
+      expect(sent.ok).toBe(true);
+      waits.push(sent.retryAfterMs!);
+      // Rejected early attempts neither succeed nor change the wait.
+      expect(activities.chat(player, 'Ещё', tick + 1).code).toBe('RATE_LIMITED');
+      tick += Math.ceil((sent.retryAfterMs! * TICK_RATE) / 1000);
+    }
+    expect(waits.slice(0, 5)).toEqual([1000, 1000, 1000, 1000, 1000]);
+    expect(waits.at(-1)).toBeGreaterThan(2000);
+    // Kinds are independent: chat spam does not slow reactions or animations.
+    expect(activities.react(player, 'hello', tick)).toEqual({ ok: true, retryAfterMs: 1000 });
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', tick).retryAfterMs).toBe(1000);
+    expect(activities.chat(player, 'Спокойно', tick + 60 * TICK_RATE).retryAfterMs).toBe(1000);
   });
 
   it('distinguishes animation interruptions from natural completion at the same tick', () => {
@@ -99,9 +130,9 @@ describe('authoritative player activities', () => {
     ]);
     cancelAnimation(player, 11);
     expect(player.animationSequence).toBe(2);
-    activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 12);
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 65).ok).toBe(true);
     actual.velocity.x = 1;
-    updatePlayerActivities(player, actual, 13);
+    updatePlayerActivities(player, actual, 66);
     const end = player.animationEndsAtTick;
     cancelAnimation(player, end);
     expect(player.animationSequence).toBe(3);
@@ -135,13 +166,15 @@ describe('authoritative player activities', () => {
     );
     expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 1).ok).toBe(true);
     cancelAnimation(player, 2);
+    // An interrupted animation still spends its cooldown.
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 2).code).toBe('RATE_LIMITED');
     actual.grounded = false;
-    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 2).code).toBe(
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 61).code).toBe(
       'ANIMATION_NOT_ALLOWED',
     );
     actual.grounded = true;
     player.skinId = 'unsupported';
-    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 2).code).toBe(
+    expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 61).code).toBe(
       'ANIMATION_NOT_ALLOWED',
     );
   });

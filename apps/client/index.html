@@ -354,6 +354,28 @@
               </button>
             </div>
           </div>
+          <div class="setting" data-touch-hidden>
+            <span class="setting-label" id="chat-close-label">Закрывать чат после отправки</span>
+            <div class="seg" role="group" aria-labelledby="chat-close-label">
+              <button class="ui-btn" type="button" data-chat-close="enter" aria-pressed="true">
+                Enter
+              </button>
+              <button
+                class="ui-btn"
+                type="button"
+                data-chat-close="shift-enter"
+                aria-pressed="false"
+              >
+                Shift+Enter
+              </button>
+              <button class="ui-btn" type="button" data-chat-close="never" aria-pressed="false">
+                Никогда
+              </button>
+            </div>
+          </div>
+          <p class="help-note" data-touch-hidden>
+            Другое сочетание отправляет сообщение, не закрывая чат.
+          </p>
           <label class="setting" for="quality"
             ><span class="setting-label">Качество графики</span>
             <select id="quality" class="ui-input">

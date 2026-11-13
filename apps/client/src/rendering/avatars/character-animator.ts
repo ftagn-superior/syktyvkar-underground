@@ -22,6 +22,8 @@ export type AvatarMotion = Pick<
   Pick<DisplayPlayer, 'animation'> &
   Partial<Pick<DisplayPlayer, 'entityId'>>;
 const TAU = Math.PI * 2;
+/** Путь сворачивается ради точности float; рывок колеса раз в километр незаметен. */
+const TRAVEL_WRAP = 1000;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const angleDifference = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
@@ -37,6 +39,8 @@ export class CharacterAnimator {
   readonly footsteps: FootstepMarkers = { count: 0, running: false };
   private previous?: { x: number; z: number; revision: number; motionRevision: number };
   private phase = 0;
+  /** Путь по земле в метрах для колёс и других вращающихся деталей. */
+  private distance = 0;
   private speed = 0;
   private movement = 0;
   private running = 0;
@@ -53,6 +57,10 @@ export class CharacterAnimator {
     private readonly walkSpeed: number,
     private readonly sprintSpeed: number,
   ) {}
+
+  get travel(): number {
+    return this.distance;
+  }
 
   resetMotion(): void {
     this.previous = undefined;
@@ -118,6 +126,7 @@ export class CharacterAnimator {
       );
       this.running += (run - this.running) * blend;
       this.airborne += ((frame.grounded ? 0 : 1) - this.airborne) * blend;
+      if (frame.grounded) this.distance = (this.distance + this.speed * delta) % TRAVEL_WRAP;
       if (moving) {
         const cyclesPerSecond = 1.85 * clamp(this.speed / this.walkSpeed) + 0.95 * this.running;
         const nextPhase = this.phase + TAU * cyclesPerSecond * delta;

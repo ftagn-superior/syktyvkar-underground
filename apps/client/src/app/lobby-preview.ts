@@ -1,11 +1,11 @@
 import type { AvatarSkinId, SimulationConfig } from '@su/contracts';
 import { CharacterPreview } from '../ui/character-preview';
-import { applyAccent } from '../ui/theme';
+import { applyPlayerColor } from '../ui/theme';
 
-/** Owns the lobby-only scene and the accent shared with in-world UI. */
+/** Owns the lobby-only scene and the colour used by the player's sign and character. */
 export class LobbyPreview {
   private preview?: CharacterPreview;
-  private accent = '';
+  private playerColor = '';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -13,13 +13,13 @@ export class LobbyPreview {
   ) {}
 
   get color(): string {
-    return this.accent || '#6EE0C4';
+    return this.playerColor || '#6EE0C4';
   }
 
-  setAccent(color: string): void {
-    if (color === this.accent) return;
-    this.accent = color;
-    applyAccent(color);
+  setPlayerColor(color: string): void {
+    if (color === this.playerColor) return;
+    this.playerColor = color;
+    applyPlayerColor(color);
   }
 
   update(
@@ -32,7 +32,7 @@ export class LobbyPreview {
       this.dispose();
       return;
     }
-    this.setAccent(color);
+    this.setPlayerColor(color);
     if (!this.preview && character) {
       try {
         this.canvas.hidden = false;

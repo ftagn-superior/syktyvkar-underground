@@ -4,10 +4,11 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { Page } from 'playwright';
+import type { WorldManifest } from '../packages/contracts/src/index.js';
 import { buildWorld } from '../tools/world-build/src/index.js';
 import { createGameServer } from './helpers/game-server.js';
 import { holdCamera, rotateCamera, waitForCamera } from './helpers/camera.js';
-import { hudClick } from './helpers/hud.js';
+import { hudClick, setRenderQuality } from './helpers/hud.js';
 
 // A separate test release changes only placements/spawns; controls still use real keyboard input.
 const temporary = await mkdtemp(join(tmpdir(), 'su-buildings-browser-'));
@@ -39,22 +40,34 @@ try {
   const output = join(temporary, 'release');
   await buildWorld(source, output);
   app = await createGameServer({ port: 0, worldDirectory: output });
+  const info = await fetch(`${app.url}/api/world`).then((response) => response.json());
+  const manifestUrl = new URL(info.manifestUrl, app.url);
+  const manifest: WorldManifest = await fetch(manifestUrl).then((response) => response.json());
+  const graphicsFiles = new Set(
+    manifest.cells.flatMap(
+      (cell) =>
+        cell.graphicsPacks ??
+        cell.assetIds.flatMap((id) => {
+          const file = manifest.assets[id].modelFile;
+          return file ? [file] : [];
+        }),
+    ),
+  );
+  const expectedGraphics = [...graphicsFiles].map((file) => new URL(file, manifestUrl).href).sort();
   const contexts = await Promise.all(
     [0, 1].map(() => browser.newContext({ viewport: { width: 1280, height: 800 } })),
   );
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
-  const glbRequests: string[][] = [[], []];
+  const graphicsRequests: string[][] = [[], []];
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('request', (request) => {
-      if (request.url().endsWith('.glb')) glbRequests[i].push(request.url());
+      if (/\.(glb|pack)$/.test(request.url())) graphicsRequests[i].push(request.url());
     });
+    await page.addInitScript(() => localStorage.setItem('su:render-quality:v1', 'economy'));
     await page.goto(`${app.url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').waitFor({ timeout: 30_000 });
-    await hudClick(page, '#diagnostics-toggle');
-    await page.locator('#quality').selectOption('economy');
-    await hudClick(page, '#diagnostics-toggle');
     await page.locator('#join').click();
     await page.waitForFunction(
       () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
@@ -69,7 +82,11 @@ try {
       data.assets.reduce((sum: number, asset: any) => sum + asset.loads, 0),
       2,
     );
-    assert.equal(glbRequests[i].length, 2, 'one GLB fetch per model despite duplicate instances');
+    assert.deepEqual(
+      graphicsRequests[i].sort(),
+      expectedGraphics,
+      'each published graphics resource is fetched once despite duplicate building instances',
+    );
   }
   checks.push('three placed buildings reuse two verified GLB models per client');
   await pages[0].waitForFunction(
@@ -86,18 +103,14 @@ try {
   checks.push(
     'occlusion is local to the player and does not fade another instance of the same asset',
   );
-  await hudClick(pages[0], '#diagnostics-toggle');
-  await pages[0].locator('#quality').selectOption('standard');
-  await hudClick(pages[0], '#diagnostics-toggle');
+  await setRenderQuality(pages[0], 'standard');
   await pages[0].waitForTimeout(800);
   assert.ok(
     (await buildings(pages[0])).buildings.find((b: any) => b.entityId === original.entityId)
       .opacity < 0.4,
   );
   await pages[0].screenshot({ path: 'output/playwright/buildings/occluded-standard.png' });
-  await hudClick(pages[0], '#diagnostics-toggle');
-  await pages[0].locator('#quality').selectOption('economy');
-  await hudClick(pages[0], '#diagnostics-toggle');
+  await setRenderQuality(pages[0], 'economy');
   checks.push('both quality profiles retain the same occlusion behavior');
 
   // Camera moves without changing the authoritative position, and completes a full circuit.
@@ -235,7 +248,7 @@ try {
     result: 'passed',
     checks,
     browserErrors: errors,
-    glbRequests: glbRequests.map((items) => items.length),
+    graphicsRequests: graphicsRequests.map((items) => items.length),
     rendering: (await report(page)).rendering,
   };
   await writeFile(

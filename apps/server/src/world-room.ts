@@ -61,6 +61,7 @@ import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
 import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
 import { ActionLedger, rememberResult } from './gameplay/action-ledger.js';
+import { WorldClock } from './gameplay/world-clock.js';
 import {
   PlayerActivities,
   cancelAnimation,
@@ -104,6 +105,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private definition!: WorldDefinition;
   private items!: ItemRuntime;
   private itemRequests = 0;
+  private readonly dayClock = new WorldClock(this.state);
   private staticPlacement?: LiveStaticPlacement;
   private layoutGroup?: Set<string>;
   private layoutFailureReported = false;
@@ -770,7 +772,17 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       session.auth.expiresAt <= Date.now() ||
       this.accounts?.wasRevoked(session.auth.authSessionId)
     )
-      return fail('AUTH_REQUIRED', giveFailureMessage('AUTH_REQUIRED'));
+      return fail(
+        'AUTH_REQUIRED',
+        command.kind === 'time'
+          ? 'Чтобы управлять временем, войдите через Telegram.'
+          : giveFailureMessage('AUTH_REQUIRED'),
+      );
+    if (command.kind === 'time')
+      return this.finishAction(client, session, {
+        requestId,
+        ...this.dayClock.command(command.action, Date.now()),
+      });
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();
       if (!effect) return fail('COMMAND_DISABLED', 'Размещение скамейки недоступно в этом мире.');

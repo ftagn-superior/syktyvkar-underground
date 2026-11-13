@@ -67,12 +67,17 @@ try {
   for (let index = 1; index < REACTIONS.length; index++) await sender.keyboard.press('Tab');
   assert.equal(await sender.locator('.reaction-choice:last-child:focus').count(), 1);
   assert.equal(
-    await sender.locator('#reactions-panel').evaluate((panel) => panel.scrollTop > 0),
+    await sender
+      .locator('#reactions-panel .catalog-scroll')
+      .evaluate((panel) => panel.scrollTop > 0),
     true,
   );
   await sender.keyboard.press('Escape');
   await sender.keyboard.press('r');
-  assert.equal(await sender.locator('#reactions-panel').evaluate((panel) => panel.scrollTop), 0);
+  assert.equal(
+    await sender.locator('#reactions-panel .catalog-scroll').evaluate((panel) => panel.scrollTop),
+    0,
+  );
   assert.equal(await sender.locator('.reaction-choice:first-child:focus').count(), 1);
   checks.push(
     'Tab reaches the last reaction and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges',

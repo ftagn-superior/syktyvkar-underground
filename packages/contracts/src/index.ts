@@ -12,6 +12,7 @@ export * from './world-types.js';
 export * from './input.js';
 export * from './session.js';
 export * from './activity.js';
+export * from './day-clock.js';
 export { validateWorld, validateWorldHeader, validateEntities, canonicalJson } from './world.js';
 export {
   worldNeighborhood,

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { hudClick } from './helpers/hud.js';
+import { hudClick, setRenderQuality } from './helpers/hud.js';
 
 if (!process.env.SU_TEST_DATABASE_URL) throw new Error('SU_TEST_DATABASE_URL is required.');
 const app = await createGameServer({
@@ -290,11 +290,8 @@ try {
   record('help and all social/item shortcuts respect first-person action limits');
 
   const resourceCounts: unknown[] = [];
-  for (const quality of ['economy', 'standard', 'economy', 'standard']) {
-    await hudClick(first, '#diagnostics-toggle');
-    await first.locator('#quality').selectOption(quality);
-    await hudClick(first, '#diagnostics-toggle');
-    await first.keyboard.press('h');
+  for (const quality of ['economy', 'standard', 'economy', 'standard'] as const) {
+    await setRenderQuality(first, quality);
     await first.waitForTimeout(150);
     const data = await rendering(first);
     assert.equal(data.camera.mode, 'first-person');
@@ -317,10 +314,7 @@ try {
   record('both qualities preserve projection and register both cameras after pipeline recreation');
 
   // Keep the movement/resource route within this software GPU's frame budget.
-  await hudClick(first, '#diagnostics-toggle');
-  await first.locator('#quality').selectOption('economy');
-  await hudClick(first, '#diagnostics-toggle');
-  await first.keyboard.press('h');
+  await setRenderQuality(first, 'economy');
 
   await first.locator('#overview-button').click();
   assert.equal((await controls(first)).view, 'overview');
@@ -371,10 +365,7 @@ try {
   });
   record('a rejected capture request leaves a usable overview with feedback');
 
-  await hudClick(first, '#diagnostics-toggle');
-  await first.locator('#quality').selectOption('economy');
-  await hudClick(first, '#diagnostics-toggle');
-  await first.keyboard.press('h');
+  await setRenderQuality(first, 'economy');
   await first.mouse.wheel(0, -5000);
   await enter(first);
   await first.keyboard.down('w');

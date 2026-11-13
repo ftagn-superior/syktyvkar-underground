@@ -32,7 +32,8 @@ import { Frustum } from '@babylonjs/core/Maths/math.frustum';
 import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
-import { WorldLighting } from './lighting';
+import { WorldEnvironment } from './environment/world-environment';
+import type { DayClock } from '@su/contracts';
 import { BuildingViews } from './buildings';
 import {
   CameraOrbit,
@@ -43,6 +44,7 @@ import {
 } from './camera-controller';
 import type { DisplayEntity, DisplayPlayer } from '../presentation/display-state';
 import { ReactionSoundGate } from '../presentation/reaction-sounds';
+import { createSign } from '../ui/player-sign';
 import type { GameAudio } from '../audio/game-audio';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
@@ -86,7 +88,7 @@ export class WorldView {
   private pitch = 0;
   private eyePosition?: Vec3;
   private overlayTest?: (from: Vec3, to: Vec3, targetId?: string) => boolean;
-  private readonly lighting: WorldLighting;
+  private readonly environment: WorldEnvironment;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
@@ -185,12 +187,18 @@ export class WorldView {
     this.eyeCamera.minZ = FIRST_PERSON.minZ;
     this.eyeCamera.maxZ = FIRST_PERSON.maxZ;
     this.scene.activeCamera = this.camera;
-    this.lighting = new WorldLighting(this.scene, this.camera, [this.eyeCamera]);
-    this.shadow = this.lighting.shadow;
+    this.environment = new WorldEnvironment(this.scene, this.camera, [this.eyeCamera]);
+    this.shadow = this.environment.shadow;
     this.applyQuality();
     this.sizeCamera();
-    this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
-    this.statics = new StaticViews(this.scene, this.shadow);
+    // Неподвижный мир отбрасывает тени в кэшируемую карту; аватары и предметы — в покадровую.
+    this.buildings = new BuildingViews(
+      this.scene,
+      this.environment.staticShadow,
+      definition,
+      this.radial,
+    );
+    this.statics = new StaticViews(this.scene, this.environment.staticShadow);
     this.sizeCamera();
     if ('entities' in definition) {
       for (const entity of definition.entities)
@@ -247,7 +255,12 @@ export class WorldView {
         );
       }
       const active = this.activeCamera;
-      this.lighting.follow(this.ownPosition ?? this.target);
+      this.environment.update({
+        target: this.ownPosition ?? this.target,
+        // On foot the cloud shadows remain, while the overhead layer is hidden.
+        zoom: this.firstPerson ? 0 : this.zoom,
+        visible: this.radial,
+      });
       active.getViewMatrix(true);
       active.getProjectionMatrix(true);
       this.scene.updateTransformMatrix(true);
@@ -294,13 +307,25 @@ export class WorldView {
     const settings = renderQualitySettings(this.quality);
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
-    this.lighting.setQuality(this.quality);
+    this.environment.setQuality(this.quality);
   }
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
     this.quality = quality;
     this.applyQuality();
     this.sizeCamera();
+  }
+  /** Holds the world at one game hour (0..24); `undefined` returns to the running clock. */
+  setTimeOfDay(hour?: number): void {
+    this.environment.setTimeOfDay(hour);
+  }
+  /** Игровой час последнего кадра (0..24): по нему интерфейс выбирает тему и показывает часы. */
+  get hour(): number {
+    return this.environment.hour;
+  }
+  /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
+  setDayClock(clock: DayClock): void {
+    this.environment.setDayClock(clock);
   }
   get cameraAngle(): number {
     return this.firstPerson ? orbitFromYaw(this.yaw) : this.cameraOrbit.angle;
@@ -452,6 +477,7 @@ export class WorldView {
     );
   }
   renderingDiagnostics() {
+    const shadows = this.environment.shadowDiagnostics();
     return {
       quality: this.quality,
       canvasSize: { width: this.canvas.clientWidth, height: this.canvas.clientHeight },
@@ -478,7 +504,8 @@ export class WorldView {
       geometries: this.scene.geometries.length,
       nodes: this.scene.transformNodes.length,
       textures: this.scene.textures.length,
-      shadowCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
+      shadowCasters: shadows.staticCasters + shadows.dynamicCasters,
+      shadowMaps: shadows,
       streaming: {
         drawRadius: this.graphicalArea().drawRadius,
         readyRadius: this.streamingRadius,
@@ -669,21 +696,19 @@ export class WorldView {
         const offline = entity.connected === false;
         const key = `${name}|${own}|${offline}|${entity.color ?? ''}`;
         if (key !== view.labelText) {
-          // Each tag carries the player's own colour as its gem; own tag adds "· Вы".
-          const gem = document.createElement('span');
-          gem.className = 'su-gem sm';
-          if (entity.color) gem.style.setProperty('--gem', entity.color);
+          // Знак игрока и имя; своя подпись показывает «Вы».
           const text = document.createElement('span');
-          text.textContent = name;
-          const suffixes = [...(own ? ['· Вы'] : []), ...(offline ? ['· нет связи'] : [])].map(
-            (suffix) => {
-              const node = document.createElement('span');
-              node.className = 'you';
-              node.textContent = suffix;
-              return node;
-            },
-          );
-          view.label.replaceChildren(gem, text, ...suffixes);
+          text.textContent = own ? 'Вы' : name;
+          const suffixes = offline
+            ? [
+                Object.assign(document.createElement('span'), {
+                  className: 'note',
+                  textContent: '· нет связи',
+                }),
+              ]
+            : [];
+          view.label.replaceChildren(createSign(name, entity.color ?? ''), text, ...suffixes);
+          view.label.dataset.name = name;
           view.labelText = key;
         }
       }
@@ -1083,7 +1108,7 @@ export class WorldView {
     this.statics.dispose();
     this.instrumentation.dispose();
     const releaseGraphics = () => {
-      this.lighting.dispose();
+      this.environment.dispose();
       this.scene.dispose();
       this.engine.dispose();
     };

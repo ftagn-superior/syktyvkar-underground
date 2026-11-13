@@ -89,7 +89,7 @@ try {
   await page.locator('#join').click();
   await playing(page);
   await page.waitForFunction(
-    () => document.querySelector('#player-count')?.textContent === '1 / 8',
+    () => document.querySelector('#player-count')?.textContent === '1 из 8',
   );
   assert.equal(await page.locator('#diagnostics').isHidden(), true);
   checks.push('player count updates while the diagnostics panel is closed');
@@ -148,8 +148,8 @@ try {
   assert.ok(Date.now() - respawnAt >= 2800, 'cooldown covers the server interval');
   checks.push('respawn confirms once, displays cooldown, and becomes available again');
 
-  await hudClick(page, '#diagnostics-toggle');
   const standard = await report(page);
+  if (!(await page.locator('#help-panel').isVisible())) await page.locator('#help-toggle').click();
   await page.locator('#quality').selectOption('economy');
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__.report().rendering.quality === 'economy',
@@ -162,8 +162,9 @@ try {
   await playing(page);
   assert.equal((await snapshot(page)).authoritative.entityId, identity);
   assert.equal((await report(page)).rendering.quality, 'economy');
-  await hudClick(page, '#diagnostics-toggle');
+  await page.locator('#help-toggle').click();
   assert.equal(await page.locator('#quality').inputValue(), 'economy');
+  await hudClick(page, '#diagnostics-toggle');
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.locator('#download-report').click(),
@@ -197,16 +198,18 @@ try {
   checks.push(
     'economy changes render settings, survives reload, and exports a bounded diagnostic report',
   );
-  await hudClick(page, '#diagnostics-toggle');
+  await page.locator('#help-toggle').click();
+  assert.equal(await page.locator('#diagnostics').isHidden(), true);
 
   await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle']);
   await page.screenshot({ path: 'output/playwright/polish/playing-1280x600.png' });
   await page.setViewportSize({ width: 640, height: 300 });
-  await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle']);
+  await reachable(page, ['#respawn', '#leave', '#diagnostics-toggle', '#quality']);
   await hudClick(page, '#diagnostics-toggle');
-  await reachable(page, ['#quality', '#download-report']);
+  await reachable(page, ['#download-report']);
   await page.screenshot({ path: 'output/playwright/polish/diagnostics-640x300.png' });
-  await hudClick(page, '#diagnostics-toggle');
+  await page.locator('#help-toggle').click();
+  await page.locator('#help-close').click();
   await page.setViewportSize({ width: 1280, height: 600 });
   checks.push(
     'playing controls and diagnostics remain reachable in 1280×600 and 640×300 viewports',
@@ -244,9 +247,16 @@ try {
   );
 
   await hudClick(page, '#leave');
-  await page.setViewportSize({ width: 640, height: 300 });
-  await reachable(page, ['#join']);
-  await page.screenshot({ path: 'output/playwright/polish/welcome-640x300.png' });
+  for (const viewport of [
+    { width: 640, height: 300 },
+    { width: 1024, height: 500 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await reachable(page, ['#join']);
+    await page.screenshot({
+      path: `output/playwright/polish/welcome-${viewport.width}x${viewport.height}.png`,
+    });
+  }
   checks.push(
     'entry remains reachable in a reduced CSS viewport equivalent to a zoomed desktop window',
   );

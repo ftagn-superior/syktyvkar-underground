@@ -44,7 +44,14 @@ async function neutral(page: Page) {
   );
 }
 async function point(page: Page, selector: string) {
-  const box = (await page.locator(selector).boundingBox())!;
+  const target = page.locator(selector);
+  // Native CDP taps use fixed coordinates; the opening panel must stop scaling first.
+  await target.evaluate((node) =>
+    Promise.all(
+      (node.closest('.ui-pop')?.getAnimations() ?? []).map((animation) => animation.finished),
+    ),
+  );
+  const box = (await target.boundingBox())!;
   assert.ok(box, `${selector} has a hit area`);
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
@@ -87,8 +94,18 @@ class Fingers {
 async function touchLayout(page: Page) {
   const help = page.locator('#help-panel');
   if (await help.isVisible()) await page.locator('#help-close').tap();
-  for (const selector of ['#touch-stick', '#respawn', '#leave', '#diagnostics-toggle']) {
-    if (selector !== '#touch-stick' && !(await help.isVisible())) {
+  for (const selector of [
+    '#touch-stick',
+    '#inventory-toggle',
+    '#respawn',
+    '#leave',
+    '#diagnostics-toggle',
+  ]) {
+    if (
+      selector !== '#touch-stick' &&
+      selector !== '#inventory-toggle' &&
+      !(await help.isVisible())
+    ) {
       await page.locator('#help-toggle').tap();
       await help.evaluate((node) =>
         Promise.all(node.getAnimations().map((animation) => animation.finished)),
@@ -153,6 +170,21 @@ try {
   // Typing movement letters in a form never switches the input mode.
   await page.locator('#profile-name').fill('Touch WASD');
   assert.equal(await page.locator('body').getAttribute('data-input-mode'), 'touch');
+  // The scrollable lobby keeps the roster below the complete profile, including its entry button.
+  assert.equal(
+    await page.evaluate(() => {
+      const profile = document.querySelector('.l-card')!.getBoundingClientRect();
+      const roster = document.querySelector('.l-roster')!.getBoundingClientRect();
+      return roster.top >= profile.bottom;
+    }),
+    true,
+    'avatar choices do not overlap the profile or its entry button',
+  );
+  for (const skin of ['standard', 'minifigure']) {
+    const choice = page.locator(`input[name="avatar-skin"][value="${skin}"]`);
+    await choice.tap();
+    assert.equal(await choice.isChecked(), true, `${skin} can be selected by touch`);
+  }
   // Entering the world saves the edited profile.
   await page.locator('#join:not([disabled])').tap();
   await playing(page);
@@ -260,13 +292,14 @@ try {
     '#reactions-panel',
     '#animations-toggle',
     '#animations-panel',
-    '#inventory-toggle',
     '#inventory-panel',
-    '[aria-keyshortcuts="Z"]',
     '#item-placement',
     '#static-placement',
   ])
     assert.equal(await page.locator(selector).isHidden(), true, `${selector} remains unavailable`);
+  // The backpack button stays on screen for touch, but hardware keys do not open it.
+  assert.equal(await page.locator('#inventory-toggle').isVisible(), true);
+  assert.equal((await controls(page)).mode, 'touch');
   assert.equal(
     (await snapshot(page)).items.length,
     1,
@@ -277,7 +310,46 @@ try {
   await fingers.up(1);
   assert.equal(magnitude((await controls(page)).input), 0, 'left canvas is not a movement target');
   recordCheck(
-    'signed-in touch player cannot open social panels or inventory, collect or place through hotkeys or swipes',
+    'touch keeps social panels unavailable; hardware shortcuts and canvas swipes neither open the backpack nor collect or place items',
+  );
+
+  const touchItemId = (await snapshot(page)).items[0].entityId;
+  const pickup = page.locator('.su-ctx[aria-keyshortcuts="Z"]');
+  await pickup.waitFor({ state: 'visible' });
+  await pickup.tap();
+  await page.waitForFunction((itemId) => {
+    const state = (window as any).__SU_DEBUG__.snapshot();
+    return (
+      !state.itemPending &&
+      !state.storagePaused &&
+      state.items.length === 0 &&
+      state.inventory.slots
+        .flatMap((slot: any) => slot.items)
+        .some((item: any) => item.itemId === itemId)
+    );
+  }, touchItemId);
+  assert.equal((await controls(page)).mode, 'touch', 'pickup tap keeps touch controls');
+  await page.locator('#inventory-toggle').tap();
+  await page.locator('#inventory-panel').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#inventory-toggle').getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('#inventory-count').textContent(), '1');
+  const tile = page.locator('.inventory-choice');
+  assert.equal(await tile.getAttribute('aria-label'), 'Деревянный ящик, 1 шт.');
+  assert.equal(await tile.isDisabled(), true, 'touch backpack is for viewing collected items');
+  assert.match(await page.locator('#inventory-note').innerText(), /мышью и клавиатурой/);
+  // Exercise a real tap even though the disabled tile cannot produce a click.
+  const tilePoint = await point(page, '.inventory-choice');
+  await fingers.down(1, tilePoint.x, tilePoint.y);
+  await fingers.up(1);
+  for (const key of ['x', '1', 'z']) await page.keyboard.press(key);
+  assert.equal(await page.locator('#inventory-panel').isVisible(), true);
+  assert.equal(await page.locator('#item-placement').isHidden(), true);
+  assert.equal((await snapshot(page)).items.length, 0);
+  assert.equal((await controls(page)).mode, 'touch');
+  await page.locator('#inventory-toggle').tap();
+  await page.locator('#inventory-panel').waitFor({ state: 'hidden' });
+  recordCheck(
+    'native touch picks up the nearby crate and opens its backpack tile; taps and hardware shortcuts cannot start placement in touch mode',
   );
 
   await fingers.down(1, center.x, center.y - 35);
@@ -497,18 +569,13 @@ try {
   assert.equal((await rendering(page)).camera.zoom, 1, 'wheel disabled in touch');
   await page.mouse.click(300, 400, { button: 'right' });
   assert.equal((await controls(page)).mode, 'desktop');
-  await page.waitForFunction(() => {
-    const prompt = document.querySelector<HTMLButtonElement>(
-      '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
-    );
-    return prompt && !prompt.disabled && getComputedStyle(prompt).visibility !== 'hidden';
-  });
-  await page.keyboard.press('z');
-  await page.waitForFunction(
-    () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 1,
+  assert.equal(
+    (await snapshot(page)).inventory.slots[0].items[0].itemId,
+    touchItemId,
+    'the touch pickup survives lifecycle recovery and switching to desktop',
   );
   await page.keyboard.press('x');
-  await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
+  await page.locator('.inventory-choice').first().click();
   await page.locator('#item-placement').waitFor({ state: 'visible' });
   await fingers.down(1, 300, 400);
   await fingers.up(1);
@@ -569,6 +636,8 @@ try {
     await qualityPage.locator('#help-toggle').tap();
     await qualityPage.locator('#diagnostics-toggle').tap();
     await qualityPage.locator('#help-panel').waitFor({ state: 'hidden' });
+    await qualityPage.locator('#help-toggle').tap();
+    await qualityPage.locator('#diagnostics').waitFor({ state: 'hidden' });
     await qualityPage.locator('#quality').selectOption('economy');
     const economy = await rendering(qualityPage);
     assert.equal(economy.hardwareScaling, 1.5);

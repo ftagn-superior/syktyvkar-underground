@@ -2,13 +2,14 @@ import { createElementLookup } from './dom';
 import { GameHud } from './game-hud';
 import { GamePanels } from './game-panels';
 import { LobbyPreview } from './lobby-preview';
+import { WorldHud } from './world-hud';
 import { HelpMenu } from '../ui/help';
 import { InteractionSystem } from '../interaction/prompt';
 import { PickupSource } from '../interaction/pickups';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput } from '../input/keyboard';
 import { FirstPersonInput } from '../input/first-person';
-import { MAX_PLAYERS, NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
+import { dayClockHour, MAX_PLAYERS, NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
 import { firstPersonMovement } from '../rendering/camera-controller';
 import { CameraPointerInput } from '../input/camera-pointer';
 import { GameInputMode } from '../input/mode';
@@ -93,6 +94,13 @@ export function startGame(): void {
   let placementOwner: 'inventory' | 'static' | undefined;
   let help: HelpMenu | undefined;
   let interactions: InteractionSystem | undefined;
+  const worldHud = new WorldHud(
+    element,
+    () => panels.closeExcept('players', 'chat'),
+    () => canvas.focus({ preventScroll: true }),
+  );
+  // ?time=14.5 fixes the visible world hour for screenshots and visual tests.
+  const fixedHour = Number.parseFloat(new URLSearchParams(location.search).get('time') ?? '');
   const lobbyPreview = new LobbyPreview(
     element<HTMLCanvasElement>('preview-canvas'),
     element<HTMLImageElement>('preview-fallback'),
@@ -119,6 +127,7 @@ export function startGame(): void {
   }
   const panels = new GamePanels({
     help: () => help?.close(false),
+    players: () => worldHud.closePlayers(),
     static: () => staticPlacement?.close(),
     reactions: () => reactions?.close(false),
     animations: () => animations?.close(false),
@@ -175,8 +184,10 @@ export function startGame(): void {
     const isTouch = inputMode.value === 'touch';
     document.body.dataset.inputMode = inputMode.value;
     stick.hidden = !isTouch || session.state !== 'playing' || graphicsLost;
-    keyboard?.setEnabled(!isTouch && !graphicsLost && element('chat-console').hidden);
-    inventory?.setEnabled(overviewPanelsAvailable());
+    // A text input consumes typing; an open chat dock alone does not disable movement.
+    keyboard?.setEnabled(!isTouch && !graphicsLost);
+    inventory?.setTouch(isTouch);
+    inventory?.setEnabled(!graphicsLost && !firstPerson?.selected && !firstPerson?.requesting);
     renderControls();
     syncTouchInput();
   }
@@ -248,6 +259,7 @@ export function startGame(): void {
     if (!session.room && !reconnecting && !preparing) firstPerson?.overview();
     hud.renderConnection({
       state,
+      loaded,
       graphicsLost,
       roomPresent: !!session.room,
       accountBusy: accounts.busy,
@@ -266,7 +278,7 @@ export function startGame(): void {
     if (
       playing &&
       !graphicsLost &&
-      !document.querySelector('.inventory-panel:not([hidden]), .chat-console:not([hidden])')
+      !document.querySelector('.inventory-panel:not([hidden]), .chat-form:not([hidden])')
     ) {
       canvas.focus({ preventScroll: true });
     }
@@ -275,9 +287,10 @@ export function startGame(): void {
     renderGamePanels();
     if (playing) {
       const own = session.room?.state.players.get(session.room.sessionId);
-      if (own?.color) lobbyPreview.setAccent(own.color);
+      if (own?.color) lobbyPreview.setPlayerColor(own.color);
     }
     help?.setAvailable(welcome.hidden && !graphicsLost && !!session.room);
+    if (!session.room) worldHud.clearChat();
     syncPreview();
   }
   const session = new GameSession(updateState, showNotice);
@@ -290,12 +303,12 @@ export function startGame(): void {
   }
   syncAudioActivity();
   const storageStatus = document.createElement('div');
-  storageStatus.className = 'storage-status';
+  storageStatus.className = 'storage-status ui-panel';
   storageStatus.setAttribute('role', 'status');
   storageStatus.hidden = true;
   storageStatus.textContent =
     'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
-  document.body.append(storageStatus);
+  element('hud-top').append(storageStatus);
   const accounts = new AccountPanel(
     () => {
       session.accountId = accounts.account?.accountId;
@@ -307,7 +320,7 @@ export function startGame(): void {
   inventory = new InventoryPanel(
     session,
     canvas,
-    () => panels.closeExcept('inventory'),
+    () => panels.closeExcept('inventory', 'chat'),
     (placing) => {
       if (placing) {
         staticPlacement?.close();
@@ -317,7 +330,7 @@ export function startGame(): void {
       resetGameInput();
       renderControls(placing);
     },
-    (name) => showNotice(`В инвентарь: ${name}`, { toast: { hint: 'X' } }),
+    (name, icon) => showNotice(`${name} — в рюкзаке`, { toast: { hint: 'X', icon } }),
   );
   staticPlacement = new StaticPlacement(
     session,
@@ -341,17 +354,18 @@ export function startGame(): void {
   help = new HelpMenu(
     () => canvas.focus({ preventScroll: true }),
     () => {
-      panels.closeExcept('help');
+      panels.closeExcept('help', 'chat');
       if (!firstPerson?.selected && !firstPerson?.requesting) return;
       firstPerson?.suspend();
       resetGameInput();
     },
+    worldHud.theme,
   );
   const pickups = new PickupSource(
     session,
     () => view,
     () => lobbyPreview.color,
-    (itemId, name) => inventory?.pickup(itemId, name),
+    (itemId, name, typeId) => inventory?.pickup(itemId, name, typeId),
   );
   interactions = new InteractionSystem({
     player: () => {
@@ -362,11 +376,9 @@ export function startGame(): void {
     candidates: () => pickups.candidates(),
     project: (anchor, out) => (view ? view.project(anchor, out) : (out.visible = false)),
     enabled: () =>
-      loaded &&
-      !graphicsLost &&
-      inputMode.value === 'desktop' &&
-      placementOwner !== 'static' &&
-      !!inventory?.canCollect,
+      loaded && !graphicsLost && placementOwner !== 'static' && !!inventory?.canCollect,
+    // Touch players use the contextual prompt; hardware keys belong to desktop input.
+    keys: () => inputMode.value === 'desktop',
   });
   const accountPreparation = accounts.load();
   function setCameraRotation(direction: -1 | 0 | 1): void {
@@ -384,7 +396,7 @@ export function startGame(): void {
       renderGamePanels();
     },
     () => {
-      panels.closeExcept('reactions');
+      panels.closeExcept('reactions', 'chat');
       renderGamePanels();
     },
   );
@@ -399,7 +411,7 @@ export function startGame(): void {
       renderGamePanels();
     },
     () => {
-      panels.closeExcept('animations');
+      panels.closeExcept('animations', 'chat');
       // Opening a catalog must not wait for the periodic HUD refresh to enable shortcuts.
       renderGamePanels();
     },
@@ -407,6 +419,7 @@ export function startGame(): void {
   chat = new ChatConsole(
     element<HTMLButtonElement>('chat-toggle'),
     element<HTMLFormElement>('chat-console'),
+    element('chat-row'),
     element<HTMLInputElement>('chat-input'),
     element('chat-status'),
     element('chat-counter'),
@@ -419,11 +432,11 @@ export function startGame(): void {
     },
     (open) => {
       if (open) firstPerson?.suspend();
-      keyboard?.setEnabled(!open && !graphicsLost && inputMode.value === 'desktop');
       resetGameInput();
       if (open) panels.closeExcept('chat');
     },
   );
+  session.onDayClock = (clock) => view?.setDayClock(clock);
   session.onChatResult = (result) => {
     chat?.complete(result.ok);
     renderChat();
@@ -434,6 +447,7 @@ export function startGame(): void {
       'reactions-panel',
       'animations-panel',
       'inventory-panel',
+      'players-panel',
       'chat-console',
       'diagnostics',
     ].map((id) => element(id)),
@@ -540,9 +554,15 @@ export function startGame(): void {
   function renderRespawn(): void {
     hud.renderRespawn(session.respawnStatus(), !graphicsLost && session.state === 'playing');
   }
+  function renderWorldHud(): void {
+    const hour =
+      view?.hour ??
+      (Number.isFinite(fixedHour) ? fixedHour : dayClockHour(session.dayClock, Date.now()));
+    const room = session.room;
+    worldHud.update(hour, session.occupancy, room?.state?.players ?? [], room?.sessionId);
+  }
   function renderMetrics(): void {
-    element('player-count').textContent = `${session.occupancy} / ${MAX_PLAYERS}`;
-    element('help-online').textContent = `${session.occupancy} / ${MAX_PLAYERS} в сети`;
+    element('player-count').textContent = `${session.occupancy} из ${MAX_PLAYERS}`;
     if (diagnostics.hidden) return;
     const data = session.diagnostics();
     const rendering = view?.renderingDiagnostics();
@@ -621,6 +641,8 @@ export function startGame(): void {
       if (disposed) return;
       view = new WorldView(canvas, element('labels'), session.definition, quality);
       view.setAudio(audio);
+      view.setDayClock(session.dayClock);
+      if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
       view.setTouchMode(inputMode.value === 'touch');
       view.setOverlayTest((from, to, targetId) => session.overlayBlocked(from, to, targetId));
       view.engine.onContextRestoredObservable.add(() => {
@@ -810,6 +832,7 @@ export function startGame(): void {
       : 'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
     renderRespawn();
     renderMetrics();
+    renderWorldHud();
     const loading = session.state === 'preparing' || session.state === 'waiting';
     const problem = session.areaProblem;
     element('area-status').hidden = (!loading && !problem) || graphicsLost;
@@ -846,6 +869,7 @@ export function startGame(): void {
       view?.dispose();
       keyboard.dispose();
       help?.dispose();
+      worldHud.dispose();
       interactions?.dispose();
       lobbyPreview.dispose();
       reactions?.dispose();

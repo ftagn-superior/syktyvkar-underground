@@ -1,31 +1,22 @@
-import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS, type AnimationId } from '@su/contracts';
+import { ANIMATIONS, type AnimationId } from '@su/contracts';
 import type { GameSession } from '../network/session';
-import { bindCatalogShortcuts } from './catalog-shortcuts';
+import { CatalogFilter, CatalogShortcuts } from './catalog-shortcuts';
 type Status = ReturnType<GameSession['animationStatus']>;
 
-const poses: Record<AnimationId, string> = {
-  wave: 'M12 9v7m0-5-5 3-3-3m8 0 5-3V3m-5 13-4 6m4-6 5 6',
-  clap: 'M12 9v7m0-6-5 4 4-6m1 2 5 4-4-6m-1 8-4 6m4-6 4 6',
-  dance: 'm12 9-2 7m2-5-6-1-2-4m8 5 5 2 3-4m-10 7-4 4m4-4 6 2 2 4',
-  point: 'M12 9v7m0-5-5 3m5-3h9m-9 5-4 6m4-6 4 6',
-  cheer: 'M12 9v7m0-5-5-4-2-4m7 8 5-4 2-4m-7 13-4 6m4-6 4 6',
-  shrug: 'M12 9v7m0-5-5 3-3-3m8 0 5 3 3-3m-8 5-4 6m4-6 4 6',
-  bow: 'm12 9 4 6-5 3m5-3 4-2m-9 5-4 4m4-4 4 4',
-  stretch: 'M12 9v7m0-5-4-4V2m4 9 4-4V2m-4 14-4 6m4-6 4 6',
-  march: 'M12 9v7m0-5-6 4m6-4 6-2m-6 7-5 2 2 4m3-6 4 6',
-  balance: 'm12 9 2 7m-2-5H3m9 0h9m-7 5-2 6m2-6 7 2',
-  boxing: 'M12 9v7m0-5-5 2 1-5m4 3h9m-9 5-5 6m5-6 5 6',
-  disco: 'm12 9-1 7m1-5-6 3m6-3 5-5 2-3m-8 13-5 6m5-6 7 6',
-  robot: 'M12 9v7m0-5H6V7m6 4h6v4m-6 1H8v6m4-6h4v6',
-  sway: 'm12 9 3 7m-2-5-5 4m5-4 5 3m-3 2-5 6m5-6 3 6',
-  conduct: 'M12 9v7m0-5-5 1-2-5m7 4 5 1 2-5m-7 9-4 6m4-6 4 6',
-};
-
+/** Окно анимаций над строкой чата: фильтр по категориям и прокручиваемый список названий. */
 export class AnimationMenu {
   private available = false;
   private readonly controller = new AbortController();
-  private readonly choices: { button: HTMLButtonElement; hint: HTMLElement; fullBody: boolean }[] =
-    [];
+  private readonly choices: {
+    button: HTMLButtonElement;
+    hint: HTMLElement;
+    fullBody: boolean;
+    category: string;
+  }[] = [];
+  private readonly scroll: HTMLElement;
+  private readonly shown: HTMLElement;
+  private readonly filter: CatalogFilter;
+  private readonly shortcuts: CatalogShortcuts;
   private accepted = 0;
   constructor(
     private readonly toggle: HTMLButtonElement,
@@ -37,38 +28,21 @@ export class AnimationMenu {
   ) {
     const options = { signal: this.controller.signal };
     panel.querySelector('[data-catalog-count]')!.textContent = String(ANIMATIONS.length);
+    this.shown = panel.querySelector('[data-catalog-shown]')!;
+    this.scroll = panel.querySelector('.catalog-scroll')!;
+    const list = panel.querySelector('.animation-choices')!;
     for (const animation of ANIMATIONS) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'animation-choice';
+      button.className = 'ui-btn animation-choice';
       button.dataset.animationId = animation.id;
-      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      icon.setAttribute('viewBox', '0 0 24 26');
-      icon.setAttribute('aria-hidden', 'true');
-      icon.classList.add('animation-icon');
-      const head = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      head.setAttribute('cx', '12');
-      head.setAttribute('cy', '5');
-      head.setAttribute('r', '2');
-      const body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      body.setAttribute('d', poses[animation.id]);
-      icon.append(head, body);
-      const copy = document.createElement('span');
-      copy.className = 'animation-copy';
-      const title = document.createElement('strong');
+      const title = document.createElement('span');
       title.textContent = animation.label;
-      const detail = document.createElement('span');
-      detail.className = 'animation-category';
-      detail.textContent = `${animation.category} · до движения`;
-      const duration = document.createElement('span');
-      duration.className = 'animation-duration';
-      duration.textContent = `+ ${WORLD_ACTIVITY_MOVE_DURATION_MS / 1000} с`;
       const hint = document.createElement('span');
       hint.className = 'animation-hint';
       hint.id = `animation-hint-${animation.id}`;
       button.setAttribute('aria-describedby', hint.id);
-      copy.append(title, detail, hint);
-      button.append(icon, copy, duration);
+      button.append(title, hint);
       button.addEventListener(
         'click',
         () => {
@@ -76,16 +50,22 @@ export class AnimationMenu {
         },
         options,
       );
-      panel.querySelector('.animation-choices')!.append(button);
-      this.choices.push({ button, hint, fullBody: animation.mode === 'fullBody' });
+      list.append(button);
+      this.choices.push({
+        button,
+        hint,
+        fullBody: animation.mode === 'fullBody',
+        category: animation.category,
+      });
     }
-    bindCatalogShortcuts(
-      panel,
-      this.choices.map(({ button }) => button),
+    this.shortcuts = new CatalogShortcuts(() => !panel.hidden, this.controller.signal);
+    this.filter = new CatalogFilter(
+      panel.querySelector('.filters')!,
+      ANIMATIONS.map((animation) => animation.category),
+      () => this.renderList(),
       this.controller.signal,
     );
     toggle.addEventListener('click', () => this.toggleOpen(), options);
-    panel.querySelector('[data-close]')!.addEventListener('click', () => this.close(), options);
     window.addEventListener(
       'keydown',
       (event) => {
@@ -109,17 +89,30 @@ export class AnimationMenu {
       },
       options,
     );
+    this.renderList();
+  }
+  private renderList(): void {
+    const visible: HTMLButtonElement[] = [];
+    for (const { button, category } of this.choices) {
+      button.hidden = !this.filter.matches(category);
+      if (!button.hidden) visible.push(button);
+    }
+    this.shown.textContent = String(visible.length);
+    this.shortcuts.bind(visible);
+    this.scroll.scrollTop = 0;
   }
   toggleOpen(): void {
     if (this.toggle.hidden || this.toggle.disabled) return;
     if (!this.panel.hidden) return this.close();
     this.onOpen();
+    this.renderList();
     this.panel.hidden = false;
-    this.panel.scrollTop = 0;
+    // A hidden element cannot scroll: reset once the list is laid out.
+    this.scroll.scrollTop = 0;
     this.toggle.setAttribute('aria-expanded', 'true');
     (
-      this.choices.find(({ button }) => !button.disabled)?.button ??
-      this.panel.querySelector<HTMLButtonElement>('[data-close]')
+      this.choices.find(({ button }) => !button.hidden && !button.disabled)?.button ??
+      this.panel.querySelector<HTMLButtonElement>('.filters button')
     )?.focus({ preventScroll: true });
   }
   close(restoreFocus = true): void {
@@ -160,12 +153,7 @@ export class AnimationMenu {
         : fullBody && state.moving
           ? 'Остановитесь, чтобы начать'
           : '';
-      const description =
-        reason ||
-        (fullBody
-          ? `После движения — ещё ${WORLD_ACTIVITY_MOVE_DURATION_MS / 1000} с`
-          : 'Можно на ходу');
-      if (hint.textContent !== description) hint.textContent = description;
+      if (hint.textContent !== reason) hint.textContent = reason;
       button.disabled = !state.available || state.pending || state.busy || state.paused || !!reason;
     }
   }

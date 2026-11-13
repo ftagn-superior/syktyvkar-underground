@@ -8,7 +8,8 @@ import {
 } from '@su/contracts';
 import { AvatarPicker } from './avatar-picker';
 import { ColorPicker } from './color-picker';
-import { applyAccent } from './theme';
+import { createSign, updateSign } from './player-sign';
+import { applyPlayerColor } from './theme';
 
 const guestSkinKey = 'su:guest-skin:v1';
 function guestSkin() {
@@ -46,6 +47,7 @@ export class AccountPanel {
   private readonly message = document.getElementById('account-message')!;
   private readonly login = document.getElementById('telegram-login') as HTMLAnchorElement;
   private readonly note = document.getElementById('welcome-note')!;
+  private readonly sign = createSign('', PROFILE_COLORS[0].hex);
 
   constructor(
     private readonly onChange: () => void,
@@ -62,6 +64,7 @@ export class AccountPanel {
       this.onChange();
     });
     this.skins.value = guestSkin();
+    document.getElementById('profile-sign')!.append(this.sign);
     this.colors = new ColorPicker(
       document.getElementById('profile-swatches')!,
       document.getElementById('profile-color-label')!,
@@ -151,10 +154,12 @@ export class AccountPanel {
     this.skins.value = profile.skinId;
     this.preview();
   }
-  /** Colour, plate and accent follow the form live; nothing is saved until the player enters. */
+  /** Colour, plate and sign follow the form live; nothing is saved until the player enters. */
   private preview(): void {
-    applyAccent(this.previewColor);
-    this.skins.setIdentity(this.account ? this.name.value.trim() : '', this.colorLabel);
+    applyPlayerColor(this.previewColor);
+    const name = this.account ? this.name.value.trim() : '';
+    this.skins.setIdentity(name, this.colorLabel);
+    updateSign(this.sign, name, this.previewColor);
   }
   private get colorLabel(): string {
     return this.account ? this.colors.colorLabel : '';

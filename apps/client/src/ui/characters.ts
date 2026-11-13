@@ -5,26 +5,15 @@ export interface CharacterEntry {
   id: string;
   name: string;
   description: string;
-  /** Present only for characters that can actually be played. */
-  skinId?: AvatarSkinId;
-  locked: boolean;
+  skinId: AvatarSkinId;
 }
 
-const placeholders: CharacterEntry[] = Array.from({ length: 10 }, (_, index) => ({
-  id: `locked-${index + 3}`,
-  name: `Персонаж ${String(index + 3).padStart(2, '0')}`,
-  description: 'Появится с обновлениями',
-  locked: true,
+export const CHARACTERS: readonly CharacterEntry[] = AVATAR_SKINS.map((skin) => ({
+  id: skin.id,
+  name: skin.label,
+  description: skin.description,
+  skinId: skin.id,
 }));
-
-export const CHARACTERS: readonly CharacterEntry[] = [
-  ...AVATAR_SKINS.map((skin) => ({
-    id: skin.id,
-    name: skin.label,
-    description: skin.description,
-    skinId: skin.id,
-    locked: false,
-  })),
-  ...placeholders,
-];
-export const availableCharacters = () => CHARACTERS.filter((character) => !character.locked);
+/** Закрытые персонажи показываются одной строкой «ещё N появятся с обновлениями». */
+export const UPCOMING_CHARACTERS = 10;
+export const availableCharacters = (): readonly CharacterEntry[] => CHARACTERS;

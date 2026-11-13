@@ -1,9 +1,11 @@
 import type { ConnectionState } from '../network/session';
 import type { InputMode } from '../input/mode';
+import { ICONS, type IconName } from '../ui/icons';
 import type { ElementLookup } from './dom';
 
 interface ConnectionPresentation {
   state: ConnectionState;
+  loaded: boolean;
   graphicsLost: boolean;
   roomPresent: boolean;
   accountBusy: boolean;
@@ -15,6 +17,7 @@ interface ConnectionPresentation {
 /** Renders the fixed HUD shell; input and session transitions belong to the application. */
 export class GameHud {
   private disposed = false;
+  private mode: InputMode = 'desktop';
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly notice: HTMLElement;
   private readonly welcome: HTMLElement;
@@ -27,6 +30,8 @@ export class GameHud {
   private readonly leave: HTMLButtonElement;
 
   constructor(private readonly element: ElementLookup) {
+    for (const node of document.querySelectorAll<HTMLElement>('[data-icon]'))
+      node.insertAdjacentHTML('afterbegin', ICONS[node.dataset.icon as IconName] ?? '');
     this.notice = element('notice');
     this.welcome = element('welcome');
     this.join = element('join');
@@ -40,6 +45,7 @@ export class GameHud {
 
   renderConnection({
     state,
+    loaded,
     graphicsLost,
     roomPresent,
     accountBusy,
@@ -52,6 +58,7 @@ export class GameHud {
     const preparing = state === 'preparing' || state === 'waiting';
     this.welcome.hidden = graphicsLost || playing || ((reconnecting || preparing) && roomPresent);
     document.body.dataset.scene = this.welcome.hidden ? 'world' : 'lobby';
+    document.body.classList.toggle('world-ready', loaded && !graphicsLost);
     this.join.disabled =
       graphicsLost ||
       accountBusy ||
@@ -102,6 +109,7 @@ export class GameHud {
     firstPerson: boolean;
     mode: InputMode;
   }): void {
+    this.mode = mode;
     const placing = !!placement;
     this.element('overview-camera-controls').hidden = firstPerson;
     this.element('first-person-camera-controls').hidden = !firstPerson;
@@ -133,12 +141,13 @@ export class GameHud {
     locked: boolean;
     eligible: boolean;
   }): void {
-    this.element<HTMLButtonElement>('view-toggle').disabled = !selected && !pending && !eligible;
-    this.element('view-toggle-label').textContent = selected
-      ? 'Обзор'
-      : pending
-        ? 'Отменить вход'
-        : 'От первого лица';
+    const toggle = this.element<HTMLButtonElement>('view-toggle');
+    toggle.disabled = !selected && !pending && !eligible;
+    toggle.setAttribute('aria-pressed', String(selected || pending));
+    toggle.setAttribute(
+      'aria-label',
+      selected ? 'Обзор' : pending ? 'Отменить вход от первого лица' : 'Вид от первого лица',
+    );
     this.element('first-person-hud').hidden = !selected && !pending;
     this.element('first-person-hint').hidden = locked;
     this.element('first-person-hint').textContent = pending
@@ -158,26 +167,28 @@ export class GameHud {
         ? `На старт · ${Math.ceil(remainingMs / 1000)} с`
         : 'На старт';
   }
-  readonly showNotice = (message: string, options: { toast?: { hint?: string } } = {}): void => {
+  readonly showNotice = (
+    message: string,
+    options: { toast?: { hint?: string; icon?: string } } = {},
+  ): void => {
     if (this.disposed) return;
     const text = document.createElement('span');
     text.textContent = message;
     const parts: Node[] = [];
-    if (options.toast) {
-      // Pickup feedback: hexagon icon + text + the key that opens the result.
+    if (options.toast?.icon) {
+      // Pickup feedback uses the same item icon as the backpack.
       const icon = document.createElement('span');
       icon.className = 'ic';
       icon.setAttribute('aria-hidden', 'true');
-      icon.innerHTML =
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>';
+      icon.textContent = options.toast.icon;
       parts.push(icon);
     }
     parts.push(text);
-    if (options.toast?.hint) {
+    if (options.toast?.hint && this.mode === 'desktop') {
       const hint = document.createElement('span');
       hint.className = 'muted';
       const key = document.createElement('kbd');
-      key.className = 'su-kbd';
+      key.className = 'ui-kbd';
       key.textContent = options.toast.hint;
       hint.append(key, 'открыть');
       parts.push(hint);
@@ -192,7 +203,7 @@ export class GameHud {
       () => {
         this.notice.hidden = true;
       },
-      options.toast ? 2800 : 7000,
+      options.toast ? 2400 : 7000,
     );
   };
   dispose(): void {

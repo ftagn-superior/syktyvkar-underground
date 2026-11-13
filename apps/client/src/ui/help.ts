@@ -1,9 +1,10 @@
 import { isTextInput } from '../input/keyboard';
+import type { UiThemeController, UiThemeMode } from './ui-theme';
 
 const TIP_KEY = 'su:help-tip:v1';
 const TIP_MS = 9000;
 
-/** The single persistent control in the world: a hexagon that opens the controls panel. */
+/** Кнопка «?» без цвета: вход в управление и настройки, включая тему интерфейса. */
 export class HelpMenu {
   private readonly toggle = document.getElementById('help-toggle') as HTMLButtonElement;
   private readonly panel = document.getElementById('help-panel')!;
@@ -15,8 +16,27 @@ export class HelpMenu {
   constructor(
     private readonly focusWorld: () => void,
     private readonly onOpen?: () => void,
+    theme?: UiThemeController,
   ) {
     const options = { signal: this.controller.signal };
+    if (theme) {
+      const buttons = Array.from(
+        this.panel.querySelectorAll<HTMLButtonElement>('[data-theme-mode]'),
+      );
+      const render = () => {
+        for (const button of buttons)
+          button.setAttribute('aria-pressed', String(button.dataset.themeMode === theme.mode));
+      };
+      for (const button of buttons)
+        button.addEventListener(
+          'click',
+          () => theme.setMode(button.dataset.themeMode as UiThemeMode),
+          options,
+        );
+      const unsubscribe = theme.onModeChange(render);
+      this.controller.signal.addEventListener('abort', unsubscribe);
+      render();
+    }
     this.toggle.addEventListener('click', () => this.open(this.panel.hidden), options);
     document
       .getElementById('help-close')!

@@ -6,7 +6,7 @@ export interface ReactionDefinition {
   asset: string;
 }
 
-export const REACTION_COOLDOWN_MS = 3000;
+export const REACTION_COOLDOWN_MS = 1000;
 export const REACTIONS: readonly ReactionDefinition[] = [
   { id: 'hello', label: 'Привет', category: 'Общение', asset: 'hello.svg' },
   { id: 'like', label: 'Класс', category: 'Общение', asset: 'like.svg' },

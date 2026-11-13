@@ -23,6 +23,7 @@ import { diagnosticReport, downloadDiagnosticReport } from '../ui/diagnostic-rep
 import { ReactionMenu } from '../ui/reactions';
 import { AnimationMenu } from '../ui/animations';
 import { ChatConsole } from '../ui/chat';
+import { ChatSettings } from '../ui/chat-settings';
 import { StaticPlacement } from '../ui/static-placement';
 import { StaticRemoval } from '../ui/static-removal';
 import { InventoryPanel } from '../ui/inventory';
@@ -55,6 +56,7 @@ export function startGame(): void {
   const graphicsReload = element<HTMLButtonElement>('graphics-reload');
   const audio = new GameAudio();
   const audioSettings = new AudioSettings(audio);
+  const chatSettings = new ChatSettings();
   const audioInputs = new AbortController();
   const unlockAudio = () => audio.unlock();
   document.addEventListener('pointerdown', unlockAudio, {
@@ -582,6 +584,7 @@ export function startGame(): void {
       resetGameInput();
     },
     worldHud.theme,
+    chatSettings,
   );
   help.onGamepadClose = () => resetGameInput();
   help.onGamepadContinue = () => {
@@ -655,15 +658,17 @@ export function startGame(): void {
     element<HTMLButtonElement>('chat-send'),
     canvas,
     (text) => {
-      if (inputMode.value !== 'desktop' || graphicsLost) return;
-      session.sendChat(text);
+      if (inputMode.value !== 'desktop' || graphicsLost) return false;
+      const sent = session.sendChat(text);
       renderChat();
+      return sent;
     },
     (open) => {
       if (open) firstPerson?.suspend();
       resetGameInput();
       if (open) panels.closeExcept('chat');
     },
+    chatSettings,
   );
   session.onDayClock = (clock) => view?.setDayClock(clock);
   session.onChatResult = (result) => {

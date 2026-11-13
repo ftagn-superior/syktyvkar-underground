@@ -38,6 +38,7 @@ try {
       errors.push(error.message);
       console.error('Browser error:', error.message);
     });
+    await page.bringToFront();
     await page.goto(`${app.url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').waitFor({ timeout: 45_000 });
     await page.locator('#join').click();
@@ -135,9 +136,11 @@ try {
       await choice.waitFor();
       await choice.click();
       await sender.locator('#reactions-panel').waitFor({ state: 'hidden' });
+      await observer.bringToFront();
       await observer.reload();
       await playing(observer);
       await observer.locator(sticker).waitFor();
+      await sender.bringToFront();
       checks.push(
         'idle stickers remain visible beyond five seconds, can be reselected after the cooldown, and survive an observer reload',
       );
@@ -200,11 +203,13 @@ try {
   );
   console.log(checks.at(-1));
 
+  await observer.bringToFront();
   await observer.reload();
   await playing(observer);
   assert.equal(await observer.locator('.player-reaction').count(), 0);
   checks.push('restoring a session does not replay an expired reaction');
 
+  await sender.bringToFront();
   await hudClick(sender, '#diagnostics-toggle');
   await hudClick(sender, '#reactions-toggle');
   assert.equal(await sender.locator('#diagnostics').isVisible(), false);

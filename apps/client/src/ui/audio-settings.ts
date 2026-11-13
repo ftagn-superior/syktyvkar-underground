@@ -38,6 +38,11 @@ export class AudioSettings {
     this.render();
   }
 
+  /** Called with HUD updates; reports browser activation separately from the mute preference. */
+  refresh(): void {
+    this.render();
+  }
+
   private render(): void {
     const settings = this.audio.settings;
     for (const button of this.buttons) {
@@ -49,6 +54,17 @@ export class AudioSettings {
       const value = String(Math.round(settings[key] * 100));
       (document.getElementById(id) as HTMLInputElement).value = value;
       document.getElementById(`${id}-value`)!.textContent = `${value}%`;
+    }
+    const diagnostics = this.audio.diagnostics();
+    const blocked = !settings.muted && diagnostics.contextState === 'suspended';
+    for (const id of ['audio-lobby-blocked', 'audio-gamepad-blocked']) {
+      const message = document.getElementById(id);
+      if (!message) continue;
+      message.hidden = !blocked;
+      const text = blocked
+        ? 'Звук заблокирован браузером. В Browsing Controls нажмите кнопку звука курсором Edge, затем вернитесь в Game Controls. Можно продолжить без звука.'
+        : '';
+      if (message.textContent !== text) message.textContent = text;
     }
   }
   dispose(): void {

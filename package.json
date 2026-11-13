@@ -28,6 +28,7 @@
     "test:physics:browser": "node --import tsx tests/browser-physics.ts",
     "test:assets:browser": "node --import tsx tests/browser-assets.ts",
     "test:touch:browser": "node --import tsx tests/browser-touch.ts",
+    "test:gamepad:browser": "node --import tsx tests/browser-gamepad.ts",
     "test:first-person:browser": "node --import tsx tests/browser-first-person.ts",
     "test:first-person:geometry": "node --import tsx tests/browser-first-person-geometry.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",

@@ -7,10 +7,12 @@ import { HelpMenu } from '../ui/help';
 import { InteractionSystem } from '../interaction/prompt';
 import { PickupSource } from '../interaction/pickups';
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { KeyboardInput } from '../input/keyboard';
+import { KeyboardInput, isTextInput } from '../input/keyboard';
+import { GamepadInput, type GamepadButtons } from '../input/gamepad';
+import { GamepadNavigation } from '../ui/gamepad-navigation';
 import { FirstPersonInput } from '../input/first-person';
 import { dayClockHour, MAX_PLAYERS, NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
-import { firstPersonMovement } from '../rendering/camera-controller';
+import { firstPersonMovement, gamepadCameraDelta } from '../rendering/camera-controller';
 import { CameraPointerInput } from '../input/camera-pointer';
 import { GameInputMode } from '../input/mode';
 import { TouchInput } from '../input/touch';
@@ -21,6 +23,7 @@ import { diagnosticReport, downloadDiagnosticReport } from '../ui/diagnostic-rep
 import { ReactionMenu } from '../ui/reactions';
 import { AnimationMenu } from '../ui/animations';
 import { ChatConsole } from '../ui/chat';
+import { ChatSettings } from '../ui/chat-settings';
 import { StaticPlacement } from '../ui/static-placement';
 import { StaticRemoval } from '../ui/static-removal';
 import { InventoryPanel } from '../ui/inventory';
@@ -53,6 +56,7 @@ export function startGame(): void {
   const graphicsReload = element<HTMLButtonElement>('graphics-reload');
   const audio = new GameAudio();
   const audioSettings = new AudioSettings(audio);
+  const chatSettings = new ChatSettings();
   const audioInputs = new AbortController();
   const unlockAudio = () => audio.unlock();
   document.addEventListener('pointerdown', unlockAudio, {
@@ -87,6 +91,14 @@ export function startGame(): void {
   let previousConnection: ConnectionState = 'loading';
   let pageActive = !document.hidden;
   let touch: TouchInput | undefined;
+  let gamepad: GamepadInput | undefined;
+  const gamepadNavigation = new GamepadNavigation();
+  let gamepadContext = '';
+  let gamepadResumeRequired = false;
+  let gamepadHasWalked = false;
+  let previousGamepadBase = false;
+  let entryPending = false;
+  let leavePending = false;
   let reactions: ReactionMenu | undefined;
   let animations: AnimationMenu | undefined;
   let chat: ChatConsole | undefined;
@@ -124,6 +136,7 @@ export function startGame(): void {
   function resetGameInput(): void {
     keyboard?.clear();
     touch?.reset();
+    gamepad?.reset();
     resetCameraInput();
     session.neutral();
   }
@@ -146,16 +159,25 @@ export function startGame(): void {
     view?.showPlacement();
   }
   const inputMode = new GameInputMode(canvas, stick, (mode) => {
-    if (mode === 'touch') firstPerson?.overview();
+    if (mode !== 'desktop') firstPerson?.overview();
     resetGameInput();
     closeGamePanels();
+    gamepadNavigation.clear();
+    gamepadContext = '';
+    gamepadResumeRequired = false;
+    previousGamepadBase = false;
+    if (mode !== 'gamepad') gamepad?.release();
+    help?.setGamepad(mode === 'gamepad');
     view?.setTouchMode(mode === 'touch');
+    view?.setGamepadMode(mode === 'gamepad');
     renderInputMode();
     renderGamePanels();
     showNotice(
-      mode === 'touch'
-        ? 'Сенсорное управление включено. Стик слева — ходьба, свайп справа — камера.'
-        : 'Управление переключено на мышь и клавиатуру. Нажмите клавишу движения ещё раз.',
+      mode === 'gamepad'
+        ? 'Геймпад включён. Отпустите стики и кнопки, затем используйте крестовину и A.'
+        : mode === 'touch'
+          ? 'Сенсорное управление включено. Стик слева — ходьба, свайп справа — камера.'
+          : 'Управление переключено на мышь и клавиатуру. Нажмите клавишу движения ещё раз.',
     );
   });
   function renderControls(placing = !!placementOwner): void {
@@ -188,9 +210,14 @@ export function startGame(): void {
     document.body.dataset.inputMode = inputMode.value;
     stick.hidden = !isTouch || session.state !== 'playing' || graphicsLost;
     // A text input consumes typing; an open chat dock alone does not disable movement.
-    keyboard?.setEnabled(!isTouch && !graphicsLost);
-    inventory?.setTouch(isTouch);
-    inventory?.setEnabled(!graphicsLost && !firstPerson?.selected && !firstPerson?.requesting);
+    keyboard?.setEnabled(inputMode.value === 'desktop' && !graphicsLost);
+    inventory?.setTouch(inputMode.value !== 'desktop');
+    inventory?.setEnabled(
+      inputMode.value !== 'gamepad' &&
+        !graphicsLost &&
+        !firstPerson?.selected &&
+        !firstPerson?.requesting,
+    );
     renderControls();
     syncTouchInput();
   }
@@ -221,6 +248,8 @@ export function startGame(): void {
     );
   }
   function readMovement(): MoveInput {
+    if (inputMode.value === 'gamepad')
+      return canGamepadWalk() ? gamepad!.read(view?.cameraAngle ?? 0) : { ...NEUTRAL_INPUT };
     if (inputMode.value === 'touch') return touch!.read(view?.cameraAngle ?? 0);
     if (firstPerson?.requesting) return { ...NEUTRAL_INPUT };
     if (firstPerson?.selected) {
@@ -244,11 +273,13 @@ export function startGame(): void {
     });
   }
   function continuationHint(): string {
-    return firstPerson?.selected
-      ? 'Щёлкните по миру, чтобы продолжить.'
-      : inputMode.value === 'touch'
-        ? 'Коснитесь стика заново, чтобы продолжить.'
-        : 'Нажмите клавишу движения, чтобы продолжить.';
+    return inputMode.value === 'gamepad'
+      ? 'Отпустите стики и кнопки, затем нажмите A, чтобы продолжить. Y — меню.'
+      : firstPerson?.selected
+        ? 'Щёлкните по миру, чтобы продолжить.'
+        : inputMode.value === 'touch'
+          ? 'Коснитесь стика заново, чтобы продолжить.'
+          : 'Нажмите клавишу движения, чтобы продолжить.';
   }
 
   function updateState(state: ConnectionState, message?: string): void {
@@ -301,6 +332,155 @@ export function startGame(): void {
     syncPreview();
   }
   const session = new GameSession(updateState, showNotice);
+  const gamepadStatus = document.createElement('p');
+  gamepadStatus.id = 'gamepad-status';
+  gamepadStatus.className = 'gamepad-status ui-panel';
+  gamepadStatus.setAttribute('role', 'status');
+  gamepadStatus.hidden = true;
+  element('hud-top').append(gamepadStatus);
+  function gamepadBaseReady(): boolean {
+    const room = session.room;
+    return (
+      loaded &&
+      !graphicsLost &&
+      pageActive &&
+      !document.hidden &&
+      session.gameplayInputEnabled &&
+      !!room?.state.players.get(room.sessionId)
+    );
+  }
+  function canGamepadWalk(): boolean {
+    return (
+      inputMode.value === 'gamepad' &&
+      gamepadBaseReady() &&
+      !!gamepad?.snapshot().ready &&
+      !gamepadResumeRequired &&
+      !help?.isOpen &&
+      !session.areaProblem &&
+      !isTextInput(document.activeElement)
+    );
+  }
+  function interruptGamepad(confirm: boolean): void {
+    if (inputMode.value !== 'gamepad') return;
+    if (confirm && gamepadHasWalked) gamepadResumeRequired = true;
+    resetGameInput();
+  }
+  function syncGamepadReadiness(): void {
+    if (inputMode.value !== 'gamepad') return;
+    const ready = gamepadBaseReady();
+    if (previousGamepadBase && !ready) interruptGamepad(true);
+    previousGamepadBase = ready;
+    if (canGamepadWalk()) gamepadHasWalked = true;
+  }
+  function gamepadBlockReason(): string {
+    const state = gamepad?.snapshot();
+    if (!state?.apiAvailable) return 'Gamepad API недоступен. Используйте управление браузером.';
+    if (state.issue === 'api-error')
+      return 'Браузер запретил доступ к геймпаду. Проверьте Game Controls.';
+    if (state.issue === 'unsupported') return 'Нужен геймпад со стандартной раскладкой Xbox.';
+    if (state.issue === 'invalid-data')
+      return 'Геймпад передаёт некорректные данные. Подключите его заново.';
+    if (state.activeIndex === null) return 'Геймпад отключён. Нажмите A, чтобы выбрать контроллер.';
+    if (!pageActive || document.hidden) return 'Вернитесь в игру, чтобы продолжить.';
+    if (graphicsLost) return 'Графика недоступна. A — перезагрузить страницу.';
+    if (help?.isOpen) return '';
+    if (session.areaProblem) return 'Не удалось загрузить окружение. A — повторить · Y — меню.';
+    if ((session.room || gamepadContext === 'waiting') && !gamepadBaseReady())
+      return 'Ожидаем готовности мира. Y — меню.';
+    if (!state.ready) return 'Отпустите стики и кнопки.';
+    if (gamepadResumeRequired) return 'Нажмите A, чтобы продолжить. Y — меню.';
+    return '';
+  }
+  function syncGamepadContext(): boolean {
+    const lobbyStatus = element('gamepad-lobby-status');
+    if (inputMode.value !== 'gamepad') {
+      gamepadStatus.hidden = true;
+      const state = gamepad?.snapshot();
+      const message = state?.supportedCount
+        ? 'Нажмите A, чтобы включить управление с геймпада.'
+        : state?.issue === 'unsupported'
+          ? 'Нужен геймпад со стандартной раскладкой Xbox.'
+          : state?.issue === 'api-error' || state?.issue === 'unavailable'
+            ? 'Gamepad API недоступен. Проверьте Game Controls или используйте управление браузером.'
+            : '';
+      if (lobbyStatus.textContent !== message) lobbyStatus.textContent = message;
+      return false;
+    }
+    syncGamepadReadiness();
+    if (graphicsLost && help?.isOpen) help.close(false);
+    help?.syncGamepad({ resumeEnabled: gamepadBaseReady() });
+    const context = graphicsLost
+      ? 'graphics'
+      : help?.isOpen
+        ? help.gamepadContext
+        : session.areaProblem && session.room
+          ? 'area-error'
+          : !welcome.hidden
+            ? 'lobby'
+            : gamepadBaseReady()
+              ? 'walk'
+              : 'waiting';
+    const changed = gamepadContext !== context;
+    gamepadContext = context;
+    if (changed) resetGameInput();
+    if (context === 'graphics')
+      gamepadNavigation.setContext(context, [{ id: 'graphics-reload', element: graphicsReload }]);
+    else if (context === 'menu' || context === 'confirm-exit')
+      gamepadNavigation.setContext(context, help!.gamepadItems(), help!.gamepadPreferredId);
+    else if (context === 'area-error') {
+      element('area-status').hidden = false;
+      element('area-retry').hidden = false;
+      gamepadNavigation.setContext(context, [{ id: 'area-retry', element: element('area-retry') }]);
+    } else if (context === 'lobby') {
+      const ids = ['join', 'preview-prev', 'preview-next', 'audio-lobby-toggle', 'account-retry'];
+      gamepadNavigation.setContext(
+        context,
+        ids.filter((id) => !element(id).hidden).map((id) => ({ id, element: element(id) })),
+      );
+    } else gamepadNavigation.clear();
+    const reason = gamepadBlockReason();
+    const message = reason || '↑↓ Выбрать · A Подтвердить';
+    if (lobbyStatus.textContent !== message) lobbyStatus.textContent = message;
+    if (gamepadStatus.textContent !== reason) gamepadStatus.textContent = reason;
+    gamepadStatus.hidden = !welcome.hidden || !reason;
+    return changed;
+  }
+  function pollGamepad(buttons: GamepadButtons): void {
+    if (
+      disposed ||
+      syncGamepadContext() ||
+      inputMode.value !== 'gamepad' ||
+      !pageActive ||
+      document.hidden ||
+      isTextInput(document.activeElement) ||
+      !gamepad?.snapshot().ready
+    )
+      return;
+    if (buttons.y && !!session.room && !graphicsLost && gamepadContext !== 'confirm-exit') {
+      if (help?.isOpen) help.handleGamepadBack('y');
+      else help?.open(true);
+    } else if (buttons.b && help?.isOpen) help.handleGamepadBack('b');
+    else if (gamepadContext === 'walk' || gamepadContext === 'waiting') {
+      if (buttons.a && gamepadResumeRequired && gamepadBaseReady()) {
+        gamepadResumeRequired = false;
+        resetGameInput();
+      }
+    } else {
+      const action = buttons.a
+        ? 'a'
+        : buttons.up
+          ? 'up'
+          : buttons.down
+            ? 'down'
+            : buttons.left
+              ? 'left'
+              : buttons.right
+                ? 'right'
+                : undefined;
+      if (action) gamepadNavigation.handle(action);
+    }
+    syncGamepadContext();
+  }
   session.onSpawn = () => audio.playUi('spawn');
   session.onActionFeedback = (cue) => audio.playUi(cue);
   function syncAudioActivity(): void {
@@ -398,12 +578,18 @@ export function startGame(): void {
     () => canvas.focus({ preventScroll: true }),
     () => {
       panels.closeExcept('help', 'chat');
+      if (inputMode.value === 'gamepad') resetGameInput();
       if (!firstPerson?.selected && !firstPerson?.requesting) return;
       firstPerson?.suspend();
       resetGameInput();
     },
     worldHud.theme,
+    chatSettings,
   );
+  help.onGamepadClose = () => resetGameInput();
+  help.onGamepadContinue = () => {
+    if (gamepadBaseReady()) gamepadResumeRequired = false;
+  };
   const pickups = new PickupSource(
     session,
     () => view,
@@ -472,17 +658,20 @@ export function startGame(): void {
     element<HTMLButtonElement>('chat-send'),
     canvas,
     (text) => {
-      if (inputMode.value !== 'desktop' || graphicsLost) return;
-      session.sendChat(text);
+      if (inputMode.value !== 'desktop' || graphicsLost) return false;
+      const sent = session.sendChat(text);
       renderChat();
+      return sent;
     },
     (open) => {
       if (open) firstPerson?.suspend();
       resetGameInput();
       if (open) panels.closeExcept('chat');
     },
+    chatSettings,
   );
   session.onDayClock = (clock) => view?.setDayClock(clock);
+  session.onWeather = (weather) => view?.setWeather(weather);
   session.onChatResult = (result) => {
     chat?.complete(result.ok);
     renderChat();
@@ -563,6 +752,24 @@ export function startGame(): void {
     () => session.neutral(),
     resetGameInput,
   );
+  gamepad = new GamepadInput({
+    canSelect: () => pageActive && !document.hidden && !isTextInput(document.activeElement),
+    onSelected: () => {
+      gamepadHasWalked = false;
+      gamepadResumeRequired = false;
+      inputMode.select('gamepad');
+      resetGameInput();
+    },
+    onDisconnected: () => {
+      interruptGamepad(false);
+      gamepadResumeRequired = false;
+      if (inputMode.value === 'gamepad')
+        showNotice('Геймпад отключён. Нажмите A для повторного выбора.');
+    },
+    onInterrupted: (reason) => interruptGamepad(reason !== 'resize'),
+    onPoll: pollGamepad,
+  });
+  gamepad.start();
   renderInputMode();
   window.addEventListener(
     'blur',
@@ -593,13 +800,18 @@ export function startGame(): void {
     eventOptions,
   );
   const resetTouchScreen = () => {
-    if (inputMode.value === 'touch' || firstPerson?.selected) resetGameInput();
+    if (inputMode.value !== 'desktop' || firstPerson?.selected) resetGameInput();
   };
   window.addEventListener('resize', resetTouchScreen, eventOptions);
   window.addEventListener('orientationchange', resetTouchScreen, eventOptions);
   screen.orientation?.addEventListener('change', resetTouchScreen, eventOptions);
   function renderRespawn(): void {
-    hud.renderRespawn(session.respawnStatus(), !graphicsLost && session.state === 'playing');
+    hud.renderRespawn(
+      session.respawnStatus(),
+      !graphicsLost &&
+        session.state === 'playing' &&
+        (inputMode.value !== 'gamepad' || gamepadBaseReady()),
+    );
   }
   function renderWorldHud(): void {
     const hour =
@@ -657,6 +869,7 @@ export function startGame(): void {
     firstPerson?.suspend();
     resetGameInput();
     view?.onFrame(() => {});
+    view?.onInputFrame(() => {});
     view?.onCameraFrame(() => {});
     console.error('Game loop failed', error);
     updateState('loading');
@@ -689,8 +902,10 @@ export function startGame(): void {
       view = new WorldView(canvas, element('labels'), session.definition, quality);
       view.setAudio(audio);
       view.setDayClock(session.dayClock);
+      view.setWeather(session.weather);
       if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
       view.setTouchMode(inputMode.value === 'touch');
+      view.setGamepadMode(inputMode.value === 'gamepad');
       view.setOverlayTest((from, to, targetId) => session.overlayBlocked(from, to, targetId));
       view.engine.onContextRestoredObservable.add(() => {
         if (!graphicsLost) return;
@@ -719,6 +934,10 @@ export function startGame(): void {
         return;
       }
       session.connectGraphics(view);
+      view.onInputFrame((_now, delta) => {
+        syncGamepadReadiness();
+        if (canGamepadWalk()) view!.rotateCameraBy(gamepadCameraDelta(gamepad!.cameraX, delta));
+      });
       view.onFrame((now, delta) => {
         try {
           if (!firstPersonEligible() || help?.isOpen || !element('chat-console').hidden)
@@ -727,6 +946,7 @@ export function startGame(): void {
           const command = readMovement();
           if (command.moveX || command.moveZ) help?.noteMovement();
           const frame = session.frame(now, delta, command);
+          syncGamepadReadiness();
           if (!firstPersonEligible()) firstPerson?.suspend();
           if (!frame.ownId && session.state !== 'reconnecting' && session.state !== 'preparing')
             firstPerson?.overview();
@@ -787,18 +1007,26 @@ export function startGame(): void {
   join.addEventListener(
     'click',
     () => {
+      if (join.disabled || entryPending) return;
       if (session.reloadRequired) location.reload();
-      else if (loaded)
-        void accounts.prepareJoin().then((ready) => {
-          if (ready && !disposed) void session.join();
-        });
-      else void start();
+      else if (loaded) {
+        entryPending = true;
+        void accounts
+          .prepareJoin()
+          .then(async (ready) => {
+            if (ready && !disposed) await session.join();
+          })
+          .finally(() => {
+            entryPending = false;
+          });
+      } else void start();
     },
     eventOptions,
   );
   respawn.addEventListener(
     'click',
     () => {
+      if (respawn.disabled || (inputMode.value === 'gamepad' && !gamepadBaseReady())) return;
       firstPerson?.suspend();
       resetGameInput();
       session.respawn();
@@ -810,15 +1038,23 @@ export function startGame(): void {
   leave.addEventListener(
     'click',
     () => {
+      if (leavePending || leave.disabled) return;
+      leavePending = true;
+      gamepadHasWalked = false;
+      gamepadResumeRequired = false;
+      help?.close(false);
       firstPerson?.overview();
       resetGameInput();
-      void session.leave();
+      void session.leave().finally(() => {
+        leavePending = false;
+      });
     },
     eventOptions,
   );
   diagnosticsToggle.addEventListener(
     'click',
     () => {
+      if (inputMode.value === 'gamepad') return;
       firstPerson?.suspend();
       panels.closeExcept('diagnostics');
       diagnostics.hidden = !diagnostics.hidden;
@@ -856,6 +1092,8 @@ export function startGame(): void {
     (event) => {
       event.preventDefault();
       graphicsLost = true;
+      interruptGamepad(true);
+      closeGamePanels();
       staticPlacement?.close();
       staticRemoval?.close();
       firstPerson?.suspend();
@@ -874,6 +1112,7 @@ export function startGame(): void {
   );
   // Feedback remains alive even when WebGL has stopped producing frames.
   const uiTimer = setInterval(() => {
+    audioSettings.refresh();
     syncTouchInput();
     storageStatus.hidden = !session.storageUnavailable && !session.layoutUpdating;
     storageStatus.textContent = session.layoutUpdating
@@ -912,6 +1151,9 @@ export function startGame(): void {
       firstPerson?.dispose();
       session.dispose();
       touch?.dispose();
+      gamepad?.dispose();
+      gamepadNavigation.clear();
+      gamepadStatus.remove();
       inputMode.dispose();
       cameraPointer?.dispose();
       staticPlacement?.dispose();
@@ -955,6 +1197,12 @@ export function startGame(): void {
           firstPersonAvailable: firstPersonEligible(),
           input: readMovement(),
           touchAvailable: canTouch(),
+          gamepad: gamepad?.snapshot(),
+          gamepadContext,
+          gamepadFocus: gamepadNavigation.selectedId,
+          gamepadBlocked: inputMode.value === 'gamepad' ? gamepadBlockReason() : '',
+          gamepadResumeRequired,
+          gamepadAvailable: canGamepadWalk(),
         }),
         corrections: () => session.correctionHistory(),
         report: () => ({

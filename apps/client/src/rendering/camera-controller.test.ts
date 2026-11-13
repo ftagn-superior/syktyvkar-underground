@@ -8,6 +8,7 @@ import {
   yawFromOrbit,
   orbitFromYaw,
   firstPersonMovement,
+  gamepadCameraDelta,
 } from './camera-controller';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 
@@ -120,6 +121,82 @@ describe('orthographic camera controls', () => {
     expect(camera.advance(-1)).toBe(INITIAL_CAMERA_ANGLE);
     expect(camera.advance(0)).toBe(INITIAL_CAMERA_ANGLE);
     expect(camera.advance(30) - INITIAL_CAMERA_ANGLE).toBeLessThan(Math.PI / 20);
+  });
+  it('finishes the same gamepad orbit at 30, 60 and 120 fps after ordinary release smoothing', () => {
+    for (const axis of [1, 0.5, -1]) {
+      const angles = [30, 60, 120].map((fps) => {
+        const camera = new CameraOrbit();
+        for (let frame = 0; frame < fps * 2; frame++) {
+          camera.rotateBy(gamepadCameraDelta(axis, 1 / fps));
+          camera.advance(1 / fps);
+        }
+        // Releasing the stick keeps the existing short approach to its last target.
+        expect(camera.turning).toBe(true);
+        const released = camera.angle;
+        settle(camera);
+        expect(Math.abs(angleDifference(camera.angle, released))).toBeLessThan(0.1);
+        expect(angleDifference(camera.angle, INITIAL_CAMERA_ANGLE + axis * Math.PI)).toBeCloseTo(
+          0,
+          10,
+        );
+        return camera.angle;
+      });
+      for (const angle of angles) expect(angleDifference(angle, angles[0])).toBeCloseTo(0, 10);
+    }
+  });
+  it('turns a positive right stick in the E direction and preserves half-speed analog travel', () => {
+    const keyboard = new CameraOrbit();
+    const full = new CameraOrbit();
+    const half = new CameraOrbit();
+    keyboard.setDirection(1);
+    for (let frame = 0; frame < 60; frame++) {
+      keyboard.advance(1 / 60);
+      full.rotateBy(gamepadCameraDelta(1, 1 / 60));
+      full.advance(1 / 60);
+      half.rotateBy(gamepadCameraDelta(0.5, 1 / 60));
+      half.advance(1 / 60);
+    }
+    keyboard.setDirection(0);
+    for (const camera of [keyboard, full, half]) settle(camera);
+    expect(full.angle).toBeGreaterThan(INITIAL_CAMERA_ANGLE);
+    expect(angleDifference(full.angle, keyboard.angle)).toBeCloseTo(0, 10);
+    expect(half.angle - INITIAL_CAMERA_ANGLE).toBeCloseTo(
+      (full.angle - INITIAL_CAMERA_ANGLE) / 2,
+      10,
+    );
+  });
+  it('caps a stalled gamepad frame to 100ms and ignores nonpositive elapsed time', () => {
+    const delayed = new CameraOrbit();
+    const capped = new CameraOrbit();
+    delayed.rotateBy(gamepadCameraDelta(1, 30));
+    delayed.advance(30);
+    capped.rotateBy(gamepadCameraDelta(1, 0.1));
+    capped.advance(0.1);
+    settle(delayed);
+    settle(capped);
+    expect(delayed.angle).toBe(capped.angle);
+    expect(delayed.angle - INITIAL_CAMERA_ANGLE).toBeCloseTo(Math.PI / 20, 10);
+    const still = new CameraOrbit();
+    for (const seconds of [0, -1, -30]) {
+      still.rotateBy(gamepadCameraDelta(1, seconds));
+      still.advance(1 / 60);
+    }
+    settle(still);
+    expect(still.angle).toBe(INITIAL_CAMERA_ANGLE);
+  });
+  it('discards pending gamepad smoothing on interruption and only accepts fresh rotation afterward', () => {
+    const camera = new CameraOrbit();
+    camera.rotateBy(gamepadCameraDelta(1, 0.1));
+    camera.advance(1 / 120);
+    expect(camera.turning).toBe(true);
+    camera.stop();
+    const interrupted = camera.angle;
+    settle(camera);
+    expect(camera.angle).toBe(interrupted);
+    camera.rotateBy(gamepadCameraDelta(-0.5, 0.1));
+    camera.advance(1 / 60);
+    settle(camera);
+    expect(camera.angle - interrupted).toBeCloseTo(-Math.PI / 40, 10);
   });
   it('casts parallel rays through off-centre samples from the camera near plane and stops before the player', () => {
     const camera = new Vector3(10, 10, 10);

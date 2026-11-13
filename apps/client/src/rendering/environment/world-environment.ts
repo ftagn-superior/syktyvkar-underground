@@ -3,7 +3,14 @@ import type { Camera } from '@babylonjs/core/Cameras/camera';
 import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { DAY_LENGTH_MS, DEFAULT_DAY_CLOCK, dayClockHour, type DayClock } from '@su/contracts';
+import {
+  DAY_LENGTH_MS,
+  DEFAULT_DAY_CLOCK,
+  DEFAULT_WEATHER,
+  dayClockHour,
+  type DayClock,
+  type WorldWeather,
+} from '@su/contracts';
 import type { RadialState } from '../radial-fog';
 import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { WorldLighting } from './lighting';
@@ -21,6 +28,8 @@ export class WorldEnvironment {
   private clock: DayClock = DEFAULT_DAY_CLOCK;
   private fixedHour?: number;
   private currentHour?: number;
+  private weather: WorldWeather = DEFAULT_WEATHER;
+  private qualityClouds = true;
 
   constructor(scene: Scene, camera: ArcRotateCamera, additionalCameras: Camera[] = []) {
     this.lighting = new WorldLighting(scene, camera, additionalCameras);
@@ -47,9 +56,15 @@ export class WorldEnvironment {
     this.fixedHour = hour === undefined ? undefined : ((hour % 24) + 24) % 24;
     this.currentHour = undefined;
   }
+  /** Облака видны, только если их разрешают и качество графики, и погода комнаты. */
+  setWeather(weather: WorldWeather): void {
+    this.weather = weather;
+    this.clouds.setEnabled(this.qualityClouds && weather.clouds);
+  }
   setQuality(quality: RenderQuality): void {
     this.lighting.setQuality(quality);
-    this.clouds.setEnabled(renderQualitySettings(quality).clouds);
+    this.qualityClouds = renderQualitySettings(quality).clouds;
+    this.clouds.setEnabled(this.qualityClouds && this.weather.clouds);
     this.nightLights.setEconomy(quality === 'economy');
   }
   update(
@@ -64,6 +79,7 @@ export class WorldEnvironment {
     const frozen = this.fixedHour !== undefined || this.clock.frozenHour >= 0;
     const night = frozen ? 0 : Math.floor((epochMs + this.clock.offsetMs) / DAY_LENGTH_MS - 0.5);
     this.nightLights.update(this.currentHour, night, frame.target);
+    this.nightLights.setGlowMask(this.lighting.glowMask);
     this.clouds.update({
       epochMs,
       lightDirection: this.lightDirection.set(
@@ -79,6 +95,9 @@ export class WorldEnvironment {
   }
   shadowDiagnostics() {
     return this.lighting.shadowDiagnostics();
+  }
+  bloomDiagnostics() {
+    return this.lighting.bloomDiagnostics();
   }
   dispose(): void {
     this.nightLights.dispose();

@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
 
-// Model an already-open v16 application bundle. All discovery responses below come
-// from the new terrain server; the legacy tab must stop before loading its catalog.
+// Model already-open v16 and v17 bundles. The combined terrain/weather release
+// must stop both legacy tabs before they load a catalog or reserve a room.
+const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({
   ...(await original<typeof import('@su/contracts')>()),
-  PROTOCOL_VERSION: 16,
+  get PROTOCOL_VERSION() {
+    return legacy.protocol;
+  },
 }));
-const reserve = vi.hoisted(() => vi.fn());
 vi.mock('@colyseus/sdk', () => ({
   Client: class {
     joinById = reserve;
@@ -20,8 +22,8 @@ import { GameSession } from './session';
 
 const current: WorldInfo = {
   roomId: 'new-room',
-  worldEpoch: 'terrain-17',
-  protocolVersion: 17,
+  worldEpoch: 'terrain-weather-18',
+  protocolVersion: 18,
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
   layoutHash: 'b'.repeat(64),
@@ -37,7 +39,7 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(17);
+  expect(actual.PROTOCOL_VERSION).toBe(18);
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -58,7 +60,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('legacy v16 tab discovering terrain protocol v17', () => {
+describe.each([16, 17])('legacy v%i tab discovering terrain/weather protocol v18', (version) => {
+  beforeEach(() => {
+    legacy.protocol = version;
+  });
   it('requires reload before initial manifest/catalog download or room reservation', async () => {
     await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
     expect(instance.reloadRequired).toBe(true);
@@ -67,7 +72,7 @@ describe('legacy v16 tab discovering terrain protocol v17', () => {
     expect(reserve).not.toHaveBeenCalled();
   });
   it('requires reload on discovery refresh even when map geometry is unchanged', async () => {
-    instance.info = { ...current, protocolVersion: 16 };
+    instance.info = { ...current, protocolVersion: version };
     instance.state = 'ready';
     await expect(instance.refreshPublication()).rejects.toThrow('VERSION_MISMATCH');
     expect(instance.reloadRequired).toBe(true);
@@ -75,7 +80,7 @@ describe('legacy v16 tab discovering terrain protocol v17', () => {
     expect(reserve).not.toHaveBeenCalled();
   });
   it('stops recovery after the new server epoch and tells the legacy player to reload', async () => {
-    instance.info = { ...current, protocolVersion: 16, worldEpoch: 'old-16' };
+    instance.info = { ...current, protocolVersion: version, worldEpoch: `old-${version}` };
     instance.state = 'reconnecting';
     (instance as unknown as { beginRecoveryCheck(): void }).beginRecoveryCheck();
     await vi.waitFor(() => expect(instance.state).toBe('ready'));

@@ -5,9 +5,9 @@ import { PROFILE_COLORS } from './accounts.js';
 import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 
-// Terrain placement catalogs carry nullable ground height and explicit support policies.
-// Older clients must reload before consuming this incompatible placement contract.
-export const PROTOCOL_VERSION = 17;
+// The combined release includes room weather and terrain placement support policies.
+// Previously published v16/v17 clients must reload before consuming these contracts.
+export const PROTOCOL_VERSION = 18;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;

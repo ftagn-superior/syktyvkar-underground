@@ -47,4 +47,32 @@ describe('chat commands', () => {
     ])
       expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid' });
   });
+
+  it('parses /weather and the /clouds shorthand', () => {
+    expect(parseChatCommand('/weather')).toEqual({ kind: 'weather' });
+    expect(parseChatCommand('/weather reset')).toEqual({
+      kind: 'weather',
+      action: { kind: 'reset' },
+    });
+    for (const [text, enabled] of [
+      ['/weather clouds off', false],
+      ['/weather clouds on', true],
+      ['/clouds off', false],
+      ['/clouds on', true],
+    ] as const)
+      expect(parseChatCommand(text)).toEqual({
+        kind: 'weather',
+        action: { kind: 'clouds', enabled },
+      });
+    for (const text of [
+      '/weather clouds',
+      '/weather clouds maybe',
+      '/weather clouds on now',
+      '/weather rain on',
+      '/weather reset now',
+      '/clouds',
+      '/clouds on off',
+    ])
+      expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
+  });
 });

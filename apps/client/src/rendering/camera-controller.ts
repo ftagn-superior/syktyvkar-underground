@@ -6,6 +6,11 @@ const SMOOTH_SECONDS = 0.045;
 const SETTLED_ANGLE = 0.0001;
 const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
+/** Horizontal normalized stick travel uses the keyboard orbit speed and the same frame cap. */
+export function gamepadCameraDelta(axis: number, seconds: number): number {
+  return axis * ROTATION_SPEED * Math.min(0.1, Math.max(0, seconds));
+}
+
 /** Continuous orbit with a short, frame-rate-independent approach to the requested angle. */
 export class CameraOrbit {
   angle = INITIAL_CAMERA_ANGLE;

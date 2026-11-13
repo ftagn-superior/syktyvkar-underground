@@ -2,6 +2,7 @@ import { schema, t } from '@colyseus/schema';
 import {
   PROTOCOL_VERSION,
   DEFAULT_DAY_CLOCK,
+  DEFAULT_WEATHER,
   normalizeInput,
   NEUTRAL_INPUT,
   type MoveInput,
@@ -114,6 +115,8 @@ export class WorldState extends schema(
     // Игровые часы (`DayClock`): сдвиг от настенного времени и час остановки, −1 — идут.
     dayOffsetMs: t.uint32().default(DEFAULT_DAY_CLOCK.offsetMs),
     dayFrozenHour: t.float32().default(DEFAULT_DAY_CLOCK.frozenHour),
+    // Погода комнаты (`WorldWeather`), её меняет `/weather`.
+    weatherClouds: t.boolean().default(DEFAULT_WEATHER.clouds),
   },
   'World',
 ) {}

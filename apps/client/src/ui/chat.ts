@@ -1,4 +1,5 @@
-import { CHAT_MAX_LENGTH, normalizeChatText } from '@su/contracts';
+import { CHAT_COOLDOWN_MS, CHAT_MAX_LENGTH, normalizeChatText } from '@su/contracts';
+import { chatSendHint, closesAfterSend, type ChatSettings } from './chat-settings';
 
 export interface ChatConsoleStatus {
   available: boolean;
@@ -10,14 +11,17 @@ export interface ChatConsoleStatus {
 const COUNTER_FROM = CHAT_MAX_LENGTH - 40;
 
 /**
- * Поле ввода чата. Свёрнуто в кнопку по умолчанию; `T` или кнопка раскрывают его, и оно остаётся
- * раскрытым после отправки, пока игрок не свернёт его: `Esc`, щелчок по миру или кнопка чата.
- * Несохранённый текст при сворачивании не теряется. Истории нет.
+ * Поле ввода чата. Свёрнуто в кнопку по умолчанию; `T` или кнопка раскрывают его. Сворачивается ли
+ * оно после отправки, решает настройка (по умолчанию Enter — отправить и закрыть, Shift+Enter —
+ * отправить, не закрывая). Также сворачивают `Esc`, щелчок по миру и кнопка чата. Несохранённый
+ * текст при сворачивании не теряется; отклонённое сообщение остаётся в поле. Истории нет.
  */
 export class ChatConsole {
   private readonly controller = new AbortController();
   private state: ChatConsoleStatus = { available: false, pending: false, remainingMs: 0 };
   private composing = false;
+  /** The current wait is longer than usual because of flooding. */
+  private slowed = false;
   constructor(
     private readonly toggle: HTMLButtonElement,
     private readonly form: HTMLFormElement,
@@ -27,11 +31,17 @@ export class ChatConsole {
     private readonly counter: HTMLElement,
     private readonly submit: HTMLButtonElement,
     private readonly canvas: HTMLCanvasElement,
-    send: (text: string) => void,
+    /** Returns whether the message actually left for the server. */
+    private readonly send: (text: string) => boolean,
     private readonly onOpenChange: (open: boolean) => void,
+    private readonly settings: ChatSettings,
   ) {
     const options = { signal: this.controller.signal };
     this.input.maxLength = CHAT_MAX_LENGTH;
+    const renderHint = () => (this.input.placeholder = chatSendHint(settings.closeMode));
+    renderHint();
+    const unsubscribe = settings.onChange(renderHint);
+    this.controller.signal.addEventListener('abort', unsubscribe);
     toggle.addEventListener('click', () => (this.isOpen ? this.close() : this.open()), options);
     input.addEventListener('input', () => this.render(), options);
     input.addEventListener('compositionstart', () => (this.composing = true), options);
@@ -47,15 +57,25 @@ export class ChatConsole {
         if (event.code === 'Escape') {
           event.preventDefault();
           this.close();
+        } else if (
+          (event.code === 'Enter' || event.code === 'NumpadEnter') &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey
+        ) {
+          // Handled here rather than by implicit submission, so Shift is known.
+          event.preventDefault();
+          if (!event.repeat) this.trySend(event.shiftKey);
         }
       },
       options,
     );
+    // The send button behaves like a plain Enter.
     form.addEventListener(
       'submit',
       (event) => {
         event.preventDefault();
-        if (!this.composing && !this.submit.disabled) send(this.input.value);
+        this.trySend(false);
       },
       options,
     );
@@ -77,6 +97,11 @@ export class ChatConsole {
       },
       options,
     );
+  }
+  private trySend(shift: boolean): void {
+    if (this.composing || this.submit.disabled) return;
+    if (this.send(this.input.value) && closesAfterSend(this.settings.closeMode, shift))
+      this.close();
   }
   get isOpen(): boolean {
     return !this.form.hidden;
@@ -111,7 +136,7 @@ export class ChatConsole {
       if (restoreFocus) this.canvas.focus({ preventScroll: true });
     }
   }
-  /** Server answer for the last message: a delivered message clears the field, which stays open. */
+  /** Server answer for the last message: a delivered message clears the field. */
   complete(ok: boolean): void {
     if (ok) this.input.value = '';
     this.render();
@@ -136,18 +161,20 @@ export class ChatConsole {
     this.input.readOnly = this.state.pending;
     this.form.setAttribute('aria-busy', String(this.state.pending));
     const command = this.input.value.trimStart().startsWith('/');
+    if (this.state.remainingMs > CHAT_COOLDOWN_MS) this.slowed = true;
+    else if (this.state.remainingMs <= 0) this.slowed = false;
     this.submit.disabled =
       !this.state.available ||
       this.state.pending ||
       (this.state.remainingMs > 0 && !command) ||
       !normalizeChatText(this.input.value);
-    // Only states worth reading are shown; the placeholder already says «Enter — отправить».
+    // Only states worth reading are shown; the placeholder already names the send keys.
     const message = !this.isOpen
       ? ''
       : this.state.pending
         ? 'Отправляем…'
         : this.state.remainingMs > 0 && !command
-          ? `Следующее сообщение через ${Math.ceil(this.state.remainingMs / 1000)} с`
+          ? `${this.slowed ? 'Слишком часто. ' : ''}Следующее сообщение через ${Math.ceil(this.state.remainingMs / 1000)} с`
           : command
             ? 'Enter — выполнить команду · Esc — свернуть'
             : '';

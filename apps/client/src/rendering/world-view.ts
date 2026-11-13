@@ -35,7 +35,7 @@ import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldEnvironment } from './environment/world-environment';
-import type { DayClock } from '@su/contracts';
+import type { DayClock, WorldWeather } from '@su/contracts';
 import { BuildingViews } from './buildings';
 import {
   CameraOrbit,
@@ -236,6 +236,7 @@ export class WorldView {
       const now = performance.now();
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
+      this.inputFrameHook?.(now, delta);
       this.camera.alpha = this.cameraOrbit.advance(delta);
       this.frameHook?.(now, delta);
       this.camera.setTarget(
@@ -331,6 +332,10 @@ export class WorldView {
   /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
   setDayClock(clock: DayClock): void {
     this.environment.setDayClock(clock);
+  }
+  /** Погода комнаты, которой управляет `/weather`. */
+  setWeather(weather: WorldWeather): void {
+    this.environment.setWeather(weather);
   }
   get cameraAngle(): number {
     return this.firstPerson ? orbitFromYaw(this.yaw) : this.cameraOrbit.angle;
@@ -496,6 +501,7 @@ export class WorldView {
       shadows: this.scene.shadowsEnabled,
       hour: this.environment.hour,
       nightLampSources: this.environment.nightLights.sourceCount,
+      bloom: this.environment.bloomDiagnostics(),
       lights: this.scene.lights.map((light) => ({
         name: light.name,
         type: light.getClassName(),
@@ -609,7 +615,7 @@ export class WorldView {
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();
-    if (this.touchMode || this.firstPerson) return;
+    if (this.touchMode || this.gamepadMode || this.firstPerson) return;
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * Math.exp(event.deltaY * 0.001)));
     if (zoom === this.zoom) return;
     this.zoom = zoom;
@@ -626,8 +632,21 @@ export class WorldView {
       this.sizeCamera();
     }
   }
+  private gamepadMode = false;
+  setGamepadMode(enabled: boolean): void {
+    this.gamepadMode = enabled;
+    if (enabled) {
+      this.zoom = 1;
+      this.sizeCamera();
+    }
+  }
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
+  }
+  private inputFrameHook?: (now: number, delta: number) => void;
+  /** Samples local controls before the orbit advances and movement reads its actual angle. */
+  onInputFrame(callback: (now: number, delta: number) => void): void {
+    this.inputFrameHook = callback;
   }
   onCameraFrame(callback: (now: number, delta: number) => void): void {
     this.cameraFrameHook = callback;

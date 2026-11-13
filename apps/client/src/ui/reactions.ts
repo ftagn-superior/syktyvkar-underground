@@ -1,4 +1,4 @@
-import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '@su/contracts';
+import { REACTION_COOLDOWN_MS, REACTIONS } from '@su/contracts';
 import { CatalogFilter, CatalogShortcuts } from './catalog-shortcuts';
 
 export interface ReactionMenuStatus {
@@ -61,7 +61,7 @@ export class ReactionMenu {
     panel.querySelector('[data-catalog-count]')!.textContent = String(REACTIONS.length);
     this.shown = panel.querySelector('[data-catalog-shown]')!;
     this.cooldown = panel.querySelector<HTMLProgressElement>('.reaction-cooldown')!;
-    this.cooldown.max = WORLD_ACTIVITY_MOVE_DURATION_MS;
+    this.cooldown.max = REACTION_COOLDOWN_MS;
     this.scroll = panel.querySelector('.catalog-scroll')!;
     this.recentBlock = panel.querySelector('.catalog-recent')!;
     this.recentGrid = panel.querySelector('.reaction-recents')!;
@@ -199,11 +199,15 @@ export class ReactionMenu {
     this.panel.setAttribute('aria-busy', String(state.pending));
     this.status.dataset.state = state.pending || state.remainingMs > 0 ? 'waiting' : 'ready';
     this.cooldown.hidden = state.remainingMs <= 0;
+    // A flood-extended wait gets its own scale so the bar still drains from full.
+    if (state.remainingMs <= 0) this.cooldown.max = REACTION_COOLDOWN_MS;
+    else if (state.remainingMs > this.cooldown.max) this.cooldown.max = state.remainingMs;
     this.cooldown.value = Math.max(0, state.remainingMs);
+    const slowed = this.cooldown.max > REACTION_COOLDOWN_MS;
     const message = state.pending
       ? 'Отправляем…'
       : state.remainingMs > 0
-        ? `Следующая реакция через ${Math.ceil(state.remainingMs / 1000)} с`
+        ? `${slowed ? 'Слишком часто. ' : ''}Следующая реакция через ${Math.ceil(state.remainingMs / 1000)} с`
         : 'Стикер появится над персонажем';
     if (this.status.textContent !== message) this.status.textContent = message;
     const disabled = !state.available || state.pending || state.remainingMs > 0;

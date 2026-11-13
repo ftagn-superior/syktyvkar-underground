@@ -1,8 +1,11 @@
 import {
   foliageGeometry,
   foliageOcclusion,
+  GLOW_KIND,
   type BuildingPhysicsAsset,
+  type GlowKind,
   type StaticCollider,
+  type StaticLightSource,
 } from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
 import { meshPart } from './house.js';
@@ -10,6 +13,7 @@ import { mergeParts } from './merge.js';
 import { bakeLocalAo } from './ambient-occlusion.js';
 import { treeRenderRecipe } from './tree-instances.js';
 import { addOrientedBox, addOutwardFace } from './facade.js';
+import { glowRandom, markGlow } from './glow.js';
 
 /**
  * Модель «из конструктора»: части из простых фигур, отдельно — тела столкновений.
@@ -57,6 +61,8 @@ export interface KitRecipe {
     /** Становится ли часть прозрачной, закрывая персонажа. */
     fade: boolean;
     color: string;
+    /** Ночное свечение части, например плафона фонаря (`lamp`) или вывески (`sign`). */
+    glow?: GlowKind;
     shapes: KitShape[];
   }[];
   colliders: KitCollider[];
@@ -65,6 +71,11 @@ export interface KitRecipe {
    * Резко сокращает вызовы отрисовки для сгенерированных квадратов с мелкими объектами.
    */
   merge?: boolean;
+  /**
+   * Источники ночного света в локальных осях модели: клиент рисует под ними пятно света.
+   * `position` — [x, y, z] светящегося плафона, `radius` — дальность в метрах.
+   */
+  lights?: { position: Triple; radius: number; color: string }[];
 }
 
 const finite = (values: unknown, count: number) =>
@@ -173,7 +184,7 @@ function addWedge(part: StaticMeshPart, wedge: Extract<KitShape, { wedge: unknow
 export function generateKit(
   assetId: string,
   recipe: KitRecipe,
-): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
+): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset; lights?: StaticLightSource[] } {
   if (recipe.formatVersion !== 1) throw new Error('Unsupported kit recipe version');
   if (recipe.foliage !== undefined && recipe.foliage !== 'broadleaf')
     throw new Error('Unsupported kit foliage profile');
@@ -264,6 +275,10 @@ export function generateKit(
       else throw new Error(`Unknown kit shape in ${spec.id}`);
       if (part.colors) while (part.colors.length < part.positions.length) part.colors.push(1);
     }
+    if (spec.glow !== undefined) {
+      if (!Object.hasOwn(GLOW_KIND, spec.glow)) throw new Error(`Invalid kit glow ${spec.id}`);
+      markGlow(part, 0, spec.glow, glowRandom(`${assetId}:${spec.id}`)());
+    }
     return part;
   });
   const colliders: StaticCollider[] = recipe.colliders.map((spec) => {
@@ -306,8 +321,19 @@ export function generateKit(
     bakeLocalAo(
       parts.filter((_, i) => !recipe.parts[i].shapes.some((shape) => 'foliage' in shape)),
     );
+  const lights = recipe.lights?.map((light) => {
+    if (
+      !finite(light.position, 3) ||
+      !(light.radius > 0 && light.radius <= 40) ||
+      !/^#[a-f0-9]{6}$/i.test(light.color)
+    )
+      throw new Error(`Invalid kit light in ${assetId}`);
+    const [x, y, z] = light.position;
+    return { position: { x, y, z }, radius: light.radius, color: light.color };
+  });
   return {
     parts: recipe.merge ? mergeParts(parts) : parts,
     physics: { assetId, bounds: { min, max }, colliders },
+    ...(lights?.length ? { lights } : {}),
   };
 }

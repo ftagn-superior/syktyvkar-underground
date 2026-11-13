@@ -197,6 +197,7 @@ export class WorldView {
       this.environment.staticShadow,
       definition,
       this.radial,
+      this.environment.nightLights,
     );
     this.statics = new StaticViews(this.scene, this.environment.staticShadow);
     this.sizeCamera();
@@ -489,6 +490,7 @@ export class WorldView {
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
       hour: this.environment.hour,
+      nightLampSources: this.environment.nightLights.sourceCount,
       lights: this.scene.lights.map((light) => ({
         name: light.name,
         type: light.getClassName(),

@@ -22,6 +22,7 @@ import {
   type WorldDefinition,
   type WorldSource,
   type TreeRenderRecipe,
+  type StaticLightSource,
   type BuildingParts,
   validateBuildingParts,
 } from '@su/contracts';
@@ -85,6 +86,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   let model: Uint8Array | undefined, physics: BuildingPhysicsAsset;
   let treeParts: BuildingParts | undefined;
   let tree: TreeRenderRecipe | undefined;
+  let lights: StaticLightSource[] | undefined;
+  let glow = false;
   const kind = descriptor.source?.kind;
   const generator = Object.hasOwn(generators, kind)
     ? generators[kind as keyof typeof generators]
@@ -93,6 +96,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     const recipe = groundRecipe ?? (await readJson(sourceFile(directory, descriptor.source.file)));
     const generated = generator(assetId, recipe);
     physics = generated.physics;
+    if ('lights' in generated) lights = generated.lights as StaticLightSource[] | undefined;
+    glow = generated.parts.some((part) => part.glow);
     if (kind === 'kit') tree = treeRenderRecipe(assetId, recipe);
     if (assetId.startsWith('tree-') && !tree)
       throw new Error(`Tree must use the current instancing profile: ${assetId}`);
@@ -131,6 +136,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
           .join('; ')}`,
       );
     inspected = inspectStaticGlb(model, assetId, descriptor.renderMode);
+    if (lights) inspected.parts = { ...inspected.parts, lights };
+    if (glow) inspected.parts = { ...inspected.parts, glow: true };
   } else {
     if (!treeParts) throw new Error(`Missing tree representation: ${assetId}`);
     if (descriptor.renderMode !== undefined)

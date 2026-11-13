@@ -5,6 +5,7 @@ import { triangulate, type Point2 } from './triangulate.js';
 import { addOrientedBox, buildFacade, type FacadeDetails } from './facade.js';
 import { mergeParts } from './merge.js';
 import { bakeLocalAo } from './ambient-occlusion.js';
+import { glowRandom, markGlow } from './glow.js';
 
 /**
  * Генераторы городских моделей по контурам: здание-призма и поверхность земли.
@@ -79,6 +80,11 @@ export interface FootprintRecipe {
   doors?: Point2[];
   /** Слить части в один меш на группу прозрачности (цвета — в вершинах). */
   merge?: boolean;
+  /**
+   * Как окна светятся ночью: `window` (по умолчанию) — жилой дом, `office` — школа, вуз,
+   * учреждение: вечером горят, к ночи гаснут почти все; `none` — окна не светятся.
+   */
+  windowGlow?: 'window' | 'office' | 'none';
 }
 
 /** Двери с козырьками у ближайших к точкам входов рёбер контура. */
@@ -204,7 +210,15 @@ function generatePrism(
   const walls = meshPart('walls', 'wall', recipe.wallColor);
   const roof = meshPart('roof', 'roof', recipe.roofColor);
   const windows = meshPart('windows', 'detail', recipe.windowColor);
-  const facade = buildFacade(ring, h, recipe.floors, recipe.details, e);
+  const windowGlow = recipe.windowGlow ?? 'window';
+  if (!['window', 'office', 'none'].includes(windowGlow))
+    throw new Error('Invalid footprint windowGlow');
+  // Порядок окон в контуре стабилен, поэтому случайные числа повторяются от сборки к сборке.
+  const random = glowRandom(`${assetId}:${JSON.stringify(recipe.outline)}`);
+  const facade = buildFacade(ring, h, recipe.floors, recipe.details, e, {
+    random,
+    windows: windowGlow === 'none' ? undefined : windowGlow,
+  });
   const top = h + facade.parapet;
   // triangulate возвращает контур с положительной площадью в осях (x, z);
   // для такого обхода внешняя нормаль ребра p → q равна up × (q − p).
@@ -243,12 +257,15 @@ function generatePrism(
         const s0 = center - width / 2,
           s1 = center + width / 2;
         const at = (s: number, y: number) => [px + dx * s + ox, y, pz + dz * s + oz];
+        const start = windows.positions.length / 3;
         addFace(windows, [
           at(s0, bottom),
           at(s0, bottom + height),
           at(s1, bottom + height),
           at(s1, bottom),
         ]);
+        const seed = random();
+        if (windowGlow !== 'none') markGlow(windows, start, windowGlow, seed);
       }
     }
   }

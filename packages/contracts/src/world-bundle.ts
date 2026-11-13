@@ -252,6 +252,26 @@ export function validateBuildingParts(value: unknown): BuildingParts {
     );
     requireValue(Number.isSafeInteger(part.nodeIndex) && part.nodeIndex >= 0, 'part nodeIndex');
   }
+  requireValue(
+    value.glow === undefined || (value.glow === true && value.tree === undefined),
+    'parts glow',
+  );
+  if (value.lights !== undefined) {
+    requireValue(
+      Array.isArray(value.lights) && value.lights.length > 0 && value.lights.length <= 16,
+      'parts lights',
+    );
+    requireValue(value.tree === undefined, 'tree recipe cannot contain lights');
+    for (const light of value.lights) {
+      requireValue(object(light), 'light');
+      vec(light.position);
+      requireValue(
+        typeof light.radius === 'number' && light.radius > 0 && light.radius <= 40,
+        'light radius',
+      );
+      requireValue(stringMatches(light.color, /^#[a-f0-9]{6}$/i), 'light color');
+    }
+  }
   if (value.tree !== undefined) {
     const tree = value.tree;
     const tuple = (v: unknown): v is number[] =>

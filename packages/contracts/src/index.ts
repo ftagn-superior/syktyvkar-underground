@@ -9,9 +9,10 @@ export * from './avatars.js';
 export * from './animations.js';
 export * from './sounds.js';
 export * from './world-layout-patch.js';
+export * from './day-clock.js';
 import type { ItemCatalog, InitialItem, ItemState, ItemError } from './items.js';
 
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 export const WORLD_FORMAT_VERSION = 5;
 export const TICK_RATE = 60;
 export const STEP_SECONDS = 1 / TICK_RATE;

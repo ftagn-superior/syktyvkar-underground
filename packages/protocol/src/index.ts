@@ -110,6 +110,9 @@ export class WorldState extends schema(
     items: t.map(EntitySchema).view(),
     paused: t.boolean().default(false),
     pauseReason: t.string().default(''),
+    // Игровые часы (`DayClock`): сдвиг от настенного времени и час остановки, −1 — идут.
+    dayOffsetMs: t.uint32().default(0),
+    dayFrozenHour: t.float32().default(-1),
   },
   'World',
 ) {}

@@ -5,6 +5,7 @@ export function renderQualitySettings(quality: RenderQuality) {
   return {
     shadows: quality === 'standard',
     postProcessing: quality === 'standard',
+    clouds: quality === 'standard',
     hardwareScaling: quality === 'economy' ? 1.5 : 1,
   };
 }

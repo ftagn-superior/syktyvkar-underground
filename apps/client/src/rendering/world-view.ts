@@ -33,6 +33,8 @@ import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
 import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldLighting } from './lighting';
+import { WorldClouds } from './clouds';
+import { DEFAULT_DAY_CLOCK, dayClockHour, type DayClock } from '@su/contracts';
 import { BuildingViews } from './buildings';
 import {
   CameraOrbit,
@@ -87,6 +89,11 @@ export class WorldView {
   private eyePosition?: Vec3;
   private overlayTest?: (from: Vec3, to: Vec3, targetId?: string) => boolean;
   private readonly lighting: WorldLighting;
+  private readonly clouds: WorldClouds;
+  private readonly cloudTint = new Color3();
+  private readonly lightDirection = new Vector3();
+  private fixedHour?: number;
+  private dayClock: DayClock = DEFAULT_DAY_CLOCK;
   private readonly shadow: ShadowGenerator;
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
@@ -186,11 +193,19 @@ export class WorldView {
     this.eyeCamera.maxZ = FIRST_PERSON.maxZ;
     this.scene.activeCamera = this.camera;
     this.lighting = new WorldLighting(this.scene, this.camera, [this.eyeCamera]);
+    // Before any world material exists: cloud shadows attach to materials as they are created.
+    this.clouds = new WorldClouds(this.scene, this.camera);
     this.shadow = this.lighting.shadow;
     this.applyQuality();
     this.sizeCamera();
-    this.buildings = new BuildingViews(this.scene, this.shadow, definition, this.radial);
-    this.statics = new StaticViews(this.scene, this.shadow);
+    // Неподвижный мир отбрасывает тени в кэшируемую карту; аватары и предметы — в покадровую.
+    this.buildings = new BuildingViews(
+      this.scene,
+      this.lighting.staticShadow,
+      definition,
+      this.radial,
+    );
+    this.statics = new StaticViews(this.scene, this.lighting.staticShadow);
     this.sizeCamera();
     if ('entities' in definition) {
       for (const entity of definition.entities)
@@ -248,6 +263,23 @@ export class WorldView {
       }
       const active = this.activeCamera;
       this.lighting.follow(this.ownPosition ?? this.target);
+      const epochMs = Date.now();
+      const sky = this.lighting.setTimeOfDay(
+        this.fixedHour ?? dayClockHour(this.dayClock, epochMs),
+      );
+      this.clouds.update({
+        epochMs,
+        lightDirection: this.lightDirection.set(
+          sky.lightDirection.x,
+          sky.lightDirection.y,
+          sky.lightDirection.z,
+        ),
+        lightStrength: sky.directLight,
+        tint: this.cloudTint.set(...sky.cloudColor),
+        // The layer is laid out for the orthographic view; on foot only the shadows remain.
+        zoom: this.firstPerson ? 0 : this.zoom,
+        visible: this.radial,
+      });
       active.getViewMatrix(true);
       active.getProjectionMatrix(true);
       this.scene.updateTransformMatrix(true);
@@ -295,12 +327,21 @@ export class WorldView {
     this.engine.setHardwareScalingLevel(settings.hardwareScaling);
     this.engine.resize();
     this.lighting.setQuality(this.quality);
+    this.clouds.setEnabled(renderQualitySettings(this.quality).clouds);
   }
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
     this.quality = quality;
     this.applyQuality();
     this.sizeCamera();
+  }
+  /** Holds the world at one game hour (0..24); `undefined` returns to the running clock. */
+  setTimeOfDay(hour?: number): void {
+    this.fixedHour = hour === undefined ? undefined : ((hour % 24) + 24) % 24;
+  }
+  /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
+  setDayClock(clock: DayClock): void {
+    this.dayClock = clock;
   }
   get cameraAngle(): number {
     return this.firstPerson ? orbitFromYaw(this.yaw) : this.cameraOrbit.angle;
@@ -452,6 +493,7 @@ export class WorldView {
     );
   }
   renderingDiagnostics() {
+    const shadows = this.lighting.shadowDiagnostics();
     return {
       quality: this.quality,
       canvasSize: { width: this.canvas.clientWidth, height: this.canvas.clientHeight },
@@ -478,7 +520,8 @@ export class WorldView {
       geometries: this.scene.geometries.length,
       nodes: this.scene.transformNodes.length,
       textures: this.scene.textures.length,
-      shadowCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
+      shadowCasters: shadows.staticCasters + shadows.dynamicCasters,
+      shadowMaps: shadows,
       streaming: {
         drawRadius: this.graphicalArea().drawRadius,
         readyRadius: this.streamingRadius,
@@ -1083,6 +1126,7 @@ export class WorldView {
     this.statics.dispose();
     this.instrumentation.dispose();
     const releaseGraphics = () => {
+      this.clouds.dispose();
       this.lighting.dispose();
       this.scene.dispose();
       this.engine.dispose();

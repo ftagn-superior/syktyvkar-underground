@@ -85,6 +85,7 @@ interface BodyRecord {
   item?: ItemState;
   recovering?: boolean;
 }
+type ItemBodyRecord = BodyRecord & { item: ItemState };
 interface CharacterRecord {
   controller: PhysicsCharacterController;
   body: PhysicsBody;
@@ -102,6 +103,8 @@ export class PhysicsWorld {
   readonly physics: PhysicsEngine;
   readonly characters = new Map<string, CharacterRecord>();
   readonly objects = new Map<string, BodyRecord>();
+  /** The same records indexed for dynamic work; static city geometry never enters these loops. */
+  private readonly items = new Map<string, ItemBodyRecord>();
   readonly remotePlayers = new Map<
     string,
     { node: TransformNode; body: PhysicsBody; shape: PhysicsShape }
@@ -240,7 +243,7 @@ export class PhysicsWorld {
       ),
       buildings: this.buildings.diagnostics(),
       bodies: this.physics.getBodies().length,
-      items: [...this.objects.values()].filter((item) => item.item).length,
+      items: this.items.size,
       remotePlayers: this.remotePlayers.size,
     };
   }
@@ -354,16 +357,16 @@ export class PhysicsWorld {
       grounded: player.grounded,
     };
   }
-  boxState(box: BodyRecord): ItemState {
+  private itemState(record: ItemBodyRecord): ItemState {
     return {
-      ...box.item!,
-      entityId: box.definition.entityId,
+      ...record.item,
+      entityId: record.definition.entityId,
       kind: 'item',
-      revision: box.revision,
-      position: plain(box.node.position),
-      rotation: rotation(box.node.rotationQuaternion ?? Quaternion.Identity()),
-      velocity: plain(box.body.getLinearVelocity()),
-      angularVelocity: plain(box.body.getAngularVelocity()),
+      revision: record.revision,
+      position: plain(record.node.position),
+      rotation: rotation(record.node.rotationQuaternion ?? Quaternion.Identity()),
+      velocity: plain(record.body.getLinearVelocity()),
+      angularVelocity: plain(record.body.getAngularVelocity()),
     };
   }
   snapshot(): SimulationSnapshot {
@@ -371,7 +374,7 @@ export class PhysicsWorld {
     return {
       scope: 'authoritative',
       players: [...this.characters.keys()].map((id) => this.state(id)),
-      items: [...this.objects.values()].filter((b) => b.item).map((b) => this.boxState(b)),
+      items: [...this.items.values()].map((record) => this.itemState(record)),
     };
   }
   /** Restoring through public controller construction drops stale contact manifolds. */
@@ -394,7 +397,7 @@ export class PhysicsWorld {
   setRemoteSnapshot(snapshot: LocalSimulationSnapshot | SimulationSnapshot, ownId: string) {
     if (!this.prediction) throw new Error('Remote proxies belong to prediction');
     const ids = new Set(snapshot.items.map((i) => i.entityId));
-    for (const [id, record] of this.objects) if (record.item && !ids.has(id)) this.removeItem(id);
+    for (const id of this.items.keys()) if (!ids.has(id)) this.removeItem(id);
     for (const item of snapshot.items) {
       let record = this.objects.get(item.entityId);
       if (!record) {
@@ -475,13 +478,12 @@ export class PhysicsWorld {
     if (!this.prediction) {
       this.impacts.beginStep(dt);
       this.impactMotion.clear();
-      for (const record of this.objects.values())
-        if (record.item)
-          this.impactMotion.set(record.body, {
-            velocity: record.body.getLinearVelocity(),
-            angular: record.body.getAngularVelocity(),
-            center: record.node.position.clone(),
-          });
+      for (const record of this.items.values())
+        this.impactMotion.set(record.body, {
+          velocity: record.body.getLinearVelocity(),
+          angular: record.body.getAngularVelocity(),
+          center: record.node.position.clone(),
+        });
     }
     for (const record of this.characters.values()) {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
@@ -533,23 +535,26 @@ export class PhysicsWorld {
     if (this.objects.has(state.entityId)) throw new Error('Duplicate physical item');
     const type = this.definition.itemCatalog.types[state.typeId];
     if (!type) throw new Error(`Unknown item type ${state.typeId}`);
-    const record = this.createBody(
-      {
-        ...type,
-        entityId: state.entityId,
-        kind: 'item',
-        position: state.position,
-      },
-      type,
-    );
-    record.item = structuredClone(state);
-    record.revision = state.revision;
+    const record: ItemBodyRecord = {
+      ...this.createBody(
+        {
+          ...type,
+          entityId: state.entityId,
+          kind: 'item',
+          position: state.position,
+        },
+        type,
+      ),
+      item: structuredClone(state),
+      revision: state.revision,
+    };
     this.teleport(record.body, record.node, state.position, state.rotation);
     if (!this.prediction) {
       record.body.setLinearVelocity(vector(state.velocity));
       record.body.setAngularVelocity(vector(state.angularVelocity));
     }
     this.objects.set(state.entityId, record);
+    this.items.set(state.entityId, record);
   }
   removeItem(id: string) {
     const record = this.objects.get(id);
@@ -559,10 +564,21 @@ export class PhysicsWorld {
     record.shape.dispose();
     record.node.dispose();
     this.objects.delete(id);
+    this.items.delete(id);
+  }
+  /** Preserve live position and velocity unless persistence describes a new placement. */
+  reconcileItems(items: ItemState[]) {
+    const ids = new Set(items.map((item) => item.entityId));
+    for (const id of this.items.keys()) if (!ids.has(id)) this.removeItem(id);
+    for (const item of items)
+      if (this.items.get(item.entityId)?.item.placementVersion !== item.placementVersion) {
+        this.removeItem(item.entityId);
+        this.addItem(item);
+      }
   }
   replaceItems(items: ItemState[]) {
     this.impacts.clear();
-    for (const [id, record] of this.objects) if (record.item) this.removeItem(id);
+    for (const id of this.items.keys()) this.removeItem(id);
     for (const item of items) this.addItem(item);
   }
   surfaceRay(from: Vec3, to: Vec3, ignorePlayer?: string) {
@@ -768,8 +784,7 @@ export class PhysicsWorld {
   }
   returnLostItems() {
     const { min, max } = this.definition.bounds;
-    for (const item of this.objects.values()) {
-      if (!item.item) continue;
+    for (const item of this.items.values()) {
       const p = item.node.position;
       if (
         p.y >= min.y &&
@@ -803,8 +818,7 @@ export class PhysicsWorld {
           rotation: identity(),
         });
       const next = candidates.find(
-        (pose) =>
-          !this.checkPlacement(item.item!.typeId, pose, undefined, item.definition.entityId),
+        (pose) => !this.checkPlacement(item.item.typeId, pose, undefined, item.definition.entityId),
       );
       if (!next) {
         item.body.setLinearVelocity(Vector3.Zero());
@@ -835,6 +849,7 @@ export class PhysicsWorld {
       item.node.dispose();
     }
     this.objects.clear();
+    this.items.clear();
     this.staticReferences.clear();
     this.remotePlayers.clear();
     this.spawnShape.dispose();

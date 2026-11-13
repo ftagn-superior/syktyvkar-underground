@@ -1,4 +1,5 @@
-import type { Quat, StaticObjectInstance } from './index.js';
+import type { Quat } from './simulation.js';
+import type { StaticObjectInstance } from './world-types.js';
 
 export const STATIC_PLACEMENT_ASSET_ID = 'bench-0152a250d22ef0a9';
 export const STATIC_PLACEMENT_GROUND_Y = 0;

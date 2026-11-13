@@ -1,12 +1,5 @@
-import type {
-  Bounds,
-  BuildingInstance,
-  EntityDefinition,
-  WorldCell,
-  WorldGrid,
-  Vec3,
-  Quat,
-} from './index.js';
+import type { BuildingInstance, EntityDefinition, WorldCell, WorldGrid } from './world-types.js';
+import type { Bounds, Vec3, Quat } from './simulation.js';
 import { canonicalJson } from './world.js';
 
 function requireGrid(value: unknown, message: string): asserts value {
@@ -202,9 +195,21 @@ export function cellsIntersectingCircle(
 ): string[] {
   requireGrid(Number.isFinite(radius) && radius >= 0, 'finite nonnegative radius');
   requireGrid(Number.isFinite(position.x) && Number.isFinite(position.z), 'finite circle center');
+  // A closed circle can touch the cell on either side of a seam, including at radius zero.
+  // Restrict exact distance checks to its enclosing grid rectangle, not the whole city.
+  const minX = Math.max(0, Math.ceil((position.x - radius - grid.origin.x) / grid.cellSize) - 1);
+  const minZ = Math.max(0, Math.ceil((position.z - radius - grid.origin.z) / grid.cellSize) - 1);
+  const maxX = Math.min(
+    grid.columns - 1,
+    Math.floor((position.x + radius - grid.origin.x) / grid.cellSize),
+  );
+  const maxZ = Math.min(
+    grid.rows - 1,
+    Math.floor((position.z + radius - grid.origin.z) / grid.cellSize),
+  );
   const result: string[] = [];
-  for (let z = 0; z < grid.rows; z++)
-    for (let x = 0; x < grid.columns; x++) {
+  for (let z = minZ; z <= maxZ; z++)
+    for (let x = minX; x <= maxX; x++) {
       const id = `${x}_${z}`;
       if (distanceToBoundsXZ(position, worldCellBounds(bounds, grid, id)) <= radius)
         result.push(id);

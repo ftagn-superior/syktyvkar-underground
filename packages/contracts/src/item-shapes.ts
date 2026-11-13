@@ -1,5 +1,5 @@
 import type { ItemType } from './items.js';
-import type { Quat, Vec3 } from './index.js';
+import type { Quat, Vec3 } from './simulation.js';
 
 export type ItemShapePart = { center: Vec3 } & (
   | { kind: 'box'; size: Vec3 }

@@ -1,4 +1,4 @@
-import type { StaticObjectInstance, WorldLayoutSnapshot } from './index.js';
+import type { StaticObjectInstance, WorldLayoutSnapshot } from './world-types.js';
 import { validateBuildingInstances } from './world-bundle.js';
 import { canonicalJson } from './world.js';
 

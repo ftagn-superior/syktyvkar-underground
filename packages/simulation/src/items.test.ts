@@ -1,12 +1,58 @@
 import { describe, it, expect } from 'vitest';
 import { createPhysicsWorld } from './physics-world.js';
 import { createPredictionWorld } from './prediction.js';
+import { AuthoritativeWorld } from './authoritative-world.js';
 import { loadServerWasm } from './server.js';
 import { physicsFixture, buildingFixture } from './test-fixture.js';
 import { initialItemState, itemSupportDistance } from '@su/contracts';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 
 describe('item placement and dynamic collections in Havok', () => {
+  it('reconciles item placements without resetting live motion or touching static geometry', async () => {
+    const definition = physicsFixture();
+    const physics = await createPhysicsWorld(definition, await loadServerWasm(), false);
+    const world = new AuthoritativeWorld(physics);
+    try {
+      const saved = world.getSnapshot().items[0];
+      const floor = physics.objects.get(definition.entities[0].entityId);
+      const body = physics.objects.get(saved.entityId)!.body;
+      body.setLinearVelocity(new Vector3(2, 0, 0));
+      for (let tick = 0; tick < 10; tick++) world.step();
+      const moving = world.getSnapshot().items[0];
+      expect(moving.position.x).toBeGreaterThan(saved.position.x);
+
+      world.reconcileItems([saved]);
+      expect(world.getSnapshot().items).toEqual([moving]);
+      expect(physics.objects.get(saved.entityId)!.body).toBe(body);
+
+      const placed = {
+        ...saved,
+        placementVersion: saved.placementVersion + 1,
+        position: { x: -5, y: 2, z: -5 },
+        velocity: { x: 1, y: 0, z: 0 },
+      };
+      world.reconcileItems([placed]);
+      expect(world.getSnapshot().items[0]).toMatchObject({
+        placementVersion: placed.placementVersion,
+        position: placed.position,
+        velocity: placed.velocity,
+      });
+      expect(physics.objects.get(saved.entityId)!.body).not.toBe(body);
+
+      world.reconcileItems([]);
+      expect(world.getSnapshot().items).toEqual([]);
+      expect(physics.staticDiagnostics().items).toBe(0);
+      expect(physics.objects.get(definition.entities[0].entityId)).toBe(floor);
+      world.reconcileItems([placed]);
+      expect(world.getSnapshot().items).toHaveLength(1);
+      world.replaceItems([]);
+      expect(physics.staticDiagnostics().items).toBe(0);
+    } finally {
+      world.dispose();
+    }
+    expect(physics.staticDiagnostics()).toMatchObject({ items: 0, bodies: 0 });
+  });
+
   it('validates saved airborne dynamics separately from supported placement without changing state', async () => {
     const world = await createPhysicsWorld(physicsFixture(), await loadServerWasm(), false);
     try {

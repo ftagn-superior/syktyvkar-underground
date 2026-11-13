@@ -115,6 +115,29 @@ describe('world grid and seam identity', () => {
     expect(rounded.max.z).toBeCloseTo(8, 10);
   });
 
+  it('matches exhaustive circle selection at seams, partial edges and outside the city', () => {
+    const partial: Bounds = {
+      min: { x: -37, y: -5, z: -23 },
+      max: { x: 138, y: 15, z: 94 },
+    };
+    const partialGrid = createWorldGrid(partial, 16);
+    const cells = [];
+    for (let z = 0; z < partialGrid.rows; z++)
+      for (let x = 0; x < partialGrid.columns; x++) {
+        const id = `${x}_${z}`;
+        cells.push({ id, bounds: worldCellBounds(partial, partialGrid, id) });
+      }
+    for (const x of [-100, -37, -21, -20.999999, 0, 123, 138, 160])
+      for (const z of [-100, -23, -7, -6.999999, 0, 89, 94, 160])
+        for (const radius of [0, 0.000001, 1, 16, 32, 100, 1000]) {
+          const position = { x, z };
+          const expected = cells
+            .filter((cell) => distanceToBoundsXZ(position, cell.bounds) <= radius)
+            .map((cell) => cell.id);
+          expect(cellsIntersectingCircle(partial, partialGrid, position, radius)).toEqual(expected);
+        }
+  });
+
   it('merges identical definitions across cells and rejects conflicts and within-cell duplicates', () => {
     const item = {
       entityId: 'shared',

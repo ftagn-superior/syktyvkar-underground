@@ -38,6 +38,9 @@ export class AuthoritativeWorld {
   getSnapshot() {
     return this.world.snapshot();
   }
+  getPlayerState(entityId: string) {
+    return this.world.characters.has(entityId) ? this.world.state(entityId) : undefined;
+  }
   /** Returns a source point; occupation is checked again when the plan is committed. */
   findSpawn(excludeId?: string, candidates = this.world.definition.spawnPoints): Vec3 | undefined {
     return candidates.find((point) => this.world.findSpawn(excludeId, point) !== undefined);
@@ -46,14 +49,7 @@ export class AuthoritativeWorld {
     this.world.replaceItems(items);
   }
   reconcileItems(items: ItemState[]) {
-    const current = new Map(this.world.snapshot().items.map((i) => [i.entityId, i]));
-    const ids = new Set(items.map((i) => i.entityId));
-    for (const id of current.keys()) if (!ids.has(id)) this.world.removeItem(id);
-    for (const item of items)
-      if (current.get(item.entityId)?.placementVersion !== item.placementVersion) {
-        this.world.removeItem(item.entityId);
-        this.world.addItem(item);
-      }
+    this.world.reconcileItems(items);
   }
   checkPickup(playerId: string, itemId: string) {
     const item = this.world.objects.get(itemId);

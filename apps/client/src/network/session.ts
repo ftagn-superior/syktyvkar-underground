@@ -22,11 +22,11 @@ import {
   MAX_INPUT_QUEUE,
   type WorldPublicationInfo,
   type StaticPlacementEffect,
-  type StaticPlacementError,
-  STATIC_PLACEMENT_COOLDOWN_MS,
   type PlaceStaticRequest,
   type PlaceStaticResult,
   parsePlaceStaticRequest,
+  parseItemCommand,
+  isPlayerMoving,
   type InventoryView,
   type ItemAction,
   type ItemCommand,
@@ -48,12 +48,7 @@ import {
   resolveAvatarSkinId,
   type AvatarSkinId,
   NEUTRAL_INPUT,
-  WORLD_FORMAT_VERSION,
-  canonicalJson,
-  loadWorldHeader,
   itemSupportDistance,
-  trustWorldManifest,
-  worldManifestIdentity,
   type ActionResult,
   type ReactionRequest,
   type ChatRequest,
@@ -78,6 +73,11 @@ import type { DisplayEntity } from '../presentation/display-state';
 import { AnimationBuffer, REMOTE_INTERPOLATION_MS } from '../presentation/animation-buffer';
 import { AnimationRequestState } from '../presentation/animation-request';
 import { WorldSoundEvents } from '../presentation/world-sound-events';
+import { messages, staticPlacementMessages, readableError } from './errors';
+import { PendingAction } from './pending-action';
+import { PersistentOperation } from './persistent-operation';
+import { getResponse, loadWorldPublication, WorldVersionMismatch } from './world-publication';
+export { readableError } from './errors';
 
 export type ConnectionState =
   | 'loading'
@@ -92,66 +92,6 @@ type Pose = { x: number; y: number; z: number };
 type StoredSession = { token: string; epoch: string; actionId: number; accountId?: string };
 const storageKey = 'su:session:v1';
 const fields = ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'] as const;
-const messages: Record<string, string> = {
-  STORAGE_UNAVAILABLE:
-    'Сохранение временно недоступно. Мир приостановлен до восстановления связи с БД.',
-  ITEM_UNAVAILABLE: 'Предмет уже перемещён. Инвентарь обновлён.',
-  OUT_OF_REACH: 'Подойдите ближе: дальность взаимодействия — 3 метра.',
-  BLOCKED: 'Здесь есть препятствие или место уже занято.',
-  NO_SUPPORT: 'Для предмета нужна опора.',
-  OUT_OF_BOUNDS: 'Предмет должен целиком находиться в границах мира.',
-  INCOMPATIBLE_STACK: 'Эти стопки нельзя объединить или ячейка уже заполнена.',
-  LAYOUT_UPDATING: 'Обновляется окружение. Дождитесь загрузки.',
-  LAYOUT_CHANGED: 'Раскладка изменилась. Выберите место и подтвердите заново.',
-  CONTENT_LIMIT: 'Достигнут лимит статичных объектов.',
-  OPERATION_CONFLICT: 'Идентификатор операции уже использован.',
-  WORLD_FULL: 'На полигоне уже 8 игроков. Попробуйте войти чуть позже.',
-  WORLD_NOT_READY: 'Сервер ещё готовит мир. Попробуйте снова через несколько секунд.',
-  VERSION_MISMATCH: 'Версия мира изменилась. Перезагрузите страницу.',
-  PREPARE_TIMEOUT: 'Подготовка заняла слишком много времени. Попробуйте войти снова.',
-  SPAWN_UNAVAILABLE: 'Все точки старта заняты. Освободите место и попробуйте снова.',
-  RATE_LIMITED: 'Возврат на старт доступен раз в 3 секунды.',
-  STALE_WORLD: 'Мир был перезапущен. Войдите снова.',
-  INVALID_INPUT: 'Сервер отклонил команду. Состояние восстановлено.',
-  INVALID_SKIN: 'Эта внешность недоступна. Выберите вариант из каталога.',
-  ANIMATION_NOT_ALLOWED: 'Дождитесь опоры; для движений всем телом остановитесь.',
-  ALREADY_PROCESSED: 'Этот запрос уже обработан.',
-  PLAN_REPLACED: 'Готовим другую безопасную точку.',
-  AUTH_REQUIRED: 'Авторизация истекла. Обновите страницу и войдите через Telegram снова.',
-  ACCOUNT_CHANGED: 'Аккаунт изменился в другой вкладке. Обновите страницу перед входом.',
-  ACCOUNT_IN_USE:
-    'Этот аккаунт уже находится в игре. Покиньте мир в другой вкладке или дождитесь завершения переподключения.',
-  ACCOUNTS_UNAVAILABLE: 'Хранилище аккаунтов временно недоступно. Повторите вход позже.',
-};
-const staticPlacementMessages: Partial<Record<StaticPlacementError, string>> = {
-  RATE_LIMITED: `Размещать скамейки можно раз в ${STATIC_PLACEMENT_COOLDOWN_MS / 1000} секунды.`,
-  AUTH_REQUIRED: 'Чтобы размещать скамейки, войдите через Telegram.',
-  COMMAND_DISABLED: 'Размещение скамейки недоступно в этом мире.',
-  OUT_OF_BOUNDS: 'Скамейка должна целиком находиться в границах мира.',
-};
-export function readableError(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
-  const code = Object.keys(messages).find((key) => text.includes(key));
-  if (code) return messages[code];
-  if (/room.*(?:full|locked)|maximum.*clients|seat.*full/i.test(text)) return messages.WORLD_FULL;
-  if (/fetch|network|connect|ECONN|Failed|timeout|aborted/i.test(text))
-    return 'Не удалось связаться с сервером. Проверьте, что локальный сервер запущен, и повторите вход.';
-  return 'Не удалось подготовить полигон. Перезагрузите страницу или проверьте консоль сервера.';
-}
-async function getResponse(
-  url: string,
-  cache: RequestCache = 'no-cache',
-  signal?: AbortSignal,
-): Promise<Response> {
-  const response = await fetch(url, {
-    cache,
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(12_000)])
-      : AbortSignal.timeout(12_000),
-  });
-  if (!response.ok) throw new Error(`WORLD_NOT_READY: ${response.status}`);
-  return response;
-}
 function readStored(): StoredSession | undefined {
   try {
     const stored = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');
@@ -179,8 +119,10 @@ export class GameSession {
   accountId?: string;
   guestSkinId: AvatarSkinId = DEFAULT_AVATAR_SKIN;
   inventory: InventoryView = { slots: [] };
-  private pendingStatic?: PlaceStaticRequest;
-  private staticRetryAt = 0;
+  private readonly staticOperation = new PersistentOperation<PlaceStaticRequest>(
+    'su:static-operation',
+    parsePlaceStaticRequest,
+  );
   private publicationTask?: Promise<void>;
   private publicationTarget?: string;
   private switchingPublication = false;
@@ -188,9 +130,11 @@ export class GameSession {
   onStaticPlacementResult?: (result: PlaceStaticResult) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
-  private pendingItem?: ItemCommand;
+  private readonly itemOperation = new PersistentOperation<ItemCommand>(
+    'su:item-operation',
+    parseItemCommand,
+  );
   private liveItemOperation?: string;
-  private itemRetryAt = 0;
   private persistencePaused = false;
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
@@ -250,18 +194,12 @@ export class GameSession {
   private readonly revisions = new Map<string, number>();
   private readonly trackedEntities = new Map<string, EntitySchema>();
   private actionId = 0;
-  private pendingRespawn?: number;
-  private respawnTimeout?: ReturnType<typeof setTimeout>;
-  private respawnAvailableAt = 0;
-  private pendingReaction?: number;
-  private reactionTimeout?: ReturnType<typeof setTimeout>;
-  private reactionAvailableAt = 0;
+  private readonly chatRequest = new PendingAction();
+  private readonly reactionRequest = new PendingAction();
+  private readonly respawnRequest = new PendingAction();
   private readonly animationBuffer = new AnimationBuffer();
   private readonly animationRequest = new AnimationRequestState();
   private animationMoving = false;
-  private pendingChat?: number;
-  private chatTimeout?: ReturnType<typeof setTimeout>;
-  private chatAvailableAt = 0;
   private inputEnabled = true;
   private discardNextInputFrame = false;
   private lastAck = 0;
@@ -288,11 +226,11 @@ export class GameSession {
       this.worldSounds.clear();
       this.pendingSpawnSound = false;
       this.liveItemOperation = undefined;
-      this.clearPendingRespawn();
-      this.clearPendingReaction();
+      this.respawnRequest.cancel();
+      this.reactionRequest.cancel();
       this.animationRequest.clear();
       this.animationBuffer.clear();
-      this.clearPendingChat();
+      this.chatRequest.cancel();
     }
     this.state = state;
     this.onState(state, message);
@@ -302,34 +240,33 @@ export class GameSession {
     throw new Error('VERSION_MISMATCH');
   }
   async load(): Promise<void> {
-    this.generation++;
+    const generation = ++this.generation;
     this.cancelPhysicsPreparation();
     this.setState('loading');
-    const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
-    if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
-    const manifestUrl = new URL(info.manifestUrl, location.href);
-    const rawManifest = await (await getResponse(manifestUrl.href)).json();
-    if (rawManifest.formatVersion !== WORLD_FORMAT_VERSION) this.versionMismatch();
-    // Проверяется один раз; загрузчики ячеек не повторяют полную проверку на каждую ячейку.
-    const manifest = trustWorldManifest(rawManifest);
-    if (
-      manifest.mapVersion !== info.mapVersion ||
-      manifest.simulationConfigHash !== info.simulationConfigHash ||
-      (await this.hash(
-        new TextEncoder().encode(canonicalJson(worldManifestIdentity(manifest))),
-      )) !== manifest.mapVersion
-    )
-      this.versionMismatch();
-    this.manifest = manifest;
-    this.manifestUrl = manifestUrl;
-    this.streamer?.dispose();
-    this.streamer = undefined;
-    this.resources?.dispose();
-    this.resources = new VerifiedResources(manifest, new URL('.', manifestUrl).href);
-    this.definition = await loadWorldHeader(manifest, (path) => this.resources!.read(path));
-    this.info = info;
-    this.physics?.dispose();
-    this.physics = undefined;
+    try {
+      const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+      if (generation !== this.generation) return;
+      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      const publication = await loadWorldPublication(info);
+      if (generation !== this.generation) {
+        publication.resources.dispose();
+        return;
+      }
+      this.streamer?.dispose();
+      this.streamer = undefined;
+      this.resources?.dispose();
+      this.manifest = publication.manifest;
+      this.manifestUrl = publication.url;
+      this.definition = publication.definition;
+      this.resources = publication.resources;
+      this.info = info;
+      this.physics?.dispose();
+      this.physics = undefined;
+    } catch (error) {
+      if (generation !== this.generation) return;
+      if (error instanceof WorldVersionMismatch) this.versionMismatch();
+      throw error;
+    }
   }
   /** Replaces the resource/physics generation while preserving the room and character. */
   private changePublication(info: WorldInfo | WorldPublicationInfo): Promise<void> {
@@ -368,36 +305,15 @@ export class GameSession {
     const playing = !!this.room;
     this.setState(playing ? 'preparing' : 'loading');
     const task = (async () => {
-      const url = new URL(info.manifestUrl, location.href);
-      const raw = await (await getResponse(url.href)).json();
-      if (generation !== this.generation) return;
-      const manifest = trustWorldManifest(raw);
-      if (
-        manifest.formatVersion !== WORLD_FORMAT_VERSION ||
-        manifest.mapVersion !== info.mapVersion ||
-        manifest.simulationConfigHash !== info.simulationConfigHash ||
-        (await this.hash(
-          new TextEncoder().encode(canonicalJson(worldManifestIdentity(manifest))),
-        )) !== manifest.mapVersion
-      )
-        this.versionMismatch();
-      if (generation !== this.generation) return;
-      const resources = new VerifiedResources(manifest, new URL('.', url).href);
-      let definition: WorldHeader;
-      try {
-        definition = await loadWorldHeader(manifest, (path) => resources.read(path));
-      } catch (error) {
-        resources.dispose();
-        throw error;
-      }
+      const publication = await loadWorldPublication(info);
       if (generation !== this.generation) {
-        resources.dispose();
+        publication.resources.dispose();
         return;
       }
-      this.manifest = manifest;
-      this.manifestUrl = url;
-      this.definition = definition;
-      this.resources = resources;
+      this.manifest = publication.manifest;
+      this.manifestUrl = publication.url;
+      this.definition = publication.definition;
+      this.resources = publication.resources;
       this.info = { ...this.info, ...info };
       if (playing) await this.preparePhysics(generation);
       if (generation !== this.generation) return;
@@ -405,7 +321,11 @@ export class GameSession {
       this.switchingPublication = false;
       this.resetFrameMeasurements();
       if (!playing) this.setState('ready');
-    })();
+    })().catch((error: unknown) => {
+      if (generation !== this.generation) return;
+      if (error instanceof WorldVersionMismatch) this.versionMismatch();
+      throw error;
+    });
     this.publicationTask = task;
     return task.finally(() => {
       if (this.publicationTask === task) {
@@ -421,7 +341,9 @@ export class GameSession {
       document.hidden
     )
       return;
+    const generation = this.generation;
     const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+    if (generation !== this.generation) return;
     if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
     else this.info = info;
@@ -430,29 +352,30 @@ export class GameSession {
     return this.resources!.read(path, signal);
   }
   get staticPlacementPending() {
-    return !!this.pendingStatic;
+    return !!this.staticOperation.current;
   }
   placeStatic(position: { x: number; z: number }, yawStep: number): boolean {
-    if (this.pendingStatic || this.state !== 'playing' || !this.accountId || this.worldPaused)
+    if (
+      this.staticOperation.current ||
+      this.state !== 'playing' ||
+      !this.accountId ||
+      this.worldPaused
+    )
       return false;
-    this.pendingStatic = {
-      operationId: crypto.randomUUID(),
-      worldEpoch: this.info.worldEpoch,
-      assetReleaseVersion: this.info.assetReleaseVersion!,
-      expectedLayoutRevision: this.info.layoutRevision!,
-      position,
-      yawStep,
-    };
-    try {
-      sessionStorage.setItem(
-        `su:static-operation:${this.accountId}`,
-        JSON.stringify(this.pendingStatic),
-      );
-    } catch {
-      /* optional */
-    }
-    this.room!.send('placeStatic', this.pendingStatic);
-    this.staticRetryAt = performance.now() + 3000;
+    this.staticOperation.begin(
+      {
+        operationId: crypto.randomUUID(),
+        worldEpoch: this.info.worldEpoch,
+        assetReleaseVersion: this.info.assetReleaseVersion!,
+        expectedLayoutRevision: this.info.layoutRevision!,
+        position,
+        yawStep,
+      },
+      this.accountId,
+    );
+    this.staticOperation.sendIfDue(performance.now(), (request) =>
+      this.room!.send('placeStatic', request),
+    );
     return true;
   }
   private async preparePhysics(generation: number): Promise<void> {
@@ -490,11 +413,6 @@ export class GameSession {
   private cancelPhysicsPreparation(): void {
     this.physicsPreparation?.controller.abort();
     this.physicsPreparation = undefined;
-  }
-  private async hash(bytes: Uint8Array): Promise<string> {
-    return [...new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes).buffer))]
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('');
   }
   connectGraphics(graphics: CellGraphics): void {
     this.graphics = graphics;
@@ -664,17 +582,13 @@ export class GameSession {
         });
       });
       room.onMessage<PlaceStaticResult>('staticPlacementResult', (result) => {
-        if (this.room !== room || result.operationId !== this.pendingStatic?.operationId) return;
+        if (this.room !== room || result.operationId !== this.staticOperation.current?.operationId)
+          return;
         if (!result.ok && ['WORLD_NOT_READY', 'STORAGE_UNAVAILABLE'].includes(result.code)) {
-          this.staticRetryAt = performance.now() + 3000;
+          this.staticOperation.defer();
           return;
         }
-        this.pendingStatic = undefined;
-        try {
-          sessionStorage.removeItem(`su:static-operation:${this.accountId}`);
-        } catch {
-          /* optional */
-        }
+        this.staticOperation.complete();
         this.onNotice(
           result.ok
             ? 'Скамейка сохранена.'
@@ -697,24 +611,20 @@ export class GameSession {
         });
       });
       room.onMessage<ItemResult>('itemResult', (result) => {
-        if (this.room !== room || result.operationId !== this.pendingItem?.operationId) return;
+        if (this.room !== room || result.operationId !== this.itemOperation.current?.operationId)
+          return;
         if (
           result.code === 'STORAGE_UNAVAILABLE' ||
           result.code === 'WORLD_NOT_READY' ||
           result.code === 'RATE_LIMITED'
         ) {
-          this.itemRetryAt = performance.now() + 3000;
+          this.itemOperation.defer();
           return;
         }
         if (!result.ok && this.liveItemOperation === result.operationId)
           this.onActionFeedback?.('error');
         this.liveItemOperation = undefined;
-        this.pendingItem = undefined;
-        try {
-          sessionStorage.removeItem(`su:item-operation:${this.accountId}`);
-        } catch {
-          /* optional storage */
-        }
+        this.itemOperation.complete();
         if (!result.ok && result.code) this.onNotice(messages[result.code] ?? result.code);
         this.onItemResult?.(result);
         this.onInventoryChange?.();
@@ -735,15 +645,7 @@ export class GameSession {
           this.onActionFeedback?.(result.ok ? 'click' : 'error');
           return;
         }
-        if (result.requestId === this.pendingChat) {
-          this.clearPendingChat();
-          if (!this.pendingChatCommand && (result.ok || result.code === 'RATE_LIMITED')) {
-            const delay =
-              typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
-                ? Math.min(CHAT_MAX_COOLDOWN_MS, Math.max(0, result.retryAfterMs))
-                : CHAT_MAX_COOLDOWN_MS;
-            this.chatAvailableAt = performance.now() + delay;
-          }
+        if (this.chatRequest.settle(result, this.pendingChatCommand ? 0 : CHAT_MAX_COOLDOWN_MS)) {
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(
@@ -755,16 +657,8 @@ export class GameSession {
           if (!result.ok) this.onActionFeedback?.('error');
           return;
         }
-        if (result.requestId === this.pendingReaction) {
-          this.clearPendingReaction();
+        if (this.reactionRequest.settle(result, REACTION_COOLDOWN_MS)) {
           if (!result.ok) this.onActionFeedback?.('error');
-          if (result.ok || result.code === 'RATE_LIMITED') {
-            const delay =
-              typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
-                ? Math.min(REACTION_COOLDOWN_MS, Math.max(0, result.retryAfterMs))
-                : REACTION_COOLDOWN_MS;
-            this.reactionAvailableAt = performance.now() + delay;
-          }
           if (!result.ok && result.code)
             this.onNotice(
               result.code === 'RATE_LIMITED'
@@ -773,16 +667,8 @@ export class GameSession {
             );
           return;
         }
-        if (result.requestId !== this.pendingRespawn) return;
-        this.clearPendingRespawn();
+        if (!this.respawnRequest.settle(result, RESPAWN_COOLDOWN_MS)) return;
         if (!result.ok) this.onActionFeedback?.('error');
-        if (result.ok || result.code === 'RATE_LIMITED') {
-          const delay =
-            typeof result.retryAfterMs === 'number' && Number.isFinite(result.retryAfterMs)
-              ? Math.min(RESPAWN_COOLDOWN_MS, Math.max(0, result.retryAfterMs))
-              : RESPAWN_COOLDOWN_MS;
-          this.respawnAvailableAt = performance.now() + delay;
-        }
         if (!result.ok && result.code) this.onNotice(messages[result.code] ?? result.code);
       });
       room.onMessage<{ code: string }>('problem', ({ code }) => {
@@ -1142,10 +1028,8 @@ export class GameSession {
       }
     }
     const room = this.room;
-    if (this.pendingStatic && room && this.state !== 'reconnecting' && now >= this.staticRetryAt) {
-      room.send('placeStatic', this.pendingStatic);
-      this.staticRetryAt = now + 3000;
-    }
+    if (room && this.state !== 'reconnecting')
+      this.staticOperation.sendIfDue(now, (request) => room.send('placeStatic', request));
     if (this.switchingPublication)
       return room ? this.authoritativeDisplay() : { entities: this.preview() };
     this.planArea();
@@ -1207,17 +1091,8 @@ export class GameSession {
       this.areaWaiting = false;
       this.save();
       if (this.accountId) {
-        try {
-          this.pendingStatic ??= parsePlaceStaticRequest(
-            JSON.parse(sessionStorage.getItem(`su:static-operation:${this.accountId}`) ?? 'null'),
-          );
-          this.pendingItem =
-            JSON.parse(sessionStorage.getItem(`su:item-operation:${this.accountId}`) ?? 'null') ??
-            undefined;
-        } catch {
-          /* Optional storage. */
-        }
-        this.itemRetryAt = 0;
+        this.staticOperation.restore(this.accountId);
+        this.itemOperation.restore(this.accountId);
       }
     }
     if (this.pendingSpawnSound) {
@@ -1272,15 +1147,8 @@ export class GameSession {
       }
     }
     this.discardNextInputFrame = false;
-    if (
-      this.pendingItem &&
-      this.state === 'playing' &&
-      !this.persistencePaused &&
-      now >= this.itemRetryAt
-    ) {
-      room.send('itemCommand', this.pendingItem);
-      this.itemRetryAt = now + 3000;
-    }
+    if (this.state === 'playing' && !this.persistencePaused)
+      this.itemOperation.sendIfDue(now, (command) => room.send('itemCommand', command));
     const self = room.state.players.get(room.sessionId);
     this.animationMoving =
       this.inputEnabled &&
@@ -1402,7 +1270,7 @@ export class GameSession {
     return [];
   }
   get itemPending() {
-    return !!this.pendingItem;
+    return !!this.itemOperation.current;
   }
   get worldPaused() {
     return this.persistencePaused;
@@ -1449,25 +1317,17 @@ export class GameSession {
       !this.accountId ||
       !this.room ||
       this.state !== 'playing' ||
-      this.pendingItem ||
+      this.itemOperation.current ||
       this.persistencePaused
     )
       return;
-    this.pendingItem = {
+    const command: ItemCommand = {
       operationId: crypto.randomUUID(),
       worldEpoch: this.info.worldEpoch,
       action,
     };
-    this.liveItemOperation = this.pendingItem.operationId;
-    try {
-      sessionStorage.setItem(
-        `su:item-operation:${this.accountId}`,
-        JSON.stringify(this.pendingItem),
-      );
-    } catch {
-      /* retry survives reconnect in memory */
-    }
-    this.itemRetryAt = 0;
+    this.itemOperation.begin(command, this.accountId);
+    this.liveItemOperation = command.operationId;
     this.onInventoryChange?.();
   }
   placement(
@@ -1522,8 +1382,8 @@ export class GameSession {
   }
   respawnStatus(): { pending: boolean; remainingMs: number } {
     return {
-      pending: this.pendingRespawn !== undefined,
-      remainingMs: Math.max(0, this.respawnAvailableAt - performance.now()),
+      pending: this.respawnRequest.pending,
+      remainingMs: this.respawnRequest.remainingMs(),
     };
   }
   private displayRemainingMs(expiresAtTick: number, now = performance.now()): number {
@@ -1536,20 +1396,16 @@ export class GameSession {
   reactionStatus(): { pending: boolean; remainingMs: number; available: boolean } {
     const self = this.room?.state?.players?.get(this.room.sessionId);
     return {
-      pending: this.pendingReaction !== undefined,
+      pending: this.reactionRequest.pending,
       remainingMs: Math.max(
         0,
-        this.reactionAvailableAt - performance.now(),
+        this.reactionRequest.remainingMs(),
         this.displayRemainingMs(self?.reactionExpiresAtTick ?? 0),
       ),
       available: this.state === 'playing' && this.inputEnabled && !this.stalled,
     };
   }
-  private clearPendingReaction(): void {
-    clearTimeout(this.reactionTimeout);
-    this.reactionTimeout = undefined;
-    this.pendingReaction = undefined;
-  }
+
   animationStatus() {
     this.animationRequest.expire(performance.now());
     const player = this.room?.state?.players?.get(this.room.sessionId);
@@ -1572,8 +1428,7 @@ export class GameSession {
       accepted: this.animationRequest.accepted,
       busy,
       grounded: state?.grounded ?? false,
-      moving:
-        this.animationMoving || (!!state && Math.hypot(state.velocity.x, state.velocity.z) > 0.08),
+      moving: this.animationMoving || (!!state && isPlayerMoving(state.velocity)),
       paused: this.persistencePaused,
       message: this.animationRequest.message,
     };
@@ -1618,11 +1473,9 @@ export class GameSession {
     )
       return;
     this.actionId++;
-    this.pendingReaction = this.actionId;
-    this.reactionTimeout = setTimeout(() => {
-      this.clearPendingReaction();
+    this.reactionRequest.begin(this.actionId, 5000, () => {
       this.onNotice('Ответ на реакцию не получен. Проверьте связь и попробуйте снова.');
-    }, 5000);
+    });
     this.save();
     this.room!.send('requestReaction', {
       requestId: this.actionId,
@@ -1633,21 +1486,17 @@ export class GameSession {
   chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
     const self = this.room?.state?.players?.get(this.room.sessionId);
     return {
-      pending: this.pendingChat !== undefined,
+      pending: this.chatRequest.pending,
       remainingMs: Math.max(
         0,
-        this.chatAvailableAt - performance.now(),
+        this.chatRequest.remainingMs(),
         this.displayRemainingMs(self?.chatExpiresAtTick ?? 0),
       ),
       available:
         this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused,
     };
   }
-  private clearPendingChat(): void {
-    clearTimeout(this.chatTimeout);
-    this.chatTimeout = undefined;
-    this.pendingChat = undefined;
-  }
+
   sendChat(value: string): boolean {
     const status = this.chatStatus();
     const text = normalizeChatText(value);
@@ -1661,12 +1510,10 @@ export class GameSession {
     )
       return false;
     this.actionId++;
-    this.pendingChat = this.actionId;
     this.pendingChatCommand = !!command;
-    this.chatTimeout = setTimeout(() => {
-      this.clearPendingChat();
+    this.chatRequest.begin(this.actionId, 5000, () => {
       this.onNotice('Ответ на сообщение не получен. Проверьте связь и попробуйте снова.');
-    }, 5000);
+    });
     this.save();
     this.room!.send('requestChat', {
       requestId: this.actionId,
@@ -1675,11 +1522,7 @@ export class GameSession {
     } satisfies ChatRequest);
     return true;
   }
-  private clearPendingRespawn(): void {
-    clearTimeout(this.respawnTimeout);
-    this.respawnTimeout = undefined;
-    this.pendingRespawn = undefined;
-  }
+
   respawn(): void {
     const status = this.respawnStatus();
     if (
@@ -1691,11 +1534,9 @@ export class GameSession {
     )
       return;
     this.actionId++;
-    this.pendingRespawn = this.actionId;
-    this.respawnTimeout = setTimeout(() => {
-      this.clearPendingRespawn();
+    this.respawnRequest.begin(this.actionId, 21000, () => {
       this.onNotice('Ответ на возврат не получен. Проверьте связь и попробуйте снова.');
-    }, 21_000);
+    });
     this.save();
     this.room.send('requestRespawn', {
       requestId: this.actionId,
@@ -1725,22 +1566,24 @@ export class GameSession {
     this.pendingSpawnSound = false;
     this.liveItemOperation = undefined;
     this.cancelPhysicsPreparation();
-    this.clearPendingRespawn();
-    this.clearPendingReaction();
+    this.respawnRequest.cancel();
+    this.reactionRequest.cancel();
     this.animationRequest.clear();
     this.animationBuffer.clear();
     this.animationMoving = false;
-    this.clearPendingChat();
+    this.chatRequest.cancel();
     this.inventory = { slots: [] };
-    this.pendingItem = undefined;
-    this.pendingStatic = undefined;
+    this.itemOperation.reset();
+    this.staticOperation.reset();
     this.openedStaticActions.clear();
     this.switchingPublication = false;
+    this.publicationTask = undefined;
+    this.publicationTarget = undefined;
     this.persistencePaused = false;
     this.onInventoryChange?.();
-    this.respawnAvailableAt = 0;
-    this.reactionAvailableAt = 0;
-    this.chatAvailableAt = 0;
+    this.respawnRequest.reset();
+    this.reactionRequest.reset();
+    this.chatRequest.reset();
     if (!preserveRecovery) this.stopRecoveryCheck();
     this.predictor?.dispose();
     this.predictor = undefined;
@@ -1816,7 +1659,7 @@ export class GameSession {
         layoutRevision: this.info?.layoutRevision,
         layoutHash: this.info?.layoutHash,
       },
-      staticPlacementPending: this.pendingStatic,
+      staticPlacementPending: this.staticOperation.current,
       plan: this.plan,
       areaResults: this.planResults.slice(),
       streaming: this.streamer?.diagnostics(),
@@ -1866,7 +1709,7 @@ export class GameSession {
         : [],
       items: room?.state?.items ? Array.from(room.state.items.values(), toItemState) : [],
       inventory: this.inventory,
-      itemPending: !!this.pendingItem,
+      itemPending: !!this.itemOperation.current,
       storagePaused: this.persistencePaused,
       entities: room?.state?.players ? Array.from(room.state.players.values(), toPlayerState) : [],
     };

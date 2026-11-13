@@ -38,23 +38,27 @@ try {
   await pages[0].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 2);
   const info = await fetch(`${url}/api/world`).then((response) => response.json());
   const fillers = [];
+  const fullBrowser = await launchTestBrowser();
   try {
+    // Isolate the rejected entrant's WebGL startup from the two active SwiftShader scenes.
+    // Admission is still checked by the real client after all eight seats are occupied.
+    const fullContext = await fullBrowser.newContext();
+    const fullPage = await fullContext.newPage();
+    fullPage.on('pageerror', (error) => errors.push(error.message));
+    await fullPage.goto(`${url}/?diagnostics=1`);
+    await fullPage.locator('#join:not([disabled])').waitFor();
     for (let index = 0; index < 6; index++) {
       const room = await new Client(url).joinById(info.roomId, info);
       prepareSdk(room);
       fillers.push(room);
     }
-    const fullContext = await browser.newContext();
-    const fullPage = await fullContext.newPage();
-    await fullPage.goto(`${url}/?diagnostics=1`);
-    await fullPage.locator('#join:not([disabled])').waitFor();
     await fullPage.locator('#join').click();
     await fullPage.waitForFunction(() =>
       document.querySelector('#notice')?.textContent?.includes('8 игроков'),
     );
     assert.equal((await snapshot(fullPage)).connection, 'ready');
-    await fullContext.close();
   } finally {
+    await fullBrowser.close();
     await Promise.all(fillers.map((room) => room.leave()));
   }
   await pages[0].waitForFunction(() => (window as any).__SU_DEBUG__.snapshot().playerCount === 2);

@@ -263,7 +263,8 @@ try {
     '#inventory-toggle',
     '#inventory-panel',
     '[aria-keyshortcuts="Z"]',
-    '.placement-toolbar',
+    '#item-placement',
+    '#static-placement',
   ])
     assert.equal(await page.locator(selector).isHidden(), true, `${selector} remains unavailable`);
   assert.equal(
@@ -508,10 +509,10 @@ try {
   );
   await page.keyboard.press('x');
   await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
-  await page.locator('.placement-toolbar').waitFor({ state: 'visible' });
+  await page.locator('#item-placement').waitFor({ state: 'visible' });
   await fingers.down(1, 300, 400);
   await fingers.up(1);
-  await page.locator('.placement-toolbar').waitFor({ state: 'hidden' });
+  await page.locator('#item-placement').waitFor({ state: 'hidden' });
   assert.equal(
     (await snapshot(page)).items.length,
     0,
@@ -567,7 +568,7 @@ try {
     assert.deepEqual(standard.renderSize, { width: 390, height: 844 });
     await qualityPage.locator('#help-toggle').tap();
     await qualityPage.locator('#diagnostics-toggle').tap();
-    await qualityPage.locator('#help-close').tap();
+    await qualityPage.locator('#help-panel').waitFor({ state: 'hidden' });
     await qualityPage.locator('#quality').selectOption('economy');
     const economy = await rendering(qualityPage);
     assert.equal(economy.hardwareScaling, 1.5);

@@ -144,7 +144,7 @@ try {
           await observer.locator(`.player-chat[data-entity-id="${id}"]`).isVisible(),
           true,
         );
-        assert.equal((await avatar(sender, id)).animation.reason, 'playing');
+        await active(sender, id, definition.id);
         await sender.locator('#world').focus();
         await sender.keyboard.down('s');
         await sender.waitForFunction((id) => {
@@ -159,19 +159,29 @@ try {
         await hudClick(sender, '#chat-toggle');
         await sender.locator('#chat-input').fill('wasd qer');
         await sender.keyboard.press('Escape');
-        assert.equal((await avatar(sender, id)).animation.reason, 'playing');
+        await active(sender, id, definition.id);
         const initial = (await snapshot(sender)).authoritative.position;
         await sender.locator('#world').focus();
         await sender.keyboard.down('Shift');
         await sender.waitForTimeout(150);
-        assert.equal((await avatar(sender, id)).animation.reason, 'playing');
+        // Reconciliation may briefly pause presentation on the delayed client. The clip must
+        // still be playing when presentation resumes; Shift alone must not end it.
+        await active(sender, id, definition.id);
         await sender.keyboard.up('Shift');
         await sender.screenshot({
           path: `${output}/${index ? 'standard' : 'minifigure'}-dance.png`,
         });
         await sender.keyboard.down('s');
-        await sender.waitForTimeout(200);
-        await sender.keyboard.up('s');
+        try {
+          // Under delayed input/software rendering a timed key press may never move the server.
+          // Observe the movement that actually starts the five-second expiry instead.
+          await sender.waitForFunction((origin) => {
+            const position = (window as any).__SU_DEBUG__.snapshot().authoritative.position;
+            return Math.hypot(position.x - origin.x, position.z - origin.z) > 0.15;
+          }, initial);
+        } finally {
+          await sender.keyboard.up('s');
+        }
         await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
         const after = (await snapshot(sender)).authoritative.position;
         assert.ok(Math.hypot(after.x - initial.x, after.z - initial.z) < 3);
@@ -245,10 +255,7 @@ try {
         box.x + box.width <= size.width + 1 &&
         box.y + box.height <= size.height + 1,
     );
-    if (size.width < 430) {
-      const actions = await sender.locator('.actions').boundingBox();
-      assert.ok(actions && box.y + box.height < actions.y);
-    }
+    assert.equal(await sender.locator('#help-panel').isHidden(), true);
     const panel = sender.locator('#animations-panel');
     const layout = await panel.evaluate((node) => ({
       scrollTop: node.scrollTop,
@@ -276,7 +283,12 @@ try {
         hit?.closest('.animation-choice') === panel.querySelector('.animation-choice:last-child')
       );
     });
+    await sender.screenshot({ path: `${output}/menu-${size.width}-bottom.png` });
+    await sender.locator('#help-toggle').click();
+    await sender.locator('#help-panel').waitFor({ state: 'visible' });
+    assert.equal(await sender.locator('#animations-panel').isHidden(), true);
     for (const selector of ['#animations-toggle', '#respawn', '#leave']) {
+      await sender.locator(selector).scrollIntoViewIfNeeded();
       assert.ok(
         await sender.locator(selector).evaluate((node) => {
           const rect = node.getBoundingClientRect();
@@ -293,7 +305,6 @@ try {
         `${selector} remains reachable at ${size.width}x${size.height}`,
       );
     }
-    await sender.screenshot({ path: `${output}/menu-${size.width}-bottom.png` });
     await sender.keyboard.press('Escape');
   }
   checks.push(

@@ -6,6 +6,26 @@ import { createPhysicsWorld } from './physics-world.js';
 import { NEUTRAL_INPUT } from '@su/contracts';
 
 describe('Havok shared world', () => {
+  it('reads one player without exposing mutable physics state and handles removal', async () => {
+    const world = await createAuthoritativeWorld(fixture());
+    try {
+      expect(world.getPlayerState('own')).toBeUndefined();
+      const spawned = world.addPlayer('own');
+      expect(world.getPlayerState('own')).toEqual(spawned);
+      const copy = world.getPlayerState('own')!;
+      copy.position.x += 100;
+      copy.velocity.x = 100;
+      expect(world.getPlayerState('own')).toEqual(spawned);
+      world.setInput('own', { moveX: 1, moveZ: 0 });
+      world.step();
+      expect(world.getPlayerState('own')).toEqual(world.getSnapshot().players[0]);
+      world.removePlayer('own');
+      expect(world.getPlayerState('own')).toBeUndefined();
+    } finally {
+      world.dispose();
+    }
+  });
+
   it('identifies wall and peer ray hits while excluding the local collision body', async () => {
     const world = await createAuthoritativeWorld(fixture());
     const prediction = await createPredictionWorld(fixture(), await loadServerWasm());

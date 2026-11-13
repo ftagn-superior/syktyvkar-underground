@@ -1,4 +1,4 @@
-import type { Vec3 } from './index.js';
+import type { Vec3 } from './simulation.js';
 
 /** Transient presentation event, never part of saved world state or replayed input. */
 export interface WorldSoundEvent {

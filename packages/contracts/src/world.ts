@@ -1,12 +1,11 @@
 import {
-  validateItemCatalog,
-  validPose,
   WORLD_FORMAT_VERSION,
   type WorldDefinition,
   type WorldHeader,
   type EntityDefinition,
-  type Vec3,
-} from './index.js';
+} from './world-types.js';
+import { TICK_RATE, type Vec3 } from './simulation.js';
+import { validateItemCatalog, validPose } from './items.js';
 import {
   validateBuildingPhysicsAsset,
   validateBuildingInstances,
@@ -70,7 +69,7 @@ export function validateWorld(value: unknown): WorldDefinition {
   vector(world.bounds.max, 'bounds.max');
   for (const axis of ['x', 'y', 'z'] as const)
     invariant(world.bounds.min[axis] < world.bounds.max[axis], 'ordered bounds');
-  invariant(world.simulation?.tickRate === 60, 'supported tick rate is 60 Hz');
+  invariant(world.simulation?.tickRate === TICK_RATE, 'supported tick rate is 60 Hz');
   vector(world.simulation.gravity, 'gravity');
   const character = world.simulation.character;
   invariant(character && typeof character === 'object', 'character');

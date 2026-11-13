@@ -35,9 +35,12 @@ import { compileStaticAsset } from '@su/terrain-build/assets';
 import { prepareTerrainBuildContext, rectangle } from '@su/terrain-build';
 import {
   TERRAIN_GENERATOR_VERSION,
+  TERRAIN_GENERATOR_VERSION_V2,
+  validateFoundationSupportRule,
   validateTerrainCoverage,
   validateTerrainPrivateData,
   type TerrainPrivateData,
+  type FoundationSupportRuleV2,
 } from '@su/terrain-build/private-data';
 import { createGroundTerrain } from './ground-terrain.js';
 import { buildTerrainTiles } from './terrain-tiles.js';
@@ -145,14 +148,16 @@ async function compileBytes(
   return compileStaticAsset(assetId, model, physics, treeParts, renderMode);
 }
 
+export interface BuildWorldOptions {
+  terrainVariant?: 'hill' | 'flat';
+  /** Explicit output-only candidate. Rules are private inputs, never prebuilt foundations. */
+  groundTerrain?: { spacing: 2 | 4; supports?: FoundationSupportRuleV2[] };
+}
+
 export async function buildWorld(
   source = 'content/worlds/ring-block/world.json',
   output?: string,
-  options: {
-    terrainVariant?: 'hill' | 'flat';
-    /** Isolated flat-ground experiment; absent in normal authored builds. */
-    groundTerrain?: { spacing: 2 | 4 };
-  } = {},
+  options: BuildWorldOptions = {},
 ): Promise<WorldManifest> {
   const authored = (await readJson(source)) as WorldSource;
   if (
@@ -168,6 +173,11 @@ export async function buildWorld(
   const sourceDirectory = dirname(resolve(source));
   if (options.groundTerrain && (authored.terrain || authored.generator || output === undefined))
     throw new Error('Ground terrain requires an explicit output and a non-generated flat source');
+  const supportRules = options.groundTerrain?.supports;
+  if (supportRules !== undefined) {
+    if (!Array.isArray(supportRules)) throw new Error('Ground terrain supports must be an array');
+    supportRules.forEach(validateFoundationSupportRule);
+  }
   if (authored.terrain && authored.generator)
     throw new Error('Terrain and world generators cannot compete');
   const itemCatalog = await readJson(resolve(sourceDirectory, authored.itemCatalog));
@@ -227,6 +237,10 @@ export async function buildWorld(
       buildings: [],
     });
   const merged = mergeWorldCells(authoredCells);
+  for (const rule of supportRules ?? []) {
+    if (!Object.hasOwn(catalog.assets, rule.assetId))
+      throw new Error(`Unknown terrain support asset: ${rule.assetId}`);
+  }
   const buildings: WorldDefinition['buildings'] = [];
   const fixedInstanceIds: string[] = [...(terrain?.fixed ?? [])];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
@@ -273,11 +287,12 @@ export async function buildWorld(
       validateTerrainGrid(converted.grid);
       validateTerrainCoverage(converted.grid, base.bounds);
       privateTerrain = validateTerrainPrivateData({
-        formatVersion: 1,
-        generatorVersion: TERRAIN_GENERATOR_VERSION,
+        formatVersion: supportRules === undefined ? 1 : 2,
+        generatorVersion:
+          supportRules === undefined ? TERRAIN_GENERATOR_VERSION : TERRAIN_GENERATOR_VERSION_V2,
         worldId: base.worldId,
         grid: converted.grid,
-        supports: [],
+        supports: supportRules ?? [],
       });
       const context = prepareTerrainBuildContext(converted.grid, converted.surfaces);
       for (const cellId of cellsIntersectingBounds(base.bounds, grid, extent)) {
@@ -344,6 +359,9 @@ export async function buildWorld(
     if (descriptor.source?.kind !== 'ground')
       compiled.set(assetId, await compileAsset(assetId, descriptorPath));
   }
+  for (const rule of supportRules ?? [])
+    if (!compiled.has(rule.assetId))
+      throw new Error(`Terrain support requires a published model asset: ${rule.assetId}`);
   const world: WorldDefinition = validateWorld({
     ...base,
     entities: merged.statics,

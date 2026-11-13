@@ -195,7 +195,9 @@ describe('isolated ring terrain profile publication', () => {
     [
       'owner support',
       (r) => {
-        r.terrain!.supports.push({
+        const terrain = r.terrain!;
+        if (terrain.formatVersion !== 1) throw new Error('Flat fixture must remain v1');
+        terrain.supports.push({
           ownerId: 'building-a',
           assetId: 'house-a',
           kind: 'rectangle-v1',

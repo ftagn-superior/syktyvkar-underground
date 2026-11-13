@@ -1,0 +1,170 @@
+{
+  "formatVersion": 1,
+  "date": "2026-11-13",
+  "stage": 3,
+  "acceptance": {
+    "status": "passed",
+    "sourceExportSha256": "f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193",
+    "sourceRevision": 5214,
+    "sourceAssetReleaseVersion": "4972394673ec2847e880e4b1262f937cc88a59c1366408af9801104ba915e0c3",
+    "targetAssetReleaseVersion": "b71cbf102c8cdf1a4c2296e80f24b493265ba09c12831d7b06db244801e6067b",
+    "mapVersion": "4a84f9b821113ee0267a8f21f7b1eb317ca3659df46056bfed345a859c6c841a",
+    "layoutHash": "06ae09351ed2113c62e02d76e5de7f3f66acdd4a189eee5ee9adce6501451951",
+    "enabledSavedOwners": 3709,
+    "supportPlan": {
+      "minimumY": 0.08,
+      "terrainMin": 0,
+      "terrainMax": 0,
+      "jointY": 0
+    },
+    "explicitOfflinePoseChanges": [
+      {
+        "entityId": "osm-way-1258973447",
+        "before": {
+          "x": -148.88,
+          "y": 0,
+          "z": -157.92
+        },
+        "after": {
+          "x": -148.88,
+          "y": 0.6,
+          "z": -157.92
+        },
+        "reason": "Stage 3 foundation and entrance stand on the flat city; not a migration plan"
+      }
+    ],
+    "derived": [
+      {
+        "assetId": "support-a760f58c09d00e2644dd02c20055849f01a0d502e30e0a92750f1d47e88da261",
+        "bounds": {
+          "min": {
+            "x": -209.1999969482422,
+            "y": -0.10000000149011612,
+            "z": -262.5
+          },
+          "max": {
+            "x": -79.5999984741211,
+            "y": 0.6000000238418579,
+            "z": -58.400001525878906
+          }
+        },
+        "version": "aa2fc71332c23627e177ef106f584b2068671e88c1874c84754c19d51380384f"
+      },
+      {
+        "assetId": "support-acc09236b60ed1dd9c23253f874d99ee731e81e760da754bb7ef1e7b28af7226",
+        "bounds": {
+          "min": {
+            "x": -95.48234558105469,
+            "y": -0.10000000149011612,
+            "z": -122.85935974121094
+          },
+          "max": {
+            "x": -89.03082275390625,
+            "y": 0.6399999856948853,
+            "z": -118.14116668701172
+          }
+        },
+        "version": "3e54aea8d6d6726d6ea6b90789a6917b8438b20465e77103cd1c8dee0a4ce83d"
+      }
+    ],
+    "approaches": [
+      {
+        "id": "main-entrance",
+        "maximumRayError": 0.0008591938018798762,
+        "routes": [
+          {
+            "sprint": false,
+            "stopped": {
+              "x": -94.3942330670297,
+              "y": 1.4898235851928925,
+              "z": -119.49923155937053
+            },
+            "returned": {
+              "x": -89.26243756619783,
+              "y": 0.9129461219351173,
+              "z": -121.90261645601498
+            },
+            "grounded": true
+          },
+          {
+            "sprint": true,
+            "stopped": {
+              "x": -94.3625774342034,
+              "y": 1.4905626675018793,
+              "z": -119.51395827799081
+            },
+            "returned": {
+              "x": -89.07977097739618,
+              "y": 0.912607917581091,
+              "z": -121.98806577385108
+            },
+            "grounded": true
+          }
+        ],
+        "threshold": {
+          "x": -94.97339524632127,
+          "z": -119.22788984977208
+        }
+      }
+    ],
+    "unchangedOriginalSnapshot": true,
+    "unchangedEditableCatalog": true,
+    "unchangedSeed": true,
+    "databaseAccess": false,
+    "fullGameplayAcceptance": false
+  },
+  "checks": {
+    "fullBeforeFinalApproachChecks": {
+      "passed": 766,
+      "failed": 0,
+      "skipped": 0
+    },
+    "finalScoped": {
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typescript": "passed",
+    "boundaries": "passed",
+    "applicationBuild": "passed",
+    "isolatedPostgreSQL": true,
+    "standaloneReleaseOnly": "passed"
+  },
+  "visual": {
+    "mapVersion": "4a84f9b821113ee0267a8f21f7b1eb317ca3659df46056bfed345a859c6c841a",
+    "browser": "158.0.8127.18",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "errors": [],
+    "screenshots": [
+      {
+        "file": "output/ring-terrain-stage3/overview.png",
+        "sha256": "1333df1a0b2b413adbf19ca9aa1c353d13003d510b40bed8209ab760994e951d"
+      },
+      {
+        "file": "output/ring-terrain-stage3/entrance.png",
+        "sha256": "20fbb3f3e9c9133b2a4f95ed3213b5dd9e253f2ffc67d57a2f2063cea7ec1d0d"
+      }
+    ]
+  },
+  "sourceFiles": [
+    {
+      "file": "packages/terrain-build/src/supports.ts",
+      "sha256": "d73b046c64d796abd4939cc4baa06b97a80b4f45e49b21b19a0f13b640cfa130"
+    },
+    {
+      "file": "packages/terrain-build/src/private-data.ts",
+      "sha256": "a66fa3f4a9bb750084d55140344a1900367337d7135b0845b6d9349bdd584feb"
+    },
+    {
+      "file": "content/buildings/ring-block/osm-way-1258973447/terrain-support.json",
+      "sha256": "4466acc973c27a4be5c3b8fa2cbf38fe5f963f539b91e904f3c533cb5d1fd2af"
+    },
+    {
+      "file": "tests/ring-terrain-supports.ts",
+      "sha256": "6f4a432f4ce57b44730f103a9f7c4bf204d1bc7996dea806cb4c88388bd97f60"
+    }
+  ]
+}

@@ -4,7 +4,9 @@ import {
   STATIC_PLACEMENT_ASSET_ID,
   STATIC_PLACEMENT_GROUND_Y,
   STATIC_PLACEMENT_YAW_STEPS,
+  canonicalJson,
   placedStaticInstance,
+  type BuildingInstance,
   type PlaceStaticRequest,
   type PlaceStaticResult,
   type StaticPlacementError,
@@ -24,6 +26,41 @@ type Publication = Pick<
   Prepared,
   'definition' | 'manifest' | 'directory' | 'snapshot' | 'layoutHash'
 >;
+
+function isSingleStaticAddition(
+  current: Publication,
+  candidate: Awaited<ReturnType<typeof createLayoutPublication>>,
+  instance: BuildingInstance,
+) {
+  const sorted = (buildings: BuildingInstance[]) =>
+    buildings.slice().sort((a, b) => a.entityId.localeCompare(b.entityId));
+  if (
+    canonicalJson({ ...candidate.world, buildings: sorted(candidate.world.buildings) }) !==
+    canonicalJson({
+      ...current.definition,
+      buildings: sorted([...current.definition.buildings, instance]),
+    })
+  )
+    return false;
+  const before = current.manifest;
+  const after = candidate.publication.manifest;
+  if (
+    canonicalJson(after.assets) !== canonicalJson(before.assets) ||
+    canonicalJson(after.grid) !== canonicalJson(before.grid) ||
+    after.worldFile !== before.worldFile
+  )
+    return false;
+  const retainedFiles = [
+    before.worldFile,
+    ...Object.values(before.assets).flatMap((asset) =>
+      [asset.modelFile, asset.collisionFile, asset.partsFile].filter(
+        (path): path is string => !!path,
+      ),
+    ),
+  ];
+  return retainedFiles.every((path) => after.files[path] === before.files[path]);
+}
+
 /** Current and previous immutable publications share one pointer across HTTP and the room. */
 export class LayoutPublications {
   current: Publication;
@@ -266,24 +303,6 @@ export class LiveStaticPlacement {
         this.items.setLayoutPaused(false);
         return fail(error);
       }
-      // Only the candidate geometry: existing dynamic contact and occupied spawns are unrelated.
-      const probe = await createAuthoritativeWorld({
-        ...current,
-        entities: [],
-        buildings: [instance],
-        initialItems: [],
-      });
-      try {
-        if (
-          current.spawnPoints.some((p) => !probe.findSpawn(undefined, [p])) ||
-          this.world.getSnapshot().items.some((i) => probe.checkSavedItem(i))
-        ) {
-          this.items.setLayoutPaused(false);
-          return fail('BLOCKED');
-        }
-      } finally {
-        probe.dispose();
-      }
       const snapshot = {
         ...before.snapshot,
         revision: before.snapshot.revision + 1,
@@ -298,6 +317,28 @@ export class LiveStaticPlacement {
           this.publications.prepared.release,
           snapshot,
         );
+        const { instanceRevision: _r, enabled: _e, ...added } = instance;
+        // This live contract activates one pre-existing box asset only. Derived supports or
+        // changed prior geometry require a separately validated atomic physics delta; publishing
+        // them here would make client geometry disagree with the authoritative server.
+        if (!isSingleStaticAddition(this.publications.current, publication, added)) {
+          this.items.setLayoutPaused(false);
+          return fail('COMMAND_DISABLED');
+        }
+        // Spawn checks require real ground support. Probe the complete candidate statics,
+        // without dynamics that can legitimately occupy an existing spawn or saved pose.
+        const probe = await createAuthoritativeWorld({ ...publication.world, initialItems: [] });
+        try {
+          if (
+            publication.world.spawnPoints.some((p) => !probe.findSpawn(undefined, [p])) ||
+            this.world.getSnapshot().items.some((i) => probe.checkSavedItem(i))
+          ) {
+            this.items.setLayoutPaused(false);
+            return fail('BLOCKED');
+          }
+        } finally {
+          probe.dispose();
+        }
         candidate = await this.publications.write(publication, snapshot);
         this.metrics = {
           operationId: request.operationId,

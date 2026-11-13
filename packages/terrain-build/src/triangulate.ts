@@ -120,8 +120,9 @@ export interface Triangulation {
 export function triangulate(
   outerRing: readonly Point2[],
   holeRings: readonly (readonly Point2[])[] = [],
+  cleanTolerance = 1e-3,
 ): Triangulation {
-  const outer = cleanRing(outerRing);
+  const outer = cleanRing(outerRing, cleanTolerance);
   if (outer.length < 3 || Math.abs(signedArea(outer)) < 1e-6)
     return { points: [], triangles: [], coverage: 1 };
   if (signedArea(outer) < 0) outer.reverse();
@@ -129,7 +130,7 @@ export function triangulate(
   let list = outer.map((_, index) => index);
   let expected = signedArea(outer);
   const holes = holeRings
-    .map((ring) => cleanRing(ring))
+    .map((ring) => cleanRing(ring, cleanTolerance))
     .filter((ring) => ring.length >= 3 && Math.abs(signedArea(ring)) >= 1e-6)
     .map((ring) => {
       if (signedArea(ring) > 0) ring.reverse();

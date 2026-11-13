@@ -56,7 +56,9 @@ describe('private terrain release', () => {
       'summit-house',
       'slope-house',
     ]);
-    expect(release.terrain!.supports[2].approach).toEqual({ length: 6, width: 1.5 });
+    const labTerrain = release.terrain!;
+    if (labTerrain.formatVersion !== 1) throw new Error('Lab terrain must remain v1');
+    expect(labTerrain.supports[2].approach).toEqual({ length: 6, width: 1.5 });
     const { publication } = await createLayoutPublication(release, {
       formatVersion: 1,
       worldId: release.definition.worldId,

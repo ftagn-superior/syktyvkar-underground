@@ -180,6 +180,20 @@
               </button>
             </span>
           </div>
+          <p
+            id="gamepad-lobby-status"
+            class="gamepad-lobby-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <details class="xbox-preparation">
+            <summary>Xbox · подготовка в Edge</summary>
+            <p>Включите Game Controls в меню Edge, затем нажмите A, чтобы выбрать геймпад.</p>
+            <p class="gamepad-profile-note">
+              Профиль и вход через Telegram доступны через управление браузером.
+            </p>
+            <p id="audio-lobby-blocked" class="audio-browser-blocked" role="status" hidden></p>
+          </details>
         </div>
       </section>
 
@@ -234,6 +248,33 @@
             aria-label="Закрыть (Esc)"
             data-icon="close"
           ></button>
+        </div>
+        <div id="gamepad-menu" class="gamepad-menu" hidden>
+          <p class="gamepad-menu-description">Левый стик — ходьба · правый — камера · RT — бег</p>
+          <div id="gamepad-actions" class="gamepad-actions">
+            <button
+              id="gamepad-continue"
+              class="ui-btn"
+              type="button"
+              aria-describedby="gamepad-continue-reason"
+            >
+              A · Продолжить
+            </button>
+            <p id="gamepad-continue-reason" class="gamepad-action-reason" role="status"></p>
+            <button id="gamepad-quality" class="ui-btn" type="button">
+              Качество графики · ← Обычное →
+            </button>
+            <p id="gamepad-respawn-reason" class="gamepad-action-reason" role="status"></p>
+            <button id="gamepad-exit" class="ui-btn" type="button">A · Выйти в лобби</button>
+          </div>
+          <div id="gamepad-exit-confirmation" class="gamepad-actions" hidden>
+            <h3>Выйти из мира?</h3>
+            <button id="gamepad-stay" class="ui-btn" type="button">A · Остаться</button>
+          </div>
+          <p id="audio-gamepad-blocked" class="audio-browser-blocked" role="status" hidden></p>
+          <p id="gamepad-menu-controls" class="gamepad-menu-controls">
+            ↑↓ Выбрать · A Подтвердить · ←→ Качество · B / Y Закрыть
+          </p>
         </div>
         <div class="help-scroll">
           <p class="help-mode"><strong id="controls-title">Свободное движение</strong></p>
@@ -360,6 +401,9 @@
         </div>
       </section>
 
+      <p id="gamepad-walk-hint" class="gamepad-walk-hint ui-panel">
+        Левый стик — ходьба · правый — камера · RT — бег · Y — меню
+      </p>
       <div class="hud-chips">
         <div id="clock-chip" class="ui-chip ui-panel" aria-label="Время в мире">
           <span id="clock-icon" class="ic" aria-hidden="true"></span>

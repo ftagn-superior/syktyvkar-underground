@@ -218,14 +218,23 @@ try {
       })();`,
     });
   }
+  await owner.bringToFront();
   await owner.goto(app.url + '/?diagnostics=1', { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await owner.locator('#telegram-login').click();
   await owner.locator('#profile-form').waitFor({ state: 'visible' });
   for (const page of [owner, observer]) {
+    await page.bringToFront();
     await page.goto(app.url + '/?diagnostics=1', {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
+    // Native audio initialization may wait for browser activation. Use the same existing
+    // lobby control as the player and restore its mute preference before checking decode.
+    const sound = page.locator('#audio-lobby-toggle');
+    const preference = await sound.getAttribute('aria-pressed');
+    await sound.click();
+    await sound.click();
+    assert.equal(await sound.getAttribute('aria-pressed'), preference);
     await ready(page);
     await page.locator('#join:not([disabled])').click();
     await playing(page);
@@ -236,7 +245,9 @@ try {
   await Promise.all([audible(owner), audible(observer)]);
   await owner.waitForTimeout(600);
   for (const page of [owner, observer]) assert.equal(count(await audio(page), 'ui:spawn'), 1);
-  checked('17 assets decode; ordinary join unlocks audio; each local spawn sounds once');
+  checked(
+    'existing lobby sound control unlocks audio, preserving mute; 17 assets decode and each local spawn sounds once',
+  );
 
   const beforeHelp = await audio(owner);
   await owner.locator('#help-toggle').click();
@@ -370,10 +381,11 @@ try {
   assert.equal(count(await audio(observer), 'reaction'), count(beforeReaction[1], 'reaction') + 1);
   checked('a new reaction sounds once on both clients; later replicated frames do not replay it');
 
+  await observer.bringToFront();
   await observer.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
   await playing(observer);
-  await ready(observer);
   await observer.locator('#world').click();
+  await ready(observer);
   await audible(observer);
   await observer
     .locator(`.player-reaction[data-entity-id="${ownerId}"][data-reaction-id="hello"]`)

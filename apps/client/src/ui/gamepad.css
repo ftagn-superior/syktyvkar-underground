@@ -1,0 +1,168 @@
+.xbox-preparation {
+  margin-top: 0.8em;
+  font-size: 0.85em;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.xbox-preparation summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.xbox-preparation p {
+  margin: 0.5em 0 0;
+}
+.audio-browser-blocked {
+  font-weight: 500;
+  line-height: 1.45;
+}
+.gamepad-lobby-status {
+  font-size: 16px;
+  line-height: 1.4;
+}
+.gamepad-lobby-status:empty {
+  display: none;
+}
+body[data-input-mode='gamepad'] {
+  --gamepad-edge-x: calc(
+    max(24px, 3vw) + max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px))
+  );
+  --gamepad-edge-y: calc(
+    max(24px, 3vh) + max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px))
+  );
+  --edge: max(24px, 3vw);
+  --hud-size: 18px;
+}
+body[data-input-mode='gamepad'] .lobby {
+  padding: var(--gamepad-edge-y) var(--gamepad-edge-x);
+}
+body[data-input-mode='gamepad'] .l-card {
+  font-size: 18px;
+}
+body[data-input-mode='gamepad'] .l-card small,
+body[data-input-mode='gamepad'] .l-foot,
+body[data-input-mode='gamepad'] .xbox-preparation,
+body[data-input-mode='gamepad'] .plate small,
+body[data-input-mode='gamepad'] .world-status {
+  font-size: 16px;
+}
+body[data-input-mode='gamepad'] .l-card button,
+body[data-input-mode='gamepad'] .fig-row button,
+body[data-input-mode='gamepad'] .hud-helppanel button,
+body[data-input-mode='gamepad'] .hud-top button {
+  min-height: 44px;
+}
+body[data-input-mode='gamepad'] .gamepad-focus {
+  outline: 4px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 0.4em;
+  opacity: 1;
+  scroll-margin: 12px;
+}
+body[data-input-mode='gamepad'] .gamepad-focus:disabled {
+  border-style: dashed;
+  color: var(--mut);
+}
+body[data-input-mode='gamepad'] .gamepad-help {
+  left: 50%;
+  top: var(--gamepad-edge-y);
+  transform: translateX(-50%);
+  transform-origin: top center;
+  animation: none;
+  width: min(640px, calc(100vw - 2 * var(--gamepad-edge-x)));
+  max-height: calc(100dvh - 2 * var(--gamepad-edge-y));
+  font-size: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body[data-input-mode='gamepad'] .gamepad-help .help-scroll,
+body[data-input-mode='gamepad'] .gamepad-help .help-foot,
+body[data-input-mode='gamepad'] .gamepad-help #help-close {
+  display: none;
+}
+.gamepad-menu {
+  padding: 0 4px 4px;
+}
+.gamepad-menu-description,
+.gamepad-menu-controls,
+.gamepad-action-reason,
+.gamepad-menu .audio-browser-blocked {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.gamepad-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gamepad-actions > .ui-btn {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0.55em 0.75em;
+}
+.gamepad-actions > h3 {
+  margin: 0.4em 0;
+  font-size: 20px;
+}
+.gamepad-action-reason {
+  margin: -4px 0 0;
+  color: var(--mut);
+}
+.gamepad-action-reason:empty {
+  display: none;
+}
+.gamepad-menu-controls {
+  margin-bottom: 0;
+}
+.gamepad-walk-hint {
+  display: none;
+}
+body[data-input-mode='gamepad'] .gamepad-walk-hint {
+  display: block;
+  right: var(--gamepad-edge-x);
+  bottom: var(--gamepad-edge-y);
+  max-width: min(640px, 45vw);
+  margin: 0;
+  padding: 0.65em 0.9em;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  pointer-events: none;
+}
+body[data-input-mode='gamepad']:has(#help-panel:not([hidden])) .hud-top,
+body[data-input-mode='gamepad']:has(#help-panel:not([hidden])) .gamepad-walk-hint {
+  visibility: hidden;
+}
+body[data-input-mode='gamepad'] .hud-top {
+  top: var(--gamepad-edge-y);
+  max-width: calc(100vw - 2 * var(--gamepad-edge-x));
+  font-size: 18px;
+}
+body[data-input-mode='gamepad'] .gamepad-status {
+  max-width: 720px;
+  padding: 0.7em 1em;
+  font-size: 18px;
+  line-height: 1.4;
+  text-align: center;
+}
+body[data-input-mode='gamepad'] .hud-dock,
+body[data-input-mode='gamepad'] #chat-form,
+body[data-input-mode='gamepad'] #chat-toggle,
+body[data-input-mode='gamepad'] #diagnostics,
+body[data-input-mode='gamepad'] #help-tip,
+body[data-input-mode='gamepad'] #touch-stick {
+  display: none !important;
+}
+@media (max-height: 700px) {
+  body[data-input-mode='gamepad'] .lobby {
+    overflow-y: auto;
+    align-content: start;
+  }
+  body[data-input-mode='gamepad'] .gamepad-help {
+    padding: 14px 18px;
+  }
+  body[data-input-mode='gamepad'] .gamepad-actions {
+    gap: 10px;
+  }
+}

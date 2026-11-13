@@ -1,9 +1,8 @@
 import { resolve } from 'node:path';
 import { access, rm } from 'node:fs/promises';
 import {
-  STATIC_PLACEMENT_ASSET_ID,
-  STATIC_PLACEMENT_GROUND_Y,
-  STATIC_PLACEMENT_YAW_STEPS,
+  MAX_EDITABLE_STATIC_INSTANCES,
+  LEGACY_PLACEMENT_CATALOG_VERSION,
   placedStaticInstance,
   type PlaceStaticRequest,
   type PlaceStaticResult,
@@ -11,13 +10,14 @@ import {
   type StaticPlacementEffect,
   type WorldPublicationInfo,
 } from '@su/contracts';
-import { writeWorldPublication } from '@su/world-release';
+import { writeWorldPublication, WorldPublicationContentLimitError } from '@su/world-release';
 import { createAuthoritativeWorld, type AuthoritativeWorld } from '@su/simulation/server';
 import type { ItemRuntime } from '../items/runtime.js';
 import { worldCompatibility } from '../items/store.js';
 import { createLayoutPublication } from './release.js';
 import { StaticLayoutStore } from './store.js';
 import type { prepareLayoutWorld } from './prepare.js';
+import { hasPlacementGround, type ServerPlacementCatalog } from './placement-catalog.js';
 
 type Prepared = Awaited<ReturnType<typeof prepareLayoutWorld>>;
 type Publication = Pick<
@@ -128,55 +128,23 @@ export class LiveStaticPlacement {
     private epoch: string,
     private changed: () => void,
     private neutral: () => void,
+    readonly catalog?: ServerPlacementCatalog,
   ) {
     this.layouts = new StaticLayoutStore(items.store.ownership, publications.prepared.release);
   }
   effect(): StaticPlacementEffect | undefined {
-    const p = this.publications.current,
-      asset = p.definition.buildingAssets[STATIC_PLACEMENT_ASSET_ID];
-    // The adopted release must contain the city ground and the fixed one-box asset.
-    const flat = (rotation: { x: number; y: number; z: number; w: number }) =>
-      Math.abs(rotation.x) + Math.abs(rotation.y) + Math.abs(rotation.z) < 1e-8;
-    const slabs = p.definition.buildings.flatMap((i) =>
-      !flat(i.rotation)
-        ? []
-        : (p.definition.buildingAssets[i.assetId]?.colliders ?? []).flatMap((c) =>
-            c.kind !== 'box' ||
-            !flat(c.rotation) ||
-            Math.abs(i.position.y + c.position.y + c.size.y / 2) > 1e-6
-              ? []
-              : [
-                  {
-                    x: i.position.x + c.position.x,
-                    z: i.position.z + c.position.z,
-                    sx: c.size.x,
-                    sz: c.size.z,
-                  },
-                ],
-          ),
-    );
-    for (const i of p.definition.entities)
-      if (Math.abs(i.position.y + i.size.y / 2) < 1e-6)
-        slabs.push({ x: i.position.x, z: i.position.z, sx: i.size.x, sz: i.size.z });
-    const ground = p.manifest.cells.every(({ bounds: b }) =>
-      slabs.some(
-        (s) =>
-          s.x - s.sx / 2 <= b.min.x + 1e-6 &&
-          s.x + s.sx / 2 >= b.max.x - 1e-6 &&
-          s.z - s.sz / 2 <= b.min.z + 1e-6 &&
-          s.z + s.sz / 2 >= b.max.z - 1e-6,
-      ),
-    );
-    if (!asset || asset.colliders.length !== 1 || asset.colliders[0].kind !== 'box' || !ground)
+    if (
+      !this.catalog ||
+      !hasPlacementGround(this.publications.current.definition, this.publications.current.manifest)
+    )
       return;
     return {
       kind: 'staticPlacement',
-      assetId: STATIC_PLACEMENT_ASSET_ID,
-      groundY: STATIC_PLACEMENT_GROUND_Y,
-      yawSteps: STATIC_PLACEMENT_YAW_STEPS,
+      catalog: this.catalog.reference,
       publication: this.publications.info(this.epoch),
     };
   }
+
   place(
     accountId: string,
     request: PlaceStaticRequest,
@@ -236,11 +204,16 @@ export class LiveStaticPlacement {
         return fail('WORLD_NOT_READY');
       const ready = validateNew();
       if (ready) return fail(ready);
+      // The zero version is reserved for legacy local reconciliation, never for a new write.
+      if (request.placementCatalogVersion === LEGACY_PLACEMENT_CATALOG_VERSION) return fail('CATALOG_CHANGED');
       if (!this.effect()) return fail('COMMAND_DISABLED');
       const info = this.publications.info(this.epoch);
       if (request.worldEpoch !== this.epoch) return fail('STALE_WORLD');
       if (request.assetReleaseVersion !== info.assetReleaseVersion) return fail('VERSION_MISMATCH');
+      if (request.placementCatalogVersion !== this.catalog!.reference.placementCatalogVersion)
+        return fail('CATALOG_CHANGED');
       if (request.expectedLayoutRevision !== info.layoutRevision) return fail('LAYOUT_CHANGED');
+      if (!this.catalog!.assetIds.has(request.assetId)) return fail('ASSET_NOT_ALLOWED');
       if (await this.layouts.gameRateLimited(accountId)) return fail('RATE_LIMITED');
       reserved = true;
       const pauseStarted = performance.now();
@@ -254,7 +227,7 @@ export class LiveStaticPlacement {
         return fail('LAYOUT_CHANGED');
       }
       const current = this.publications.current.definition;
-      if (current.buildings.length + current.entities.length >= 2048) {
+      if (before.snapshot.instances.length >= MAX_EDITABLE_STATIC_INSTANCES) {
         this.items.setLayoutPaused(false);
         return fail('CONTENT_LIMIT');
       }
@@ -310,9 +283,13 @@ export class LiveStaticPlacement {
           pauseStarted,
           clients: {},
         };
-      } catch {
+      } catch (error) {
         this.items.setLayoutPaused(false);
-        return fail('STORAGE_UNAVAILABLE');
+        return fail(
+          error instanceof WorldPublicationContentLimitError
+            ? 'CONTENT_LIMIT'
+            : 'STORAGE_UNAVAILABLE',
+        );
       }
       const writeAuth = authorize();
       if (writeAuth) {

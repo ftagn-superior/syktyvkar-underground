@@ -1,5 +1,6 @@
 export * from './accounts.js';
 export * from './static-placement.js';
+export * from './placement-catalog.js';
 export * from './items.js';
 export * from './item-shapes.js';
 export * from './foliage-shapes.js';

@@ -1,4 +1,5 @@
 import { LiveStaticPlacement, type LayoutPublications } from './layout/live.js';
+import type { ServerPlacementCatalog } from './layout/placement-catalog.js';
 import type { Pool } from 'pg';
 import { ItemStore } from './items/store.js';
 import type { WorldOwnership } from './world-ownership.js';
@@ -72,6 +73,7 @@ import type { PlayerSession as Session, ClientAction } from './room/session.js';
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 export interface WorldRoomOptions {
   layouts?: LayoutPublications;
+  placementCatalog?: ServerPlacementCatalog;
   ownership?: WorldOwnership;
   itemStore?: ItemStore;
   definition: WorldDefinition;
@@ -179,6 +181,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.state.worldEpoch,
         () => this.layoutChanged(),
         () => this.neutralAll(),
+        options.placementCatalog,
       );
     this.onMessage('placeStatic', (client, request: unknown) => {
       void this.placeStatic(client, request);
@@ -776,7 +779,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         'AUTH_REQUIRED',
         command.kind === 'time'
           ? 'Чтобы управлять временем, войдите через Telegram.'
-          : giveFailureMessage('AUTH_REQUIRED'),
+          : command.kind === 'staticPlacement'
+            ? 'Чтобы размещать объекты, войдите через Telegram.'
+            : giveFailureMessage('AUTH_REQUIRED'),
       );
     if (command.kind === 'time')
       return this.finishAction(client, session, {
@@ -785,7 +790,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       });
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();
-      if (!effect) return fail('COMMAND_DISABLED', 'Размещение скамейки недоступно в этом мире.');
+      if (!effect) return fail('COMMAND_DISABLED', 'Размещение объектов недоступно в этом мире.');
       if (this.staticPlacement?.busy || this.items.layoutPaused)
         return fail('WORLD_NOT_READY', 'Обновляется окружение.');
       this.finishAction(client, session, { requestId, ok: true, effect });

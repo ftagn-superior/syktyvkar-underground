@@ -200,6 +200,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('offline static asset catalog
       operationId: randomUUID(),
       worldEpoch: original.items.epoch,
       assetReleaseVersion: original.snapshot.assetReleaseVersion,
+      assetId: 'bench-0152a250d22ef0a9',
+      placementCatalogVersion: 'a'.repeat(64),
       expectedLayoutRevision: original.snapshot.revision,
       position: { x: -10, z: -9 },
       yawStep: 1,

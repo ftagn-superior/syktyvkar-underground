@@ -250,7 +250,7 @@ export function startGame(): void {
 
   function updateState(state: ConnectionState, message?: string): void {
     if (disposed) return;
-    if (state !== 'playing' && state !== 'waiting') staticPlacement?.close();
+    if (!['playing', 'waiting', 'preparing'].includes(state)) staticPlacement?.close();
     const playing = state === 'playing';
     if (!playing) audio.stopWorld();
     const reconnecting = state === 'reconnecting';
@@ -278,6 +278,7 @@ export function startGame(): void {
     if (
       playing &&
       !graphicsLost &&
+      !staticPlacement?.browsing &&
       !document.querySelector('.inventory-panel:not([hidden]), .chat-form:not([hidden])')
     ) {
       canvas.focus({ preventScroll: true });
@@ -311,6 +312,7 @@ export function startGame(): void {
   element('hud-top').append(storageStatus);
   const accounts = new AccountPanel(
     () => {
+      if (session.accountId !== accounts.account?.accountId) staticPlacement?.close();
       session.accountId = accounts.account?.accountId;
       session.guestSkinId = accounts.selectedSkinId;
       updateState(session.state);
@@ -345,9 +347,9 @@ export function startGame(): void {
     () => inputMode.value === 'desktop' && !graphicsLost,
   );
   session.onStaticPlacementOpen = (effect) => {
-    if (inputMode.value !== 'desktop' || graphicsLost) return;
+    if (inputMode.value !== 'desktop' || graphicsLost || session.staticPlacementPending) return;
     firstPerson?.overview();
-    closeGamePanels();
+    panels.closeExcept('static');
     help?.close(false);
     void staticPlacement?.open(effect);
   };
@@ -473,6 +475,7 @@ export function startGame(): void {
         if (axis === 'y') staticPlacement?.rotate(direction);
       } else inventory?.rotatePlacement(axis, direction);
     },
+    () => staticPlacement?.browsing ?? false,
   );
   cameraPointer = new CameraPointerInput(
     canvas,
@@ -888,6 +891,7 @@ export function startGame(): void {
     Object.defineProperty(window, '__SU_DEBUG__', {
       value: Object.freeze({
         snapshot: () => structuredClone(session.diagnostics()),
+        placement: () => staticPlacement?.diagnostics(),
         controls: () => ({
           mode: inputMode.value,
           view: firstPerson?.selected ? 'first-person' : 'overview',

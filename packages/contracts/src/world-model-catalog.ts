@@ -36,6 +36,8 @@ export interface WorldModelCatalog {
 }
 export interface WorldModelCatalogIndex {
   formatVersion: 1;
+  /** Enables strict loading of the separate policy artifact. */
+  placementPolicy?: true;
   worldId: string;
   assetReleaseVersion: string;
   catalogVersion: string;
@@ -137,6 +139,10 @@ export function validateWorldModelCatalogIndex(value: unknown): WorldModelCatalo
   requireValue(
     typeof value.catalogVersion === 'string' && hashPattern.test(value.catalogVersion),
     'catalogVersion',
+  );
+  requireValue(
+    value.placementPolicy === undefined || value.placementPolicy === true,
+    'placementPolicy marker',
   );
   return value as WorldModelCatalogIndex;
 }

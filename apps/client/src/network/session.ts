@@ -24,7 +24,9 @@ import {
   type StaticPlacementEffect,
   type PlaceStaticRequest,
   type PlaceStaticResult,
-  parsePlaceStaticRequest,
+  parseStoredPlaceStaticRequest,
+  type PlacementCatalogReference,
+  type PlacementCatalog,
   parseItemCommand,
   isPlayerMoving,
   type InventoryView,
@@ -78,6 +80,7 @@ import { WorldSoundEvents } from '../presentation/world-sound-events';
 import { messages, staticPlacementMessages, readableError } from './errors';
 import { PendingAction } from './pending-action';
 import { PersistentOperation } from './persistent-operation';
+import { readPlacementCatalog, PlacementCatalogChanged } from './placement-catalog';
 import { getResponse, loadWorldPublication, WorldVersionMismatch } from './world-publication';
 export { readableError } from './errors';
 
@@ -123,7 +126,7 @@ export class GameSession {
   inventory: InventoryView = { slots: [] };
   private readonly staticOperation = new PersistentOperation<PlaceStaticRequest>(
     'su:static-operation',
-    parsePlaceStaticRequest,
+    parseStoredPlaceStaticRequest,
   );
   private publicationTask?: Promise<void>;
   private publicationTarget?: string;
@@ -356,10 +359,35 @@ export class GameSession {
   readStaticAsset(path: string, signal?: AbortSignal) {
     return this.resources!.read(path, signal);
   }
+  async loadPlacementCatalog(
+    reference: PlacementCatalogReference,
+    signal?: AbortSignal,
+  ): Promise<PlacementCatalog> {
+    for (let attempt = 0; ; attempt++) {
+      const generation = this.generation;
+      try {
+        const catalog = await readPlacementCatalog(reference, this.info, this.manifest, signal);
+        if (generation !== this.generation)
+          throw new PlacementCatalogChanged('Мир обновлён во время загрузки каталога.');
+        return catalog;
+      } catch (error) {
+        if (signal?.aborted || !(error instanceof PlacementCatalogChanged) || attempt > 0)
+          throw error;
+        await this.refreshPublication();
+        if (!this.info.placementCatalog) throw new Error('Каталог размещения недоступен.');
+        reference = this.info.placementCatalog;
+      }
+    }
+  }
   get staticPlacementPending() {
     return !!this.staticOperation.current;
   }
-  placeStatic(position: { x: number; z: number }, yawStep: number): boolean {
+  placeStatic(
+    position: { x: number; z: number },
+    yawStep: number,
+    assetId: string,
+    placementCatalogVersion: string,
+  ): boolean {
     if (
       this.staticOperation.current ||
       this.state !== 'playing' ||
@@ -372,6 +400,8 @@ export class GameSession {
         operationId: crypto.randomUUID(),
         worldEpoch: this.info.worldEpoch,
         assetReleaseVersion: this.info.assetReleaseVersion!,
+        assetId,
+        placementCatalogVersion,
         expectedLayoutRevision: this.info.layoutRevision!,
         position,
         yawStep,
@@ -596,7 +626,7 @@ export class GameSession {
         this.staticOperation.complete();
         this.onNotice(
           result.ok
-            ? 'Скамейка сохранена.'
+            ? 'Объект сохранён.'
             : (result.message ??
                 staticPlacementMessages[result.code] ??
                 messages[result.code] ??

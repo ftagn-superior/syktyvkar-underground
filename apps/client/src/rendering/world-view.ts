@@ -7,7 +7,7 @@ import { Camera } from '@babylonjs/core/Cameras/camera';
 import { Vector3, Quaternion, Matrix } from '@babylonjs/core/Maths/math.vector';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { loadBuildingContainer } from './building-container';
+import { createModelVisual, type ModelResourceReader } from './model-visual';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -23,6 +23,7 @@ import {
   type WorldCell,
   type StaticEntityDefinition,
   type BuildingInstance,
+  type BuildingAssetManifest,
   type WorldManifest,
 } from '@su/contracts';
 import { decorateWorld } from './world-decoration';
@@ -866,46 +867,17 @@ export class WorldView {
     };
   }
   /** An isolated local model; neither cell references nor the inventory ghost own it. */
-  async createStaticGhost(model: Uint8Array) {
-    const container = await loadBuildingContainer(model, this.scene, 'static-preview.glb');
+  async createStaticGhost(
+    descriptor: BuildingAssetManifest,
+    read: ModelResourceReader,
+    signal?: AbortSignal,
+  ) {
+    const visual = await createModelVisual(this.scene, descriptor, read, 'placement-ghost', signal);
     if (this.disposed) {
-      container.dispose();
+      visual.dispose();
       throw new Error('View disposed');
     }
-    const root = new TransformNode('static-placement-preview', this.scene);
-    const material = new StandardMaterial('static-placement-preview', this.scene);
-    material.diffuseColor = Color3.FromHexString('#b8c5d6');
-    material.emissiveColor = material.diffuseColor.scale(0.25);
-    material.alpha = 0.5;
-    const entries = container.instantiateModelsToScene((name) => `static-preview:${name}`, false, {
-      doNotInstantiate: true,
-    });
-    for (const node of entries.rootNodes) node.parent = root;
-    for (const mesh of root.getChildMeshes()) {
-      mesh.material = material;
-      mesh.isPickable = false;
-      mesh.useVertexColors = false;
-    }
-    root.setEnabled(false);
-    return {
-      show: (pose?: ItemPose) => {
-        root.setEnabled(!!pose);
-        if (!pose) return;
-        root.position.copyFrom(vector(pose.position));
-        root.rotationQuaternion = new Quaternion(
-          pose.rotation.x,
-          pose.rotation.y,
-          pose.rotation.z,
-          pose.rotation.w,
-        );
-      },
-      dispose: () => {
-        entries.dispose();
-        root.dispose();
-        container.dispose();
-        material.dispose();
-      },
-    };
+    return visual;
   }
   showPlacement(typeId?: string, pose?: ItemPose, valid = false) {
     if (!typeId || !pose) {

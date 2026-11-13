@@ -24,6 +24,8 @@ import {
   type TreeRenderRecipe,
   type BuildingParts,
   validateBuildingParts,
+  validateWorldPlacementAssets,
+  type WorldPlacementPolicy,
 } from '@su/contracts';
 import {
   createWorldPublication,
@@ -47,6 +49,7 @@ import {
   readWorldModelSources,
   createWorldModelCatalog,
   writeWorldModelCatalog,
+  readPlacementPolicySource,
 } from './model-catalog.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
@@ -196,6 +199,7 @@ export async function buildWorld(
   const sourceDirectory = dirname(resolve(source));
   const catalogPath = resolve(sourceDirectory, authored.assetCatalog);
   const modelSources = await readWorldModelSources(catalogPath);
+  const policySource = await readPlacementPolicySource(source, authored, modelSources);
   const runtimeAssetIds: Record<string, string[]> = Object.fromEntries(
     Object.keys(modelSources.models).map((id) => [id, []]),
   );
@@ -295,12 +299,35 @@ export async function buildWorld(
     authoringMetadata(world, publication.manifest, fixedInstanceIds).assetReleaseVersion,
     runtimeAssetIds,
   );
+  const placementPolicy: WorldPlacementPolicy | undefined = policySource
+    ? {
+        formatVersion: 1,
+        worldId: base.worldId,
+        assetReleaseVersion: modelCatalog.assetReleaseVersion,
+        assetIds: [...policySource.assetIds].sort(),
+      }
+    : undefined;
+  if (placementPolicy)
+    validateWorldPlacementAssets(
+      placementPolicy,
+      modelCatalog,
+      publication.manifest,
+      world,
+      Object.fromEntries(
+        [...compiled].map(([assetId, asset]) => [
+          assetId,
+          JSON.parse(new TextDecoder().decode(asset.parts)),
+        ]),
+      ),
+      fixedInstanceIds,
+    );
   await writeWorldPublication(publication, outputDirectory);
   await writeAuthoringMetadata(world, publication.manifest, fixedInstanceIds, outputDirectory);
   await writeWorldModelCatalog(
     modelCatalog,
     modelCatalogOutput ??
       (output ? resolve(outputDirectory, 'model-catalog') : `dist/model-catalogs/${base.worldId}`),
+    placementPolicy,
   );
   const manifest = publication.manifest;
   return manifest;

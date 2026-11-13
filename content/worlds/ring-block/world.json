@@ -204,6 +204,7 @@
     "cells/0_0.json"
   ],
   "assetCatalog": "../../buildings/ring-block/catalog.json",
+  "placementPolicy": "placement.json",
   "itemCatalog": "../../items/catalog.json",
   "initialItems": [
     {

@@ -14,6 +14,8 @@ const request = (x: number, z: number, yawStep = 0): PlaceStaticRequest => ({
   operationId: '12345678-1234-4567-8123-123456789abc',
   worldEpoch: 'e',
   assetReleaseVersion: 'a'.repeat(64),
+  assetId: STATIC_PLACEMENT_ASSET_ID,
+  placementCatalogVersion: 'b'.repeat(64),
   expectedLayoutRevision: 1,
   position: { x, z },
   yawStep,

@@ -15,6 +15,7 @@ import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { REFERENCE_HOUR, skyAt, type Sky } from './day-cycle';
 import { darkness } from './night-schedule';
+import { GLOW_MASK_SUPPORTED, glowMaskPatches } from './glow-mask';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -32,14 +33,16 @@ const SHADOW_SNAP = (SHADOW_EXTENT / SHADOW_MAP_SIZE) * 128;
  */
 const LIGHT_STEP_COS = Math.cos((0.1 * Math.PI) / 180);
 /**
- * Ореол ночных огней. Порог яркости (с учётом экспозиции) выше освещённых луной стен
- * и травы, но ниже окон, витрин, вывесок и плафонов. Пятна под фонарями тоже чуть
- * светятся, как на ночной фотографии. Подобрано по снимкам в браузере.
- * Днём ореол выключен целиком: солнечные стены превысили бы порог, а проходы размытия
- * стоили бы кадра впустую.
+ * Ореол ночных огней. Размываются только пиксели, помеченные шейдером огней
+ * (см. `glow-mask.ts`): окна, витрины, вывески и плафоны, но не освещённые фонарями
+ * стены. Днём ореол выключен целиком: проходы размытия стоили бы кадра впустую.
+ */
+const BLOOM_WEIGHT = 1.5;
+/**
+ * Запасной порог яркости (с учётом экспозиции), если метку огней поставить нельзя:
+ * выше освещённых луной стен, ниже окон. Пятна под фонарями тогда тоже светятся.
  */
 const BLOOM_THRESHOLD = 0.2;
-const BLOOM_WEIGHT = 0.7;
 const BLOOM_KERNEL = 64;
 const BLOOM_SCALE = 0.5;
 /** Темнота, с которой включается ореол; ниже неё его вес и так незаметен. */
@@ -281,12 +284,22 @@ export class WorldLighting {
     if (enabled) pipeline.bloomWeight = BLOOM_WEIGHT * this.dark;
   }
 
+  /**
+   * Должны ли огни помечать себя для ореола в этом кадре. Метка допустима только при
+   * включённом ореоле: его проход слияния возвращает альфу холста к единице.
+   */
+  get glowMask(): boolean {
+    return GLOW_MASK_SUPPORTED && (this.pipeline?.bloomEnabled ?? false);
+  }
+
   /** Состояние ореола для диагностики и тестов. */
   bloomDiagnostics() {
     const pipeline = this.pipeline;
     return {
       enabled: pipeline?.bloomEnabled ?? false,
       weight: pipeline?.bloomEnabled ? pipeline.bloomWeight : 0,
+      glowMask: this.glowMask,
+      patchedPasses: { ...glowMaskPatches },
     };
   }
 

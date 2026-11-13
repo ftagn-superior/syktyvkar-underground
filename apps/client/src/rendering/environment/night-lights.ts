@@ -59,7 +59,7 @@ type NightState = {
   slots: number;
   /** Пять классов по vec4: вечер, держится, утро, яркость. */
   levels: Float32Array;
-  /** Номер ночи (перемешивает окна), темнота, накал фонарей, 0. */
+  /** Номер ночи (перемешивает окна), темнота, накал фонарей, метка для ореола (0/1). */
   clock: Float32Array;
   lampPositions: Float32Array;
   lampColors: Float32Array;
@@ -196,6 +196,8 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
         }
       #endif
       #ifdef SU_GLOW
+        // Свечение этого пикселя: из него ставится метка для ореола (см. glow-mask.ts).
+        vec3 suGlowLight = vec3(0.0);
         vec3 suNightGlow(vec3 albedo) {
           float kind = floor(vSuGlow.x + 0.5);
           if (kind < 0.5) return vec3(0.0);
@@ -246,7 +248,17 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
             #endif
           #endif
           #ifdef SU_GLOW
-            finalEmissive += suNightGlow(surfaceAlbedo.rgb);
+            suGlowLight = suNightGlow(surfaceAlbedo.rgb);
+            finalEmissive += suGlowLight;
+          #endif
+        `,
+        // Отрицательная альфа помечает огонь для ореола; непрозрачная сцена так не пишет.
+        CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
+          #if defined(SU_GLOW) && !defined(ALPHABLEND)
+            if (suNightClock.w > 0.0) {
+              float suGlowMark = clamp(max(suGlowLight.r, max(suGlowLight.g, suGlowLight.b)) * 4.0, 0.0, 1.0);
+              if (suGlowMark > 0.0) finalColor.a = -suGlowMark;
+            }
           #endif
         `,
       };
@@ -340,7 +352,12 @@ export class WorldNightLights {
       const level: GlowLevel = levels[kind];
       target.set([level.evening, level.keep, level.morning, level.brightness], index * 4);
     });
-    this.state.clock.set([night % 997, levels.dark, Math.max(levels.lamps, levels.neonLight), 0]);
+    this.state.clock.set([
+      night % 997,
+      levels.dark,
+      Math.max(levels.lamps, levels.neonLight),
+      this.state.clock[3],
+    ]);
     this.selectLamps(focus, levels.lamps, levels.neonLight);
   }
 
@@ -377,6 +394,14 @@ export class WorldNightLights {
         i * 4,
       );
     }
+  }
+
+  /**
+   * Помечать ли огни для ореола. Включать только вместе с ореолом: без его прохода
+   * слияния отрицательная альфа дошла бы до холста. Униформа, без пересборки шейдеров.
+   */
+  setGlowMask(on: boolean): void {
+    this.state.clock[3] = on ? 1 : 0;
   }
 
   setEnabled(enabled: boolean): void {

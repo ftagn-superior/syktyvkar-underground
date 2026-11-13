@@ -64,6 +64,7 @@ export class WorldEnvironment {
     const frozen = this.fixedHour !== undefined || this.clock.frozenHour >= 0;
     const night = frozen ? 0 : Math.floor((epochMs + this.clock.offsetMs) / DAY_LENGTH_MS - 0.5);
     this.nightLights.update(this.currentHour, night, frame.target);
+    this.nightLights.setGlowMask(this.lighting.glowMask);
     this.clouds.update({
       epochMs,
       lightDirection: this.lightDirection.set(

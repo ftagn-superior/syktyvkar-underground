@@ -196,16 +196,26 @@ describe('night bloom', () => {
     try {
       lighting.setQuality('standard');
       lighting.setTimeOfDay(12);
-      expect(lighting.bloomDiagnostics()).toEqual({ enabled: false, weight: 0 });
+      expect(lighting.bloomDiagnostics()).toMatchObject({
+        enabled: false,
+        weight: 0,
+        glowMask: false,
+      });
 
       lighting.setTimeOfDay(1);
       const night = lighting.bloomDiagnostics();
       expect(night.enabled).toBe(true);
       expect(night.weight).toBeGreaterThan(0);
+      // Only the night lights bloom: they mark themselves while bloom is on.
+      expect(night.glowMask).toBe(true);
 
       // Economy has no post-processing; returning at night restores the glow.
       lighting.setQuality('economy');
-      expect(lighting.bloomDiagnostics()).toEqual({ enabled: false, weight: 0 });
+      expect(lighting.bloomDiagnostics()).toMatchObject({
+        enabled: false,
+        weight: 0,
+        glowMask: false,
+      });
       lighting.setQuality('standard');
       expect(lighting.bloomDiagnostics()).toEqual(night);
 

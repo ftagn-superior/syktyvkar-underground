@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { ItemStore } from './items/store.js';
 import type { WorldOwnership } from './world-ownership.js';
 import { ItemRuntime } from './items/runtime.js';
+import { PlayerPositionRuntime } from './players/position-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DurationMetric } from './metrics.js';
@@ -19,6 +20,7 @@ import {
 } from '@colyseus/core';
 import {
   MAX_PLAYERS,
+  parseAreaFailed,
   parsePlaceStaticRequest,
   type StaticPlacementError,
   parseRemoveStaticRequest,
@@ -108,6 +110,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private manifest!: WorldManifest;
   private definition!: WorldDefinition;
   private items!: ItemRuntime;
+  private positions!: PlayerPositionRuntime;
+  private stopping = false;
+  private lastPositionCapture = 0;
+  private readonly positionSpawns = {
+    saved: 0,
+    default: 0,
+    fallbacks: {} as Record<string, number>,
+  };
   private itemRequests = 0;
   private readonly dayClock = new WorldClock(this.state);
   private staticPlacement?: LiveStaticPlacement;
@@ -170,8 +180,20 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     );
     try {
       await this.items.initialize();
+      this.positions = new PlayerPositionRuntime({
+        pool: options.pool,
+        worldId: options.definition.worldId,
+        writeEpoch: this.state.worldEpoch,
+        isAccountActive: (accountId) => this.accountPlayers.has(accountId),
+        onOwnershipLost: () => {
+          void this.shutdownWorld().catch((error) => console.error('World ownership lost', error));
+          for (const client of [...this.clients]) this.fail(client, 'WORLD_NOT_READY');
+        },
+      });
     } catch (error) {
+      await this.positions?.close().catch(() => {});
       await this.items.store.close();
+      this.loopDelay.disable();
       this.world.dispose();
       throw error;
     }
@@ -200,6 +222,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     });
     this.onMessage('requestArea', (client) => this.sendPlan(client));
     this.onMessage('areaReady', (client, data: unknown) => this.areaReady(client, data));
+    this.onMessage('areaFailed', (client, data: unknown) => this.areaFailed(client, data));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
@@ -289,17 +312,84 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       lastRespawn: -Infinity,
       lastInput: { ...NEUTRAL_INPUT },
       areaResults: new Map(),
+      initialSpawn: {
+        stage: auth ? 'loading-position' : 'default',
+        startedAt: performance.now(),
+        deadline: performance.now() + this.prepareTimeoutMs,
+      },
+      transport: client,
+      connectionPeriod: 1,
     });
     if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
     this.state.occupancy = this.sessions.size;
     this.interest.reset(client, this.sessions.get(client.sessionId)!.entityId);
-    this.createPlan(
-      client,
-      this.sessions.get(client.sessionId)!,
-      'spawn',
-      performance.now() + this.prepareTimeoutMs,
-    );
+    const session = this.sessions.get(client.sessionId)!;
+    if (auth) void this.loadPosition(client, session);
+    else this.beginSpawnStage(client, session, 'default');
     void this.sendInventory(client);
+  }
+
+  private async loadPosition(client: Client, session: Session): Promise<void> {
+    const result = await this.positions.loadForJoin(session.auth!.accountId);
+    if (
+      this.stopping ||
+      this.sessions.get(client.sessionId) !== session ||
+      !session.connected ||
+      session.initialSpawn.stage !== 'loading-position'
+    )
+      return;
+    if (
+      session.auth!.expiresAt <= Date.now() ||
+      this.accounts?.wasRevoked(session.auth!.authSessionId)
+    ) {
+      this.fail(client, 'AUTH_REQUIRED');
+      return;
+    }
+    if (result.status === 'found') {
+      const checked = this.world.checkPlayerSpawnPosition(result.snapshot.position);
+      if (checked.ok) {
+        this.beginSpawnStage(client, session, 'saved', result.snapshot.position);
+        return;
+      }
+      this.recordPositionFallback(checked.reason);
+    } else
+      this.recordPositionFallback(
+        result.status === 'missing'
+          ? 'missing'
+          : result.reason === 'timeout'
+            ? 'read_timeout'
+            : result.reason === 'invalid'
+              ? 'invalid_record'
+              : 'read_error',
+      );
+    this.beginSpawnStage(client, session, 'default');
+  }
+
+  private recordPositionFallback(reason: string): void {
+    this.positionSpawns.fallbacks[reason] = (this.positionSpawns.fallbacks[reason] ?? 0) + 1;
+  }
+
+  private beginSpawnStage(
+    client: Client,
+    session: Session,
+    stage: 'saved' | 'default',
+    position?: Vec3,
+  ): void {
+    const startedAt = performance.now();
+    if (session.plan) this.completePlan(client, session, false, 'PLAN_REPLACED', false);
+    session.initialSpawn = {
+      stage,
+      position: position && { ...position },
+      startedAt,
+      deadline: startedAt + this.prepareTimeoutMs,
+    };
+    this.createPlan(client, session, 'spawn', session.initialSpawn.deadline, undefined, position);
+  }
+
+  private fallbackPosition(client: Client, session: Session, reason: string): void {
+    if (session.initialSpawn.stage !== 'saved' || this.stopping) return;
+    this.recordPositionFallback(reason);
+    this.beginSpawnStage(client, session, 'default');
   }
 
   private sendPlan(client: Client): void {
@@ -314,24 +404,48 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     requestId?: number,
     position?: Vec3,
   ): void {
-    const spawnDeadline =
-      reason === 'layout' || this.items.layoutPaused ? undefined : session.plan?.spawnDeadline;
+    if (this.stopping) return;
+    const initial = reason === 'spawn' ? session.initialSpawn : undefined;
+    if (initial?.stage === 'loading-position' || initial?.stage === 'spawned') return;
+    if (initial?.stage === 'saved') {
+      const checked = this.world.checkPlayerSpawnPosition(initial.position!);
+      if (!checked.ok) {
+        this.fallbackPosition(client, session, checked.reason);
+        return;
+      }
+      position = initial.position;
+    }
+    const spawnDeadline = initial
+      ? initial.executionDeadline
+      : reason === 'layout'
+        ? undefined
+        : session.plan?.spawnDeadline;
     if (session.plan) this.completePlan(client, session, false, 'PLAN_REPLACED', false);
     const actual = this.state.players.get(client.sessionId);
     const target =
       position ??
       ((reason === 'reconnect' || reason === 'layout') && actual
         ? { x: actual.x, y: actual.y, z: actual.z }
-        : (this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined) ??
-          this.definition.spawnPoints[0]));
+        : (this.world.findDefaultPlayerSpawn(reason === 'respawn' ? session.entityId : undefined) ??
+          this.world.getDefaultPlayerSpawnPosition()));
+    const cellIds = worldNeighborhood(this.definition.bounds, this.manifest.grid, target);
+    if (
+      initial?.stage === 'saved' &&
+      !cellIds.every((id) => this.manifest.cells.some((cell) => cell.cellId === id))
+    ) {
+      this.fallbackPosition(client, session, 'area_unavailable');
+      return;
+    }
+    if (initial) initial.position = { ...target };
     const message: PrepareArea = {
       prepareId: randomUUID(),
       layoutRevision: this.staticPlacement?.publications.current.snapshot.revision ?? 1,
       worldEpoch: this.state.worldEpoch,
       mapVersion: this.state.mapVersion,
       reason,
+      ...(initial ? { spawnSource: initial.stage as 'saved' | 'default' } : {}),
       position: { ...target },
-      cellIds: worldNeighborhood(this.definition.bounds, this.manifest.grid, target),
+      cellIds,
       expiresAt: Date.now() + Math.max(0, deadline - performance.now()),
       ...(requestId !== undefined ? { requestId } : {}),
     };
@@ -342,7 +456,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
   private areaReady(client: Client, value: unknown): void {
     const session = this.sessions.get(client.sessionId);
-    if (!session || !value || typeof value !== 'object') return;
+    if (
+      this.stopping ||
+      !session ||
+      session.transport !== client ||
+      !value ||
+      typeof value !== 'object'
+    )
+      return;
     const data = value as Record<string, unknown>;
     if (
       data.worldEpoch !== this.state.worldEpoch ||
@@ -368,7 +489,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         return;
       }
       plan.readyAt = performance.now();
-      if (!this.layoutGroup) plan.spawnDeadline ??= plan.readyAt + 5000;
+      plan.spawnDeadline ??= Math.min(
+        plan.readyAt + 5000,
+        plan.message.reason === 'spawn'
+          ? session.initialSpawn.startedAt + this.prepareTimeoutMs + 5000
+          : plan.deadline + 5000,
+      );
+      if (plan.message.reason === 'spawn')
+        session.initialSpawn.executionDeadline ??= plan.spawnDeadline;
     }
     if (this.layoutGroup) {
       if (this.staticPlacement?.metrics)
@@ -380,9 +508,29 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     this.tryCompletePlan(client, session);
   }
+  private areaFailed(client: Client, value: unknown): void {
+    const data = parseAreaFailed(value);
+    const session = this.sessions.get(client.sessionId);
+    const plan = session?.plan?.message;
+    if (
+      this.stopping ||
+      !data ||
+      !session?.connected ||
+      session.transport !== client ||
+      !plan ||
+      data.prepareId !== plan.prepareId ||
+      data.worldEpoch !== plan.worldEpoch ||
+      data.mapVersion !== plan.mapVersion ||
+      data.layoutRevision !== plan.layoutRevision
+    )
+      return;
+    if (plan.reason === 'spawn' && session.initialSpawn.stage === 'saved')
+      this.fallbackPosition(client, session, 'area_unavailable');
+  }
   private tryCompletePlan(client: Client, session: Session): void {
     const plan = session.plan;
     if (
+      this.stopping ||
       !plan ||
       plan.readyAt === undefined ||
       !session.connected ||
@@ -420,55 +568,68 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         else this.expirePlan(client, session, 'PREPARE_TIMEOUT');
         return;
       }
-      this.completePlan(client, session, true);
-      return;
-    }
-    const candidates = [plan.message.position, ...this.definition.spawnPoints];
-    const inside = candidates.filter((point) =>
-      worldNeighborhood(this.definition.bounds, this.manifest.grid, point).every((id) =>
-        cellIds.includes(id),
-      ),
-    );
-    const point = this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined, inside);
-    if (point) {
-      if (reason === 'respawn') {
-        if (!this.world.respawnPlayer(session.entityId, point)) {
-          this.expirePlan(client, session, 'SPAWN_UNAVAILABLE');
-          return;
-        }
-        session.lastRespawn = performance.now();
-        session.lastInput = { ...NEUTRAL_INPUT };
-        cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
-        const projected = this.state.players.get(client.sessionId)!;
-        const actual = this.world.getPlayerState(session.entityId)!;
-        applyEntityState(projected, actual);
-        this.interest.upsert(projected);
-      } else {
-        const player = this.world.addPlayer(session.entityId, point);
-        if (!player) return;
-        const projected = new PlayerSchema();
-        applyEntityState(projected, player);
-        Object.assign(projected, {
-          sessionId: client.sessionId,
-          name: session.name,
-          color: session.color,
-          skinId: session.skinId,
-          connected: session.connected,
-        });
-        this.state.players.set(client.sessionId, projected);
-        this.interest.upsert(projected);
+      if (reason === 'reconnect') {
+        session.disconnectSnapshot = undefined;
+        this.capturePosition(session);
       }
-      this.inputs.get(client.sessionId).clear();
-      this.interest.refresh(client.sessionId);
       this.completePlan(client, session, true);
       return;
     }
-    const alternative = this.world.findSpawn(reason === 'respawn' ? session.entityId : undefined);
-    if (alternative && performance.now() < plan.deadline)
-      this.createPlan(client, session, reason, plan.deadline, requestId, alternative);
-    else if (performance.now() >= plan.spawnDeadline!)
-      this.expirePlan(client, session, 'SPAWN_UNAVAILABLE');
+    const excludeId = reason === 'respawn' ? session.entityId : undefined;
+    const checked = this.world.checkPlayerSpawnPosition(plan.message.position, excludeId);
+    const saved = reason === 'spawn' && session.initialSpawn.stage === 'saved';
+    if (!checked.ok && saved) {
+      this.fallbackPosition(client, session, checked.reason);
+      return;
+    }
+    const point = checked.ok ? plan.message.position : this.world.findDefaultPlayerSpawn(excludeId);
+    if (!point) return; // Retry only until this stage's fixed execution deadline.
+    if (
+      !worldNeighborhood(this.definition.bounds, this.manifest.grid, point).every((id) =>
+        cellIds.includes(id),
+      )
+    ) {
+      this.createPlan(client, session, reason, plan.deadline, requestId, point);
+      return;
+    }
+    // No await between the final geometry check and body creation: contenders serialize here.
+    if (reason === 'respawn') {
+      if (!this.world.respawnPlayerAtPosition(session.entityId, point)) {
+        this.expirePlan(client, session, 'SPAWN_UNAVAILABLE');
+        return;
+      }
+      session.lastRespawn = performance.now();
+      session.lastInput = { ...NEUTRAL_INPUT };
+      cancelAnimation(this.state.players.get(client.sessionId)!, this.state.serverTick);
+      const projected = this.state.players.get(client.sessionId)!;
+      applyEntityState(projected, this.world.getPlayerState(session.entityId)!);
+      this.interest.upsert(projected);
+    } else {
+      const player = this.world.addPlayerAtPosition(session.entityId, point);
+      if (!player) {
+        if (saved) this.fallbackPosition(client, session, 'BLOCKED');
+        return;
+      }
+      const projected = new PlayerSchema();
+      applyEntityState(projected, player);
+      Object.assign(projected, {
+        sessionId: client.sessionId,
+        name: session.name,
+        color: session.color,
+        skinId: session.skinId,
+        connected: session.connected,
+      });
+      this.state.players.set(client.sessionId, projected);
+      this.interest.upsert(projected);
+      this.positionSpawns[saved ? 'saved' : 'default']++;
+      session.initialSpawn.stage = 'spawned';
+    }
+    this.capturePosition(session);
+    this.inputs.get(client.sessionId).clear();
+    this.interest.refresh(client.sessionId);
+    this.completePlan(client, session, true);
   }
+
   private rememberAction(
     client: Client | undefined,
     session: Session,
@@ -518,6 +679,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
   private expirePlan(client: Client, session: Session, code: ErrorCode): void {
     const reason = session.plan?.message.reason;
+    if (
+      reason === 'spawn' &&
+      session.initialSpawn.stage === 'saved' &&
+      (code === 'PREPARE_TIMEOUT' || code === 'SPAWN_UNAVAILABLE')
+    ) {
+      this.fallbackPosition(client, session, 'prepare_timeout');
+      return;
+    }
     this.completePlan(client, session, false, code);
     if (reason !== 'respawn') this.fail(client, code);
     this.layoutGroup?.delete(client.sessionId);
@@ -531,6 +700,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   private step(ctx: StepContext): void {
+    if (this.stopping) return;
     if (this.pendingCycleMs !== undefined) this.cycleTime.record(this.pendingCycleMs);
     this.pendingCycleMs = undefined;
     const now = performance.now();
@@ -589,6 +759,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     for (const impact of this.world.drainImpacts())
       this.publishWorldSound({ ...impact, kind: 'impact' });
     this.items.step(this.state.serverTick);
+    if (now - this.lastPositionCapture >= 5000) {
+      this.lastPositionCapture = now;
+      for (const session of this.sessions.values())
+        if (session.connected && !session.disconnectSnapshot) this.capturePosition(session, true);
+    }
     const duration = performance.now() - start;
     this.pendingCycleMs = duration;
     // Diagnostics update at the patch rate rather than churning a field at 60Hz.
@@ -863,11 +1038,34 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
 
+  private capturePosition(session: Session, onlyChanged = false) {
+    if (!session.auth || this.stopping) return;
+    const actual = this.world.getPlayerState(session.entityId);
+    if (!actual) return;
+    const position = { ...actual.position };
+    const previous = session.lastCapturedPosition;
+    if (
+      onlyChanged &&
+      previous &&
+      previous.x === position.x &&
+      previous.y === position.y &&
+      previous.z === position.z
+    )
+      return;
+    session.lastCapturedPosition = position;
+    return this.positions.capture(session.auth.accountId, position);
+  }
+
+  private captureDisconnect(session: Session): void {
+    if (!session.disconnectSnapshot) session.disconnectSnapshot = this.capturePosition(session);
+  }
+
   onDrop(client: Client, code?: number): void {
+    const session = this.sessions.get(client.sessionId);
+    if (!session || session.transport !== client || !session.connected) return;
+    this.captureDisconnect(session);
     this.layoutGroup?.delete(client.sessionId);
     this.finishLayoutBarrier();
-    const session = this.sessions.get(client.sessionId);
-    if (!session) return;
     session.connected = false;
     this.interest.drop(client.sessionId);
     this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
@@ -885,19 +1083,30 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       code === CloseCode.SERVER_SHUTDOWN ||
       code === CloseCode.WITH_ERROR ||
       code === CloseCode.FAILED_TO_RECONNECT;
-    if (terminal || !player || (session.auth && session.auth.expiresAt <= Date.now())) return;
+    if (
+      this.stopping ||
+      terminal ||
+      !player ||
+      (session.auth && session.auth.expiresAt <= Date.now())
+    )
+      return;
+    const period = session.connectionPeriod;
     const reconnection = this.allowReconnection(client, this.reconnectSeconds);
     const cancel = () => reconnection.reject(new Error('AUTH_REQUIRED'));
     session.cancelReconnect = cancel;
     void reconnection
       .catch(() => {})
       .finally(() => {
-        if (session.cancelReconnect === cancel) session.cancelReconnect = undefined;
+        if (session.connectionPeriod === period && session.cancelReconnect === cancel)
+          session.cancelReconnect = undefined;
       });
   }
   async onReconnect(client: Client): Promise<void> {
     const session = this.sessions.get(client.sessionId);
-    if (!session) throw new ServerError(4002, 'STALE_WORLD');
+    if (!session || this.stopping) throw new ServerError(4002, 'STALE_WORLD');
+    const period = session.connectionPeriod;
+    // The framework calls onLeave with this transport if authentication rejects it.
+    session.transport = client;
     if (session.auth) {
       let restored: AuthenticatedAccount | undefined;
       try {
@@ -908,10 +1117,21 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       if (
         !restored ||
         restored.accountId !== session.auth.accountId ||
-        session.auth.expiresAt <= Date.now()
+        session.auth.expiresAt <= Date.now() ||
+        this.accounts?.wasRevoked(session.auth.authSessionId)
       )
         throw new ServerError(401, 'AUTH_REQUIRED');
     }
+    if (
+      this.stopping ||
+      this.sessions.get(client.sessionId) !== session ||
+      session.connectionPeriod !== period ||
+      session.transport !== client
+    )
+      throw new ServerError(4002, 'STALE_WORLD');
+    session.transport = client;
+    session.connectionPeriod++;
+    session.cancelReconnect = undefined;
     session.connected = true;
     void this.sendInventory(client);
     this.inputs.get(client.sessionId).clear();
@@ -924,10 +1144,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (this.layoutGroup) this.layoutGroup.add(client.sessionId);
   }
   onLeave(client: Client): void {
+    const session = this.sessions.get(client.sessionId);
+    if (!session || session.transport !== client) return;
+    this.captureDisconnect(session);
     this.layoutGroup?.delete(client.sessionId);
     this.finishLayoutBarrier();
-    const session = this.sessions.get(client.sessionId);
-    if (!session) return;
     const player = this.state.players.get(client.sessionId);
     if (player) cancelAnimation(player, this.state.serverTick);
     this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
@@ -943,6 +1164,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   revokeAuthSession(authSessionId: string): void {
     for (const [sessionId, session] of this.sessions) {
       if (session.auth?.authSessionId !== authSessionId) continue;
+      this.captureDisconnect(session);
       session.auth.expiresAt = 0;
       session.connected = false;
       const player = this.state.players.get(sessionId);
@@ -956,6 +1178,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
   isReady(includeLayout = true) {
     return (
+      !this.stopping &&
       !!this.items &&
       !this.items.unavailable &&
       !this.items.closing &&
@@ -981,16 +1204,26 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.layoutGroup = undefined;
       return;
     }
-    this.layoutGroup = new Set([...this.sessions].filter(([, s]) => s.connected).map(([id]) => id));
+    this.layoutGroup = new Set(
+      [...this.sessions]
+        .filter(([, s]) => s.connected && s.initialSpawn.stage !== 'loading-position')
+        .map(([id]) => id),
+    );
     this.broadcast('layoutChanged', p.info(this.state.worldEpoch));
     for (const client of this.clients) {
       const session = this.sessions.get(client.sessionId);
-      if (session?.connected)
+      if (session?.connected && session.initialSpawn.stage !== 'loading-position')
         this.createPlan(
           client,
           session,
-          this.state.players.has(client.sessionId) ? 'layout' : 'spawn',
-          performance.now() + this.prepareTimeoutMs,
+          this.state.players.has(client.sessionId)
+            ? session.plan?.message.reason === 'reconnect'
+              ? 'reconnect'
+              : 'layout'
+            : 'spawn',
+          this.state.players.has(client.sessionId)
+            ? performance.now() + this.prepareTimeoutMs
+            : session.initialSpawn.deadline,
         );
     }
     this.finishLayoutBarrier();
@@ -1181,9 +1414,32 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
   shutdownWorld(): Promise<void> {
+    if (this.shutdown) return this.shutdown;
+    // All captures precede stopping; later lifecycle callbacks only release sessions.
+    this.items?.beginClose();
+    this.neutralAll();
+    for (const session of this.sessions.values())
+      if (session.connected && !session.disconnectSnapshot) this.capturePosition(session);
+    this.stopping = true;
     this.layoutGroup = undefined;
-    this.items?.setLayoutPaused(false);
-    return (this.shutdown ??= this.items?.close() ?? Promise.resolve());
+    this.shutdown = (async () => {
+      let positionError: unknown;
+      try {
+        await this.positions?.close();
+      } catch (error) {
+        positionError = error;
+      }
+      // Item flush and ownership release are mandatory even if positions failed.
+      try {
+        await this.items?.close();
+      } catch (error) {
+        if (positionError)
+          throw new AggregateError([positionError, error], 'Final world saves failed');
+        throw error;
+      }
+      if (positionError) throw positionError;
+    })();
+    return this.shutdown;
   }
   async onDispose(): Promise<void> {
     try {
@@ -1246,13 +1502,29 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         p99Ms: this.loopDelay.percentile(99) / 1e6,
         maxMs: this.loopDelay.max / 1e6,
       },
-      ...(this.testDiagnostics ? { testPublications: this.publications } : {}),
+      ...(this.testDiagnostics
+        ? {
+            testPublications: this.publications,
+            testPreparations: [...this.sessions].map(([sessionId, session]) => ({
+              sessionId,
+              stage: session.initialSpawn.stage,
+              startedAt: session.initialSpawn.startedAt,
+              deadline: session.initialSpawn.deadline,
+              executionDeadline: session.initialSpawn.executionDeadline,
+              plan: session.plan?.message,
+            })),
+          }
+        : {}),
       resyncs: this.resyncs,
       interest: this.interest.diagnostics(),
       preparing: [...this.sessions.values()].filter((session) => session.plan).length,
       disposed: this.disposed,
       items: this.state.items.size,
       persistence: { paused: this.state.paused, unavailable: this.items.unavailable },
+      playerPositions: {
+        ...this.positions?.diagnostics(),
+        spawns: this.positionSpawns,
+      },
     };
   }
 }

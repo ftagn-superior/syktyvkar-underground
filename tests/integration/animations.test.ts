@@ -302,7 +302,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     await until(() => player().grounded);
     request(room, 2, 'clap');
     await until(() => player().animationId === 'clap');
-    const failed = vi.spyOn(world, 'respawnPlayer').mockReturnValueOnce(false);
+    const failed = vi.spyOn(world, 'respawnPlayerAtPosition').mockReturnValueOnce(false);
     room.send('requestRespawn', { requestId: 3, worldEpoch: info.worldEpoch });
     await until(() => results.length === 3);
     expect(player().animationId).toBe('clap');

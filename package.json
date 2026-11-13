@@ -63,6 +63,7 @@
     "world:migrate:built": "node dist/server/migrate-world.mjs",
     "test:accounts": "node tools/test-database.mjs",
     "test:accounts:browser": "node tools/test-database.mjs --browser",
+    "test:player-positions:browser": "node --import tsx tests/browser-player-positions.ts",
     "test:reactions:browser": "node --import tsx tests/browser-reactions.ts",
     "test:animations:browser": "node --import tsx tests/browser-animations.ts",
     "test:chat:browser": "node --import tsx tests/browser-chat.ts",

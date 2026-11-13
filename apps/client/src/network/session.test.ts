@@ -16,6 +16,8 @@ import {
   loadWorldBundle,
   type WorldInfo,
   type WorldManifest,
+  type PrepareArea,
+  worldNeighborhood,
 } from '@su/contracts';
 import type { PredictionWorld } from '@su/simulation/prediction';
 import { buildWorld } from '../../../../tools/world-build/src/index.js';
@@ -66,6 +68,7 @@ function physics() {
     dispose: vi.fn(),
     retainStatic: vi.fn(),
     releaseStatic: vi.fn(),
+    syncRemote: vi.fn(),
     staticDiagnostics: () => ({
       entities: 0,
       references: 0,
@@ -236,7 +239,158 @@ describe('static removal confirmation', () => {
   });
 });
 
+describe('saved spawn resource preparation', () => {
+  async function joined() {
+    const messages = new Map<string, (value: unknown) => void | Promise<void>>();
+    const notice = vi.fn();
+    const instance = new GameSession(vi.fn(), notice);
+    sessions.push(instance);
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      state: { worldEpoch: '', players: new Map(), items: new Map(), serverTick: 0 },
+      onStateChange: vi.fn(),
+      onDrop: vi.fn(),
+      onReconnect: vi.fn(),
+      onLeave: vi.fn(),
+      onError: vi.fn(),
+      onMessage: (name: string, callback: (value: unknown) => void) => messages.set(name, callback),
+      send: vi.fn(),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    await instance.load();
+    instance.markPrepared();
+    await instance.join();
+    room.state.worldEpoch = info.worldEpoch;
+    const streamer = {
+      setArea: vi.fn(),
+      setPreparationArea: vi.fn(),
+      pumpFrame: vi.fn(),
+      dispose: vi.fn(),
+      problem: undefined as string | undefined,
+      backgroundProblem: undefined as string | undefined,
+      criticalReady: false,
+    };
+    (instance as unknown as { streamer: unknown }).streamer = streamer;
+    const plan = (prepareId: string, spawnSource: 'saved' | 'default'): PrepareArea => {
+      const position = { x: 0, y: 0.92, z: 0 };
+      return {
+        prepareId,
+        layoutRevision: info.layoutRevision,
+        worldEpoch: info.worldEpoch,
+        mapVersion: info.mapVersion,
+        reason: 'spawn',
+        spawnSource,
+        position,
+        cellIds: worldNeighborhood(manifest.bounds, manifest.grid, position),
+        expiresAt: Date.now() + 15000,
+      };
+    };
+    const frame = () =>
+      instance.frame(performance.now(), 1 / 60, { moveX: 0, moveZ: 0, sprint: false });
+    return { instance, room, messages, streamer, notice, plan, frame };
+  }
+
+  it('reports a final critical resource error once per active plan without requiring reload', async () => {
+    const v = await joined();
+    const saved = v.plan('saved', 'saved');
+    await v.messages.get('prepareArea')!(saved);
+    v.streamer.backgroundProblem = 'Resource version/SHA-256 mismatch: background.glb';
+    v.frame();
+    expect(v.room.send).not.toHaveBeenCalledWith('areaFailed', expect.anything());
+    v.streamer.problem = 'Resource version/SHA-256 mismatch: saved.glb';
+    v.frame();
+    v.frame();
+    expect(v.room.send.mock.calls.filter(([name]) => name === 'areaFailed')).toEqual([
+      [
+        'areaFailed',
+        {
+          prepareId: saved.prepareId,
+          layoutRevision: saved.layoutRevision,
+          worldEpoch: saved.worldEpoch,
+          mapVersion: saved.mapVersion,
+          code: 'RESOURCE_UNAVAILABLE',
+        },
+      ],
+    ]);
+    expect(v.instance.reloadRequired).toBe(false);
+    expect(v.room.send).not.toHaveBeenCalledWith('areaReady', expect.anything());
+  });
+
+  it('replaces failed saved preparation, keeps the fallback notice across PLAN_REPLACED and ignores late results', async () => {
+    const v = await joined();
+    const saved = v.plan('saved', 'saved');
+    const fallback = v.plan('fallback', 'default');
+    await v.messages.get('prepareArea')!(saved);
+    v.streamer.problem = 'Resource HTTP 503';
+    v.frame();
+    v.messages.get('areaResult')!({ ...saved, ok: false, code: 'PLAN_REPLACED' });
+    await v.messages.get('prepareArea')!(fallback);
+    expect(v.notice).toHaveBeenCalledExactlyOnceWith(
+      'Не удалось вернуться на прежнее место. Появляемся на старте',
+    );
+    expect(v.streamer.setPreparationArea.mock.calls).toEqual([
+      [saved.position],
+      [fallback.position],
+    ]);
+    v.messages.get('areaResult')!({ ...saved, ok: true });
+    v.streamer.problem = undefined;
+    v.streamer.criticalReady = true;
+    v.frame();
+    expect(v.room.send).toHaveBeenCalledWith('areaReady', {
+      prepareId: fallback.prepareId,
+      layoutRevision: fallback.layoutRevision,
+      worldEpoch: fallback.worldEpoch,
+      mapVersion: fallback.mapVersion,
+    });
+    await v.messages.get('prepareArea')!(fallback);
+    expect(v.notice).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not announce a fallback for an initially missing position', async () => {
+    const v = await joined();
+    await v.messages.get('prepareArea')!(v.plan('default', 'default'));
+    expect(v.notice).not.toHaveBeenCalled();
+  });
+
+  it('keeps failure deduplication and fallback feedback across a transport interruption', async () => {
+    const v = await joined();
+    const saved = v.plan('saved', 'saved');
+    await v.messages.get('prepareArea')!(saved);
+    v.streamer.problem = 'Resource HTTP 503';
+    v.frame();
+    v.room.onDrop.mock.calls[0][0]();
+    await v.messages.get('prepareArea')!(saved);
+    v.frame();
+    expect(v.room.send.mock.calls.filter(([name]) => name === 'areaFailed')).toHaveLength(1);
+    await v.messages.get('prepareArea')!(v.plan('default', 'default'));
+    expect(v.notice).toHaveBeenCalledExactlyOnceWith(
+      'Не удалось вернуться на прежнее место. Появляемся на старте',
+    );
+  });
+});
+
 describe('lazy gameplay physics', () => {
+  it.each(['protocol', 'manifest'] as const)(
+    'still requires a reload for a global %s incompatibility',
+    async (kind) => {
+      const previousFetch = globalThis.fetch;
+      vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+        const path = new URL(String(url), 'http://localhost/').pathname;
+        if (kind === 'protocol' && path === '/api/world')
+          return Response.json({ ...info, protocolVersion: PROTOCOL_VERSION - 1 });
+        if (kind === 'manifest' && path.endsWith('/manifest.json'))
+          return Response.json({ ...manifest, formatVersion: -1 });
+        return previousFetch(url, init);
+      });
+      const instance = session();
+      await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
+      expect(instance.reloadRequired).toBe(true);
+      expect(mocks.reserve).not.toHaveBeenCalled();
+    },
+  );
+
   it('ignores initial metadata arriving after disposal', async () => {
     const instance = session();
     const delayed = deferred<Response>();

@@ -23,6 +23,8 @@
  *   --max-images <n>      предохранитель от расходов (по умолчанию 150)
  *   --force               перекачать уже скачанные кадры
  *   --index-only          только пересобрать index.html из готовых manifest.json
+ *   --mark                нарисовать разметку поверх уже скачанных кадров выбранных зданий
+ *                         в <osm-id>/marked/ (без сети и ключа; удобно ИИ-агентам)
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -476,9 +478,10 @@ async function collectPanos(points: Vec[], key: string): Promise<Map<string, Pan
     writeFileSync(CACHE_FILE, JSON.stringify(cache));
   }
 
+  // Пул — все известные панорамы, а не только найденные для выбранных зданий: так выбор точки
+  // съёмки не зависит от того, запущен скрипт для одного здания или для всего участка.
   const panos = new Map<string, Pano>();
-  for (const k of queries.keys()) {
-    const r = cache[k];
+  for (const r of Object.values(cache)) {
     if (r?.status !== 'OK' || !r.pano_id || !r.location) continue;
     panos.set(r.pano_id, {
       id: r.pano_id,
@@ -539,13 +542,13 @@ function evaluate(pano: Pano, f: Facade, b: Building, obstacles: Obstacle[]): Ca
         : distance <= 35
           ? 1
           : 35 / distance;
-  const spread = framing(pano, f, b).spread;
+  const spread = framing(pano, f).spread;
   const score =
     visibility * Math.pow(cosInc, 0.7) * distanceScore * (spread > MAX_FOV - 12 ? 0.85 : 1);
   return { pano, distance, incidence: deg(Math.acos(clamp(cosInc, -1, 1))), visibility, score };
 }
 
-function framing(pano: Pano, f: Facade, b: Building) {
+function framing(pano: Pano, f: Facade) {
   const midBearing = bearingOf(sub(f.mid, pano.pos));
   const rel = f.points.map((p) => wrap180(bearingOf(sub(p, pano.pos)) - midBearing));
   const lo = Math.min(...rel);
@@ -558,8 +561,8 @@ function framing(pano: Pano, f: Facade, b: Building) {
   return { center: wrap360(midBearing + (lo + hi) / 2), spread: hi - lo, top, bottom };
 }
 
-function planShots(pano: Pano, f: Facade, b: Building, baseName: string): Shot[] {
-  const { center, spread, top, bottom } = framing(pano, f, b);
+function planShots(pano: Pano, f: Facade, baseName: string): Shot[] {
+  const { center, spread, top, bottom } = framing(pano, f);
   const hNeeded = spread + 12;
   const vNeeded = top - bottom + 10;
   const pitch = round(clamp((top + bottom) / 2, -10, 40), 1);
@@ -729,6 +732,110 @@ function writeIndex(buildings: Building[]) {
   return manifests.length;
 }
 
+// ---------- размеченные копии кадров ----------
+
+const SIDE_RU: Record<string, string> = {
+  N: 'север',
+  NE: 'северо-восток',
+  E: 'восток',
+  SE: 'юго-восток',
+  S: 'юг',
+  SW: 'юго-запад',
+  W: 'запад',
+  NW: 'северо-запад',
+};
+const CAPTION_HEIGHT = 30;
+
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+function markedHtml(
+  m: Manifest,
+  view: View,
+  shot: Shot,
+  imageBase64: string,
+  names: Map<string, string>,
+): string {
+  const facade = m.facades.find((f) => f.key === view.facade)!;
+  const order = { other: 0, same: 1, target: 2 };
+  const items = [...shot.overlays].sort((a, b) => order[a.kind] - order[b.kind]);
+  const polygons = items
+    .filter((o) => o.points.length)
+    .map(
+      (o) => `<polygon class="${o.kind}" points="${o.points.map((p) => p.join(',')).join(' ')}"/>`,
+    )
+    .join('');
+  const labels = items
+    .filter((o) => o.anchor)
+    .map((o) => {
+      const text =
+        o.kind === 'target' ? `фасад ${view.facade}` : (names.get(o.building) ?? o.building);
+      const x = clamp(o.anchor![0], 70, IMAGE_SIZE - 70);
+      const y = clamp(o.anchor![1] - 8, 18, IMAGE_SIZE - 8);
+      return `<text class="${o.kind}" x="${x}" y="${y}">${escapeHtml(text)}</text>`;
+    })
+    .join('');
+  const part = facade.part ? `, часть ${facade.part[0]} из ${facade.part[1]}` : '';
+  const caption = `${m.name} · ${m.id} · ${view.facade} (${SIDE_RU[facade.side]}${part}) · ${view.date ?? '?'}`;
+  return `<!doctype html><meta charset="utf-8"><style>
+    body { margin: 0; background: #111; }
+    .cap { height: ${CAPTION_HEIGHT}px; padding: 0 10px; color: #fff; font: 600 14px/${CAPTION_HEIGHT}px system-ui, sans-serif;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #1d1f23; }
+    .frame { position: relative; width: ${IMAGE_SIZE}px; height: ${IMAGE_SIZE}px; }
+    .frame img, .frame svg { position: absolute; inset: 0; }
+    polygon.target { fill: rgba(229, 52, 90, 0.16); stroke: #e5345a; stroke-width: 3; }
+    polygon.same { fill: none; stroke: #f08a24; stroke-width: 2; stroke-dasharray: 6 4; }
+    polygon.other { fill: none; stroke: #1b9fd6; stroke-width: 1.5; }
+    text { font: 600 15px system-ui, sans-serif; text-anchor: middle; paint-order: stroke;
+      stroke: rgba(0, 0, 0, 0.75); stroke-width: 4px; fill: #fff; }
+    text.other { fill: #bfe9ff; font-size: 12px; }
+  </style>
+  <div class="cap">${escapeHtml(caption)}</div>
+  <div class="frame"><img src="data:image/jpeg;base64,${imageBase64}" width="${IMAGE_SIZE}" height="${IMAGE_SIZE}">
+  <svg width="${IMAGE_SIZE}" height="${IMAGE_SIZE}" viewBox="0 0 ${IMAGE_SIZE} ${IMAGE_SIZE}">${polygons}${labels}</svg></div>`;
+}
+
+async function writeMarked(ids: string[], buildings: Building[]): Promise<number> {
+  const { chromium } = await import('playwright');
+  // Как в tests/helpers/browser.ts; без скачанного Chromium берём установленный Chrome.
+  const browser = await chromium
+    .launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH })
+    .catch(() => chromium.launch({ channel: 'chrome' }));
+  const names = new Map(buildings.map((b) => [b.id, b.name]));
+  let count = 0;
+  try {
+    const page = await browser.newPage({
+      viewport: { width: IMAGE_SIZE, height: IMAGE_SIZE + CAPTION_HEIGHT },
+    });
+    for (const id of ids) {
+      const dir = join(OUT_DIR, id);
+      const manifestPath = join(dir, 'manifest.json');
+      if (!existsSync(manifestPath)) {
+        console.warn(`${id}: нет manifest.json — сначала скачайте кадры`);
+        continue;
+      }
+      const m = readJson<Manifest>(manifestPath);
+      const outDir = join(dir, 'marked');
+      rmSync(outDir, { recursive: true, force: true });
+      mkdirSync(outDir, { recursive: true });
+      for (const view of m.views) {
+        for (const shot of view.shots) {
+          const file = join(dir, shot.file);
+          if (shot.error || !existsSync(file)) continue;
+          await page.setContent(
+            markedHtml(m, view, shot, readFileSync(file).toString('base64'), names),
+          );
+          await page.screenshot({ path: join(outDir, shot.file), type: 'jpeg', quality: 88 });
+          count++;
+        }
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  return count;
+}
+
 // ---------- main ----------
 
 function parseArgs(argv: string[]) {
@@ -742,6 +849,7 @@ function parseArgs(argv: string[]) {
     maxImages: 150,
     force: false,
     indexOnly: false,
+    mark: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -759,6 +867,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--max-images') args.maxImages = Number(value());
     else if (a === '--force') args.force = true;
     else if (a === '--index-only') args.indexOnly = true;
+    else if (a === '--mark') args.mark = true;
     else throw new Error(`Неизвестный флаг ${a}`);
   }
   return args;
@@ -784,6 +893,15 @@ async function main() {
   if (unknown.length) throw new Error(`Не найдены здания: ${unknown.join(', ')}`);
   if (!selected.length)
     throw new Error('Не выбрано ни одного здания: укажите --building, --match или --all');
+
+  if (args.mark) {
+    const count = await writeMarked(
+      selected.map((b) => b.id),
+      buildings,
+    );
+    console.log(`Размечено кадров: ${count} → reference/streetview/<osm-id>/marked/`);
+    return;
+  }
 
   const key = loadKey();
   const obstacles = obstaclesOf(buildings);
@@ -817,7 +935,7 @@ async function main() {
       }
       if (!chosen.length) missing.push(f.key);
       chosen.forEach((c, i) => {
-        const shots = planShots(c.pano, f, building, i ? `${f.key}-v${i + 1}` : f.key);
+        const shots = planShots(c.pano, f, i ? `${f.key}-v${i + 1}` : f.key);
         for (const s of shots)
           s.overlays = overlaysFor({ pos: c.pano.pos, ...s }, building, f, buildings, obstacles);
         views.push({
@@ -903,9 +1021,15 @@ async function main() {
     mkdirSync(dir, { recursive: true });
     // Кадры, которых больше нет в плане, удаляются — это наши же файлы из прошлого запуска.
     const current = new Set(p.views.flatMap((v) => v.shots.map((s) => s.file)));
+    let changed = pending.some((x) => x.plan === p);
     for (const file of previous.get(p.building.id)!.keys()) {
-      if (!current.has(file) && existsSync(join(dir, file))) rmSync(join(dir, file));
+      if (!current.has(file) && existsSync(join(dir, file))) {
+        rmSync(join(dir, file));
+        changed = true;
+      }
     }
+    // Размеченные копии устарели вместе с кадрами; их пересоздаёт --mark.
+    if (changed) rmSync(join(dir, 'marked'), { recursive: true, force: true });
     const manifest: Manifest = {
       formatVersion: 1,
       id: p.building.id,

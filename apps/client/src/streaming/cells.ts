@@ -134,6 +134,13 @@ export class CellStreamer {
       false,
     );
   }
+  /** Replace preparation pins without carrying old-area hysteresis into a new server plan. */
+  setPreparationArea(center: Vec3): void {
+    this.physicsWanted.clear();
+    this.graphicsWanted.clear();
+    if (this.visual) this.visual = { ...this.visual, center: { ...center } };
+    this.setArea(center);
+  }
   /** The preview has no physics, player reservation or network lifecycle. */
   setPreview(center: Vec3, drawRadius = 500): void {
     this.critical.clear();
@@ -171,6 +178,7 @@ export class CellStreamer {
         });
     for (const cell of this.cells.values()) {
       if (!this.physicsWanted.has(cell.id)) cell.physicsController?.abort();
+      if (!this.graphicsWanted.has(cell.id)) cell.graphicsController?.abort();
       // Joining may promote a still-loading graphical preview to critical physics.
       if (this.physicsWanted.has(cell.id) && !cell.physicsLoaded) cell.graphicsController?.abort();
       if (this.physicsWanted.has(cell.id)) cell.physicsReleaseAt = undefined;
@@ -270,7 +278,8 @@ export class CellStreamer {
           }
           cell.releaseModels = release;
         } catch (error) {
-          if (!controller.signal.aborted || !this.physicsWanted.has(cell.id)) throw error;
+          // Promotion to physics or replacement can cancel graphics while the cell stays alive.
+          if (!controller.signal.aborted) throw error;
         } finally {
           cell.graphicsController = undefined;
         }

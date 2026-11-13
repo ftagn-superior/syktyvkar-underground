@@ -91,6 +91,7 @@ function fixture() {
     sourceSnapshot,
     sourceWorld,
     sourceItems: [],
+    sourcePlayers: [],
   };
   const rules: TerrainPoseRules = {
     formatVersion: 1,

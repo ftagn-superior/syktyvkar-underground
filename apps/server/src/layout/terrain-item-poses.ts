@@ -75,7 +75,7 @@ function nearSupports(world: AuthoritativeWorld, typeId: string, pose: ItemPose,
 }
 
 /** Static owners may translate vertically, but their contact geometry must survive unchanged. */
-function ownerDelta(
+export function terrainSupportOwnerDelta(
   source: WorldDefinition,
   target: WorldDefinition,
   entityId: string,
@@ -242,7 +242,7 @@ export async function planTerrainItemPoses(
             }
             targetContactY = Math.max(...groundHits.map((hit) => hit.contactY));
           } else {
-            const delta = ownerDelta(sourceWorld, targetWorld, key);
+            const delta = terrainSupportOwnerDelta(sourceWorld, targetWorld, key);
             if (delta === undefined) {
               issue(
                 item.entityId,

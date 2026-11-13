@@ -137,8 +137,8 @@ describe.skipIf(!databaseUrl)(
     });
 
     it('upgrades the existing account schema in place and can reapply migrations safely', async () => {
-      await fixture.pool
-        .query(`DROP TABLE world_static_operations,world_static_instances,world_layouts;
+      await fixture.pool.query(`DROP TABLE player_positions;
+      DROP TABLE world_static_operations,world_static_instances,world_layouts;
       DROP FUNCTION world_static_before_change(),world_static_after_change(),world_layout_before_change(),su_finite(double precision);
       DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
       DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
@@ -159,13 +159,15 @@ describe.skipIf(!databaseUrl)(
         { version: 4 },
         { version: 5 },
         { version: 6 },
+        { version: 7 },
       ]);
       expect(await open()).toHaveLength(1);
     });
 
     it('reconciles the old skin-only migration 2 without losing the selected skin or session', async () => {
       await fixture.pool.query(`
-        DROP TABLE world_static_operations,world_static_instances,world_layouts;
+        DROP TABLE player_positions;
+      DROP TABLE world_static_operations,world_static_instances,world_layouts;
       DROP FUNCTION world_static_before_change(),world_static_after_change(),world_layout_before_change(),su_finite(double precision);
       DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
         DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
@@ -198,6 +200,7 @@ describe.skipIf(!databaseUrl)(
         { version: 4 },
         { version: 5 },
         { version: 6 },
+        { version: 7 },
       ]);
       expect(await open()).toHaveLength(1);
     });

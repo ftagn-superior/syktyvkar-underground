@@ -25,6 +25,7 @@ import {
   type TerrainMigrationPrepare,
 } from '../../apps/server/src/layout/terrain-migration.js';
 import { ItemStore } from '../../apps/server/src/items/store.js';
+import { PlayerPositionStore } from '../../apps/server/src/players/position-store.js';
 import { WorldOwnership } from '../../apps/server/src/world-ownership.js';
 import { createDatabaseFixture } from '../helpers/database-fixture.js';
 
@@ -40,6 +41,10 @@ const prepare: TerrainMigrationPrepare = async (context) => {
   return {
     targetSnapshot,
     targetItems,
+    targetPlayers: context.sourcePlayers.map((player) => ({
+      ...player,
+      position: { ...player.position, y: player.position.y + 1 },
+    })),
     audit: { fixture: 'separate-current-and-safe-height' },
     issues: [],
   };
@@ -77,9 +82,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
         ['item_types', 'id'],
         ['item_operations', 'operation_id'],
         ['accounts', 'id'],
+        ['player_positions', 'world_id,account_id'],
       ])
         result[table] = (
-          await database.pool.query(`SELECT to_jsonb(t) AS value FROM ${table} t ORDER BY ${order}`)
+          await database.pool.query(
+            `SELECT to_jsonb(t)${table === 'player_positions' ? "||jsonb_build_object('write_sequence',write_sequence::text)" : ''} AS value FROM ${table} t ORDER BY ${order}`,
+          )
         ).rows.map((row) => row.value);
       return result;
     }
@@ -153,6 +161,11 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
         createWorldLayoutPatch(prepared.snapshot, next),
       );
       await editor.close();
+      await database.pool.query(
+        `INSERT INTO player_positions(account_id,world_id,x,y,z,write_epoch,write_sequence,updated_at)
+        SELECT $1,id,-3,0.92,4,epoch,9007199254740993,'2026-11-13T00:00:00.123456Z' FROM persistent_worlds`,
+        [accountId],
+      );
     });
     afterEach(async () => {
       for (const ownership of owners.splice(0)) await ownership.close();
@@ -179,6 +192,15 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       const result = await applyTerrainMigration(settings, JSON.parse(JSON.stringify(plan)));
       expect(result.alreadyApplied).toBe(false);
       const after = await state();
+      expect(plan.before.players[0]).toEqual({
+        accountId,
+        worldId: source.definition.worldId,
+        position: { x: -3, y: 0.92, z: 4 },
+      });
+      expect(plan.after.players[0].position).toEqual({ x: -3, y: 1.92, z: 4 });
+      expect(after.player_positions).toEqual(
+        before.player_positions.map((row) => ({ ...(row as object), y: 1.92 })),
+      );
       for (const table of ['accounts', 'inventory_slots', 'item_types', 'item_operations'])
         expect(after[table]).toEqual(before[table]);
       const beforeRows = before.item_instances as Record<string, any>[];
@@ -290,7 +312,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       expect(await state()).toEqual(committed);
     });
 
-    it.each(['item', 'layout', 'inventory'])(
+    it.each(['item', 'layout', 'inventory', 'player-position', 'player-sequence'])(
       'rejects a stale %s snapshot before mutation',
       async (changed) => {
         const settings = options(),
@@ -303,6 +325,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
           await settings.ownership.db.query(
             "UPDATE world_static_instances SET enabled=NOT enabled WHERE entity_id LIKE 'placed_%'",
           );
+        else if (changed === 'player-position')
+          await database.pool.query('UPDATE player_positions SET y=y+0.01');
+        else if (changed === 'player-sequence')
+          await database.pool.query('UPDATE player_positions SET write_sequence=write_sequence+1');
         else
           await database.pool.query(
             "UPDATE item_instances SET properties='{" +
@@ -335,6 +361,54 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
           plan,
         ),
       ).rejects.toThrow('release changed since planning');
+      expect(await state()).toEqual(before);
+    });
+
+    it.each(['omitted', 'empty', 'extra', 'identity', 'world', 'xz'] as const)(
+      'rejects %s saved players from a planner',
+      async (kind) => {
+        const settings = options(),
+          before = await state();
+        await expect(
+          planTerrainMigration({
+            ...settings,
+            prepare: async (context) => {
+              const result = await prepare(context);
+              if (kind === 'omitted') delete result.targetPlayers;
+              else if (kind === 'empty') result.targetPlayers = [];
+              else if (kind === 'extra')
+                result.targetPlayers!.push(structuredClone(result.targetPlayers![0]));
+              else if (kind === 'identity') result.targetPlayers![0].accountId = randomUUID();
+              else if (kind === 'world') result.targetPlayers![0].worldId = 'another';
+              else result.targetPlayers![0].position.x += 1;
+              return result;
+            },
+          }),
+        ).rejects.toThrow(/saved player/);
+        expect(await state()).toEqual(before);
+      },
+    );
+
+    it('replay detects changes to saved player metadata and preserves the committed position', async () => {
+      const settings = options(),
+        plan = await planTerrainMigration(settings);
+      await applyTerrainMigration(settings, plan);
+      await database.pool.query('UPDATE player_positions SET write_sequence=write_sequence+1');
+      const before = await state();
+      expect((await applyTerrainMigration(settings, plan)).currentStateMatches).toBe(false);
+      expect(await state()).toEqual(before);
+    });
+
+    it('rolls back every terrain write if updating a saved player fails', async () => {
+      const settings = options(),
+        plan = await planTerrainMigration(settings);
+      await database.pool
+        .query(`CREATE FUNCTION reject_terrain_player() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected player failure'; END $$;
+      CREATE TRIGGER reject_terrain_player BEFORE UPDATE ON player_positions FOR EACH ROW EXECUTE FUNCTION reject_terrain_player()`);
+      const before = await state();
+      await expect(applyTerrainMigration(settings, plan)).rejects.toThrow(
+        'injected player failure',
+      );
       expect(await state()).toEqual(before);
     });
 
@@ -450,6 +524,14 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
         settings.ownership,
       );
       await staleVersionWithCurrentEpoch.save(plan.before.items, 1001);
+      const playerStore = new PlayerPositionStore(database.pool);
+      expect(
+        await playerStore.save({
+          ...plan.before.players[0],
+          writeEpoch: oldEpoch,
+          writeSequence: 1000,
+        }),
+      ).toBe('ownership-lost');
       expect(await state()).toEqual(before);
     });
 

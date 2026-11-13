@@ -149,6 +149,7 @@ try {
       sourceSnapshot: snapshot,
       sourceWorld: sourcePublication.world,
       sourceItems: [],
+      sourcePlayers: [],
     },
     rules,
   );

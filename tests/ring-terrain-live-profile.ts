@@ -10,7 +10,11 @@ const databaseUrl = process.env.SU_REHEARSAL_DATABASE_URL;
 assert.ok(databaseUrl);
 const database = new URL(databaseUrl);
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(database.hostname));
-assert.equal(database.pathname, '/terrain_production_rehearsal');
+assert.ok(
+  ['/terrain_production_rehearsal', '/terrain_production_rehearsal_65ec'].includes(
+    database.pathname,
+  ),
+);
 const candidate = resolve(process.argv[2] ?? 'output/ring-terrain-stage6/candidate');
 const output = resolve(process.argv[3] ?? 'output/ring-terrain-stage6/live-profile');
 process.umask(0o077);
@@ -118,6 +122,11 @@ const pool = createDatabasePool(databaseUrl);
 let app: Awaited<ReturnType<typeof createGameServer>> | undefined;
 let browser: Awaited<ReturnType<typeof launchTestBrowser>> | undefined;
 try {
+  const expectedItemIds = (
+    await pool.query<{ id: string }>(
+      "SELECT id FROM item_instances WHERE world_id='ring-block' ORDER BY id",
+    )
+  ).rows.map((row) => row.id);
   app = await createGameServer({
     pool,
     port: 0,
@@ -131,7 +140,7 @@ try {
   app.room.state.dayFrozenHour = 12;
   report.world = await (await fetch(app.url + '/api/world')).json();
   report.realWorldItems = app.room.state.items.size;
-  assert.equal(report.realWorldItems, 4);
+  assert.deepEqual([...app.room.state.items.keys()].sort(), expectedItemIds);
   browser = await launchTestBrowser({
     renderer: 'default',
     channel: 'chromium',
@@ -314,6 +323,7 @@ try {
   const restarted = await fetch(app.url + '/health/ready');
   assert.equal(restarted.status, 200);
   assert.equal(app.room.state.items.size, report.realWorldItems);
+  assert.deepEqual([...app.room.state.items.keys()].sort(), expectedItemIds);
   report.restartAfterLiveSimulation = { readiness: 200, items: app.room.state.items.size };
   report.status = report.phases.every((p: any) => p.performanceAccepted)
     ? 'passed'

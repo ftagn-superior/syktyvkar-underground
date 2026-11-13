@@ -4,4 +4,4 @@ export {
   createLocalPredictionWorld,
   PredictionWorld,
 } from './prediction.js';
-export type { WasmBinary } from './physics-world.js';
+export type { WasmBinary, PlayerSpawnCheck, PlayerSpawnFailure } from './physics-world.js';

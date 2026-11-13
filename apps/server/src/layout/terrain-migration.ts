@@ -7,6 +7,7 @@ import {
   type ItemState,
   type WorldDefinition,
   type WorldLayoutSnapshot,
+  type Vec3,
 } from '@su/contracts';
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import { hash, writeWorldPublication } from '@su/world-release';
@@ -20,6 +21,12 @@ export interface TerrainMigrationIssue {
   message: string;
   entityId?: string;
 }
+export interface TerrainPlayerPosition {
+  accountId: string;
+  worldId: string;
+  /** Exact world-space capsule centre; never an authoring ground datum. */
+  position: Vec3;
+}
 export interface TerrainMigrationContext {
   sourceRelease: AuthoringRelease;
   targetRelease: AuthoringRelease;
@@ -27,10 +34,13 @@ export interface TerrainMigrationContext {
   /** Reconstructed from the saved placements, never from the authored seed. */
   sourceWorld: WorldDefinition;
   sourceItems: ItemState[];
+  sourcePlayers: TerrainPlayerPosition[];
 }
 export interface TerrainMigrationPreparation {
   targetSnapshot: WorldLayoutSnapshot;
   targetItems: ItemState[];
+  /** Required whenever persisted players exist; omission cannot silently preserve stale Y. */
+  targetPlayers?: TerrainPlayerPosition[];
   audit: unknown;
   issues: TerrainMigrationIssue[];
 }
@@ -59,8 +69,8 @@ export interface TerrainMigrationPlan {
   sourceCompatibility: string;
   targetCompatibility: string | null;
   targetLayoutHash: string | null;
-  before: { snapshot: WorldLayoutSnapshot; items: ItemState[] };
-  after: { snapshot: WorldLayoutSnapshot; items: ItemState[] };
+  before: { snapshot: WorldLayoutSnapshot; items: ItemState[]; players: TerrainPlayerPosition[] };
+  after: { snapshot: WorldLayoutSnapshot; items: ItemState[]; players: TerrainPlayerPosition[] };
   audit: unknown;
   issues: TerrainMigrationIssue[];
   planHash: string;
@@ -106,6 +116,14 @@ interface RawState {
   items: ItemRow[];
   slots: Record<string, unknown>[];
   types: (Record<string, unknown> & { id: string; max_stack: string; physics: unknown })[];
+  players: (Record<string, unknown> & {
+    account_id: string;
+    world_id: string;
+    x: number;
+    y: number;
+    z: number;
+    write_sequence: string;
+  })[];
 }
 const digest = (value: unknown) => hash(canonicalJson(value));
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
@@ -127,6 +145,10 @@ async function readState(ownership: WorldOwnership, lock = false): Promise<RawSt
     await db.query('SELECT id FROM item_instances WHERE world_id=$1 ORDER BY id FOR UPDATE', [
       ownership.worldId,
     ]);
+    await db.query(
+      'SELECT account_id FROM player_positions WHERE world_id=$1 ORDER BY account_id FOR UPDATE',
+      [ownership.worldId],
+    );
   }
   const rows = async <T>(sql: string, values: unknown[] = []): Promise<T[]> =>
     (await db.query<{ value: T }>(sql, values)).rows.map((row) => row.value);
@@ -159,7 +181,23 @@ async function readState(ownership: WorldOwnership, lock = false): Promise<RawSt
       `SELECT to_jsonb(t)||jsonb_build_object('max_stack',t.max_stack::text) AS value
       FROM item_types t ORDER BY id`,
     ),
+    players: await rows(
+      `SELECT to_jsonb(p)||jsonb_build_object('write_sequence',p.write_sequence::text) AS value FROM player_positions p ORDER BY world_id,account_id`,
+    ),
   };
+}
+
+function savedPlayers(raw: RawState, worldId: string): TerrainPlayerPosition[] {
+  return raw.players
+    .filter((row) => row.world_id === worldId)
+    .map((row) => {
+      fail([row.x, row.y, row.z].every(Number.isFinite), 'invalid saved player position');
+      return {
+        accountId: row.account_id,
+        worldId: row.world_id,
+        position: { x: row.x, y: row.y, z: row.z },
+      };
+    });
 }
 
 function savedItems(raw: RawState, worldId: string, release: AuthoringRelease): ItemState[] {
@@ -189,7 +227,12 @@ function savedItems(raw: RawState, worldId: string, release: AuthoringRelease): 
 }
 
 /** Includes every protected column, seed link, property and inventory row. */
-function preservedState(raw: RawState, worldId: string, changedItems: Set<string>) {
+function preservedState(
+  raw: RawState,
+  worldId: string,
+  changedItems: Set<string>,
+  changedPlayers: Set<string>,
+) {
   return {
     world: { id: raw.world.id, initialized_at: raw.world.initialized_at },
     layout: { seed_version: raw.layout.seed_version, initialized_at: raw.layout.initialized_at },
@@ -206,6 +249,11 @@ function preservedState(raw: RawState, worldId: string, changedItems: Set<string
     }),
     slots: raw.slots,
     types: raw.types,
+    players: raw.players.map((row) => {
+      if (row.world_id !== worldId || !changedPlayers.has(row.account_id)) return row;
+      const { y: _y, ...rest } = row;
+      return rest;
+    }),
   };
 }
 
@@ -242,6 +290,7 @@ async function readReleases(options: TerrainMigrationOptions) {
 function prepareHeights(
   source: WorldLayoutSnapshot,
   sourceItems: ItemState[],
+  sourcePlayers: TerrainPlayerPosition[],
   prepared: TerrainMigrationPreparation,
   target: AuthoringRelease,
 ) {
@@ -304,7 +353,30 @@ function prepareHeights(
       fail(item.placementVersion <= 2147483647, 'item placement version overflow');
     }
   });
-  return { snapshot: candidate, items, changedItems };
+  fail(
+    !sourcePlayers.length || Array.isArray(prepared.targetPlayers),
+    'planner omitted saved player positions',
+  );
+  const playerOrder = (values: TerrainPlayerPosition[]) =>
+    values
+      .slice()
+      .sort((a, b) => (a.accountId < b.accountId ? -1 : a.accountId > b.accountId ? 1 : 0));
+  const players = playerOrder(structuredClone(prepared.targetPlayers ?? [])),
+    oldPlayers = playerOrder(sourcePlayers),
+    changedPlayers = new Set<string>();
+  fail(players.length === oldPlayers.length, 'planner added or removed saved players');
+  for (const [index, player] of players.entries()) {
+    const before = oldPlayers[index];
+    fail(
+      validVector(player.position) &&
+        player.position.x === before.position.x &&
+        player.position.z === before.position.z &&
+        same({ ...player, position: before.position }, before),
+      'planner changed more than saved player height',
+    );
+    if (player.position.y !== before.position.y) changedPlayers.add(player.accountId);
+  }
+  return { snapshot: candidate, items, players, changedItems, changedPlayers };
 }
 
 async function preparePlan(
@@ -319,6 +391,7 @@ async function preparePlan(
   const sourceCompatibility = worldCompatibility(sourcePublication.world);
   fail(raw.world.compatibility_hash === sourceCompatibility, 'source geometry is not accepted');
   const sourceItems = sorted(savedItems(raw, options.ownership.worldId, source));
+  const sourcePlayers = savedPlayers(raw, options.ownership.worldId);
   for (const type of raw.types) {
     if (!raw.items.some((item) => item.type_id === type.id)) continue;
     const next = target.definition.itemCatalog.types[type.id];
@@ -335,11 +408,12 @@ async function preparePlan(
     sourceSnapshot: structuredClone(before.snapshot),
     sourceWorld: structuredClone(sourcePublication.world),
     sourceItems: structuredClone(sourceItems),
+    sourcePlayers: structuredClone(sourcePlayers),
   });
   fail(Array.isArray(prepared.issues), 'planner must return an issues array');
-  const after = prepareHeights(before.snapshot, sourceItems, prepared, target);
+  const after = prepareHeights(before.snapshot, sourceItems, sourcePlayers, prepared, target);
   const preservedStateHash = digest(
-    preservedState(raw, options.ownership.worldId, after.changedItems),
+    preservedState(raw, options.ownership.worldId, after.changedItems, after.changedPlayers),
   );
   const issues = structuredClone(prepared.issues);
   let publication: Awaited<ReturnType<typeof createLayoutPublication>> | undefined;
@@ -354,6 +428,16 @@ async function preparePlan(
         for (const item of after.items) {
           const error = physics.checkSavedItem(item);
           if (error) issues.push({ kind: 'item-pose', entityId: item.entityId, message: error });
+        }
+        physics.replaceItems(after.items);
+        for (const player of after.players) {
+          const checked = physics.checkPlayerSpawnPosition(player.position);
+          if (!checked.ok)
+            issues.push({
+              kind: 'player-pose',
+              entityId: player.accountId,
+              message: checked.reason,
+            });
         }
       } finally {
         physics.dispose();
@@ -376,6 +460,7 @@ async function preparePlan(
       ? digest({
           snapshot: after.snapshot,
           items: after.items,
+          players: after.players,
           preservedStateHash,
           targetCompatibility,
         })
@@ -384,13 +469,18 @@ async function preparePlan(
     sourceCompatibility,
     targetCompatibility,
     targetLayoutHash: publication?.hash ?? null,
-    before: { snapshot: before.snapshot, items: sourceItems },
-    after: { snapshot: after.snapshot, items: after.items },
+    before: { snapshot: before.snapshot, items: sourceItems, players: sourcePlayers },
+    after: { snapshot: after.snapshot, items: after.items, players: after.players },
     audit: prepared.audit ?? null,
     issues,
   };
   const plan: TerrainMigrationPlan = { ...value, planHash: digest(value) };
-  return { plan, publication, changedItems: after.changedItems };
+  return {
+    plan,
+    publication,
+    changedItems: after.changedItems,
+    changedPlayers: after.changedPlayers,
+  };
 }
 
 /** Read-only consistent snapshot. No files, markers, rows, epochs or revisions are written. */
@@ -496,6 +586,22 @@ export async function applyTerrainMigration(
       );
       fail(updated.rowCount === 1, `item changed during migration: ${item.entityId}`);
     }
+    for (const player of plan.after.players) {
+      if (!prepared.changedPlayers.has(player.accountId)) continue;
+      const previous = plan.before.players.find((p) => p.accountId === player.accountId)!;
+      const updated = await db.query(
+        'UPDATE player_positions SET y=$3 WHERE account_id=$1 AND world_id=$2 AND x=$4 AND y=$5 AND z=$6',
+        [
+          player.accountId,
+          player.worldId,
+          player.position.y,
+          previous.position.x,
+          previous.position.y,
+          previous.position.z,
+        ],
+      );
+      fail(updated.rowCount === 1, 'player position changed during migration');
+    }
     await db.query('UPDATE persistent_worlds SET compatibility_hash=$2,epoch=$3 WHERE id=$1', [
       plan.worldId,
       plan.targetCompatibility,
@@ -503,14 +609,16 @@ export async function applyTerrainMigration(
     ]);
     const after = await readState(options.ownership);
     fail(
-      digest(preservedState(after, plan.worldId, prepared.changedItems)) ===
-        plan.preservedStateHash,
+      digest(
+        preservedState(after, plan.worldId, prepared.changedItems, prepared.changedPlayers),
+      ) === plan.preservedStateHash,
       'protected rows or inventory changed during migration',
     );
     fail(
       digest({
         snapshot: stored,
         items: sorted(savedItems(after, plan.worldId, releases.target)),
+        players: savedPlayers(after, plan.worldId),
         preservedStateHash: plan.preservedStateHash,
         targetCompatibility: after.world.compatibility_hash,
       }) === plan.targetStateHash,

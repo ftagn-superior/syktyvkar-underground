@@ -15,9 +15,31 @@ export class AuthoritativeWorld {
   constructor(private readonly world: PhysicsWorld) {}
   addPlayer(entityId: string, spawn?: Vec3) {
     if (this.world.characters.has(entityId)) return this.world.state(entityId);
-    const position = this.world.findSpawn(undefined, spawn);
+    // Legacy simulation probes may intentionally start in free fall. Runtime
+    // entry uses addPlayerAtPosition(), which always requires stable support.
+    const position = this.world.findSpawn(undefined, spawn, false);
     if (!position) return undefined;
     this.world.createCharacter(entityId, position);
+    return this.world.state(entityId);
+  }
+  checkPlayerSpawnPosition(center: Vec3, excludeId?: string) {
+    return this.world.checkPlayerSpawnPosition(center, excludeId);
+  }
+  queryPlayerSupports(center: Vec3, sweep: ItemSupportSweep) {
+    return this.world.queryPlayerSupports(center, sweep);
+  }
+  findDefaultPlayerSpawn(excludeId?: string): Vec3 | undefined {
+    return this.world.findDefaultPlayerSpawn(excludeId);
+  }
+  /** Preparation target only: creation still requires a successful safety check. */
+  getDefaultPlayerSpawnPosition(): Vec3 {
+    return this.world.spawnPosition(this.world.definition.spawnPoints[0]);
+  }
+  /** Saved positions already describe the body center and must not be raised again. */
+  addPlayerAtPosition(entityId: string, center: Vec3) {
+    if (this.world.characters.has(entityId)) return this.world.state(entityId);
+    if (!this.world.checkPlayerSpawnPosition(center).ok) return undefined;
+    this.world.createCharacter(entityId, center);
     return this.world.state(entityId);
   }
   removePlayer(id: string) {
@@ -88,7 +110,7 @@ export class AuthoritativeWorld {
   respawnPlayer(id: string, spawn?: Vec3): boolean {
     const character = this.world.characters.get(id);
     if (!character) return false;
-    const position = this.world.findSpawn(id, spawn);
+    const position = this.world.findSpawn(id, spawn, false);
     if (!position) return false;
     const next = {
       ...this.world.state(id),
@@ -98,6 +120,19 @@ export class AuthoritativeWorld {
       grounded: false,
     };
     this.world.restoreCharacter(next);
+    this.setInput(id, NEUTRAL_INPUT);
+    return true;
+  }
+  respawnPlayerAtPosition(id: string, center: Vec3): boolean {
+    const character = this.world.characters.get(id);
+    if (!character || !this.world.checkPlayerSpawnPosition(center, id).ok) return false;
+    this.world.restoreCharacter({
+      ...this.world.state(id),
+      position: { ...center },
+      revision: character.revision + 1,
+      velocity: { x: 0, y: 0, z: 0 },
+      grounded: false,
+    });
     this.setInput(id, NEUTRAL_INPUT);
     return true;
   }

@@ -26,7 +26,11 @@ import '@babylonjs/core/Physics/v2/physicsEngineComponent.js';
 import '@babylonjs/core/Physics/joinedPhysicsEngineComponent.js';
 import { BuildingColliders } from './building-colliders.js';
 import { createItemShape } from './item-shapes.js';
-import { queryItemSupports, type ItemSupportSweep } from './item-support-query.js';
+import {
+  queryItemSupports,
+  queryShapeSupports,
+  type ItemSupportSweep,
+} from './item-support-query.js';
 import { ImpactCollector } from './impacts.js';
 import {
   canonicalJson,
@@ -76,6 +80,17 @@ const rotation = (q: Quat): Quat => ({ x: q.x, y: q.y, z: q.z, w: q.w });
 const zero = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 const identity = (): Quat => ({ x: 0, y: 0, z: 0, w: 1 });
 const down = new Vector3(0, -1, 0);
+const MAX_PLAYER_SLOPE_COSINE = 0.5;
+const PLAYER_SPAWN_PENETRATION = 0.005;
+
+export type PlayerSpawnFailure =
+  | 'INVALID_POSITION'
+  | 'OUT_OF_BOUNDS'
+  | 'BLOCKED'
+  | 'NO_SUPPORT'
+  | 'UNSTABLE_SUPPORT'
+  | 'STEEP_SUPPORT';
+export type PlayerSpawnCheck = { ok: true } | { ok: false; reason: PlayerSpawnFailure };
 
 interface BodyRecord {
   node: TransformNode;
@@ -297,6 +312,7 @@ export class PhysicsWorld {
     controller.keepDistance = 0.015;
     controller.keepContactTolerance = 0.05;
     controller.maxStepHeight = 0;
+    controller.maxSlopeCosine = MAX_PLAYER_SLOPE_COSINE;
     controller.setVelocity(vector(state?.velocity ?? zero()));
     // The public registry identifies the controller's engine-owned proxy without accessing private fields.
     const body = this.physics
@@ -479,6 +495,14 @@ export class PhysicsWorld {
   }
   overlaps(shape: PhysicsShape, position: Vec3, ignoreBody?: PhysicsBody): boolean {
     if (this.buildings.contains(position)) return true;
+    return this.proximity(shape, position, 0.005, ignoreBody).hasHit;
+  }
+  private proximity(
+    shape: PhysicsShape,
+    position: Vec3,
+    maxDistance: number,
+    ignoreBody?: PhysicsBody,
+  ): ProximityCastResult {
     const inputResult = new ProximityCastResult();
     const hitResult = new ProximityCastResult();
     this.plugin.shapeProximity(
@@ -486,21 +510,69 @@ export class PhysicsWorld {
         shape,
         position: vector(position),
         rotation: Quaternion.Identity(),
-        maxDistance: 0.005,
+        maxDistance,
         shouldHitTriggers: false,
         ignoreBody,
       },
       inputResult,
       hitResult,
     );
-    return hitResult.hasHit;
+    return hitResult;
   }
-  findSpawn(excludeId?: string, requested?: Vec3): Vec3 | undefined {
+  /** Read-only queries at the exact body center; authoring spawn points use spawnPosition(). */
+  checkPlayerSpawnPosition(center: Vec3, excludeId?: string): PlayerSpawnCheck {
+    if (!center || ![center.x, center.y, center.z].every(Number.isFinite))
+      return { ok: false, reason: 'INVALID_POSITION' };
+    const { height, radius } = this.definition.simulation.character;
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const extent = axis === 'y' ? height / 2 : radius;
+      if (
+        center[axis] - extent < this.definition.bounds.min[axis] ||
+        center[axis] + extent > this.definition.bounds.max[axis]
+      )
+        return { ok: false, reason: 'OUT_OF_BOUNDS' };
+    }
+    // Mesh queries see surfaces only, so also reject a capsule enclosed by a solid.
+    if (this.buildings.contains(center)) return { ok: false, reason: 'BLOCKED' };
+    const ignoreBody = this.characters.get(excludeId ?? '')?.body;
+    const overlap = this.proximity(this.spawnShape, center, 0, ignoreBody);
+    if (overlap.hasHit && overlap.hitDistance < -PLAYER_SPAWN_PENETRATION)
+      return { ok: false, reason: 'BLOCKED' };
+    const position = vector(center);
+    const support = new ShapeCastResult();
+    this.plugin.shapeCast(
+      {
+        shape: this.spawnShape,
+        rotation: Quaternion.Identity(),
+        startPosition: position.add(new Vector3(0, 0.02, 0)),
+        endPosition: position.add(new Vector3(0, -0.06, 0)),
+        shouldHitTriggers: false,
+        ignoreBody,
+      },
+      new ShapeCastResult(),
+      support,
+    );
+    if (!support.hasHit) return { ok: false, reason: 'NO_SUPPORT' };
+    // Only retained world geometry is stable: sleeping items and players remain dynamic.
+    if (!support.body || !this.staticReferences.has(support.body.transformNode.name))
+      return { ok: false, reason: 'UNSTABLE_SUPPORT' };
+    if (support.hitNormal.y < MAX_PLAYER_SLOPE_COSINE)
+      return { ok: false, reason: 'STEEP_SUPPORT' };
+    return { ok: true };
+  }
+  findDefaultPlayerSpawn(excludeId?: string): Vec3 | undefined {
+    for (const point of this.definition.spawnPoints) {
+      const center = this.spawnPosition(point);
+      if (this.checkPlayerSpawnPosition(center, excludeId).ok) return center;
+    }
+  }
+  findSpawn(excludeId?: string, requested?: Vec3, requireSupport = true): Vec3 | undefined {
     const points = requested ? [requested] : this.definition.spawnPoints;
     const selfBody = excludeId ? this.characters.get(excludeId)?.body : undefined;
     for (const point of points) {
       const { position, supported } = this.spawnCandidate(point, excludeId);
-      if (supported && !this.overlaps(this.spawnShape, position, selfBody)) return position;
+      if ((supported || !requireSupport) && !this.overlaps(this.spawnShape, position, selfBody))
+        return position;
     }
   }
   advance(dt: number) {
@@ -772,6 +844,16 @@ export class PhysicsWorld {
     const type = this.definition.itemCatalog.types[typeId];
     if (!type) throw new Error(`Unknown item type: ${typeId}`);
     return queryItemSupports(this.scene, this.plugin, this.physics.getBodies(), type, pose, sweep);
+  }
+  /** Actual upright player capsule, using a world-space centre rather than a ground datum. */
+  queryPlayerSupports(center: Vec3, sweep: ItemSupportSweep) {
+    return queryShapeSupports(
+      this.plugin,
+      this.physics.getBodies(),
+      this.spawnShape,
+      { position: center, rotation: identity() },
+      sweep,
+    );
   }
   /** The live editor accepts exactly one box asset. Queries use Havok's actual shapes. */
   checkStaticPlacement(

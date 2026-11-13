@@ -7,6 +7,7 @@ import { build as buildClient, createServer } from 'vite';
 import type { Page } from 'playwright';
 import {
   canonicalJson,
+  PROTOCOL_VERSION,
   type WorldLayoutSnapshot,
   type Vec3,
 } from '../packages/contracts/src/index.js';
@@ -64,6 +65,7 @@ const report: any = {
     enabled: staticSnapshot.instances.filter((o) => o.enabled).length,
   },
   mapVersion: published.manifest.mapVersion,
+  protocolVersion: PROTOCOL_VERSION,
   phase,
   viewport: { width: 1280, height: 720 },
   quality: 'standard',
@@ -413,6 +415,13 @@ async function runGame() {
     });
     app.room.state.dayFrozenHour = 12; // Explicit environment setup, not a movement/physics override.
     const info = await (await fetch(app.url + '/api/world')).json();
+    assert.equal(info.protocolVersion, PROTOCOL_VERSION);
+    report.servedWorld = {
+      protocolVersion: info.protocolVersion,
+      mapVersion: info.mapVersion,
+      assetReleaseVersion: info.assetReleaseVersion,
+      layoutRevision: info.layoutRevision,
+    };
     assert.equal(
       info.mapVersion,
       published.manifest.mapVersion,

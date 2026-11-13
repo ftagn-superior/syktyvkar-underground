@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { canonicalJson } from '../packages/contracts/src/index.js';
 import { hash } from '../packages/world-release/src/index.js';
 import { createDatabasePool } from '../apps/server/src/database.js';
+import { migrateDatabase } from '../apps/server/src/migrations.js';
 import { createGameServer } from '../apps/server/src/index.js';
 import type { TerrainMigrationPlan } from '../apps/server/src/layout/terrain-migration.js';
 
@@ -25,7 +26,10 @@ const databaseUrl = process.env.SU_REHEARSAL_DATABASE_URL;
 assert.ok(databaseUrl, 'SU_REHEARSAL_DATABASE_URL is required; DATABASE_URL is not used');
 const parsed = new URL(databaseUrl);
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname), 'Loopback database only');
-assert.equal(parsed.pathname, '/terrain_production_rehearsal', 'Dedicated restored database only');
+assert.ok(
+  ['/terrain_production_rehearsal', '/terrain_production_rehearsal_65ec'].includes(parsed.pathname),
+  'Dedicated restored database only',
+);
 const output = options.get('--output')!;
 process.umask(0o077);
 await mkdir(output, { recursive: true, mode: 0o700 });
@@ -76,6 +80,13 @@ const protectedRows = (state: State) => ({
     ].map((k) => [k, state[k]]),
   ),
   inventory: state.item_instances.filter((row) => JSON.parse(row).world_id === null),
+  playerPositionMetadata: (state.player_positions ?? [])
+    .map((row) => {
+      const value = JSON.parse(row);
+      if (value.world_id === 'ring-block') delete value.y;
+      return canonicalJson(value);
+    })
+    .sort(),
 });
 const digest = (data: unknown) => hash(canonicalJson(data));
 const ids = (rows: string[], field: string) => rows.map((r) => JSON.parse(r)[field]).sort();
@@ -111,6 +122,19 @@ async function cli(command: 'plan' | 'apply', name: string, plan?: string) {
   }
 }
 try {
+  const original = await readState();
+  if (!original.player_positions) {
+    assert.equal(original.su_schema_migrations.length, 6, 'Expected schema 6 production source');
+    await save('before-schema-upgrade.json', original);
+    await migrateDatabase(pool);
+    const upgraded = await readState();
+    for (const [table, rows] of Object.entries(original)) {
+      if (table !== 'su_schema_migrations') assert.deepEqual(upgraded[table], rows);
+    }
+    assert.deepEqual(upgraded.player_positions, []);
+    assert.equal(upgraded.su_schema_migrations.length, 7);
+    checks.schemaUpgrade = { from: 6, to: 7, existingRowsPreserved: true, savedPlayerPositions: 0 };
+  }
   const before = await readState();
   assert.equal(before.persistent_worlds.length, 1);
   const beforeProtected = protectedRows(before);
@@ -174,6 +198,11 @@ try {
       assert.deepEqual(current[field], previous[field], `Item ${field} must be preserved`);
   }
   checks.identitiesPropertiesAndInventoryPreserved = true;
+  checks.savedPlayerPositions = {
+    before: before.player_positions?.length ?? 0,
+    after: after.player_positions?.length ?? 0,
+    identityAndXZPreserved: true,
+  };
   checks.replay = await cli('apply', 'replay.json', join(output, 'plan.json'));
   assert.equal((checks.replay as { status: string }).status, 'already-applied');
   assert.deepEqual(await readState(), after);

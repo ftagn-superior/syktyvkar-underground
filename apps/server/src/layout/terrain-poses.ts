@@ -11,6 +11,7 @@ import { rectangle, terrainPatch, patchRange, type Point2 } from '@su/terrain-bu
 import { planSupportPlacement, selectSupportRule } from '@su/terrain-build/supports';
 import { createLayoutPublication } from './release.js';
 import { planTerrainItemPoses, type TerrainItemPoseDecision } from './terrain-item-poses.js';
+import { planTerrainPlayerPoses } from './terrain-player-poses.js';
 import type {
   TerrainMigrationContext,
   TerrainMigrationPreparation,
@@ -425,7 +426,8 @@ export async function prepareTerrainPoses(
     return {
       targetSnapshot,
       targetItems: structuredClone(context.sourceItems),
-      audit: { statics: audit, items: [] },
+      targetPlayers: structuredClone(context.sourcePlayers),
+      audit: { statics: audit, items: [], players: [] },
       issues,
     };
   try {
@@ -438,17 +440,30 @@ export async function prepareTerrainPoses(
       targetGroundIds: rules.targetGroundIds,
       decisions: rules.itemPoseDecisions,
     });
+    const players = items.issues.length
+      ? { targetPlayers: structuredClone(context.sourcePlayers), audit: [], issues: [] }
+      : await planTerrainPlayerPoses({
+          sourceWorld: context.sourceWorld,
+          targetWorld: target.world,
+          sourcePlayers: context.sourcePlayers,
+          sourceItems: context.sourceItems,
+          targetItems: items.targetItems,
+          sourceGroundIds: rules.sourceGroundIds,
+          targetGroundIds: rules.targetGroundIds,
+        });
     return {
       targetSnapshot,
       targetItems: items.targetItems,
-      audit: { statics: audit, items: items.audit },
-      issues: items.issues,
+      targetPlayers: players.targetPlayers,
+      audit: { statics: audit, items: items.audit, players: players.audit },
+      issues: [...items.issues, ...players.issues],
     };
   } catch (error) {
     return {
       targetSnapshot,
       targetItems: structuredClone(context.sourceItems),
-      audit: { statics: audit, items: [] },
+      targetPlayers: structuredClone(context.sourcePlayers),
+      audit: { statics: audit, items: [], players: [] },
       issues: [
         {
           kind: 'target-geometry',

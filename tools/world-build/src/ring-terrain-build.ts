@@ -219,6 +219,7 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
       sourceSnapshot: snapshot,
       sourceWorld: original.world,
       sourceItems: [],
+      sourcePlayers: [],
     },
     rules,
   );

@@ -8,6 +8,7 @@ import {
   validateWorld,
   validateWorldCell,
   validateBuildingPhysicsAsset,
+  validateTerrainGrid,
   type BuildingPhysicsAsset,
   type WorldHeader,
   type WorldCell,
@@ -31,6 +32,15 @@ import {
 } from '@su/world-release';
 import { encodeStaticGlb, staticMeshBounds } from './glb.js';
 import { compileStaticAsset } from '@su/terrain-build/assets';
+import { prepareTerrainBuildContext, rectangle } from '@su/terrain-build';
+import {
+  TERRAIN_GENERATOR_VERSION,
+  validateTerrainCoverage,
+  validateTerrainPrivateData,
+  type TerrainPrivateData,
+} from '@su/terrain-build/private-data';
+import { createGroundTerrain } from './ground-terrain.js';
+import { buildTerrainTiles } from './terrain-tiles.js';
 import { generateHouse, type HouseRecipe } from './house.js';
 import { generateStreamingCells } from './streaming-lab.js';
 import {
@@ -138,7 +148,11 @@ async function compileBytes(
 export async function buildWorld(
   source = 'content/worlds/ring-block/world.json',
   output?: string,
-  options: { terrainVariant?: 'hill' | 'flat' } = {},
+  options: {
+    terrainVariant?: 'hill' | 'flat';
+    /** Isolated flat-ground experiment; absent in normal authored builds. */
+    groundTerrain?: { spacing: 2 | 4 };
+  } = {},
 ): Promise<WorldManifest> {
   const authored = (await readJson(source)) as WorldSource;
   if (
@@ -152,6 +166,8 @@ export async function buildWorld(
       `World source must use formatVersion ${WORLD_FORMAT_VERSION}, cells, itemCatalog and assetCatalog`,
     );
   const sourceDirectory = dirname(resolve(source));
+  if (options.groundTerrain && (authored.terrain || authored.generator || output === undefined))
+    throw new Error('Ground terrain requires an explicit output and a non-generated flat source');
   if (authored.terrain && authored.generator)
     throw new Error('Terrain and world generators cannot compete');
   const itemCatalog = await readJson(resolve(sourceDirectory, authored.itemCatalog));
@@ -214,6 +230,7 @@ export async function buildWorld(
   const buildings: WorldDefinition['buildings'] = [];
   const fixedInstanceIds: string[] = [...(terrain?.fixed ?? [])];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
+  let privateTerrain: TerrainPrivateData | undefined = terrain?.privateData;
   for (const [id, asset] of terrain?.assets ?? [])
     compiled.set(id, await compileBytes(id, encodeStaticGlb(asset.parts), asset.physics));
   for (const instance of [...merged.buildings, ...(terrain?.buildings ?? [])]) {
@@ -250,6 +267,55 @@ export async function buildWorld(
         z: recipe.max[1] + instance.position.z,
       },
     };
+    if (options.groundTerrain) {
+      if (privateTerrain) throw new Error('Ground terrain requires exactly one source ground');
+      const converted = createGroundTerrain(recipe, instance, options.groundTerrain.spacing);
+      validateTerrainGrid(converted.grid);
+      validateTerrainCoverage(converted.grid, base.bounds);
+      privateTerrain = validateTerrainPrivateData({
+        formatVersion: 1,
+        generatorVersion: TERRAIN_GENERATOR_VERSION,
+        worldId: base.worldId,
+        grid: converted.grid,
+        supports: [],
+      });
+      const context = prepareTerrainBuildContext(converted.grid, converted.surfaces);
+      for (const cellId of cellsIntersectingBounds(base.bounds, grid, extent)) {
+        const cell = worldCellBounds(base.bounds, grid, cellId);
+        const assetId = `${instance.assetId}-${cellId.replace('_', '-')}`;
+        const boundary = rectangle(
+          (cell.min.x + cell.max.x) / 2,
+          (cell.min.z + cell.max.z) / 2,
+          cell.max.x - cell.min.x,
+          cell.max.z - cell.min.z,
+        );
+        const tiles = buildTerrainTiles({
+          assetId,
+          grid: converted.grid,
+          surfaces: converted.surfaces,
+          context,
+          boundary,
+          color: converted.color,
+          merge: recipe.merge === true,
+        });
+        for (const { suffix, asset } of tiles) {
+          const id = assetId + suffix;
+          const entityId = `${instance.entityId}-${cellId}${suffix}`;
+          if (compiled.has(id) || Object.hasOwn(catalog.assets, id))
+            throw new Error(`Terrain asset conflicts with catalog: ${id}`);
+          // Terrain vertices are in world coordinates, including any source ground translation.
+          buildings.push({
+            entityId,
+            assetId: id,
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0, w: 1 },
+          });
+          fixedInstanceIds.push(entityId);
+          compiled.set(id, asset);
+        }
+      }
+      continue;
+    }
     for (const cellId of cellsIntersectingBounds(base.bounds, grid, extent)) {
       const cell = worldCellBounds(base.bounds, grid, cellId);
       const assetId = `${instance.assetId}-${cellId.replace('_', '-')}`;
@@ -269,6 +335,7 @@ export async function buildWorld(
       compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
     }
   }
+  if (options.groundTerrain && !privateTerrain) throw new Error('Ground terrain source is missing');
   // A catalog model is available even when this seed has no instance of it yet.
   for (const [assetId, path] of Object.entries(catalog.assets)) {
     if (compiled.has(assetId)) continue;
@@ -290,7 +357,7 @@ export async function buildWorld(
     publication.manifest,
     fixedInstanceIds,
     outputDirectory,
-    terrain ? jsonBytes(terrain.privateData) : undefined,
+    privateTerrain ? jsonBytes(privateTerrain) : undefined,
   );
   const manifest = publication.manifest;
   return manifest;

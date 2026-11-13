@@ -328,6 +328,7 @@ export function generateTerrainTile(
   boundary: Point2[],
   surfaces: TerrainSurface[],
   context?: TerrainBuildContext,
+  options: { baseColor?: string } = {},
 ): GeneratedTerrainAsset {
   const prepared = context ?? prepareTerrainBuildContext(g, surfaces);
   if (prepared.sourceGrid !== g || prepared.sourceSurfaces !== surfaces)
@@ -339,7 +340,7 @@ export function generateTerrainTile(
     triangles,
     (p) => p.y,
     () => g.bottom,
-    '#617658',
+    options.baseColor ?? '#617658',
   );
   const normals = prepared.normals,
     solid = built.parts[0];

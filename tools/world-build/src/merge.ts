@@ -24,8 +24,9 @@ export function mergeParts(parts: StaticMeshPart[]): StaticMeshPart[] {
     }
     const offset = target.positions.length / 3;
     const [r, g, b] = linear(part.color);
-    target.positions.push(...part.positions);
-    target.normals.push(...part.normals);
+    // Large terrain parts exceed the engine's argument-count limit for push(...values).
+    for (const value of part.positions) target.positions.push(value);
+    for (const value of part.normals) target.normals.push(value);
     for (let i = 0; i < part.positions.length; i += 3)
       target.colors!.push(
         r * (part.colors?.[i] ?? 1),

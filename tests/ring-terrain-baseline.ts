@@ -8,19 +8,22 @@ import { join, resolve } from 'node:path';
 import { createServer } from 'vite';
 import type { Browser, Page } from 'playwright';
 import { buildWorld } from '../tools/world-build/src/index.js';
-import {
-  readAuthoringRelease,
-  createLayoutPublication,
-} from '../apps/server/src/layout/release.js';
 import { writeWorldPublication } from '../packages/world-release/src/index.js';
 import { validateWorldLayoutSnapshot } from '../packages/contracts/src/index.js';
 import { loadServerWasm } from '../packages/simulation/src/server.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { prepareRingProfilePublication } from './helpers/ring-terrain-profile.js';
 
 const output = resolve(
   process.env.SU_RING_BASELINE_OUTPUT ?? 'output/ring-terrain-stage0/hardware-baseline',
 );
 const layoutFile = resolve(process.env.SU_RING_BASELINE_LAYOUT ?? 'data/map-layout.json');
+const preparedSource = process.env.SU_RING_BASELINE_SOURCE_RELEASE;
+const candidateDirectory = process.env.SU_RING_BASELINE_CANDIDATE_RELEASE;
+assert.ok(
+  !candidateDirectory || preparedSource,
+  'A flat candidate requires its prepared old source release',
+);
 const warmupMs = Number(process.env.SU_RING_BASELINE_WARMUP_MS ?? 60_000);
 const sampleMs = Number(process.env.SU_RING_BASELINE_SAMPLE_MS ?? 60_000);
 assert.ok(Number.isFinite(warmupMs) && warmupMs >= 60_000);
@@ -50,16 +53,20 @@ const distribution = (values: number[]) => ({
   p99: percentile(values, 0.99),
   max: values.length ? Math.max(...values) : null,
 });
+const benchmarkPath = 'tests/ring-terrain-baseline.ts';
+const profileFixturePath = 'tests/helpers/ring-terrain-profile.ts';
+const [benchmarkSha256, profileFixtureSha256] = await Promise.all(
+  [benchmarkPath, profileFixturePath].map(async (path) => sha(await readFile(path))),
+);
 await mkdir(output, { recursive: true });
 const exportBytes = await readFile(layoutFile);
 const snapshot = JSON.parse(exportBytes.toString());
 validateWorldLayoutSnapshot(snapshot);
 const oldDistHash = sha(await readFile('dist/worlds/ring-block/manifest.json'));
-const sourceDirectory = join(output, 'source-world');
+const sourceDirectory = preparedSource ? resolve(preparedSource) : join(output, 'source-world');
 const started = performance.now();
-await buildWorld('content/worlds/ring-block/world.json', sourceDirectory);
-const release = await readAuthoringRelease(sourceDirectory);
-const prepared = await createLayoutPublication(release, snapshot);
+if (!preparedSource) await buildWorld('content/worlds/ring-block/world.json', sourceDirectory);
+const prepared = await prepareRingProfilePublication(sourceDirectory, snapshot, candidateDirectory);
 const directory = join(output, 'export-world');
 await writeWorldPublication(prepared.publication, directory);
 const preparationMs = performance.now() - started;
@@ -270,6 +277,8 @@ let page: Page | undefined;
 const errors: string[] = [];
 const report: Record<string, any> = {
   date: new Date().toISOString(),
+  benchmarkSha256,
+  profileFixtureSha256,
   revision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   scope:
     'Real WorldView, CellStreamer and browser Havok over the current exported static layout. Stationary local neutral controller, no visible avatars or items, no room/network/database. Camera route is not a verified walking route. Not full city gameplay acceptance.',
@@ -290,7 +299,8 @@ const report: Record<string, any> = {
     'Ring → Oktyabrsky landmarks → pilot edge → entrance approach → ring; camera only',
   preparationMs,
   mapVersion: manifest.mapVersion,
-  assetReleaseVersion: snapshot.assetReleaseVersion,
+  assetReleaseVersion: prepared.profileFixture.reboundAssetReleaseVersion,
+  profileFixture: prepared.profileFixture,
   layoutHash: prepared.hash,
   layoutRevision: snapshot.revision,
   layoutSha256: sha(exportBytes),
@@ -378,11 +388,32 @@ try {
 } finally {
   await browser?.close();
   await server.close();
+  const previousFailure = report.status === 'failed';
+  const hashAfter = async (path: string) =>
+    readFile(path)
+      .then(sha)
+      .catch(() => null);
+  const [layoutAfter, distAfter, benchmarkAfter, fixtureAfter] = await Promise.all(
+    [layoutFile, 'dist/worlds/ring-block/manifest.json', benchmarkPath, profileFixturePath].map(
+      hashAfter,
+    ),
+  );
   report.unchanged = {
-    layout: sha(await readFile(layoutFile)) === sha(exportBytes),
-    oldDistManifest: sha(await readFile('dist/worlds/ring-block/manifest.json')) === oldDistHash,
+    layout: layoutAfter === sha(exportBytes),
+    oldDistManifest: distAfter === oldDistHash,
+    benchmark: benchmarkAfter === benchmarkSha256,
+    profileFixture: fixtureAfter === profileFixtureSha256,
   };
-  report.benchmarkSha256 = sha(await readFile('tests/ring-terrain-baseline.ts'));
+  const changed = Object.entries(report.unchanged)
+    .filter(([, unchanged]) => !unchanged)
+    .map(([name]) => name);
+  if (changed.length) {
+    report.integrityFailure = `Files changed or became unreadable during measurement: ${changed.join(', ')}`;
+    report.status = 'failed';
+    report.failure ??= report.integrityFailure;
+  }
   await writeFile(join(output, 'result.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(`Hardware reference saved: ${join(output, 'result.json')}`);
+  // Preserve the original thrown measurement error when cleanup finds another integrity failure.
+  if (changed.length && !previousFailure) throw new Error(report.integrityFailure);
 }

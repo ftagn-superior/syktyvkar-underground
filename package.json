@@ -10,6 +10,7 @@
   "scripts": {
     "world:build": "node --import tsx tools/world-build/src/index.ts",
     "world:terrain": "node --import tsx tools/world-build/src/terrain-lab.ts",
+    "world:ring:flat": "node --import tsx tools/world-build/src/ring-terrain.ts",
     "test:terrain": "vitest run packages/contracts/src/terrain.test.ts tests/integration/terrain-lab.test.ts",
     "test:terrain:browser": "node tools/test-terrain.mjs",
     "world:preview-ring": "node --import tsx tools/world-build/src/preview-ring.ts",

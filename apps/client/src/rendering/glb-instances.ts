@@ -2,6 +2,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
+import { Ray } from '@babylonjs/core/Culling/ray';
 import { Material } from '@babylonjs/core/Materials/material';
 import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
@@ -20,6 +21,12 @@ import type {
 import { SpatialIndex } from './spatial-index';
 import { applyRadialFog, type RadialState } from './radial-fog';
 import { INSTANCE_STATE_ATTRIBUTE, InstanceStateMaterial } from './instance-state';
+import {
+  staticHitVisible,
+  staticObjectSelection,
+  staticRayBounds,
+  type StaticObjectHit,
+} from './static-selection';
 
 type Template = { mesh: Mesh; local: Matrix; part: BuildingPart; key: string };
 type Prepared = {
@@ -166,6 +173,43 @@ export class GlbInstances {
   }
   has(id: string) {
     return this.instances.has(id);
+  }
+
+  selection(id: string) {
+    const instance = this.instances.get(id);
+    if (!instance?.visible) return;
+    return staticObjectSelection(instance.definition, instance.minimum, instance.maximum);
+  }
+
+  pick(ray: Ray, protectedIds: ReadonlySet<string>): StaticObjectHit | undefined {
+    let nearest: StaticObjectHit | undefined;
+    for (const id of this.index.query(staticRayBounds(ray))) {
+      const instance = this.instances.get(id)!;
+      if (
+        protectedIds.has(id) ||
+        !instance.visible ||
+        !ray.intersectsBoxMinMax(instance.minimum, instance.maximum)
+      )
+        continue;
+      for (const template of instance.asset.templates) {
+        const world = template.local.multiply(instance.matrix);
+        // A batch mesh has many placements. Test the shared source geometry in this
+        // placement's local space so holes and individual instance IDs remain exact.
+        const local = Ray.Transform(ray, Matrix.Invert(world));
+        const hit = template.mesh.intersects(local, false, undefined, false, world);
+        if (
+          hit.hit &&
+          hit.distance <= ray.length &&
+          (!nearest || hit.distance < nearest.distance) &&
+          staticHitVisible(this.radial, ray, hit.distance, instance.born)
+        )
+          nearest = {
+            ...staticObjectSelection(instance.definition, instance.minimum, instance.maximum),
+            distance: hit.distance,
+          };
+      }
+    }
+    return nearest;
   }
 
   add(definition: BuildingInstance, version: string, signature: string) {

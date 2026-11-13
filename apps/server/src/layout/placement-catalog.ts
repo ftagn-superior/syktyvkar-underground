@@ -17,6 +17,7 @@ import type { AuthoringRelease } from './release.js';
 
 /** One immutable, verified snapshot, shared by discovery, the command and HTTP. */
 export interface ServerPlacementCatalog {
+  modelNames?: Record<string, string>;
   catalog: PlacementCatalog;
   reference: PlacementCatalogReference;
   body: string;
@@ -75,6 +76,11 @@ export async function readPlacementCatalog(
   catalog.placementCatalogVersion = hash(canonicalJson(placementCatalogIdentity(catalog)));
   validatePlacementCatalog(catalog, manifest);
   return {
+    modelNames: Object.fromEntries(
+      Object.values(source.models).flatMap((model) =>
+        model.runtimeAssetIds.map((assetId) => [assetId, model.metadata.name]),
+      ),
+    ),
     catalog,
     body: canonicalJson(catalog),
     assetIds: new Set(policy.assetIds),

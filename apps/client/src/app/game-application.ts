@@ -22,6 +22,7 @@ import { ReactionMenu } from '../ui/reactions';
 import { AnimationMenu } from '../ui/animations';
 import { ChatConsole } from '../ui/chat';
 import { StaticPlacement } from '../ui/static-placement';
+import { StaticRemoval } from '../ui/static-removal';
 import { InventoryPanel } from '../ui/inventory';
 import { AccountPanel } from '../ui/account-panel';
 import { bindTouchButtons } from '../ui/touch-buttons';
@@ -91,7 +92,8 @@ export function startGame(): void {
   let chat: ChatConsole | undefined;
   let inventory: InventoryPanel | undefined;
   let staticPlacement: StaticPlacement | undefined;
-  let placementOwner: 'inventory' | 'static' | undefined;
+  let staticRemoval: StaticRemoval | undefined;
+  let placementOwner: 'inventory' | 'static' | 'removal' | undefined;
   let help: HelpMenu | undefined;
   let interactions: InteractionSystem | undefined;
   const worldHud = new WorldHud(
@@ -129,6 +131,7 @@ export function startGame(): void {
     help: () => help?.close(false),
     players: () => worldHud.closePlayers(),
     static: () => staticPlacement?.close(),
+    removal: () => staticRemoval?.close(),
     reactions: () => reactions?.close(false),
     animations: () => animations?.close(false),
     chat: () => chat?.close(false),
@@ -250,7 +253,10 @@ export function startGame(): void {
 
   function updateState(state: ConnectionState, message?: string): void {
     if (disposed) return;
-    if (!['playing', 'waiting', 'preparing'].includes(state)) staticPlacement?.close();
+    if (!['playing', 'waiting', 'preparing'].includes(state)) {
+      staticPlacement?.close();
+      staticRemoval?.close();
+    }
     const playing = state === 'playing';
     if (!playing) audio.stopWorld();
     const reconnecting = state === 'reconnecting';
@@ -312,7 +318,10 @@ export function startGame(): void {
   element('hud-top').append(storageStatus);
   const accounts = new AccountPanel(
     () => {
-      if (session.accountId !== accounts.account?.accountId) staticPlacement?.close();
+      if (session.accountId !== accounts.account?.accountId) {
+        staticPlacement?.close();
+        staticRemoval?.close();
+      }
       session.accountId = accounts.account?.accountId;
       session.guestSkinId = accounts.selectedSkinId;
       updateState(session.state);
@@ -326,6 +335,7 @@ export function startGame(): void {
     (placing) => {
       if (placing) {
         staticPlacement?.close();
+        staticRemoval?.close();
         placementOwner = 'inventory';
       } else if (placementOwner === 'inventory') placementOwner = undefined;
       keyboard?.setPlacementMode(!!placementOwner);
@@ -347,11 +357,42 @@ export function startGame(): void {
     () => inputMode.value === 'desktop' && !graphicsLost,
   );
   session.onStaticPlacementOpen = (effect) => {
-    if (inputMode.value !== 'desktop' || graphicsLost || session.staticPlacementPending) return;
+    if (
+      inputMode.value !== 'desktop' ||
+      graphicsLost ||
+      session.staticPlacementPending ||
+      session.staticRemovalPending
+    )
+      return;
     firstPerson?.overview();
     panels.closeExcept('static');
     help?.close(false);
     void staticPlacement?.open(effect);
+  };
+  staticRemoval = new StaticRemoval(
+    session,
+    canvas,
+    () => view,
+    (active) => {
+      placementOwner = active ? 'removal' : undefined;
+      keyboard?.setPlacementMode(active);
+      resetGameInput();
+      renderControls(active);
+    },
+    () => inputMode.value === 'desktop' && !graphicsLost,
+  );
+  session.onStaticRemovalOpen = (effect) => {
+    if (
+      inputMode.value !== 'desktop' ||
+      graphicsLost ||
+      session.staticPlacementPending ||
+      session.staticRemovalPending
+    )
+      return;
+    firstPerson?.overview();
+    panels.closeExcept('removal');
+    help?.close(false);
+    staticRemoval?.open(effect);
   };
   help = new HelpMenu(
     () => canvas.focus({ preventScroll: true }),
@@ -378,7 +419,10 @@ export function startGame(): void {
     candidates: () => pickups.candidates(),
     project: (anchor, out) => (view ? view.project(anchor, out) : (out.visible = false)),
     enabled: () =>
-      loaded && !graphicsLost && placementOwner !== 'static' && !!inventory?.canCollect,
+      loaded &&
+      !graphicsLost &&
+      (!placementOwner || placementOwner === 'inventory') &&
+      !!inventory?.canCollect,
     // Touch players use the contextual prompt; hardware keys belong to desktop input.
     keys: () => inputMode.value === 'desktop',
   });
@@ -473,7 +517,7 @@ export function startGame(): void {
     (axis, direction) => {
       if (placementOwner === 'static') {
         if (axis === 'y') staticPlacement?.rotate(direction);
-      } else inventory?.rotatePlacement(axis, direction);
+      } else if (placementOwner !== 'removal') inventory?.rotatePlacement(axis, direction);
     },
     () => staticPlacement?.browsing ?? false,
   );
@@ -710,6 +754,7 @@ export function startGame(): void {
           view!.setStreamingRadius(session.updateVisualArea(area.center, area.drawRadius));
           interactions?.tick(now);
           if (placementOwner === 'static') staticPlacement?.frame();
+          else if (placementOwner === 'removal') staticRemoval?.frame();
           else inventory?.frame(view!);
         } catch (error) {
           recoverGameLoop(error);
@@ -812,6 +857,7 @@ export function startGame(): void {
       event.preventDefault();
       graphicsLost = true;
       staticPlacement?.close();
+      staticRemoval?.close();
       firstPerson?.suspend();
       syncAudioActivity();
       keyboard.setEnabled(false);
@@ -869,6 +915,7 @@ export function startGame(): void {
       inputMode.dispose();
       cameraPointer?.dispose();
       staticPlacement?.dispose();
+      staticRemoval?.dispose();
       view?.dispose();
       keyboard.dispose();
       help?.dispose();
@@ -892,6 +939,12 @@ export function startGame(): void {
       value: Object.freeze({
         snapshot: () => structuredClone(session.diagnostics()),
         placement: () => staticPlacement?.diagnostics(),
+        removal: () => staticRemoval?.diagnostics(),
+        project: (position: { x: number; y: number; z: number }) => {
+          const out = { x: 0, y: 0, visible: false };
+          view?.project(position, out);
+          return out;
+        },
         controls: () => ({
           mode: inputMode.value,
           view: firstPerson?.selected ? 'first-person' : 'overview',

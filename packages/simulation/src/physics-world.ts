@@ -771,6 +771,11 @@ export class PhysicsWorld {
   addStatic(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
     this.retainStatic(instance, 'initial', asset);
   }
+  /** Authoritative worlds retain a single initial reference for each complete instance. */
+  removeStatic(entityId: string) {
+    this.releaseStatic(entityId);
+    this.impacts.clear(true);
+  }
   /** Stored dynamic poses can be airborne; new placement still requires support. */
   checkSavedItem(item: ItemState): ItemError | undefined {
     if (!validPose(item) || !validPose(item.safePose)) return 'INVALID_INPUT';

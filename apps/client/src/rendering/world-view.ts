@@ -1,4 +1,4 @@
-import '@babylonjs/core/Culling/ray';
+import { Ray } from '@babylonjs/core/Culling/ray';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
@@ -9,6 +9,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { createModelVisual, type ModelResourceReader } from './model-visual';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
@@ -50,6 +51,7 @@ import type { GameAudio } from '../audio/game-audio';
 import { AvatarView } from './avatars/avatar-view';
 import { createItemMesh } from './items';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import type { StaticObjectSelection } from './static-selection';
 
 type EntityView = {
   root: TransformNode;
@@ -117,6 +119,7 @@ export class WorldView {
   private audio?: GameAudio;
   private readonly reactionSounds = new ReactionSoundGate();
   private ring?: { mesh: Mesh; material: StandardMaterial; target?: string };
+  private staticHighlight?: { mesh: LinesMesh; target?: string };
   private readonly landmarks: (LabelAnchor & { position: Vector3 })[] = [];
   private readonly target = Vector3.Zero();
   private readonly projection = Matrix.Identity();
@@ -293,6 +296,7 @@ export class WorldView {
       this.radial.center = this.dynamicRadial.center = center;
       this.radial.time = this.dynamicRadial.time = now;
       this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
+      if (this.staticHighlight?.target) this.highlightStaticObject(this.staticHighlight.target);
       this.positionLabels();
       this.scene.render();
     });
@@ -468,6 +472,7 @@ export class WorldView {
   releaseStatic(entityId: string) {
     this.buildings.remove(entityId);
     this.statics.remove(entityId);
+    if (this.staticHighlight?.target === entityId) this.highlightStaticObject(entityId);
   }
   buildingDiagnostics() {
     return this.buildings.diagnostics();
@@ -865,6 +870,53 @@ export class WorldView {
         z: ray.origin.z + ray.direction.z * 5000,
       },
     };
+  }
+  getStaticObject(entityId: string): StaticObjectSelection | undefined {
+    return this.buildings.selection(entityId);
+  }
+  pickStaticObject(
+    protectedEntityIds: ReadonlySet<string> = new Set(),
+  ): StaticObjectSelection | undefined {
+    const { from, to } = this.pointerRay();
+    const direction = vector(to).subtract(vector(from)).normalize();
+    const ray = new Ray(vector(from), direction, this.activeCamera.maxZ);
+    const hit = this.buildings.pick(ray, protectedEntityIds);
+    if (!hit) return;
+    const { distance: _distance, ...selection } = hit;
+    return selection;
+  }
+  /** A private bounds cage makes the whole deletion unit visible without cloning materials. */
+  highlightStaticObject(entityId?: string): void {
+    const selection = entityId ? this.getStaticObject(entityId) : undefined;
+    if (!selection) {
+      if (this.staticHighlight) {
+        this.staticHighlight.target = undefined;
+        this.staticHighlight.mesh.setEnabled(false);
+      }
+      return;
+    }
+    if (!this.staticHighlight) {
+      const corners = Array.from(
+        { length: 8 },
+        (_, index) =>
+          new Vector3(index & 1 ? 0.5 : -0.5, index & 2 ? 0.5 : -0.5, index & 4 ? 0.5 : -0.5),
+      );
+      const lines: Vector3[][] = [];
+      for (let index = 0; index < 8; index++)
+        for (const bit of [1, 2, 4])
+          if (!(index & bit)) lines.push([corners[index], corners[index | bit]]);
+      const mesh = MeshBuilder.CreateLineSystem('static-removal-highlight', { lines }, this.scene);
+      mesh.color = Color3.FromHexString('#ff8b63');
+      mesh.isPickable = false;
+      this.staticHighlight = { mesh };
+    }
+    const { mesh } = this.staticHighlight;
+    this.staticHighlight.target = entityId;
+    const minimum = vector(selection.minimum),
+      maximum = vector(selection.maximum);
+    mesh.position.copyFrom(minimum.add(maximum).scale(0.5));
+    mesh.scaling.copyFrom(maximum.subtract(minimum).add(new Vector3(0.06, 0.06, 0.06)));
+    mesh.setEnabled(true);
   }
   /** An isolated local model; neither cell references nor the inventory ghost own it. */
   async createStaticGhost(

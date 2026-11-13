@@ -82,6 +82,7 @@ const identity = (): Quat => ({ x: 0, y: 0, z: 0, w: 1 });
 const down = new Vector3(0, -1, 0);
 const MAX_PLAYER_SLOPE_COSINE = 0.5;
 const PLAYER_SPAWN_PENETRATION = 0.005;
+const ITEM_PLACEMENT_PENETRATION = 0.01;
 
 export type PlayerSpawnFailure =
   | 'INVALID_POSITION'
@@ -758,6 +759,7 @@ export class PhysicsWorld {
     playerId?: string,
     ignoreId?: string,
     requireSupport = true,
+    savedContact = false,
   ): ItemError | undefined {
     const type = this.definition.itemCatalog.types[typeId];
     if (!type || !validPose(pose)) return 'INVALID_INPUT';
@@ -795,7 +797,8 @@ export class PhysicsWorld {
                 .add(vector(part.center))
                 .applyRotationQuaternion(q)
                 .add(p);
-              if (this.buildings.contains(corner)) return 'BLOCKED';
+              if (this.buildings.contains(corner, savedContact ? ITEM_PLACEMENT_PENETRATION : 0))
+                return 'BLOCKED';
             }
     }
     if (this.buildings.contains(p)) return 'BLOCKED';
@@ -813,7 +816,7 @@ export class PhysicsWorld {
         input,
         hit,
       );
-      if (hit.hasHit && hit.hitDistance < -0.01) return 'BLOCKED';
+      if (hit.hasHit && hit.hitDistance < -ITEM_PLACEMENT_PENETRATION) return 'BLOCKED';
       if (!requireSupport) return;
       const support = new ShapeCastResult();
       this.plugin.shapeCast(
@@ -1002,8 +1005,8 @@ export class PhysicsWorld {
       if (!vector || ![vector.x, vector.y, vector.z].every(Number.isFinite)) return 'INVALID_INPUT';
     }
     return (
-      this.checkPlacement(item.typeId, item, undefined, item.entityId, false) ??
-      this.checkPlacement(item.typeId, item.safePose, undefined, item.entityId, false)
+      this.checkPlacement(item.typeId, item, undefined, item.entityId, false, true) ??
+      this.checkPlacement(item.typeId, item.safePose, undefined, item.entityId, false, true)
     );
   }
   returnLostItems() {

@@ -144,7 +144,54 @@ export class BuildingColliders {
   }
 
   /** Havok mesh queries test triangle surfaces; reject a placement fully inside a solid too. */
-  contains(point: Vec3): boolean {
+  contains(point: Vec3, surfaceTolerance = 0): boolean {
+    if (!this.containsStrict(point)) return false;
+    if (surfaceTolerance <= 0) return true;
+    // A nearby triangle may be internal to overlapping solids. Accept shallow
+    // contact only with an actual exterior witness within the bounded distance
+    // of this point, checked against every mesh volume in the world.
+    const worldPoint = new Vector3(point.x, point.y, point.z);
+    const a = Vector3.Zero(),
+      b = Vector3.Zero(),
+      c = Vector3.Zero(),
+      projected = Vector3.Zero();
+    for (const { asset, inverse } of this.bodies.values()) {
+      const bodyPoint = Vector3.TransformCoordinates(worldPoint, inverse);
+      for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
+        const p = Vector3.TransformCoordinates(bodyPoint, shapeInverse);
+        if (
+          p.x < bounds.min.x - surfaceTolerance ||
+          p.x > bounds.max.x + surfaceTolerance ||
+          p.y < bounds.min.y - surfaceTolerance ||
+          p.y > bounds.max.y + surfaceTolerance ||
+          p.z < bounds.min.z - surfaceTolerance ||
+          p.z > bounds.max.z + surfaceTolerance
+        )
+          continue;
+        const toBody = shapeInverse.clone().invert(),
+          toWorld = inverse.clone().invert();
+        for (let i = 0; i < collider.indices.length; i += 3) {
+          Vector3.FromArrayToRef(collider.vertices, collider.indices[i] * 3, a);
+          Vector3.FromArrayToRef(collider.vertices, collider.indices[i + 1] * 3, b);
+          Vector3.FromArrayToRef(collider.vertices, collider.indices[i + 2] * 3, c);
+          const distance = Vector3.ProjectOnTriangleToRef(p, a, b, c, projected);
+          if (distance >= surfaceTolerance) continue;
+          const normal = Vector3.Cross(b.subtract(a), c.subtract(a)).normalize();
+          const outside = projected.add(normal.scale((surfaceTolerance - distance) / 2));
+          Vector3.TransformCoordinatesToRef(outside, toBody, outside);
+          Vector3.TransformCoordinatesToRef(outside, toWorld, outside);
+          if (
+            Vector3.Distance(worldPoint, outside) <= surfaceTolerance &&
+            !this.containsStrict(outside)
+          )
+            return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private containsStrict(point: Vec3): boolean {
     this.worldPoint.set(point.x, point.y, point.z);
     for (const { asset, inverse } of this.bodies.values()) {
       if (asset.volumes.length === 0) continue;

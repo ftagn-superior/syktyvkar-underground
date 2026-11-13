@@ -55,6 +55,13 @@ describe('night light schedule', () => {
     expect(share(23.5, 'office')).toBeLessThan(0.1);
   });
 
+  it('keeps brand neon signs lit from dusk to dawn and casts their light only at night', () => {
+    for (const hour of [19, 23, 2, 5]) expect(litShare(nightLevels(hour).neon), `${hour}`).toBe(1);
+    expect(litShare(nightLevels(14).neon)).toBe(0);
+    expect(nightLevels(14).neonLight).toBe(0);
+    expect(nightLevels(1).neonLight).toBeGreaterThan(0.9);
+  });
+
   it('switches every street lamp on and off by the city schedule, with a short warm-up', () => {
     expect(lampLevel(12)).toBe(0);
     expect(lampLevel(LAMP_SCHEDULE.on - 0.01)).toBe(0);

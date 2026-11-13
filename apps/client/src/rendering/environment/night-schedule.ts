@@ -24,8 +24,12 @@ export type NightLevels = {
   shop: GlowLevel;
   sign: GlowLevel;
   lamp: GlowLevel;
+  /** Фирменные вывески: загораются в сумерках все и горят до утра. */
+  neon: GlowLevel;
   /** 0..1: насколько горят фонари, включая разогрев ламп. */
   lamps: number;
+  /** 0..1: сила света, который неоновые вывески бросают вокруг. */
+  neonLight: number;
   /** 0 днём, 1 в темноте. */
   dark: number;
 };
@@ -174,13 +178,16 @@ export function nightLevels(hour: number): NightLevels {
     brightness,
   });
   const lamps = lampLevel(hour);
+  const neonEvening = curveAt(CURVES.sign.evening, hour);
   return {
     window: level(CURVES.window),
     office: level(CURVES.office),
     shop: level(CURVES.shop),
     sign: level(CURVES.sign),
     lamp: { evening: 1, keep: 1, morning: 0, brightness: lamps * (0.35 + 0.65 * dark) },
+    neon: { evening: neonEvening, keep: 1, morning: 0, brightness },
     lamps,
+    neonLight: neonEvening * brightness,
     dark,
   };
 }

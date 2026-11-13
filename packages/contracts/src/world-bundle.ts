@@ -270,6 +270,10 @@ export function validateBuildingParts(value: unknown): BuildingParts {
         'light radius',
       );
       requireValue(stringMatches(light.color, /^#[a-f0-9]{6}$/i), 'light color');
+      requireValue(
+        light.kind === undefined || light.kind === 'lamp' || light.kind === 'neon',
+        'light kind',
+      );
     }
   }
   if (value.tree !== undefined) {

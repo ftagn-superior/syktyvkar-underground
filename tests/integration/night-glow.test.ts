@@ -101,6 +101,31 @@ describe('night glow baked into static models', () => {
     const { kinds } = glowOf(shop.parts);
     expect(kinds.get(GLOW_KIND.shop)).toBeGreaterThan(0);
     expect(kinds.get(GLOW_KIND.sign)).toBeGreaterThan(0);
+    expect(kinds.get(GLOW_KIND.neon)).toBeGreaterThan(0);
+    // Неоновая вывеска на южном фасаде светится только гранями, обращёнными на юг (+Z).
+    const unmerged = generateFootprint('glow-shop', {
+      ...house,
+      details: {
+        roofSign: {
+          facing: 'S',
+          width: 10,
+          height: 1.6,
+          color: '#e42d2d',
+          text: 'МАГНИТ',
+          glow: true,
+        },
+      },
+    });
+    const letters = unmerged.parts.find((part) => part.partId === 'sign')!;
+    for (let i = 0; i < letters.positions.length / 3; i++)
+      expect(letters.glow![i * 2] === GLOW_KIND.neon).toBe(letters.normals[i * 3 + 2] > 0.7);
+    expect(unmerged.lights).toHaveLength(1);
+    const [light] = unmerged.lights!;
+    expect(light.kind).toBe('neon');
+    expect(light.color).toBe('#e42d2d');
+    expect(light.position.z).toBeGreaterThan(6);
+    expect(light.position.y).toBeGreaterThan(house.height);
+    expect(generateFootprint('glow-house', house).lights).toBeUndefined();
     expect(kinds.get(GLOW_KIND.window)).toBeGreaterThan(0);
 
     const office = glowOf(
@@ -199,6 +224,12 @@ describe('night glow baked into static models', () => {
       /color/,
     );
     expect(() => validateBuildingParts({ ...parts, glow: false })).toThrow(/glow/);
+    expect(
+      validateBuildingParts({ ...parts, lights: [{ ...light, kind: 'neon' }] }).lights,
+    ).toHaveLength(1);
+    expect(() =>
+      validateBuildingParts({ ...parts, lights: [{ ...light, kind: 'disco' }] }),
+    ).toThrow(/kind/);
   });
 
   it('draws deterministic thresholds strictly inside 0..1', () => {

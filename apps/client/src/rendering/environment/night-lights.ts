@@ -32,7 +32,9 @@ const LAMP_SLOTS = 8;
 const ECONOMY_LAMP_SLOTS = 4;
 /** Яркость пятна света: множитель линейного цвета фонаря. */
 const LAMP_POOL_INTENSITY = 2.2;
-const GLOW_KINDS = ['window', 'shop', 'sign', 'lamp', 'office'] as const;
+const GLOW_KINDS = ['window', 'shop', 'sign', 'lamp', 'office', 'neon'] as const;
+/** Неоновая вывеска светит слабее фонаря, зато своим цветом. */
+const NEON_POOL_INTENSITY = 1.0;
 
 /**
  * Переносит данные свечения из UV модели в собственный атрибут. Так шейдер не путает
@@ -46,7 +48,12 @@ export function adoptGlowAttribute(mesh: Mesh): boolean {
   return true;
 }
 
-type LampSource = { position: Vector3; radius: number; color: [number, number, number] };
+type LampSource = {
+  position: Vector3;
+  radius: number;
+  color: [number, number, number];
+  neon: boolean;
+};
 type NightState = {
   enabled: boolean;
   slots: number;
@@ -196,7 +203,8 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
             : kind < 2.5 ? suNightLevels[1]
             : kind < 3.5 ? suNightLevels[2]
             : kind < 4.5 ? suNightLevels[3]
-            : suNightLevels[4];
+            : kind < 5.5 ? suNightLevels[4]
+            : suNightLevels[5];
           float seed = vSuGlow.y + vSuGlow.z * 3.1 + suNightClock.x * 0.618;
           float evening = suNightHash(seed);
           float keep = suNightHash(seed + 41.7);
@@ -211,7 +219,7 @@ uniform vec4 suLampColors[${LAMP_SLOTS}];`,
             color *= 0.38 + 0.3 * suNightHash(seed + 5.3);
           } else if (kind < 2.5) {
             color = vec3(1.0, 0.86, 0.62) * 1.1;
-          } else if (kind < 3.5) {
+          } else if (kind < 3.5 || kind > 5.5) {
             // Вывеска светится своим цветом, насыщенно, как неон.
             color = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.02) * 1.4;
           } else if (kind < 4.5) {
@@ -300,7 +308,12 @@ export class WorldNightLights {
         const local = new Vector3(light.position.x, light.position.y, light.position.z);
         const world = local.rotateByQuaternionToRef(this.rotation, new Vector3());
         world.addInPlaceFromFloats(position.x, position.y, position.z);
-        return { position: world, radius: light.radius, color: linear(light.color) };
+        return {
+          position: world,
+          radius: light.radius,
+          color: linear(light.color),
+          neon: light.kind === 'neon',
+        };
       }),
     );
   }
@@ -322,22 +335,23 @@ export class WorldNightLights {
       const level: GlowLevel = levels[kind];
       target.set([level.evening, level.keep, level.morning, level.brightness], index * 4);
     });
-    this.state.clock.set([night % 997, levels.dark, levels.lamps, 0]);
-    this.selectLamps(focus, levels.lamps);
+    this.state.clock.set([night % 997, levels.dark, Math.max(levels.lamps, levels.neonLight), 0]);
+    this.selectLamps(focus, levels.lamps, levels.neonLight);
   }
 
-  private selectLamps(focus: Vector3, level: number): void {
+  private selectLamps(focus: Vector3, lamps: number, neon: number): void {
     const positions = this.state.lampPositions.fill(0);
     const colors = this.state.lampColors.fill(0);
-    if (level <= 0) {
+    if (lamps <= 0 && neon <= 0) {
       this.state.clock[2] = 0;
       return;
     }
     const slots = this.state.slots;
     const nearest = this.nearest;
     nearest.length = 0;
-    for (const lamps of this.sources.values())
-      for (const lamp of lamps) {
+    for (const sources of this.sources.values())
+      for (const lamp of sources) {
+        if ((lamp.neon ? neon : lamps) <= 0) continue;
         const distance = Vector3.Distance(lamp.position, focus) - lamp.radius;
         if (nearest.length < slots + 1) nearest.push({ lamp, distance });
         else if (distance < nearest[slots].distance) nearest[slots] = { lamp, distance };
@@ -349,7 +363,9 @@ export class WorldNightLights {
     for (let i = 0; i < Math.min(slots, nearest.length); i++) {
       const { lamp, distance } = nearest[i];
       const fade = edge === Infinity ? 1 : Math.min(1, Math.max(0, (edge - distance) / 12));
-      const strength = level * fade * LAMP_POOL_INTENSITY;
+      const strength = lamp.neon
+        ? neon * fade * NEON_POOL_INTENSITY
+        : lamps * fade * LAMP_POOL_INTENSITY;
       positions.set([lamp.position.x, lamp.position.y, lamp.position.z, lamp.radius], i * 4);
       colors.set(
         [lamp.color[0] * strength, lamp.color[1] * strength, lamp.color[2] * strength, 0],

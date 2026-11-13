@@ -59,9 +59,10 @@ export interface BuildingParts {
  * Классы ночного свечения. Сборщик пишет их в TEXCOORD_0 статичных GLB: `u` — класс,
  * `v` — случайное число 0..1 отдельного окна или вывески. Клиент включает их по расписанию:
  * `window` — жилые окна, `office` — школы, вузы, учреждения, `shop` — витрины,
- * `sign` — вывески, `lamp` — плафоны фонарей.
+ * `sign` — полосы вывесок витрин, `lamp` — плафоны фонарей, `neon` — фирменные вывески
+ * на крышах и стенах: светится лицевая сторона букв, горят всю ночь.
  */
-export const GLOW_KIND = { window: 1, shop: 2, sign: 3, lamp: 4, office: 5 } as const;
+export const GLOW_KIND = { window: 1, shop: 2, sign: 3, lamp: 4, office: 5, neon: 6 } as const;
 export type GlowKind = keyof typeof GLOW_KIND;
 /** Точечный источник ночного света: лужа света вокруг фонаря, без настоящей лампы Babylon. */
 export interface StaticLightSource {
@@ -70,6 +71,8 @@ export interface StaticLightSource {
   radius: number;
   /** sRGB #RRGGBB. */
   color: string;
+  /** Расписание: фонарь (по умолчанию) или неоновая вывеска, горящая от сумерек до утра. */
+  kind?: 'lamp' | 'neon';
 }
 /** Current instanced tree profile. Broadleaf crowns always use baked local AO. */
 export interface TreeRenderRecipe {

@@ -1,4 +1,10 @@
-import type { Bounds, BuildingPhysicsAsset, StaticCollider, Vec3 } from '@su/contracts';
+import type {
+  Bounds,
+  BuildingPhysicsAsset,
+  StaticCollider,
+  StaticLightSource,
+  Vec3,
+} from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
 import { addBox, addFace, meshPart } from './house.js';
 import { triangulate, type Point2 } from './triangulate.js';
@@ -135,20 +141,25 @@ export type FootprintSection = Partial<Omit<FootprintRecipe, 'formatVersion' | '
 export function generateFootprint(
   assetId: string,
   recipe: FootprintRecipe,
-): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
+): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset; lights?: StaticLightSource[] } {
   const built = recipe.sections?.length
     ? generateSections(assetId, recipe)
     : generatePrism(assetId, recipe);
   bakeLocalAo(built.parts);
   // Слияние частей с цветами вершин: один меш на группу прозрачности вместо десятка.
-  return recipe.merge ? { ...built, parts: mergeParts(built.parts) } : built;
+  return {
+    parts: recipe.merge ? mergeParts(built.parts) : built.parts,
+    physics: built.physics,
+    ...(built.lights.length ? { lights: built.lights } : {}),
+  };
 }
 
 function generateSections(
   assetId: string,
   recipe: FootprintRecipe,
-): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
+): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset; lights: StaticLightSource[] } {
   const parts: StaticMeshPart[] = [];
+  const lights: StaticLightSource[] = [];
   const colliders: StaticCollider[] = [];
   const ids = new Set<string>();
   for (const section of recipe.sections ?? []) {
@@ -158,10 +169,11 @@ function generateSections(
     const { id, ...fields } = section;
     const built = generatePrism(assetId, { ...recipe, sections: undefined, ...fields });
     for (const part of built.parts) parts.push({ ...part, partId: `${id}-${part.partId}` });
+    lights.push(...built.lights);
     for (const collider of built.physics.colliders)
       colliders.push({ ...collider, id: `${id}-${collider.id}` });
   }
-  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders } };
+  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders }, lights };
 }
 
 /** Применяет heightScale к размерам, которые растягиваются вместе со стенами. */
@@ -187,7 +199,7 @@ function stretched(recipe: FootprintRecipe): FootprintRecipe {
 function generatePrism(
   assetId: string,
   source: FootprintRecipe,
-): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset } {
+): { parts: StaticMeshPart[]; physics: BuildingPhysicsAsset; lights: StaticLightSource[] } {
   if (source.formatVersion !== 1) throw new Error('Unsupported footprint recipe version');
   const recipe = stretched(source);
   const e = recipe.elevation ?? 0;
@@ -329,7 +341,11 @@ function generatePrism(
       restitution: fixed.restitution,
     });
   });
-  return { parts, physics: { assetId, bounds: boundsOf(parts), colliders } };
+  return {
+    parts,
+    physics: { assetId, bounds: boundsOf(parts), colliders },
+    lights: facade.lights,
+  };
 }
 
 export interface GroundLayer {

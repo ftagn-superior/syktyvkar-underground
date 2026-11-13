@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   canonicalJson,
@@ -10,9 +10,16 @@ import {
   authoringMetadata,
   createWorldPublication,
   hash,
+  PRIVATE_TERRAIN_MAX_BYTES,
+  validatePrivateTerrainReference,
   type AuthoringMetadata,
   type CompiledWorldAsset,
 } from '@su/world-release';
+import {
+  validateTerrainPrivateData,
+  validateTerrainCoverage,
+  type TerrainPrivateData,
+} from '@su/terrain-build/private-data';
 import { readWorldDirectory } from '../world-bundle.js';
 
 export async function readAuthoringRelease(directory: string) {
@@ -21,17 +28,37 @@ export async function readAuthoringRelease(directory: string) {
     await readFile(resolve(directory, 'authoring.json'), 'utf8'),
   );
   if (
+    !metadata ||
     metadata.formatVersion !== 1 ||
     !Array.isArray(metadata.fixedInstanceIds) ||
     canonicalJson(metadata) !==
-      canonicalJson(authoringMetadata(definition, manifest, metadata.fixedInstanceIds))
+      canonicalJson(
+        authoringMetadata(definition, manifest, metadata.fixedInstanceIds, metadata.terrain),
+      )
   )
     throw new Error('Invalid authored release metadata. Run pnpm world:build.');
+  let terrain: TerrainPrivateData | undefined;
+  if (metadata.terrain !== undefined) {
+    const reference = validatePrivateTerrainReference(metadata.terrain);
+    const path = resolve(directory, reference.file);
+    if ((await stat(path)).size > PRIVATE_TERRAIN_MAX_BYTES)
+      throw new Error('Private terrain byte limit');
+    const bytes = await readFile(path);
+    if (bytes.byteLength > PRIVATE_TERRAIN_MAX_BYTES || hash(bytes) !== reference.sha256)
+      throw new Error('Private terrain hash mismatch');
+    terrain = validateTerrainPrivateData(JSON.parse(bytes.toString('utf8')));
+    if (terrain.worldId !== manifest.worldId) throw new Error('Private terrain world mismatch');
+    validateTerrainCoverage(terrain.grid, manifest.bounds);
+    const owners = new Map(definition.buildings.map((b) => [b.entityId, b.assetId]));
+    for (const support of terrain.supports)
+      if (owners.get(support.ownerId) !== support.assetId)
+        throw new Error(`Unknown terrain support owner: ${support.ownerId}`);
+  }
   const fixed = new Set(metadata.fixedInstanceIds);
   const seed: StaticObjectInstance[] = definition.buildings
     .filter((i) => !fixed.has(i.entityId))
     .map((i) => ({ ...i, instanceRevision: 1, enabled: true }));
-  return { manifest, definition, metadata, seed, directory: resolve(directory) };
+  return { manifest, definition, metadata, seed, terrain, directory: resolve(directory) };
 }
 export type AuthoringRelease = Awaited<ReturnType<typeof readAuthoringRelease>>;
 export function editableStaticAssetIds(release: AuthoringRelease): string[] {

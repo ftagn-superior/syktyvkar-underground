@@ -1,5 +1,6 @@
 import type { BuildingPhysicsAsset, StaticCollider, Vec3 } from '@su/contracts';
-import type { StaticMeshPart } from './glb.js';
+import { addFace, meshPart, type StaticMeshPart } from '@su/terrain-build/mesh';
+export { addFace, meshPart } from '@su/terrain-build/mesh';
 import { bakeLocalAo } from './ambient-occlusion.js';
 
 export interface HouseRecipe {
@@ -13,27 +14,6 @@ export interface HouseRecipe {
   roofColor: string;
   windowColor: string;
   doorColor: string;
-}
-export function meshPart(
-  partId: string,
-  role: StaticMeshPart['role'],
-  color: string,
-): StaticMeshPart {
-  return { partId, role, occlusionGroup: 'shell', color, positions: [], normals: [], indices: [] };
-}
-export function addFace(part: StaticMeshPart, points: number[][]): void {
-  const [a, b, c] = points;
-  const u = b.map((n, i) => n - a[i]),
-    v = c.map((n, i) => n - a[i]);
-  const cross = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-  const length = Math.hypot(...cross),
-    normal = cross.map((n) => n / length);
-  const start = part.positions.length / 3;
-  for (const point of points) {
-    part.positions.push(...point);
-    part.normals.push(...normal);
-  }
-  for (let i = 1; i < points.length - 1; i++) part.indices.push(start, start + i, start + i + 1);
 }
 export function addBox(part: StaticMeshPart, position: Vec3, size: Vec3): void {
   const x = size.x / 2,

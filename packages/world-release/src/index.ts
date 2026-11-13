@@ -262,13 +262,35 @@ export interface AuthoringMetadata {
   assetReleaseVersion: string;
   seedVersion: string;
   fixedInstanceIds: string[];
+  terrain?: PrivateTerrainReference;
+}
+
+export interface PrivateTerrainReference {
+  file: string;
+  sha256: string;
+}
+export const PRIVATE_TERRAIN_MAX_BYTES = 64 * 1024 * 1024;
+export function validatePrivateTerrainReference(value: unknown): PrivateTerrainReference {
+  const ref = value as PrivateTerrainReference;
+  if (
+    !ref ||
+    typeof ref !== 'object' ||
+    Object.keys(ref).length !== 2 ||
+    typeof ref.sha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(ref.sha256) ||
+    ref.file !== `private/terrain.${ref.sha256}.json`
+  )
+    throw new Error('Invalid private terrain reference');
+  return ref;
 }
 
 export function authoringMetadata(
   world: WorldDefinition,
   manifest: WorldManifest,
   fixedInstanceIds: string[],
+  terrain?: PrivateTerrainReference,
 ): AuthoringMetadata {
+  if (terrain) validatePrivateTerrainReference(terrain);
   const ids = new Set(fixedInstanceIds);
   if (
     ids.size !== fixedInstanceIds.length ||
@@ -287,10 +309,12 @@ export function authoringMetadata(
         assets: manifest.assets,
         statics: [...world.entities].sort(byId),
         fixed,
+        ...(terrain ? { terrain } : {}),
       }),
     ),
     seedVersion: hash(canonicalJson(seed)),
     fixedInstanceIds: [...fixedInstanceIds].sort(),
+    ...(terrain ? { terrain } : {}),
   };
 }
 export async function writeAuthoringMetadata(
@@ -298,8 +322,23 @@ export async function writeAuthoringMetadata(
   manifest: WorldManifest,
   fixedIds: string[],
   directory: string,
+  terrainBytes?: Uint8Array,
 ) {
-  const metadata = authoringMetadata(world, manifest, fixedIds);
+  let terrain: PrivateTerrainReference | undefined;
+  if (terrainBytes !== undefined) {
+    if (terrainBytes.byteLength > PRIVATE_TERRAIN_MAX_BYTES)
+      throw new Error('Private terrain byte limit');
+    const sha256 = hash(terrainBytes);
+    terrain = { file: `private/terrain.${sha256}.json`, sha256 };
+  }
+  const metadata = authoringMetadata(world, manifest, fixedIds, terrain);
+  if (terrain && terrainBytes) {
+    await mkdir(resolve(directory, 'private'), { recursive: true });
+    // Write and close the immutable payload before publishing its metadata reference.
+    const pending = resolve(directory, 'private/.terrain.tmp');
+    await writeFile(pending, terrainBytes);
+    await rename(pending, resolve(directory, terrain.file));
+  }
   const temporary = resolve(directory, '.authoring.tmp');
   await writeFile(temporary, JSON.stringify(metadata, null, 2) + '\n');
   await rename(temporary, resolve(directory, 'authoring.json'));

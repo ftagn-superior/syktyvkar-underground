@@ -10,7 +10,12 @@ import {
   type TerrainGrid,
 } from '@su/contracts';
 import {
+  TERRAIN_GENERATOR_VERSION,
+  validateTerrainPrivateData,
+} from '@su/terrain-build/private-data';
+import {
   generateTerrainTile,
+  prepareTerrainBuildContext,
   terrainPatch,
   terrainSolid,
   patchRange,
@@ -100,6 +105,7 @@ export function buildTerrainAuthoring(
     );
     ids.add(s.id);
   }
+  const terrainContext = prepareTerrainBuildContext(terrain, surfaces.layers);
   const anchors = anchorData as TerrainAnchors;
   fail(
     anchors?.formatVersion === 1 &&
@@ -130,7 +136,13 @@ export function buildTerrainAuthoring(
       add(
         `terrain-${id.replace('_', '-')}`,
         `terrain-tile-${id.replace('_', '-')}`,
-        generateTerrainTile(`terrain-tile-${id.replace('_', '-')}`, terrain, ring, surfaces.layers),
+        generateTerrainTile(
+          `terrain-tile-${id.replace('_', '-')}`,
+          terrain,
+          ring,
+          surfaces.layers,
+          terrainContext,
+        ),
       );
     }
   // Like physics-lab's boundary walls, visible retaining rails keep a sprinting
@@ -285,7 +297,21 @@ export function buildTerrainAuthoring(
       rotation: identity,
     };
   });
-  return { terrain, assets, buildings, fixed, spawnPoints, initialItems };
+  const privateData = validateTerrainPrivateData({
+    formatVersion: 1,
+    generatorVersion: TERRAIN_GENERATOR_VERSION,
+    worldId: source.worldId,
+    grid: terrain,
+    supports: anchors.objects
+      .filter((a) => a.foundation)
+      .map((a) => ({
+        ownerId: a.entityId,
+        assetId: a.assetId,
+        kind: 'rectangle-v1',
+        ...a.foundation,
+      })),
+  });
+  return { terrain, assets, buildings, fixed, spawnPoints, initialItems, privateData };
 }
 
 export type { TerrainGrid };

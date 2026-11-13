@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, sep } from 'node:path';
@@ -6,7 +5,6 @@ import { validateBytes } from 'gltf-validator';
 import {
   WORLD_FORMAT_VERSION,
   type WorldManifest,
-  canonicalJson,
   validateWorld,
   validateWorldCell,
   validateBuildingPhysicsAsset,
@@ -23,15 +21,16 @@ import {
   type WorldSource,
   type TreeRenderRecipe,
   type BuildingParts,
-  validateBuildingParts,
 } from '@su/contracts';
 import {
   createWorldPublication,
   writeWorldPublication,
   writeAuthoringMetadata,
   pruneWorldPublication,
+  jsonBytes,
 } from '@su/world-release';
-import { encodeStaticGlb, inspectStaticGlb, staticMeshBounds } from './glb.js';
+import { encodeStaticGlb, staticMeshBounds } from './glb.js';
+import { compileStaticAsset } from '@su/terrain-build/assets';
 import { generateHouse, type HouseRecipe } from './house.js';
 import { generateStreamingCells } from './streaming-lab.js';
 import {
@@ -53,8 +52,6 @@ const generators = {
   kit: (id: string, recipe: unknown) => generateKit(id, recipe as KitRecipe),
 };
 
-const hash = (input: string | Uint8Array) => createHash('sha256').update(input).digest('hex');
-const jsonBytes = (value: unknown) => new TextEncoder().encode(canonicalJson(value) + '\n');
 const readJson = async (path: string) => JSON.parse(await readFile(path, 'utf8'));
 function sourceFile(directory: string, path: unknown): string {
   if (
@@ -122,7 +119,6 @@ async function compileBytes(
   treeParts?: BuildingParts,
   renderMode?: BuildingParts['renderMode'],
 ) {
-  let inspected: { parts: BuildingParts; bounds: BuildingPhysicsAsset['bounds'] };
   if (model !== undefined) {
     if (model.byteLength > WORLD_RESOURCE_LIMITS.modelBytes)
       throw new Error(`Model byte limit: ${assetId}`);
@@ -135,38 +131,8 @@ async function compileBytes(
           .map((m) => m.message)
           .join('; ')}`,
       );
-    inspected = inspectStaticGlb(model, assetId, renderMode);
-  } else {
-    if (!treeParts) throw new Error(`Missing tree representation: ${assetId}`);
-    if (renderMode !== undefined)
-      throw new Error(`GLB render mode cannot contain a tree recipe: ${assetId}`);
-    inspected = { parts: treeParts, bounds: physics.bounds };
   }
-  // Imported proxies may simplify the silhouette, but must share the visual asset coordinate space.
-  for (const axis of ['x', 'y', 'z'] as const) {
-    if (
-      Math.abs(physics.bounds.min[axis] - inspected.bounds.min[axis]) > 0.05 ||
-      Math.abs(physics.bounds.max[axis] - inspected.bounds.max[axis]) > 0.05
-    )
-      throw new Error(`Visual/collision asset bounds disagree: ${assetId}.${axis}`);
-  }
-  physics = { ...physics, bounds: inspected.bounds };
-  validateBuildingPhysicsAsset(physics);
-  const collision = jsonBytes(physics),
-    parts = jsonBytes(validateBuildingParts(inspected.parts));
-  if (
-    collision.byteLength > WORLD_RESOURCE_LIMITS.collisionBytes ||
-    parts.byteLength > WORLD_RESOURCE_LIMITS.partsBytes
-  )
-    throw new Error(`Model metadata byte limit: ${assetId}`);
-  const version = hash(
-    canonicalJson({
-      ...(model === undefined ? {} : { model: hash(model) }),
-      collision: hash(collision),
-      parts: hash(parts),
-    }),
-  );
-  return { model, collision, parts, version, physics, bounds: inspected.bounds };
+  return compileStaticAsset(assetId, model, physics, treeParts, renderMode);
 }
 
 export async function buildWorld(
@@ -319,7 +285,13 @@ export async function buildWorld(
   });
   const publication = createWorldPublication(world, grid, Object.fromEntries(compiled));
   await writeWorldPublication(publication, outputDirectory);
-  await writeAuthoringMetadata(world, publication.manifest, fixedInstanceIds, outputDirectory);
+  await writeAuthoringMetadata(
+    world,
+    publication.manifest,
+    fixedInstanceIds,
+    outputDirectory,
+    terrain ? jsonBytes(terrain.privateData) : undefined,
+  );
   const manifest = publication.manifest;
   return manifest;
 }

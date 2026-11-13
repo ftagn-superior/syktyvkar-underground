@@ -10,6 +10,8 @@ import {
   PILOT_SUPPORT_FILE,
 } from '../../tools/world-build/src/pilot-support.js';
 
+import { readRevalidatedRingTerrainInputs } from '../../tools/world-build/src/ring-terrain-revalidation.js';
+
 function inside(point: Point2, ring: Point2[]) {
   let value = false;
   for (let i = 0; i < ring.length; i++) {
@@ -32,12 +34,14 @@ const occupies = (rule: FoundationSupportRuleV2, point: Point2) =>
 
 describe('explicit pilot support authoring', () => {
   let rule: FoundationSupportRuleV2;
+  let observed: Awaited<ReturnType<typeof inspectPilotSupportModel>>;
   beforeAll(async () => {
-    rule = await readPilotSupportRule();
+    const revalidated = await readRevalidatedRingTerrainInputs();
+    rule = revalidated.catalog.rules.find((rule) => rule.assetId === 'osm-way-1258973447')!;
+    observed = revalidated.pilot;
   });
 
   it('matches the actual underside and leaves the open courtyards empty', async () => {
-    const observed = await inspectPilotSupportModel();
     expect(observed.bodyPlanes).toHaveLength(15);
     expect(observed.bodyPlanes.filter((body) => body.minY === 0)).toHaveLength(14);
     expect(observed.bodyPlanes.find((body) => body.id === 'entrance-attic-body')!.minY).toBeCloseTo(
@@ -79,7 +83,7 @@ describe('explicit pilot support authoring', () => {
     ).toBeCloseTo(2.4, 12);
   });
 
-  it('rejects a stale source revision or an incompatible generated floor fingerprint', async () => {
+  it('keeps historical source pins strict after explicit production revalidation', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'pilot-support-'));
     try {
       const data = JSON.parse(await readFile(PILOT_SUPPORT_FILE, 'utf8'));
@@ -88,10 +92,11 @@ describe('explicit pilot support authoring', () => {
       changedSource.source.recipeSha256 = '0'.repeat(64);
       await writeFile(path, JSON.stringify(changedSource));
       await expect(readPilotSupportRule(path)).rejects.toThrow(/Unreviewed pilot source/);
-      const changedGenerator = structuredClone(data);
-      changedGenerator.evidence.modelInputSha256 = '0'.repeat(64);
-      await writeFile(path, JSON.stringify(changedGenerator));
-      await expect(readPilotSupportRule(path)).rejects.toThrow(/floor\/porch geometry changed/);
+      await expect(readPilotSupportRule()).rejects.toThrow(/Pilot descriptor changed/);
+      await expect(inspectPilotSupportModel()).rejects.toThrow(/Pilot model source changed/);
+      await expect(inspectPilotSupportModel('0'.repeat(64))).rejects.toThrow(
+        /Pilot model source changed/,
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

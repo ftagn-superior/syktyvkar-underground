@@ -20,7 +20,7 @@ it('preserves capsule access at historical gates, fence corners, routes and spaw
   );
   const directory = await mkdtemp(join(tmpdir(), 'su-library-passages-'));
   try {
-    await buildWorld('content/worlds/ring-block/world.json', directory);
+    await buildWorld('content/worlds/ring-block/world.json', directory, { terrainRelease: false });
     const { world } = await readRelease(directory);
     const physics = await createAuthoritativeWorld({ ...world, initialItems: [] });
     try {

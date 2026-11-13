@@ -1,17 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  readRingKitSupportCandidates,
-  readRingModelSupportCatalog,
   type RingKitSupportCandidate,
   type RingModelSupportCatalog,
 } from '../../tools/world-build/src/ring-support-authoring.js';
+
+import { readRevalidatedRingTerrainInputs } from '../../tools/world-build/src/ring-terrain-revalidation.js';
 
 describe('explicit ring model support authoring', () => {
   let catalog: RingModelSupportCatalog;
   let candidates: RingKitSupportCandidate[];
   beforeAll(async () => {
-    catalog = await readRingModelSupportCatalog();
-    candidates = await readRingKitSupportCandidates(catalog);
+    ({ catalog, candidates } = await readRevalidatedRingTerrainInputs());
   });
 
   it('accounts for every catalog model and keeps unsupported kit candidates separate', () => {

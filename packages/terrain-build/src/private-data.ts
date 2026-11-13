@@ -44,6 +44,19 @@ export interface FoundationSupportRuleV2 {
   approaches?: TerrainSupportApproach[];
 }
 export type TerrainSupportRule = RectangleSupportRuleV1 | FoundationSupportRuleV2;
+export type TerrainPlacementPolicy =
+  | { kind: 'foundation'; maximumVisibleHeight: number }
+  | {
+      kind: 'ground-anchor';
+      anchor: { x: number; y: number; z: number };
+      contactRadius: number;
+      maximumTerrainReliefMetres: number;
+      contactDatum?: 'anchor' | 'minimum';
+    };
+export interface TerrainPlacementModel {
+  assetId: string;
+  policy: TerrainPlacementPolicy;
+}
 /** Private build input, independent of CLI anchors, spawn policy and live object poses. */
 export interface TerrainPrivateDataV1 {
   formatVersion: 1;
@@ -58,6 +71,10 @@ export interface TerrainPrivateDataV2 {
   worldId: string;
   grid: TerrainGrid;
   supports: FoundationSupportRuleV2[];
+  /** Explicit runtime placement authoring; absent in historical migration-only releases. */
+  placementModels?: TerrainPlacementModel[];
+  /** Exactly the immutable terrain tiles, excluding walls and owner supports. */
+  placementGroundIds?: string[];
 }
 export type TerrainPrivateData = TerrainPrivateDataV1 | TerrainPrivateDataV2;
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -156,7 +173,15 @@ export function validateFoundationSupportRule(value: unknown): FoundationSupport
 export function validateTerrainPrivateData(value: unknown): TerrainPrivateData {
   if (
     !record(value) ||
-    !keys(value, ['formatVersion', 'generatorVersion', 'worldId', 'grid', 'supports']) ||
+    !keys(value, [
+      'formatVersion',
+      'generatorVersion',
+      'worldId',
+      'grid',
+      'supports',
+      'placementModels',
+      'placementGroundIds',
+    ]) ||
     !(
       (value.formatVersion === 1 && value.generatorVersion === TERRAIN_GENERATOR_VERSION) ||
       (value.formatVersion === 2 && value.generatorVersion === TERRAIN_GENERATOR_VERSION_V2)
@@ -167,6 +192,61 @@ export function validateTerrainPrivateData(value: unknown): TerrainPrivateData {
   )
     throw new Error('Invalid private terrain data');
   validateTerrainGrid(value.grid);
+  if (value.placementModels !== undefined || value.placementGroundIds !== undefined) {
+    if (
+      value.formatVersion !== 2 ||
+      !Array.isArray(value.placementModels) ||
+      value.placementModels.length === 0 ||
+      value.placementModels.length > 10_000 ||
+      !Array.isArray(value.placementGroundIds) ||
+      value.placementGroundIds.length === 0 ||
+      value.placementGroundIds.length > 100_000 ||
+      !value.placementGroundIds.every(id) ||
+      new Set(value.placementGroundIds).size !== value.placementGroundIds.length
+    )
+      throw new Error('Invalid private terrain placement authoring');
+    const modelIds = new Set<string>();
+    for (const model of value.placementModels) {
+      if (
+        !record(model) ||
+        !keys(model, ['assetId', 'policy']) ||
+        !id(model.assetId) ||
+        modelIds.has(model.assetId as string) ||
+        !record(model.policy)
+      )
+        throw new Error('Invalid private terrain placement model');
+      modelIds.add(model.assetId as string);
+      const policy = model.policy;
+      if (policy.kind === 'foundation') {
+        if (
+          !keys(policy, ['kind', 'maximumVisibleHeight']) ||
+          !positive(policy.maximumVisibleHeight)
+        )
+          throw new Error('Invalid private terrain foundation policy');
+      } else if (policy.kind === 'ground-anchor') {
+        if (
+          !keys(policy, [
+            'kind',
+            'anchor',
+            'contactRadius',
+            'maximumTerrainReliefMetres',
+            'contactDatum',
+          ]) ||
+          !record(policy.anchor) ||
+          !keys(policy.anchor, ['x', 'y', 'z']) ||
+          !['x', 'y', 'z'].every((axis) =>
+            finite((policy.anchor as Record<string, unknown>)[axis]),
+          ) ||
+          !positive(policy.contactRadius) ||
+          !positive(policy.maximumTerrainReliefMetres) ||
+          (policy.contactDatum !== undefined &&
+            policy.contactDatum !== 'anchor' &&
+            policy.contactDatum !== 'minimum')
+        )
+          throw new Error('Invalid private terrain anchor policy');
+      } else throw new Error('Invalid private terrain placement policy');
+    }
+  }
   const owners = new Set<string>();
   for (const s of value.supports) {
     if (value.formatVersion === 2) {

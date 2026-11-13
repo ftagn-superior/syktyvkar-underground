@@ -27,6 +27,14 @@ import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
 import { GlbInstances } from './glb-instances';
 import { applyRadialFog, type RadialState } from './radial-fog';
+import {
+  staticHitVisible,
+  staticObjectSelection,
+  staticRayBounds,
+  type StaticObjectHit,
+  type StaticObjectSelection,
+} from './static-selection';
+import { adoptGlowAttribute, type WorldNightLights } from './environment/night-lights';
 
 type Asset = {
   descriptor: BuildingAssetManifest;
@@ -96,12 +104,15 @@ export class BuildingViews {
   private lastOcclusionTest = -Infinity;
   private opaque = false;
   private minimumVisibleSize = 0;
+  /** Число владельцев экземпляров со своими фонарями: источник света один на экземпляр. */
+  private readonly lit = new Map<string, number>();
 
   constructor(
     private readonly scene: Scene,
     private readonly shadow: ShadowGenerator,
     private readonly definition: WorldDefinition | WorldHeader,
     private readonly radial?: RadialState,
+    private readonly nightLights?: WorldNightLights,
   ) {
     this.trees = new TreeViews(scene, shadow, radial);
     this.glbs = new GlbInstances(scene, shadow, radial);
@@ -233,6 +244,16 @@ export class BuildingViews {
   }
   add(definition: BuildingInstance, version: string): TransformNode | undefined {
     if (this.disposed) throw new Error('Building views disposed');
+    const root = this.addView(definition, version);
+    const lights = this.assets.get(version)?.parts.lights;
+    if (lights && this.nightLights) {
+      const owners = this.lit.get(definition.entityId) ?? 0;
+      if (!owners) this.nightLights.addSources(definition, lights);
+      this.lit.set(definition.entityId, owners + 1);
+    }
+    return root;
+  }
+  private addView(definition: BuildingInstance, version: string): TransformNode | undefined {
     const signature = version + canonicalJson(definition);
     const previous = this.references.get(definition.entityId);
     if (previous) {
@@ -267,6 +288,14 @@ export class BuildingViews {
     return view.root;
   }
   remove(id: string): void {
+    const owners = this.lit.get(id);
+    if (owners !== undefined) {
+      if (owners > 1) this.lit.set(id, owners - 1);
+      else {
+        this.lit.delete(id);
+        this.nightLights?.removeSources(id);
+      }
+    }
     if (this.glbs.has(id)) {
       this.glbs.remove(id);
       return;
@@ -287,6 +316,44 @@ export class BuildingViews {
     instance.entries.dispose();
     instance.root.dispose();
     for (const material of instance.materials) material.dispose(false, false);
+  }
+
+  selection(id: string): StaticObjectSelection | undefined {
+    const view = this.references.get(id)?.view;
+    if (view?.root.isEnabled())
+      return staticObjectSelection(view.definition, view.minimum, view.maximum);
+    return this.glbs.selection(id) ?? this.trees.selection(id);
+  }
+
+  /** Only called by the explicit removal tool; ordinary pointer movement never scans meshes. */
+  pick(ray: Ray, protectedIds: ReadonlySet<string> = new Set()): StaticObjectHit | undefined {
+    let nearest = this.glbs.pick(ray, protectedIds);
+    const tree = this.trees.pick(ray, protectedIds);
+    if (tree && (!nearest || tree.distance < nearest.distance)) nearest = tree;
+    for (const id of this.index.query(staticRayBounds(ray))) {
+      const view = this.references.get(id)?.view;
+      if (
+        protectedIds.has(id) ||
+        !view?.root.isEnabled() ||
+        !ray.intersectsBoxMinMax(view.minimum, view.maximum)
+      )
+        continue;
+      for (const mesh of view.meshes) {
+        if (!mesh.isVisible || mesh.visibility <= 0 || !mesh.isEnabled()) continue;
+        const hit = ray.intersectsMesh(mesh, false);
+        if (
+          hit.hit &&
+          hit.distance <= ray.length &&
+          (!nearest || hit.distance < nearest.distance) &&
+          staticHitVisible(this.radial, ray, hit.distance, mesh.metadata?.suStreamingBorn)
+        )
+          nearest = {
+            ...staticObjectSelection(view.definition, view.minimum, view.maximum),
+            distance: hit.distance,
+          };
+      }
+    }
+    return nearest;
   }
   /** Сообщает масштаб кадра; объекты мельче нескольких пикселей перестают рисоваться. */
   setDetailScale(metresPerPixel: number): void {
@@ -360,6 +427,9 @@ export class BuildingViews {
     if (!descriptor.modelFile) throw new Error('GLB asset is missing its model');
     const model = await readBytes(descriptor.modelFile);
     const container = await loadBuildingContainer(model, this.scene, `${descriptor.assetId}.glb`);
+    // Ночное свечение едет в TEXCOORD_0; переносим его в свой атрибут до клонирования.
+    if (parts.glow)
+      for (const mesh of container.meshes) if (mesh instanceof Mesh) adoptGlowAttribute(mesh);
     if (this.disposed) {
       container.dispose();
       throw new Error('Building preparation was cancelled');
@@ -631,6 +701,8 @@ export class BuildingViews {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const id of this.lit.keys()) this.nightLights?.removeSources(id);
+    this.lit.clear();
     this.trees.dispose();
     this.glbs.dispose();
     for (const [id, entry] of this.references) {

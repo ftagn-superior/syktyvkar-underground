@@ -55,8 +55,9 @@ describe('day cycle', () => {
       expect(sky.lightIntensity).toBeGreaterThanOrEqual(0);
       expect(sky.directLight).toBeGreaterThanOrEqual(0);
       expect(sky.directLight).toBeLessThanOrEqual(1);
-      // The sky fill never goes out, so the city stays readable at any hour.
-      expect(sky.skyIntensity).toBeGreaterThan(0.4);
+      // The sky fill never goes out, so the city stays readable at any hour;
+      // at night it is lower so that windows and lamps stand out.
+      expect(sky.skyIntensity).toBeGreaterThan(0.2);
     }
   });
 
@@ -89,7 +90,7 @@ describe('day cycle', () => {
   it('is dimmer and cooler at night than by day, with moonlight', () => {
     const day = skyAt(13);
     const night = skyAt(1);
-    expect(night.lightIntensity).toBeGreaterThan(0.5);
+    expect(night.lightIntensity).toBeGreaterThan(0.3);
     expect(night.lightIntensity).toBeLessThan(day.lightIntensity / 2);
     expect(night.lightColor[2]).toBeGreaterThan(night.lightColor[0]);
     expect(day.lightColor[0]).toBeGreaterThan(day.lightColor[2]);

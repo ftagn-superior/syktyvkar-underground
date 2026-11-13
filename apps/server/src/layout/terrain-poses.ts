@@ -10,7 +10,7 @@ import {
 import { rectangle, terrainPatch, patchRange, type Point2 } from '@su/terrain-build';
 import { planSupportPlacement, selectSupportRule } from '@su/terrain-build/supports';
 import { createLayoutPublication } from './release.js';
-import { planTerrainItemPoses } from './terrain-item-poses.js';
+import { planTerrainItemPoses, type TerrainItemPoseDecision } from './terrain-item-poses.js';
 import type {
   TerrainMigrationContext,
   TerrainMigrationPreparation,
@@ -38,6 +38,7 @@ export interface TerrainPoseRules {
   targetGroundIds: string[];
   models: { assetId: string; policy: TerrainObjectPolicy }[];
   overrides?: { entityId: string; assetId: string; policy: TerrainObjectPolicy }[];
+  itemPoseDecisions?: TerrainItemPoseDecision[];
 }
 
 type Rectangle = { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -435,6 +436,7 @@ export async function prepareTerrainPoses(
       sourceItems: context.sourceItems,
       sourceGroundIds: rules.sourceGroundIds,
       targetGroundIds: rules.targetGroundIds,
+      decisions: rules.itemPoseDecisions,
     });
     return {
       targetSnapshot,

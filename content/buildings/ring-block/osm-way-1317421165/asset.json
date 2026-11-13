@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Октябрьский проспект, 38",
+    "description": "Тёмный кирпич, лоджии, красная вывеска.",
+    "category": "buildings",
+    "tags": ["balconies", "building", "documented-address", "floors-9", "shopfront"]
   }
 }

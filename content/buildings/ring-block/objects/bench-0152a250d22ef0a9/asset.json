@@ -5,5 +5,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Скамейка парковая",
+    "description": "Скамейка из деревянных планок на металлических опорах для дворов, скверов и остановок.",
+    "category": "street-furniture",
+    "tags": ["bench", "metal", "wood"]
   }
 }

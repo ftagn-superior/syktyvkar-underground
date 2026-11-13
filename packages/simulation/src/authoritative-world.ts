@@ -74,6 +74,17 @@ export class AuthoritativeWorld {
     this.world.addStatic(instance, definition.buildingAssets[instance.assetId]);
     Object.assign(this.world.definition, definition);
   }
+  removeStatic(entityId: string, definition: WorldDefinition) {
+    this.world.removeStatic(entityId);
+    Object.assign(this.world.definition, definition);
+  }
+  prepareStaticReplacement(definition: WorldDefinition) {
+    return this.world.prepareStaticReplacement(definition);
+  }
+  /** Probe only the new statics, without requiring support for an airborne player. */
+  overlapsPlayer(position: Vec3) {
+    return this.world.overlaps(this.world.spawnShape, position);
+  }
   respawnPlayer(id: string, spawn?: Vec3): boolean {
     const character = this.world.characters.get(id);
     if (!character) return false;

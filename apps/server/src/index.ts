@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { WorldOwnership } from './world-ownership.js';
 import { LayoutPublications } from './layout/live.js';
 import { prepareLayoutWorld } from './layout/prepare.js';
+import { readPlacementCatalog } from './layout/placement-catalog.js';
 import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
 import { Server, matchMaker } from '@colyseus/core';
@@ -22,6 +23,7 @@ export interface GameServerOptions {
   port?: number;
   host?: string;
   worldDirectory?: string;
+  modelCatalogDirectory?: string;
   clientDirectory?: string;
   reconnectSeconds?: number;
   prepareTimeoutMs?: number;
@@ -36,6 +38,10 @@ export async function createGameServer(options: GameServerOptions = {}) {
   );
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const authored = await readAuthoringRelease(worldDirectory);
+  const placementCatalog = await readPlacementCatalog(
+    authored,
+    resolve(options.modelCatalogDirectory ?? `dist/model-catalogs/${authored.manifest.worldId}`),
+  );
   // worldId проверен по шаблону [a-z0-9-] и безопасен как сегмент URL.
   const worldPath = `/worlds/${authored.manifest.worldId}`;
   const ownedPool =
@@ -119,6 +125,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           protocolVersion: PROTOCOL_VERSION,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
+          ...(placementCatalog ? { placementCatalog: placementCatalog.reference } : {}),
         };
         res.json(info);
       });
@@ -129,6 +136,19 @@ export async function createGameServer(options: GameServerOptions = {}) {
           return;
         }
         res.json(room.diagnostics());
+      });
+      // Serve the in-memory verified snapshot before the manifest allowlist route.
+      app.use(`${worldPath}/placement-catalogs`, (req, res) => {
+        if (
+          !placementCatalog ||
+          (req.method !== 'GET' && req.method !== 'HEAD') ||
+          `${req.baseUrl}${req.path}` !== placementCatalog.reference.url
+        ) {
+          res.sendStatus(404);
+          return;
+        }
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        res.type('application/json').send(placementCatalog.body);
       });
       app.use(worldPath, (req, res) => {
         const found = layouts.find(worldPath + req.path);
@@ -175,6 +195,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     ownership,
     itemStore: prepared.items,
     layouts,
+    placementCatalog,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
     itemCreationEnabled,

@@ -44,9 +44,14 @@ export async function buildStaticPlacementWorld(directory: string) {
       spawnPoints: [-12, -9, -6, -3, 0, 3, 6, 9].map((x) => ({ x, y: 0, z: -10 })),
       cellSize: 40,
       assetCatalog: 'catalog.json',
+      placementPolicy: 'placement.json',
       itemCatalog: 'items.json',
       cells: ['cell.json'],
     }),
+  );
+  await writeFile(
+    join(source, 'placement.json'),
+    JSON.stringify({ formatVersion: 1, assetIds: [STATIC_PLACEMENT_ASSET_ID] }),
   );
   const worldDirectory = join(directory, 'world');
   await buildWorld(join(source, 'world.json'), worldDirectory);

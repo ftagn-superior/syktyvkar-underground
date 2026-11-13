@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "СыктГУ, главный корпус",
+    "description": "Главный корпус СыктГУ им. Питирима Сорокина на Октябрьском проспекте, 55. Белый корпус с башнями, золотой надписью над входом, красными щипцами и кирпичным крыльцом; дворовые крылья отличаются цветом и формой.",
+    "category": "buildings",
+    "tags": ["building", "documented-address", "landmark", "multi-part", "university"]
   }
 }

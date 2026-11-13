@@ -1,8 +1,14 @@
 # Проверки изменений
 
+Карточки всех моделей проверяются командой `pnpm world:catalog:check --sources`
+(также входит в `pnpm check`). После `pnpm world:build` выполните
+`pnpm world:catalog:check`: проверяются опубликованный индекс, SHA-256, ссылки на
+ресурсы выпуска и актуальность метаданных. Сборка создаёт каталог автоматически.
+Формат и регрессии — в [инструкции каталога моделей](world-model-catalog.md).
+
 Текущая production-версия принята: все приёмки завершены по подтверждению владельца проекта от 12 ноября 2026 года. Этот документ описывает воспроизведение проверок для следующих изменений. Ручная мобильная приёмка нового сенсорного MVP остаётся открытой; автоматические результаты — в [отчёте](../reports/touch-controls-mvp.md). Исторические результаты и ограничения конкретных стендов — в [reports](../reports/README.md).
 
-Ядро размещения статики проверяется на отдельной **тестовой** PostgreSQL:
+Каталог и размещение статики проверяются на отдельной **тестовой** PostgreSQL:
 
 ```sh
 export SU_TEST_DATABASE_URL=postgresql://.../test_database
@@ -10,6 +16,9 @@ pnpm check
 pnpm test
 pnpm build
 pnpm test:static-placement:browser
+pnpm test:static-removal:browser
+pnpm test:static-removal:city
+SU_STATIC_PLACEMENT_WORLD=ring-block pnpm test:static-placement:browser
 pnpm test:chat:browser
 pnpm test:giveme:browser
 pnpm test:items:browser
@@ -17,7 +26,9 @@ pnpm test:items:browser
 
 Для медленного стенда с городскими fixtures допустим `pnpm test --testTimeout=120000 --hookTimeout=120000`. Это лимит тестового runner; клиентский барьер по-прежнему ограничен 15 секундами.
 
-Новый сценарий сам создаёт маленький выпуск с реальной скамейкой, локальный OIDC, два браузерных контекста и временную схему. SDK-проверки находятся в `tests/integration/static-placement.test.ts`, геометрия — в `packages/simulation/src/static-placement.test.ts`. Без `SU_TEST_DATABASE_URL` SQL-наборы пропускаются и не подтверждают готовность MVP. Свидетельства браузера записываются в `output/playwright/static-placement*`; итог поставки и ограничения — в [отчёте](../reports/static-placement-core-mvp.md).
+Новый сценарий сам создаёт маленький выпуск с реальной скамейкой, локальный OIDC, два браузерных контекста и временную схему. SDK-проверки находятся в `tests/integration/static-placement.test.ts`, `placement-catalog.test.ts` и `placement-catalog-city.test.ts`, геометрия — в `packages/simulation/src/static-placement.test.ts`. Без `SU_TEST_DATABASE_URL` SQL-наборы пропускаются и не подтверждают готовность MVP. Свидетельства браузера записываются в `output/playwright/static-placement*`; текущие результаты и измерения — в [отчёте каталога](../reports/motherlode-placement-catalog.md). Исторические замеры ядра сохранены в [прежнем отчёте](../reports/static-placement-core-mvp.md).
+
+Удаление проверяют `tests/integration/static-removal.test.ts`, `packages/simulation/src/static-removal.test.ts`, клиентские контракты/состояния и `rendering/static-selection.test.ts`. Браузерный сценарий `test:static-removal:browser` использует два клиента, исходное здание вне палитры, два одинаковых экземпляра скамейки и процедурное дерево; проверяет отмену, выход из первого лица, блокировку движения, потерю фокуса/ответа и перезапуск. `test:static-removal:city` проверяет выбор и удаление исходного здания в настоящем `ring-block`, общую паузу и двух клиентов. Все записи используют временную изолированную схему PostgreSQL. Свидетельства: `output/playwright/static-removal/` и `output/playwright/static-removal-city/`.
 
 ## Подготовка
 

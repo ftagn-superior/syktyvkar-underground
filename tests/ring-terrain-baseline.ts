@@ -95,7 +95,10 @@ const preparedManifestSha = preparedPublication
 const oldDistHash = sha(await readFile('dist/worlds/ring-block/manifest.json'));
 const sourceDirectory = preparedSource ? resolve(preparedSource) : join(output, 'source-world');
 const started = performance.now();
-if (!preparedSource) await buildWorld('content/worlds/ring-block/world.json', sourceDirectory);
+if (!preparedSource)
+  await buildWorld('content/worlds/ring-block/world.json', sourceDirectory, {
+    terrainRelease: false,
+  });
 const prepared = preparedPublication
   ? await readPreparedRingProfilePublication(
       sourceDirectory,

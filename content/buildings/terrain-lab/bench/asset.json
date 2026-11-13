@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Скамейка лаборатории рельефа",
+    "description": "Деревянная скамейка со спинкой и двумя раздельными опорами.",
+    "category": "street-furniture",
+    "tags": ["bench", "test"]
   }
 }

@@ -1,3 +1,4 @@
+export * from './model-catalog.js';
 import { createHash } from 'node:crypto';
 export * from './static-asset-remap.js';
 import { mkdir, writeFile, rename, readFile, readdir, unlink, rmdir } from 'node:fs/promises';
@@ -36,6 +37,14 @@ export interface CompiledWorldAsset {
   collision: Uint8Array;
   parts: Uint8Array;
 }
+/** Deterministic format/loader budget failure, distinct from storage and malformed content. */
+export class WorldPublicationContentLimitError extends Error {
+  constructor(readonly resource: string) {
+    super(`World publication content limit: ${resource}`);
+    this.name = 'WorldPublicationContentLimitError';
+  }
+}
+
 export interface WorldPublication {
   manifest: WorldManifest;
   payloads: Map<string, Uint8Array>;
@@ -57,6 +66,13 @@ export function createWorldPublication(
   compiled: Record<string, CompiledWorldAsset>,
   options: WorldPublicationOptions = {},
 ): WorldPublication {
+  // Keep the existing format and client budgets; validate before any files or DB are written.
+  if (world.buildings.length > 10_000)
+    throw new WorldPublicationContentLimitError('world building references');
+  if (world.entities.length > 1000)
+    throw new WorldPublicationContentLimitError('world static primitives');
+  if (new Set([...world.entities, ...world.buildings].map((i) => i.entityId)).size > 16_384)
+    throw new WorldPublicationContentLimitError('unique static instances');
   validateWorld(world);
   const cells = new Map<string, WorldCell>();
   for (let z = 0; z < grid.rows; z++)
@@ -80,7 +96,7 @@ export function createWorldPublication(
   const files: Record<string, string> = {};
   const payloads = new Map<string, Uint8Array>();
   const put = (path: string, bytes: Uint8Array, maxBytes: number) => {
-    if (bytes.byteLength > maxBytes) throw new Error(`World resource byte limit: ${path}`);
+    if (bytes.byteLength > maxBytes) throw new WorldPublicationContentLimitError(path);
     files[path] = hash(bytes);
     payloads.set(path, bytes);
     return path;
@@ -124,6 +140,8 @@ export function createWorldPublication(
   const cellEntries: WorldCellManifest[] = [...cells.values()].map((cell) => {
     cell.statics.sort(byId);
     cell.buildings.sort(byId);
+    if (cell.buildings.length > 10_000)
+      throw new WorldPublicationContentLimitError(`cell ${cell.cellId} building references`);
     const bytes = jsonBytes(cell);
     return {
       cellId: cell.cellId,

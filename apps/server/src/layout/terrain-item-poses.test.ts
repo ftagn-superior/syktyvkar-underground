@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalJson,
   initialItemState,
   itemSupportDistance,
   type ItemState,
@@ -10,7 +11,8 @@ import {
   buildingFixture,
   physicsFixture,
 } from '../../../../packages/simulation/src/test-fixture.js';
-import { planTerrainItemPoses } from './terrain-item-poses.js';
+import { hash } from '@su/world-release';
+import { planTerrainItemPoses, type TerrainItemPoseDecision } from './terrain-item-poses.js';
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
 function fixture() {
@@ -51,6 +53,93 @@ function nonY(item: ItemState) {
 }
 
 describe('terrain item pose planning', () => {
+  const decision = (
+    item: ItemState,
+    pose: 'current' | 'safePose',
+    supports = ['floor'],
+    selected = supports[0],
+  ): TerrainItemPoseDecision => ({
+    entityId: item.entityId,
+    pose,
+    sourcePoseSha256: hash(
+      canonicalJson(
+        pose === 'current' ? { position: item.position, rotation: item.rotation } : item.safePose,
+      ),
+    ),
+    sourceSupportIds: supports,
+    selectedSupportId: selected,
+    clearanceLiftMetres: 0,
+    reason: 'Reviewed fixture contacts; preserve the selected support-relative pose',
+  });
+
+  it('applies an explicit millimetre clearance only to the pinned pose and audits it', async () => {
+    const item = crate();
+    const reviewed = { ...decision(item, 'current'), clearanceLiftMetres: 0.001 };
+    const result = await planTerrainItemPoses({
+      ...fixture(),
+      sourceItems: [item],
+      decisions: [reviewed],
+    });
+    expect(result.issues).toEqual([]);
+    expect(result.targetItems[0].position.y).toBeCloseTo(1.521, 4);
+    expect(result.targetItems[0].safePose.position.y).toBeCloseTo(1.52, 4);
+    expect(result.audit[0].decision).toEqual(reviewed);
+    expect(result.audit[1].decision).toBeUndefined();
+    expect(nonY(result.targetItems[0])).toEqual(nonY(item));
+  });
+
+  it('selects an explicitly reviewed support while still rejecting new target contacts', async () => {
+    const options = fixture();
+    for (const world of [options.sourceWorld, options.targetWorld]) {
+      bench(world, 'left', -0.35, 1, 0.15);
+      bench(world, 'right', 0.35, 1, 0.15);
+    }
+    const item = crate('bridge', 0, 2.52);
+    const decisions = (['current', 'safePose'] as const).map((pose) =>
+      decision(item, pose, ['left', 'right'], 'left'),
+    );
+    const result = await planTerrainItemPoses({ ...options, sourceItems: [item], decisions });
+    expect(result.issues).toEqual([]);
+    expect(result.targetItems[0].position.y).toBeCloseTo(2.52, 4);
+    bench(options.targetWorld, 'unreviewed', 0, 1, 0.15);
+    const blocked = await planTerrainItemPoses({ ...options, sourceItems: [item], decisions });
+    expect(blocked.issues.map((issue) => issue.kind)).toEqual([
+      'ambiguous-item-support',
+      'ambiguous-item-support',
+    ]);
+  });
+
+  it('rejects stale pose or support pins rather than reusing an exception', async () => {
+    const item = crate();
+    const reviewed = decision(item, 'current');
+    item.position.x += 0.01;
+    const pose = await planTerrainItemPoses({
+      ...fixture(),
+      sourceItems: [item],
+      decisions: [reviewed],
+    });
+    expect(pose.issues[0].kind).toBe('stale-item-pose-decision');
+    const support = await planTerrainItemPoses({
+      ...fixture(),
+      sourceItems: [item],
+      decisions: [decision(item, 'current', ['different'])],
+    });
+    expect(support.issues[0].kind).toBe('stale-item-pose-decision');
+  });
+
+  it('refuses oversized lifts, duplicate decisions and unknown items', async () => {
+    const item = crate();
+    const reviewed = decision(item, 'current');
+    for (const decisions of [
+      [{ ...reviewed, clearanceLiftMetres: 0.001001 }],
+      [reviewed, reviewed],
+      [{ ...reviewed, entityId: 'unknown' }],
+    ])
+      await expect(
+        planTerrainItemPoses({ ...fixture(), sourceItems: [item], decisions }),
+      ).rejects.toThrow('Invalid, duplicate or unknown');
+  });
+
   it('moves full-shape ground contacts and preserves every other saved field and source input', async () => {
     const options = fixture();
     const item = crate();

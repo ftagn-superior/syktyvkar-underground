@@ -1,5 +1,7 @@
 export * from './accounts.js';
 export * from './static-placement.js';
+export * from './static-removal.js';
+export * from './placement-catalog.js';
 export * from './items.js';
 export * from './item-shapes.js';
 export * from './foliage-shapes.js';
@@ -10,6 +12,7 @@ export * from './world-layout-patch.js';
 export * from './simulation.js';
 export * from './world-types.js';
 export * from './terrain.js';
+export * from './world-model-catalog.js';
 export * from './input.js';
 export * from './session.js';
 export * from './activity.js';

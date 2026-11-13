@@ -34,11 +34,11 @@ export const PILOT_GROUNDED_SECTIONS = [
 ] as const;
 
 /** Authoring evidence from the real model generator, also used by the reproducible union script. */
-export async function inspectPilotSupportModel() {
+export async function inspectPilotSupportModel(expectedSourceSha256 = PILOT_SUPPORT_SOURCE_SHA256) {
   const bytes = await readFile(`${directory}/source.json`);
   assert.equal(
     hash(bytes),
-    PILOT_SUPPORT_SOURCE_SHA256,
+    expectedSourceSha256,
     'Pilot model source changed; review and regenerate its support rule',
   );
   const recipe: FootprintRecipe = JSON.parse(bytes.toString());

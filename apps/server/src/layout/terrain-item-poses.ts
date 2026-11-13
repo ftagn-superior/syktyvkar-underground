@@ -11,6 +11,19 @@ import {
   type ItemSupportHit,
 } from '@su/simulation/server';
 import type { TerrainMigrationIssue } from './terrain-migration.js';
+import { hash } from '@su/world-release';
+
+/** Explicit reviewed exceptions, pinned to the exact source pose and observed contacts. */
+export interface TerrainItemPoseDecision {
+  entityId: string;
+  pose: 'current' | 'safePose';
+  sourcePoseSha256: string;
+  sourceSupportIds: string[];
+  selectedSupportId: string;
+  /** A bounded numerical contact clearance; never repairs centimetre-scale collisions. */
+  clearanceLiftMetres: number;
+  reason: string;
+}
 
 export interface TerrainItemPoseAudit {
   entityId: string;
@@ -22,6 +35,7 @@ export interface TerrainItemPoseAudit {
   sourceContactY: number;
   targetContactY: number;
   clearance: number;
+  decision?: TerrainItemPoseDecision;
 }
 export interface TerrainItemPosesOptions {
   sourceWorld: WorldDefinition;
@@ -30,6 +44,7 @@ export interface TerrainItemPosesOptions {
   sourceItems: ItemState[];
   sourceGroundIds: readonly string[];
   targetGroundIds: readonly string[];
+  decisions?: readonly TerrainItemPoseDecision[];
 }
 export interface TerrainItemPosesPlan {
   targetItems: ItemState[];
@@ -110,6 +125,29 @@ export async function planTerrainItemPoses(
     audit: [],
     issues: [],
   };
+  const decisions = new Map<string, TerrainItemPoseDecision>();
+  for (const decision of options.decisions ?? []) {
+    const key = `${decision.entityId}/${decision.pose}`;
+    if (
+      !sourceItems.some((item) => item.entityId === decision.entityId) ||
+      !['current', 'safePose'].includes(decision.pose) ||
+      decisions.has(key) ||
+      !/^[a-f0-9]{64}$/.test(decision.sourcePoseSha256) ||
+      !Array.isArray(decision.sourceSupportIds) ||
+      !decision.sourceSupportIds.length ||
+      decision.sourceSupportIds.some((id) => typeof id !== 'string' || !id.length) ||
+      new Set(decision.sourceSupportIds).size !== decision.sourceSupportIds.length ||
+      !decision.sourceSupportIds.includes(decision.selectedSupportId) ||
+      !Number.isFinite(decision.clearanceLiftMetres) ||
+      decision.clearanceLiftMetres < 0 ||
+      decision.clearanceLiftMetres > 0.001 ||
+      typeof decision.reason !== 'string' ||
+      !decision.reason.trim() ||
+      decision.reason.length > 1000
+    )
+      throw new Error('Invalid, duplicate or unknown terrain item pose decision');
+    decisions.set(key, decision);
+  }
   let source: AuthoritativeWorld | undefined;
   let target: AuthoritativeWorld | undefined;
   const issue = (entityId: string, pose: string, kind: string, message: string) => {
@@ -133,6 +171,20 @@ export async function planTerrainItemPoses(
       const poses = [['current', item] as const, ['safePose', item.safePose] as const];
       for (const [poseName, pose] of poses) {
         try {
+          const decision = decisions.get(`${item.entityId}/${poseName}`);
+          if (
+            decision &&
+            decision.sourcePoseSha256 !==
+              hash(canonicalJson({ position: pose.position, rotation: pose.rotation }))
+          ) {
+            issue(
+              item.entityId,
+              poseName,
+              'stale-item-pose-decision',
+              'saved pose differs from the reviewed pose',
+            );
+            continue;
+          }
           const sourceError = source.checkSavedItem({
             ...item,
             position: pose.position,
@@ -145,7 +197,16 @@ export async function planTerrainItemPoses(
           }
           const hits = nearSupports(source, item.typeId, pose, item.entityId);
           const keys = new Set(hits.map((hit) => supportKey(hit.entityId, sourceGround)));
-          if (keys.size !== 1) {
+          if (decision && !same([...decision.sourceSupportIds].sort(), ids(hits))) {
+            issue(
+              item.entityId,
+              poseName,
+              'stale-item-pose-decision',
+              'observed source supports differ from the reviewed contacts',
+            );
+            continue;
+          }
+          if (!keys.size || (keys.size !== 1 && !decision)) {
             issue(
               item.entityId,
               poseName,
@@ -156,8 +217,11 @@ export async function planTerrainItemPoses(
             );
             continue;
           }
-          const key = [...keys][0];
-          const sourceContactY = Math.max(...hits.map((hit) => hit.contactY));
+          const key = decision
+            ? supportKey(decision.selectedSupportId, sourceGround)
+            : [...keys][0];
+          const selectedHits = hits.filter((hit) => supportKey(hit.entityId, sourceGround) === key);
+          const sourceContactY = Math.max(...selectedHits.map((hit) => hit.contactY));
           const clearance = pose.position.y - sourceContactY;
           let targetContactY: number;
           if (key === groundKey) {
@@ -191,14 +255,20 @@ export async function planTerrainItemPoses(
             targetContactY = sourceContactY + delta;
           }
           const candidate: ItemPose = {
-            position: { ...pose.position, y: targetContactY + clearance },
+            position: {
+              ...pose.position,
+              y: targetContactY + clearance + (decision?.clearanceLiftMetres ?? 0),
+            },
             rotation: { ...pose.rotation },
           };
           const targetHits = nearSupports(target, item.typeId, candidate, item.entityId);
           const targetKeys = new Set(
             targetHits.map((hit) => supportKey(hit.entityId, targetGround)),
           );
-          if (targetKeys.size !== 1 || !targetKeys.has(key)) {
+          if (
+            !targetKeys.has(key) ||
+            [...targetKeys].some((k) => !(decision ? keys : new Set([key])).has(k))
+          ) {
             issue(
               item.entityId,
               poseName,
@@ -228,6 +298,7 @@ export async function planTerrainItemPoses(
             sourceContactY,
             targetContactY,
             clearance,
+            ...(decision ? { decision: structuredClone(decision) } : {}),
           });
           pose.position.y = candidate.position.y;
         } catch (error) {
@@ -254,11 +325,17 @@ export async function planTerrainItemPoses(
           const expected = result.audit.find(
             (entry) => entry.entityId === item.entityId && entry.pose === poseName,
           )!;
-          const key =
-            expected.support.kind === 'ground' ? groundKey : expected.support.entityIds[0];
+          const key = expected.decision
+            ? supportKey(expected.decision.selectedSupportId, sourceGround)
+            : expected.support.kind === 'ground'
+              ? groundKey
+              : expected.support.entityIds[0];
+          const allowedKeys = expected.decision
+            ? new Set(expected.decision.sourceSupportIds.map((id) => supportKey(id, sourceGround)))
+            : new Set([key]);
           const hits = nearSupports(target, item.typeId, pose, item.entityId);
           const keys = new Set(hits.map((hit) => supportKey(hit.entityId, targetGround)));
-          if (keys.size !== 1 || !keys.has(key)) {
+          if (!keys.has(key) || [...keys].some((k) => !allowedKeys.has(k))) {
             issue(
               item.entityId,
               poseName,

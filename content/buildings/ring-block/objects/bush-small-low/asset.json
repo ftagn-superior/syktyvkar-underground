@@ -5,5 +5,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Куст, узкий, низкий",
+    "description": "Гранёный зелёный куст для газонов и посадок. Один из типовых вариантов ширины и высоты.",
+    "category": "vegetation",
+    "tags": ["bush", "low", "small"]
   }
 }

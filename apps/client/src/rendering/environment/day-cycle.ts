@@ -72,12 +72,14 @@ const HORIZON = {
 };
 const NIGHT = {
   light: rgb('#a9c0ff'),
-  sky: rgb('#4b5c92'),
-  ground: rgb('#2b3142'),
+  sky: rgb('#3c4a7c'),
+  ground: rgb('#212737'),
   cloud: rgb('#59648a'),
 };
 const SUN_INTENSITY = 3;
-const MOON_INTENSITY = 0.9;
+// Ночь заметно темнее дня: окна, вывески и фонари должны читаться на её фоне.
+const MOON_INTENSITY = 0.5;
+const NIGHT_FILL = 0.26;
 
 /** Unit vector towards the sun. Below the horizon at night. */
 export function sunPosition(hour: number): { x: number; y: number; z: number } {
@@ -112,7 +114,7 @@ export function skyAt(hour: number): Sky {
     lightIntensity: SUN_INTENSITY * sunlight + MOON_INTENSITY * moonlight,
     skyColor: blend('sky'),
     groundColor: blend('ground'),
-    skyIntensity: lerp(0.42, 0.45, toDay),
+    skyIntensity: lerp(NIGHT_FILL, lerp(0.42, 0.45, toDay), fromNight),
     directLight: sunlight + 0.5 * moonlight,
     cloudColor: blend('cloud'),
   };

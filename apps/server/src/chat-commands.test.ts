@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { parseChatCommand } from './chat-commands.js';
 
 describe('chat commands', () => {
+  it('opens /vilievna privately and rejects arguments', () => {
+    expect(parseChatCommand('/vilievna')).toEqual({ kind: 'staticRemoval' });
+    for (const text of ['/vilievna bench', '/vilievna all now'])
+      expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
+  });
   it('leaves ordinary chat alone and keeps /giveme strict', () => {
     expect(parseChatCommand('Привет!')).toBeUndefined();
     expect(parseChatCommand('/giveme wooden-crate')).toEqual({

@@ -17,7 +17,10 @@ export async function buildRingTerrainFlat(spacing: 2 | 4, output: string) {
   const converted = createGroundTerrain(JSON.parse(sourceBytes.toString()), placement, spacing);
   const started = performance.now(),
     cpu = process.cpuUsage();
-  const manifest = await buildWorld(source, output, { groundTerrain: { spacing } });
+  const manifest = await buildWorld(source, output, {
+    terrainRelease: false,
+    groundTerrain: { spacing },
+  });
   const buildMs = performance.now() - started,
     usedCpu = process.cpuUsage(cpu);
   const resources: { file: string; bytes: number }[] = [];

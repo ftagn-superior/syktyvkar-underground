@@ -4,5 +4,11 @@
   "source": {
     "kind": "house",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Тестовый дом B",
+    "description": "Синтетический двухэтажный дом со скатной крышей для проверки масштаба, столкновений и потоковой загрузки. Вход внутрь не предусмотрен.",
+    "category": "buildings",
+    "tags": ["floors-2", "house", "test"]
   }
 }

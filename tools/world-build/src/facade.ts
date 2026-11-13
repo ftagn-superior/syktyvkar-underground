@@ -1,5 +1,7 @@
 import type { StaticMeshPart } from './glb.js';
 import { addFace, meshPart } from './house.js';
+import { GLOW_KIND, type StaticLightSource } from '@su/contracts';
+import { glowRandom, markGlow, withGlow } from './glow.js';
 import type { Point2 } from './triangulate.js';
 
 /**
@@ -53,6 +55,8 @@ export interface FacadeDetails {
     height: number;
     width: number;
     color: string;
+    /** Светятся ли буквы ночью, как неоновая вывеска. */
+    glow?: boolean;
   }[];
   /** Пилястры: вертикальные выступы на всю высоту стены с шагом `every` метров. */
   pilasters?: { facing: Facing[]; every: number; width?: number; depth?: number; color: string };
@@ -95,6 +99,8 @@ export interface RoofSign {
   /** Сплошной щит за буквами, например белый фон или красный круг логотипа. */
   board?: string;
   text?: string;
+  /** Светится ли щит или буквы ночью, как неоновая вывеска. */
+  glow?: boolean;
   /** Положение центра на фасаде: доля ширины слева направо для зрителя снаружи. */
   at?: number;
 }
@@ -349,6 +355,7 @@ const GLYPHS: Record<string, string[]> = {
   Н: ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
   Т: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
   Е: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  Ё: ['.#.#.', '#####', '#....', '####.', '#....', '#....', '#####'],
   К: ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
   О: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
   П: ['#####', '#...#', '#...#', '#...#', '#...#', '#...#', '#...#'],
@@ -364,7 +371,42 @@ const GLYPHS: Record<string, string[]> = {
   ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
 };
 
-function roofSign(edges: Edge[], top: number, recipe: RoofSign, index = 0) {
+/**
+ * Неоновая вывеска: светятся только грани букв, обращённые наружу от фасада, и перед
+ * вывеской появляется источник света её цвета. Такие вывески горят от сумерек до утра.
+ */
+function signGlow(
+  part: StaticMeshPart,
+  spec: { glow?: boolean; text?: string; color: string },
+  edge: Edge,
+  center: number[],
+  lights: StaticLightSource[],
+) {
+  if (!spec.glow) return;
+  const seed = glowRandom(`${spec.text ?? ''}:${spec.color}`)();
+  const count = part.positions.length / 3;
+  part.glow = [];
+  for (let i = 0; i < count; i++) {
+    const facing = part.normals[i * 3] * edge.n[0] + part.normals[i * 3 + 2] * edge.n[1];
+    part.glow.push(facing > 0.7 ? GLOW_KIND.neon : 0, facing > 0.7 ? seed : 0);
+  }
+  const [x, y, z] = center;
+  // Высокая вывеска освещает большую область, но до земли с крыши доходит слабый свет.
+  lights.push({
+    position: { x, y, z },
+    radius: Math.min(40, Math.max(10, y + 4)),
+    color: spec.color,
+    kind: 'neon',
+  });
+}
+
+function roofSign(
+  edges: Edge[],
+  top: number,
+  recipe: RoofSign,
+  index: number,
+  lights: StaticLightSource[],
+) {
   const candidates = edges.filter((edge) => faces(edge, [recipe.facing]));
   if (!candidates.length) throw new Error(`No facade faces ${recipe.facing} for the roof sign`);
   const edge = candidates.reduce((a, b) => (b.length > a.length ? b : a));
@@ -391,6 +433,7 @@ function roofSign(edges: Edge[], top: number, recipe: RoofSign, index = 0) {
     // Две опоры под щитом.
     for (const offset of [-width / 3, width / 3])
       addOrientedBox(back, at(offset, top + 0.15, 0), [0.25, 0.3, 0.25], edge.d);
+    signGlow(face, recipe, edge, along(edge, s, top + recipe.height / 2 + 0.3, 1.8), lights);
     return [face, back];
   }
   const glyphs = [...text].map((c) => {
@@ -433,6 +476,7 @@ function roofSign(edges: Edge[], top: number, recipe: RoofSign, index = 0) {
       }
     });
   });
+  signGlow(face, recipe, edge, along(edge, s, top + pixel * 4.7, 1.8), lights);
   return [face, back, ...(recipe.board ? [board] : [])];
 }
 
@@ -442,6 +486,7 @@ function wallText(
   top: number,
   spec: NonNullable<FacadeDetails['wallText']>[number],
   index: number,
+  lights: StaticLightSource[],
 ) {
   const candidates = edges.filter((edge) => faces(edge, [spec.facing]));
   if (!candidates.length) throw new Error(`No facade faces ${spec.facing} for the wall text`);
@@ -476,6 +521,7 @@ function wallText(
       }
     }),
   );
+  signGlow(part, spec, edge, along(edge, s, top - spec.fromTop - pixel * 3.5, 1.5), lights);
   return part;
 }
 
@@ -483,6 +529,8 @@ export interface FacadeResult {
   parts: StaticMeshPart[];
   /** Этажи и рёбра, где окна не нужны (например, витрины первого этажа). */
   skipWindow: (edge: number, floor: number) => boolean;
+  /** Источники света неоновых вывесок. */
+  lights: StaticLightSource[];
   /** Дополнительная высота стен над крышей. */
   parapet: number;
   /** Замкнутое тело крыши для столкновений. */
@@ -504,11 +552,14 @@ export function buildFacade(
   floors: number,
   details: FacadeDetails | undefined,
   elevation = 0,
+  /** Ночное свечение: случайные числа окон и класс остеклённых лоджий. */
+  glow: { random: () => number; windows?: 'window' | 'office' } = { random: () => 0.5 },
 ): FacadeResult {
-  if (!details) return { parts: [], skipWindow: () => false, parapet: 0, boxes: [] };
+  if (!details) return { parts: [], skipWindow: () => false, parapet: 0, boxes: [], lights: [] };
   const edges = edgesOf(ring);
   const parts: StaticMeshPart[] = [];
   const boxes: FacadeResult['boxes'] = [];
+  const lights: StaticLightSource[] = [];
   const storey = (height - elevation) / floors;
   const shopEdges = new Set<number>();
   const shop = details.shopfront;
@@ -523,18 +574,32 @@ export function buildFacade(
       if (shop.wallColor) facadeQuad(band, edge, 0, edge.length, 0, shop.height, 0.02);
       const panes = Math.max(1, Math.round(edge.length / 3.2));
       const step = edge.length / panes;
+      // Витрины одного фасада принадлежат одному магазину и включаются вместе.
+      const shopSeed = glow.random();
       for (let k = 0; k < panes; k++)
-        facadeQuad(
-          glass,
-          edge,
-          k * step + 0.18,
-          (k + 1) * step - 0.18,
-          0.35,
-          shop.height - 0.75,
-          0.04,
+        withGlow(glass, 'shop', shopSeed, () =>
+          facadeQuad(
+            glass,
+            edge,
+            k * step + 0.18,
+            (k + 1) * step - 0.18,
+            0.35,
+            shop.height - 0.75,
+            0.04,
+          ),
         );
       if (shop.signColor)
-        facadeQuad(sign, edge, 0.1, edge.length - 0.1, shop.height - 0.65, shop.height - 0.1, 0.06);
+        withGlow(sign, 'sign', glow.random(), () =>
+          facadeQuad(
+            sign,
+            edge,
+            0.1,
+            edge.length - 0.1,
+            shop.height - 0.65,
+            shop.height - 0.1,
+            0.06,
+          ),
+        );
       if (shop.awningColor) {
         const y = shop.height - 0.75;
         const near = (s: number) => along(edge, s, y, 0.07);
@@ -568,13 +633,17 @@ export function buildFacade(
         for (let floor = group.fromFloor ?? 1; floor < floors; floor++) {
           const y = elevation + floor * storey;
           addOrientedBox(slab, along(edge, clamped, y + 0.5, depth / 2), [width, 1, depth], edge.d);
-          if (group.glazing)
+          if (group.glazing) {
+            const start = glass.positions.length / 3;
             addOrientedBox(
               glass,
               along(edge, clamped, y + 1 + (storey - 1.3) / 2, depth / 2 - 0.03),
               [width - 0.1, storey - 1.3, depth - 0.12],
               edge.d,
             );
+            const seed = glow.random();
+            if (glow.windows) markGlow(glass, start, glow.windows, seed);
+          }
         }
       }
     }
@@ -606,10 +675,10 @@ export function buildFacade(
     roofCollider = roof.collider;
   }
   details.wallText?.forEach((spec, index) =>
-    parts.push(wallText(edges, height + parapet, spec, index)),
+    parts.push(wallText(edges, height + parapet, spec, index, lights)),
   );
   [...(details.roofSign ? [details.roofSign] : []), ...(details.roofSigns ?? [])].forEach(
-    (sign, index) => parts.push(...roofSign(edges, height + parapet, sign, index)),
+    (sign, index) => parts.push(...roofSign(edges, height + parapet, sign, index, lights)),
   );
   if (details.roofSlab) {
     const spec = details.roofSlab;
@@ -717,5 +786,6 @@ export function buildFacade(
     parapet,
     roofCollider,
     boxes,
+    lights,
   };
 }

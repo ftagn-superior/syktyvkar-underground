@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Октябрьский проспект, 49/1",
+    "description": "Стеклянный магазин «Л'Этуаль».",
+    "category": "buildings",
+    "tags": ["building", "documented-address", "floors-2", "shopfront"]
   }
 }

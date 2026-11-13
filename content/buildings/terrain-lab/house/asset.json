@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Дом лаборатории рельефа",
+    "description": "Небольшой дом с проходом в стене и плоской крышей для проверки рельефа.",
+    "category": "buildings",
+    "tags": ["house", "test"]
   }
 }

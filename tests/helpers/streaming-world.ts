@@ -57,7 +57,7 @@ export async function buildStreamingFixture(
   }
   await writeFile(source, JSON.stringify(worldSource));
   const worldDirectory = join(directory, 'world');
-  let manifest = await buildWorld(source, worldDirectory);
+  let manifest = await buildWorld(source, worldDirectory, { terrainRelease: false });
   let { definition } = await readWorldDirectory(worldDirectory);
   const control = definition.initialItems.find((item) => item.typeId === 'wooden-crate');
   if (!control) throw new Error('Crowd fixture requires a recorded wooden-crate seed');
@@ -257,7 +257,7 @@ export async function buildStreamingFixture(
   }
   if (itemProfile === 'all-types' || content === 'ring-block') {
     await writeFile(source, JSON.stringify(worldSource));
-    manifest = await buildWorld(source, worldDirectory);
+    manifest = await buildWorld(source, worldDirectory, { terrainRelease: false });
     ({ definition } = await readWorldDirectory(worldDirectory));
   }
   const header: WorldHeader = JSON.parse(

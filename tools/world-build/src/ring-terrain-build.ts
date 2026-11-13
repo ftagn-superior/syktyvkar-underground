@@ -34,10 +34,13 @@ import {
 import {
   planStaticTerrainPoses,
   type TerrainPoseRules,
-  type TerrainObjectPolicy,
 } from '../../../apps/server/src/layout/terrain-poses.js';
 
-import type { FoundationSupportRuleV2 } from '../../../packages/terrain-build/src/private-data.js';
+import type {
+  FoundationSupportRuleV2,
+  TerrainPlacementModel,
+} from '../../../packages/terrain-build/src/private-data.js';
+import { readRevalidatedRingTerrainInputs } from './ring-terrain-revalidation.js';
 
 export interface RingTerrainCandidateOptions {
   gridFile: string;
@@ -48,6 +51,8 @@ export interface RingTerrainCandidateOptions {
   physicsPacks?: boolean;
   boundaryInsetMetres?: number;
   verifyPilotProvenance?: boolean;
+  /** Explicit production input, independently pinned; old pilot/stage5 defaults remain strict. */
+  source?: { releaseDirectory: string; snapshotFile: string; snapshotSha256: string };
 }
 
 /** Offline only: authored release + exact saved static export; no DB or deployed publication. */
@@ -60,13 +65,17 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
   // An older successful run in this directory must not lend acceptance to a new build.
   const physicalAcceptance = { status: 'not-physically-accepted' as const };
   await save('physical-acceptance-stamp.json', physicalAcceptance);
-  const snapshotBytes = await readFile('data/map-layout.json');
+  const snapshotFile = options.source?.snapshotFile ?? 'data/map-layout.json';
+  const snapshotBytes = await readFile(snapshotFile);
   assert.equal(
     hash(snapshotBytes),
-    'f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193',
+    options.source?.snapshotSha256 ??
+      'f4419053c7b40d2f6262a05a690ede725e4c879938e8806f8b85e918d4bad193',
   );
   const snapshot: WorldLayoutSnapshot = JSON.parse(snapshotBytes.toString());
-  const source = await readAuthoringRelease('output/ring-terrain-stage0/source-world');
+  const sourceDirectory =
+    options.source?.releaseDirectory ?? 'output/ring-terrain-stage0/source-world';
+  const source = await readAuthoringRelease(sourceDirectory);
   const original = await createLayoutPublication(source, snapshot);
   const grid = validateTerrainGrid(JSON.parse(await readFile(gridFile, 'utf8')));
   assert.equal(grid.spacing, 4);
@@ -82,9 +91,11 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
     );
     assert.equal(provenance.sourceExportSha256, hash(snapshotBytes));
   }
-  const catalog = await readRingModelSupportCatalog();
-  const kits = await readRingKitSupportDecisions(catalog);
-  const anchors = await readRingAnchorDecisions(catalog);
+  const revalidated = options.source ? await readRevalidatedRingTerrainInputs() : undefined;
+  const catalog = revalidated?.catalog ?? (await readRingModelSupportCatalog());
+  const kits = revalidated?.kits ?? (await readRingKitSupportDecisions(catalog));
+  const anchors = revalidated?.anchors ?? (await readRingAnchorDecisions(catalog));
+  if (revalidated) await save('source-geometry-revalidation.json', revalidated.evidence);
   const overrides = options.supportOverrides ?? [];
   for (const override of overrides) {
     assert.ok(override.ownerId, 'Candidate support override requires an exact owner selector');
@@ -96,11 +107,11 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
     );
   }
   const supports = [...catalog.rules, ...kits.map((d) => d.rule), ...overrides];
-  const models: TerrainPoseRules['models'] = catalog.models
+  const models: TerrainPlacementModel[] = catalog.models
     .filter((m) => m.policy.kind !== 'terrain-replacement')
     .map((m) => {
       const kit = kits.find((d) => d.assetId === m.assetId);
-      let policy: TerrainObjectPolicy;
+      let policy: TerrainPlacementModel['policy'];
       if (kit) policy = { kind: 'foundation', maximumVisibleHeight: kit.maximumVisibleHeight };
       else if (m.policy.kind === 'foundation')
         policy = { kind: 'foundation', maximumVisibleHeight: 3 };
@@ -164,11 +175,13 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
   const authoringDirectory = join(output, 'authoring-world');
   const began = performance.now();
   await buildWorld('content/worlds/ring-block/world.json', authoringDirectory, {
+    terrainRelease: false,
     physicsPacks: options.physicsPacks,
     groundTerrain: {
       spacing: 4,
       grid,
       supports,
+      ...(options.source ? { placementModels: models } : {}),
       header,
       statics: ringTerrainBoundaries(source.definition, grid, {
         insetMetres: options.boundaryInsetMetres,
@@ -178,12 +191,18 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
   });
   const target = await readAuthoringRelease(authoringDirectory);
   assert.deepEqual(editableStaticAssetIds(target), editableStaticAssetIds(source));
-  for (const id of editableStaticAssetIds(source))
+  for (const id of editableStaticAssetIds(source)) {
     assert.deepEqual(
       target.definition.buildingAssets[id],
       source.definition.buildingAssets[id],
       `Changed model: ${id}`,
     );
+    assert.equal(
+      target.manifest.assets[id].version,
+      source.manifest.assets[id].version,
+      `Changed visual/collision/parts asset version: ${id}`,
+    );
+  }
   const rules: TerrainPoseRules = {
     formatVersion: 1,
     algorithmVersion: 'terrain-poses/1',
@@ -214,13 +233,16 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
     const changed = result.targetSnapshot.instances.filter(
       (owner, i) => owner.position.y !== snapshot.instances[i].position.y,
     );
-    assert.equal(hash(await readFile('data/map-layout.json')), hash(snapshotBytes));
+    assert.equal(hash(await readFile(snapshotFile)), hash(snapshotBytes));
     const report = {
       status: 'static-candidate-built',
       databaseAccess: false,
       savedItemsAssessed: false,
       physicalAcceptance,
       sourceExportSha256: hash(snapshotBytes),
+      sourceSnapshotFile: snapshotFile,
+      sourceReleaseDirectory: sourceDirectory,
+      ...(revalidated ? { sourceGeometryRevalidation: 'source-geometry-revalidation.json' } : {}),
       sourceRevision: snapshot.revision,
       sourceAssetReleaseVersion: snapshot.assetReleaseVersion,
       targetAssetReleaseVersion: target.metadata.assetReleaseVersion,
@@ -229,6 +251,7 @@ export async function buildRingTerrainCandidate(options: RingTerrainCandidateOpt
       gridFile,
       gridSha256: hash(canonicalJson(grid)),
       models: models.length,
+      editableAssetVersionsUnchanged: true,
       supportRules: supports.length,
       sourceOwners: snapshot.instances.length,
       enabledOwners: snapshot.instances.filter((o) => o.enabled).length,

@@ -5,15 +5,11 @@ import {
   planSupportPlacement,
 } from '../../packages/terrain-build/src/supports.js';
 import { signedArea } from '../../packages/terrain-build/src/triangulate.js';
-import {
-  readRingKitSupportDecisions,
-  type RingKitSupportDecision,
-} from '../../tools/world-build/src/ring-kit-authoring.js';
-import {
-  readRingModelSupportCatalog,
-  type RingModelSupportCatalog,
-} from '../../tools/world-build/src/ring-support-authoring.js';
+import { type RingKitSupportDecision } from '../../tools/world-build/src/ring-kit-authoring.js';
+import { type RingModelSupportCatalog } from '../../tools/world-build/src/ring-support-authoring.js';
 import type { Point2 } from '../../packages/terrain-build/src/triangulate.js';
+
+import { readRevalidatedRingTerrainInputs } from '../../tools/world-build/src/ring-terrain-revalidation.js';
 
 function inside(p: Point2, ring: Point2[]) {
   let result = false;
@@ -33,8 +29,9 @@ const occupied = (d: RingKitSupportDecision, p: Point2) =>
 describe('explicit rigid-kit footing decisions', () => {
   let decisions: RingKitSupportDecision[], catalog: RingModelSupportCatalog;
   beforeAll(async () => {
-    catalog = await readRingModelSupportCatalog();
-    decisions = await readRingKitSupportDecisions(catalog);
+    const revalidated = await readRevalidatedRingTerrainInputs();
+    catalog = revalidated.catalog;
+    decisions = revalidated.kits;
   });
 
   it('supports the three actual shelter walls while keeping the interior and designed glass gap open', async () => {

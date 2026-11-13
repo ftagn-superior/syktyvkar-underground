@@ -1,7 +1,7 @@
 /** Full-city physical gates for explicit entrances and all low-threshold decorative doors. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   loadWorldBundle,
@@ -17,7 +17,10 @@ import {
   readRingEntranceCatalog,
   captureRingEntrancePhysicalRuntimePins,
 } from './world-build/src/ring-entrance-authoring.js';
-import { readRingModelSupportCatalog } from './world-build/src/ring-support-authoring.js';
+import {
+  validateFoundationSupportRule,
+  type FoundationSupportRuleV2,
+} from '../packages/terrain-build/src/private-data.js';
 
 type Point = { x: number; z: number };
 type Door = {
@@ -35,8 +38,25 @@ type Route = {
   kind: string;
   points: Point[];
 };
-const directory = 'output/ring-terrain-stage5/entrance-approaches';
-const worldDirectory = process.argv[2] ?? 'output/ring-terrain-stage5/final/export-world';
+const args = process.argv.slice(2);
+const option = (name: string) => {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  assert.ok(args[index + 1] && !args[index + 1].startsWith('--'), `Missing ${name} value`);
+  return args.splice(index, 2)[1];
+};
+const catalogFile = option('--catalog');
+const output = option('--output');
+const directory =
+  option('--evidence-directory') ?? 'output/ring-terrain-stage5/entrance-approaches';
+assert.ok(!catalogFile || output, 'A fresh catalog requires a separate --output directory');
+assert.ok(
+  args.length <= 1 && args.every((arg) => !arg.startsWith('--')),
+  'Unknown entrance probe arguments',
+);
+const outputDirectory = output ?? directory;
+await mkdir(outputDirectory, { recursive: true });
+const worldDirectory = args[0] ?? 'output/ring-terrain-stage5/final/export-world';
 const manifest = validateWorldManifest(
   JSON.parse(await readFile(join(worldDirectory, 'manifest.json'), 'utf8')),
 );
@@ -45,9 +65,15 @@ const world = await loadWorldBundle(manifest, async (path, expectedHash) => {
   assert.equal(createHash('sha256').update(bytes).digest('hex'), expectedHash);
   return bytes;
 });
-const catalog = await readRingEntranceCatalog();
+const catalog = await readRingEntranceCatalog(catalogFile);
 const physicalRuntimePins = await captureRingEntrancePhysicalRuntimePins();
-const source = await readRingModelSupportCatalog();
+const supportFile = catalog.sourcePins.find((pin) => pin.file.endsWith('/model-supports.json'));
+assert.ok(supportFile, 'Catalog must pin its base model support rules');
+const source: { rules: FoundationSupportRuleV2[] } = {
+  rules: JSON.parse(await readFile(supportFile.file, 'utf8')).rules.map(
+    validateFoundationSupportRule,
+  ),
+};
 const grid = validateTerrainGrid(JSON.parse(await readFile(catalog.terrain.file, 'utf8')));
 const audit = JSON.parse(await readFile(`${directory}/entrance-audit-ready.json`, 'utf8'));
 const platforms = JSON.parse(await readFile(`${directory}/facade-platforms-ready.json`, 'utf8'));
@@ -297,7 +323,7 @@ for (const [kind, routes, file] of [
     failures: selected.filter((r) => r.status === 'failed').length,
     results: selected,
   };
-  await writeFile(join(directory, file), JSON.stringify(report, null, 2) + '\n');
+  await writeFile(join(outputDirectory, file), JSON.stringify(report, null, 2) + '\n');
   console.log(
     JSON.stringify({
       kind,

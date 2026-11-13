@@ -4,5 +4,11 @@
   "source": {
     "kind": "ground",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Основание городского участка",
+    "description": "Общая плита и слои дорог, газонов, дорожек, площадок и разметки. При сборке делится на фиксированные пространственные плитки.",
+    "category": "ground",
+    "tags": ["lawn", "markings", "road", "terrain"]
   }
 }

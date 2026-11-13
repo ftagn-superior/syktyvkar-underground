@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Ель лаборатории рельефа",
+    "description": "Ель с гранёной зелёной кроной и коричневым стволом.",
+    "category": "vegetation",
+    "tags": ["spruce", "tree", "test"]
   }
 }

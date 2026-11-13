@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Ель, малый размер",
+    "description": "Ель с коричневым стволом и тёмно-зелёной ярусной кроной.",
+    "category": "vegetation",
+    "tags": ["small", "spruce", "tree"]
   }
 }

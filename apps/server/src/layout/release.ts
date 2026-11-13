@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   canonicalJson,
+  MAX_EDITABLE_STATIC_INSTANCES,
   validateWorld,
   type StaticObjectInstance,
   type WorldLayoutSnapshot,
@@ -9,6 +10,7 @@ import {
 import {
   authoringMetadata,
   createWorldPublication,
+  WorldPublicationContentLimitError,
   hash,
   PRIVATE_TERRAIN_MAX_BYTES,
   validatePrivateTerrainReference,
@@ -112,6 +114,8 @@ export async function createLayoutPublication(
     !/^[a-f0-9]{64}$/.test(snapshot.seedVersion)
   )
     throw new Error('Invalid layout snapshot');
+  if (snapshot.instances.length > MAX_EDITABLE_STATIC_INSTANCES)
+    throw new WorldPublicationContentLimitError('editable static instances');
   const reserved = new Set([
     ...release.metadata.fixedInstanceIds,
     ...release.definition.entities.map((i) => i.entityId),
@@ -146,6 +150,11 @@ export async function createLayoutPublication(
     throw new Error('Layout belongs to a different world or asset release');
   const instances = snapshot.instances.map(({ instanceRevision: _r, enabled: _e, ...i }) => i);
   // Disabled records must still have valid references, transforms and containing world bounds.
+  if (
+    release.definition.buildings.filter((i) => reserved.has(i.entityId)).length + instances.length >
+    10_000
+  )
+    throw new WorldPublicationContentLimitError('world building references');
   validateWorld({
     ...release.definition,
     buildings: [

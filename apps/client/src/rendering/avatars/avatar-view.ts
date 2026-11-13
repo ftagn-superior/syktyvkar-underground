@@ -17,6 +17,7 @@ import { AvatarRig } from './avatar-rig';
 import { SKIN_BUILDERS } from './skins';
 
 const MARKER_ALPHA = 0.55;
+const NO_STEPS: Readonly<FootstepMarkers> = { count: 0, running: false };
 
 /** One animator and stable entity root; a skin supplies only the visual rig's appearance. */
 export class AvatarView {
@@ -98,8 +99,12 @@ export class AvatarView {
       this.rig.material.alpha = alpha;
       if (this.markerMaterial) this.markerMaterial.alpha = alpha * MARKER_ALPHA;
     }
-    this.rig.applyPose(this.animator.update(player, delta, own, reducedMotion), this.config.height);
-    return this.animator.footsteps;
+    this.rig.applyPose(
+      this.animator.update(player, delta, own, reducedMotion),
+      this.config.height,
+      this.animator.travel,
+    );
+    return this.rig.seated ? NO_STEPS : this.animator.footsteps;
   }
 
   diagnostics() {

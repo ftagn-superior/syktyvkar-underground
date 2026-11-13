@@ -2,21 +2,30 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { hash } from '../../packages/world-release/src/index.js';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { TerrainGrid, WorldLayoutSnapshot } from '../../packages/contracts/src/index.js';
-import { planSupportPlacement } from '../../packages/terrain-build/src/supports.js';
 import {
-  generateRingTerrainPads,
-  readRingTerrainPadInputs,
-  readRingTerrainPilotWithPads,
-} from '../../tools/world-build/src/ring-pads.js';
+  validateTerrainGrid,
+  type TerrainGrid,
+  type WorldLayoutSnapshot,
+} from '../../packages/contracts/src/index.js';
+import { planSupportPlacement } from '../../packages/terrain-build/src/supports.js';
+import { generateRingTerrainPads } from '../../tools/world-build/src/ring-pads.js';
+import { readRevalidatedPadFixture } from '../helpers/revalidated-ring-grids.js';
 import { ringTerrainGridStatistics } from '../../tools/world-build/src/ring-terrain-candidate.js';
 
 describe('explicit simultaneous ring terrain pads', () => {
-  let inputs: Awaited<ReturnType<typeof readRingTerrainPadInputs>>;
+  let inputs: Awaited<ReturnType<typeof readRevalidatedPadFixture>>;
   let grid: TerrainGrid;
   beforeAll(async () => {
-    inputs = await readRingTerrainPadInputs();
-    grid = await readRingTerrainPilotWithPads();
+    inputs = await readRevalidatedPadFixture();
+    grid = validateTerrainGrid(
+      JSON.parse(
+        await readFile(
+          'content/worlds/ring-block/terrain-candidate/pilot-grid-with-pads.json',
+          'utf8',
+        ),
+      ),
+    );
+    expect(generateRingTerrainPads(inputs.base, inputs.rules, inputs.config)).toEqual(grid);
   });
 
   it('does not depend on catalogue ordering or mutate the source grid', () => {

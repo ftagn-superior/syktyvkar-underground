@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Остановочный павильон, вариант 01",
+    "description": "Павильон со стеклянными стенками, металлическим каркасом, деревянным сиденьем и синим знаком остановки.",
+    "category": "street-furniture",
+    "tags": ["bus-stop", "glass", "shelter"]
   }
 }

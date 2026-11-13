@@ -16,6 +16,7 @@ import type { ItemRuntime } from '../../apps/server/src/items/runtime.js';
 import type { AuthoritativeWorld } from '../../packages/simulation/src/server.js';
 import { rectangle, terrainPatch, terrainSolid } from '../../packages/terrain-build/src/index.js';
 import { buildStaticPlacementWorld } from '../helpers/static-placement-world.js';
+import { readPlacementCatalog } from '../../apps/server/src/layout/placement-catalog.js';
 
 describe('live single-box publication guard', () => {
   let temporary: string;
@@ -71,8 +72,8 @@ describe('live single-box publication guard', () => {
     };
     const world = {
       checkStaticPlacement: () => undefined,
-      getSnapshot: vi.fn((): { items: ItemState[] } => ({ items: [] })),
-      addStatic: vi.fn(),
+      getSnapshot: vi.fn(() => ({ items: [] as ItemState[], players: [] })),
+      prepareStaticReplacement: vi.fn(() => ({ commit: vi.fn(), dispose: vi.fn() })),
     };
     const changed = vi.fn();
     const live = new LiveStaticPlacement(
@@ -82,9 +83,12 @@ describe('live single-box publication guard', () => {
       'guard-epoch',
       changed,
       () => {},
+      await readPlacementCatalog(release, join(release.directory, 'model-catalog')),
     );
     const request: PlaceStaticRequest = {
       operationId: '12345678-1234-1234-1234-123456789abc',
+      assetId: 'bench-0152a250d22ef0a9',
+      placementCatalogVersion: live.catalog!.reference.placementCatalogVersion,
       worldEpoch: 'guard-epoch',
       assetReleaseVersion: snapshot.assetReleaseVersion,
       expectedLayoutRevision: snapshot.revision,
@@ -100,7 +104,8 @@ describe('live single-box publication guard', () => {
     expect(await f.live.place('account', f.request, () => undefined)).toMatchObject({ ok: true });
     expect(f.write).toHaveBeenCalledTimes(1);
     expect(f.commit).toHaveBeenCalledTimes(1);
-    expect(f.world.addStatic).toHaveBeenCalledTimes(1);
+    expect(f.world.prepareStaticReplacement).toHaveBeenCalledTimes(1);
+    expect(f.world.prepareStaticReplacement.mock.results[0].value.commit).toHaveBeenCalledTimes(1);
     expect(f.activate).toHaveBeenCalledTimes(1);
     await f.publications.close();
   });
@@ -129,7 +134,7 @@ describe('live single-box publication guard', () => {
     expect(canonicalJson(f.publications.current)).toBe(before);
     expect(f.write).not.toHaveBeenCalled();
     expect(f.commit).not.toHaveBeenCalled();
-    expect(f.world.addStatic).not.toHaveBeenCalled();
+    expect(f.world.prepareStaticReplacement).not.toHaveBeenCalled();
     expect(f.activate).not.toHaveBeenCalled();
     expect(f.changed).not.toHaveBeenCalled();
   });
@@ -155,7 +160,7 @@ describe('live single-box publication guard', () => {
       rotation: { x: 0, y: 0, z: 0, w: 1 },
     });
     item.safePose = { position: { x: 10, y: 0.52, z: 10 }, rotation: item.rotation };
-    f.world.getSnapshot.mockReturnValue({ items: [item] });
+    f.world.getSnapshot.mockReturnValue({ items: [item], players: [] });
     expect(await f.live.place('account', f.request, () => undefined)).toMatchObject({
       ok: false,
       code: 'BLOCKED',
@@ -180,7 +185,7 @@ describe('live single-box publication guard', () => {
     expect(f.runtime.layoutPaused).toBe(false);
     expect(f.write).not.toHaveBeenCalled();
     expect(f.commit).not.toHaveBeenCalled();
-    expect(f.world.addStatic).not.toHaveBeenCalled();
+    expect(f.world.prepareStaticReplacement).not.toHaveBeenCalled();
   });
 
   it('keeps placement disabled when the ground is represented only by terrain meshes', async () => {

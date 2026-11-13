@@ -112,8 +112,8 @@ export class PhysicsWorld {
   >();
   readonly spawnShape: PhysicsShapeCapsule;
   readonly gravity: Vector3;
-  private readonly buildings: BuildingColliders;
-  private readonly staticReferences = new Map<
+  private buildings: BuildingColliders;
+  private staticReferences = new Map<
     string,
     { version: string; signature: string; references: number; building: boolean }
   >();
@@ -844,6 +844,74 @@ export class PhysicsWorld {
   }
   addStatic(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
     this.retainStatic(instance, 'initial', asset);
+  }
+  /** Authoritative worlds retain a single initial reference for each complete instance. */
+  removeStatic(entityId: string) {
+    this.releaseStatic(entityId);
+    this.impacts.clear(true);
+  }
+  /**
+   * Stage the complete building layer between fixed steps, while the room is paused.
+   * Existing dynamic bodies/controllers are never recreated, so sleep state, contacts,
+   * angular velocities and inputs cannot be rewound by an awaited database commit.
+   * All allocation/validation happens before commit; abandon disposes only the staging layer.
+   */
+  prepareStaticReplacement(definition: WorldDefinition) {
+    if (this.prediction || !('buildings' in this.definition) || this.disposed)
+      throw new Error('Static replacement requires a live authoritative world');
+    // Authoritative rooms intentionally initialize dynamics from ItemStore with an
+    // empty seed list. Seeds are publication metadata, not live bodies to recreate.
+    const header = ({
+      buildings: _b,
+      buildingAssets: _a,
+      initialItems: _seeds,
+      ...rest
+    }: WorldDefinition) => rest;
+    if (canonicalJson(header(definition)) !== canonicalJson(header(this.definition)))
+      throw new Error('Live static replacement cannot change the world header or primitives');
+    const previous = this.buildings;
+    const staged = new BuildingColliders(this.scene);
+    const references = new Map([...this.staticReferences].filter(([, entry]) => !entry.building));
+    try {
+      for (const instance of definition.buildings) {
+        if (
+          references.has(instance.entityId) ||
+          this.objects.has(instance.entityId) ||
+          this.characters.has(instance.entityId) ||
+          this.remotePlayers.has(instance.entityId)
+        )
+          throw new Error(`Occupied replacement entity ID: ${instance.entityId}`);
+        const asset = definition.buildingAssets[instance.assetId];
+        if (!asset) throw new Error(`Unknown replacement asset: ${instance.assetId}`);
+        if (asset.colliders.length) staged.add(instance, asset);
+        references.set(instance.entityId, {
+          version: 'initial',
+          signature: canonicalJson(instance),
+          references: 1,
+          building: true,
+        });
+      }
+    } catch (error) {
+      staged.dispose();
+      throw error;
+    }
+    let pending = true;
+    return {
+      commit: () => {
+        if (!pending) return;
+        pending = false;
+        this.buildings = staged;
+        this.staticReferences = references;
+        Object.assign(this.definition, definition);
+        this.impacts.clear(true);
+        previous.dispose();
+      },
+      dispose: () => {
+        if (!pending) return;
+        pending = false;
+        staged.dispose();
+      },
+    };
   }
   /** Stored dynamic poses can be airborne; new placement still requires support. */
   checkSavedItem(item: ItemState): ItemError | undefined {

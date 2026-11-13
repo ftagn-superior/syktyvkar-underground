@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Фонарь лаборатории рельефа",
+    "description": "Фонарь на тёмной стойке с пятью светлыми плафонами.",
+    "category": "lighting",
+    "tags": ["lamp", "test"]
   }
 }

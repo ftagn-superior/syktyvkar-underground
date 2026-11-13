@@ -30,6 +30,10 @@ export class AvatarRig {
   readonly leftHip: TransformNode;
   readonly rightHip: TransformNode;
   readonly material: StandardMaterial;
+  /** Сидячий скин (коляска): ноги не шагают, тело не подпрыгивает, шагов не слышно. */
+  seated = false;
+  /** Получает пройденный путь в метрах, например чтобы вращать колёса. */
+  onTravel?: (distance: number) => void;
   private readonly meshes: Mesh[] = [];
   private readonly suitParts: {
     mesh: Mesh;
@@ -93,16 +97,22 @@ export class AvatarRig {
     }
   }
 
-  applyPose(pose: AvatarPose, height: number): void {
+  applyPose(pose: AvatarPose, height: number, travel = 0): void {
+    const seated = this.seated ? 0 : 1;
     this.facing.rotation.y = pose.facingOffset;
-    this.body.rotation.set(pose.lean, 0, pose.roll);
-    this.body.position.y = pose.lift * height;
+    this.body.rotation.set(
+      pose.lean * (this.seated ? 0.4 : 1),
+      0,
+      pose.roll * (this.seated ? 0.3 : 1),
+    );
+    this.body.position.y = pose.lift * height * seated;
     this.leftShoulder.rotation.set(pose.leftArm, pose.leftArmYaw, pose.leftArmRoll);
     this.rightShoulder.rotation.set(pose.rightArm, pose.rightArmYaw, pose.rightArmRoll);
-    this.leftHip.rotation.x = pose.leftLeg;
-    this.rightHip.rotation.x = pose.rightLeg;
-    this.leftHip.rotation.z = pose.leftLegRoll;
-    this.rightHip.rotation.z = pose.rightLegRoll;
+    this.leftHip.rotation.x = pose.leftLeg * seated;
+    this.rightHip.rotation.x = pose.rightLeg * seated;
+    this.leftHip.rotation.z = pose.leftLegRoll * seated;
+    this.rightHip.rotation.z = pose.rightLegRoll * seated;
+    this.onTravel?.(travel);
   }
 
   dispose(): void {

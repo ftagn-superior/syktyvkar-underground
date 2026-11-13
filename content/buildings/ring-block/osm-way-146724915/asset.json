@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Театр оперы и балета",
+    "description": "Театр на Коммунистической, 32: стеклянное фойе, серый корпус и высокая сценическая коробка. Фойе обращено к Театральной площади.",
+    "category": "buildings",
+    "tags": ["building", "floors-3", "landmark", "theatre"]
   }
 }

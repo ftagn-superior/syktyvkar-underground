@@ -159,11 +159,13 @@ async function navigate(page: Page, point: [number, number], sprint: boolean) {
   const deadline =
     Date.now() + Math.max(25000, Math.hypot(point[0] - first.x, point[1] - first.z) * 900);
   while (Date.now() < deadline) {
-    const state = await snapshot(page);
+    // Poll only poses while steering; full snapshots remain at evidence/gate
+    // boundaries and in the correction/pin observer below.
+    const state = await page.evaluate(() => (window as any).__SU_DEBUG__.motion());
     if (state.connection === 'waiting') {
       await keys(page, []);
       await page.waitForFunction(
-        () => (window as any).__SU_DEBUG__.snapshot().connection === 'playing',
+        () => (window as any).__SU_DEBUG__.motion().connection === 'playing',
         undefined,
         { timeout: 20000 },
       );

@@ -21,8 +21,11 @@ import {
   type WorldDefinition,
   type WorldSource,
   type TreeRenderRecipe,
+  type StaticLightSource,
   type BuildingParts,
   type TerrainGrid,
+  validateWorldPlacementAssets,
+  type WorldPlacementPolicy,
 } from '@su/contracts';
 import {
   createWorldPublication,
@@ -30,6 +33,8 @@ import {
   writeAuthoringMetadata,
   pruneWorldPublication,
   jsonBytes,
+  authoringMetadata,
+  hash,
 } from '@su/world-release';
 import { encodeStaticGlb, staticMeshBounds } from './glb.js';
 import { compileStaticAsset } from '@su/terrain-build/assets';
@@ -42,6 +47,7 @@ import {
   validateTerrainPrivateData,
   type TerrainPrivateData,
   type FoundationSupportRuleV2,
+  type TerrainPlacementModel,
 } from '@su/terrain-build/private-data';
 import { createGroundTerrain } from './ground-terrain.js';
 import { buildTerrainTiles } from './terrain-tiles.js';
@@ -56,6 +62,16 @@ import {
 import { generateKit, type KitRecipe } from './kit.js';
 import { treeRenderRecipe } from './tree-instances.js';
 import { buildTerrainAuthoring } from './terrain-authoring.js';
+import {
+  readTerrainReleaseSource,
+  assertTerrainReleaseIdentity,
+} from './terrain-release-source.js';
+import {
+  readWorldModelSources,
+  createWorldModelCatalog,
+  writeWorldModelCatalog,
+  readPlacementPolicySource,
+} from './model-catalog.js';
 
 /** Миры, которые собирает `pnpm world:build`. Первый обслуживается сервером по умолчанию. */
 export const WORLDS = ['ring-block', 'physics-lab', 'streaming-lab', 'terrain-lab'] as const;
@@ -91,6 +107,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
   let model: Uint8Array | undefined, physics: BuildingPhysicsAsset;
   let treeParts: BuildingParts | undefined;
   let tree: TreeRenderRecipe | undefined;
+  let lights: StaticLightSource[] | undefined;
+  let glow = false;
   const kind = descriptor.source?.kind;
   const generator = Object.hasOwn(generators, kind)
     ? generators[kind as keyof typeof generators]
@@ -99,6 +117,8 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     const recipe = groundRecipe ?? (await readJson(sourceFile(directory, descriptor.source.file)));
     const generated = generator(assetId, recipe);
     physics = generated.physics;
+    if ('lights' in generated) lights = generated.lights as StaticLightSource[] | undefined;
+    glow = generated.parts.some((part) => part.glow);
     if (kind === 'kit') tree = treeRenderRecipe(assetId, recipe);
     if (assetId.startsWith('tree-') && !tree)
       throw new Error(`Tree must use the current instancing profile: ${assetId}`);
@@ -123,7 +143,10 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     );
     if (physics.assetId !== assetId) throw new Error('Imported collision asset ID mismatch');
   } else throw new Error(`Unsupported asset source: ${assetId}`);
-  return compileBytes(assetId, model, physics, treeParts, descriptor.renderMode);
+  return compileBytes(assetId, model, physics, treeParts, descriptor.renderMode, {
+    ...(lights ? { lights } : {}),
+    ...(glow ? { glow: true as const } : {}),
+  });
 }
 
 async function compileBytes(
@@ -132,6 +155,7 @@ async function compileBytes(
   physics: BuildingPhysicsAsset,
   treeParts?: BuildingParts,
   renderMode?: BuildingParts['renderMode'],
+  visuals?: Pick<BuildingParts, 'lights' | 'glow'>,
 ) {
   if (model !== undefined) {
     if (model.byteLength > WORLD_RESOURCE_LIMITS.modelBytes)
@@ -146,18 +170,23 @@ async function compileBytes(
           .join('; ')}`,
       );
   }
-  return compileStaticAsset(assetId, model, physics, treeParts, renderMode);
+  return compileStaticAsset(assetId, model, physics, treeParts, renderMode, visuals);
 }
 
 export interface BuildWorldOptions {
+  /** Explicit historical flat build or separately authored terrain candidate. */
+  terrainRelease?: false;
   /** Opt in only for a new authored transport release. */
   physicsPacks?: boolean;
+  /** Separate immutable authoring catalog and explicit placement policy. */
+  modelCatalogOutput?: string;
   terrainVariant?: 'hill' | 'flat';
   /** Explicit output-only candidate. Rules are private inputs, never prebuilt foundations. */
   groundTerrain?: {
     spacing: 2 | 4;
     grid?: TerrainGrid;
     supports?: FoundationSupportRuleV2[];
+    placementModels?: TerrainPlacementModel[];
     /** Reviewed offline changes for a new authored release, never startup adjustments. */
     header?: Pick<WorldHeader, 'bounds' | 'spawnPoints' | 'initialItems'> &
       Partial<Pick<WorldHeader, 'landmarks'>>;
@@ -183,7 +212,30 @@ export async function buildWorld(
       `World source must use formatVersion ${WORLD_FORMAT_VERSION}, cells, itemCatalog and assetCatalog`,
     );
   const sourceDirectory = dirname(resolve(source));
-  if (options.groundTerrain && (authored.terrain || authored.generator || output === undefined))
+  let canonicalTerrain: Awaited<ReturnType<typeof readTerrainReleaseSource>> | undefined;
+  if (authored.terrainRelease !== undefined && options.terrainRelease !== false) {
+    if (authored.terrain || authored.generator || options.groundTerrain || options.terrainVariant)
+      throw new Error(
+        'Canonical terrain cannot compete with another generator; use terrainRelease:false for an explicit override',
+      );
+    canonicalTerrain = await readTerrainReleaseSource(
+      source,
+      authored.worldId,
+      authored.terrainRelease,
+    );
+    if (
+      options.physicsPacks !== undefined &&
+      options.physicsPacks !== canonicalTerrain.options.physicsPacks
+    )
+      throw new Error(
+        'Canonical terrain fixes its physics transport; use terrainRelease:false for an explicit override',
+      );
+    options = { ...canonicalTerrain.options, ...options };
+  }
+  if (
+    options.groundTerrain &&
+    (authored.terrain || authored.generator || (!canonicalTerrain && output === undefined))
+  )
     throw new Error('Ground terrain requires an explicit output and a non-generated flat source');
   const supportRules = options.groundTerrain?.supports;
   if (supportRules !== undefined) {
@@ -225,11 +277,13 @@ export async function buildWorld(
   validateWorldHeader(base);
   const outputDirectory = output ?? `dist/worlds/${base.worldId}`;
   const catalogPath = resolve(sourceDirectory, authored.assetCatalog);
-  const catalog = await readJson(catalogPath);
-  if (catalog.formatVersion !== 1 || !catalog.assets || typeof catalog.assets !== 'object')
-    throw new Error('Invalid building asset catalog');
+  const modelSources = await readWorldModelSources(catalogPath);
+  const policySource = await readPlacementPolicySource(source, authored, modelSources);
+  const runtimeAssetIds: Record<string, string[]> = Object.fromEntries(
+    Object.keys(modelSources.models).map((id) => [id, []]),
+  );
   for (const id of terrain?.assets.keys() ?? [])
-    if (Object.hasOwn(catalog.assets, id))
+    if (Object.hasOwn(modelSources.models, id))
       throw new Error(`Terrain asset conflicts with catalog: ${id}`);
   let authoredCells: WorldCell[];
   if (authored.generator) {
@@ -262,7 +316,7 @@ export async function buildWorld(
         throw new Error(`Invalid explicit terrain seed height: ${id}`);
   }
   for (const rule of supportRules ?? []) {
-    if (!Object.hasOwn(catalog.assets, rule.assetId))
+    if (!Object.hasOwn(modelSources.models, rule.assetId))
       throw new Error(`Unknown terrain support asset: ${rule.assetId}`);
   }
   const buildings: WorldDefinition['buildings'] = [];
@@ -276,10 +330,9 @@ export async function buildWorld(
       buildings.push(instance);
       continue;
     }
-    if (!Object.hasOwn(catalog.assets, instance.assetId))
+    if (!Object.hasOwn(modelSources.models, instance.assetId))
       throw new Error(`Unknown building asset ${instance.assetId}`);
-    const descriptorPath = sourceFile(dirname(catalogPath), catalog.assets[instance.assetId]);
-    const descriptor = await readJson(descriptorPath);
+    const { path: descriptorPath, descriptor } = modelSources.models[instance.assetId];
     if (descriptor.source?.kind !== 'ground') {
       buildings.push(
         seedY && Object.hasOwn(seedY, instance.entityId)
@@ -358,7 +411,7 @@ export async function buildWorld(
         for (const { suffix, asset } of tiles) {
           const id = assetId + suffix;
           const entityId = `${instance.entityId}-${cellId}${suffix}`;
-          if (compiled.has(id) || Object.hasOwn(catalog.assets, id))
+          if (compiled.has(id) || Object.hasOwn(modelSources.models, id))
             throw new Error(`Terrain asset conflicts with catalog: ${id}`);
           // Terrain vertices are in world coordinates, including any source ground translation.
           buildings.push({
@@ -369,6 +422,7 @@ export async function buildWorld(
           });
           fixedInstanceIds.push(entityId);
           compiled.set(id, asset);
+          runtimeAssetIds[instance.assetId].push(id);
         }
       }
       continue;
@@ -390,16 +444,26 @@ export async function buildWorld(
       fixedInstanceIds.push(`${instance.entityId}-${cellId}`);
       buildings.push({ ...instance, entityId: `${instance.entityId}-${cellId}`, assetId });
       compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
+      if (!runtimeAssetIds[instance.assetId].includes(assetId))
+        runtimeAssetIds[instance.assetId].push(assetId);
     }
   }
   if (options.groundTerrain && !privateTerrain) throw new Error('Ground terrain source is missing');
+  if (options.groundTerrain?.placementModels) {
+    if (privateTerrain?.formatVersion !== 2)
+      throw new Error('Runtime terrain placement requires v2 supports');
+    privateTerrain = validateTerrainPrivateData({
+      ...privateTerrain,
+      placementModels: options.groundTerrain.placementModels,
+      placementGroundIds: [...fixedInstanceIds].sort(),
+    });
+  }
   // A catalog model is available even when this seed has no instance of it yet.
-  for (const [assetId, path] of Object.entries(catalog.assets)) {
-    if (compiled.has(assetId)) continue;
-    const descriptorPath = sourceFile(dirname(catalogPath), path);
-    const descriptor = await readJson(descriptorPath);
-    if (descriptor.source?.kind !== 'ground')
-      compiled.set(assetId, await compileAsset(assetId, descriptorPath));
+  for (const [assetId, { path, descriptor }] of Object.entries(modelSources.models)) {
+    if (descriptor.source.kind !== 'ground') {
+      runtimeAssetIds[assetId] = [assetId];
+      if (!compiled.has(assetId)) compiled.set(assetId, await compileAsset(assetId, path));
+    }
   }
   for (const rule of supportRules ?? [])
     if (!compiled.has(rule.assetId))
@@ -413,13 +477,61 @@ export async function buildWorld(
   const publication = createWorldPublication(world, grid, Object.fromEntries(compiled), {
     physicsPacks: options.physicsPacks,
   });
+  const terrainBytes = privateTerrain ? jsonBytes(privateTerrain) : undefined;
+  const terrainHash = terrainBytes ? hash(terrainBytes) : undefined;
+  const metadata = authoringMetadata(
+    world,
+    publication.manifest,
+    fixedInstanceIds,
+    terrainHash ? { file: `private/terrain.${terrainHash}.json`, sha256: terrainHash } : undefined,
+  );
+  if (canonicalTerrain)
+    assertTerrainReleaseIdentity(
+      { ...metadata, mapVersion: publication.manifest.mapVersion },
+      canonicalTerrain.expected,
+    );
+  const modelCatalog = createWorldModelCatalog(
+    modelSources,
+    publication.manifest,
+    metadata.assetReleaseVersion,
+    runtimeAssetIds,
+    [...(terrain?.assets.keys() ?? [])],
+  );
+  const placementPolicy: WorldPlacementPolicy | undefined = policySource
+    ? {
+        formatVersion: 1,
+        worldId: base.worldId,
+        assetReleaseVersion: modelCatalog.assetReleaseVersion,
+        assetIds: [...policySource.assetIds].sort(),
+      }
+    : undefined;
+  if (placementPolicy)
+    validateWorldPlacementAssets(
+      placementPolicy,
+      modelCatalog,
+      publication.manifest,
+      world,
+      Object.fromEntries(
+        [...compiled].map(([assetId, asset]) => [
+          assetId,
+          JSON.parse(new TextDecoder().decode(asset.parts)),
+        ]),
+      ),
+      fixedInstanceIds,
+    );
   await writeWorldPublication(publication, outputDirectory);
   await writeAuthoringMetadata(
     world,
     publication.manifest,
     fixedInstanceIds,
     outputDirectory,
-    privateTerrain ? jsonBytes(privateTerrain) : undefined,
+    terrainBytes,
+  );
+  await writeWorldModelCatalog(
+    modelCatalog,
+    options.modelCatalogOutput ??
+      (output ? resolve(outputDirectory, 'model-catalog') : `dist/model-catalogs/${base.worldId}`),
+    placementPolicy,
   );
   const manifest = publication.manifest;
   return manifest;
@@ -429,6 +541,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const manifest = await buildWorld(
       `content/worlds/${worldId}/world.json`,
       `dist/worlds/${worldId}`,
+      { modelCatalogOutput: `dist/model-catalogs/${worldId}` },
     );
     const removed = await pruneWorldPublication(`dist/worlds/${worldId}`);
     console.log(

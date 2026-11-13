@@ -17,6 +17,7 @@ export function compileStaticAsset(
   physics: BuildingPhysicsAsset,
   treeParts?: BuildingParts,
   renderMode?: BuildingParts['renderMode'],
+  visuals: Pick<BuildingParts, 'lights' | 'glow'> = {},
 ): CompiledWorldAsset {
   let inspected: { parts: BuildingParts; bounds: BuildingPhysicsAsset['bounds'] };
   if (model !== undefined) {
@@ -29,6 +30,7 @@ export function compileStaticAsset(
       throw new Error(`GLB render mode cannot contain a tree recipe: ${assetId}`);
     inspected = { parts: treeParts, bounds: physics.bounds };
   }
+  inspected.parts = { ...inspected.parts, ...visuals };
   if (physics.assetId !== assetId || inspected.parts.assetId !== assetId)
     throw new Error(`Compiled asset ID mismatch: ${assetId}`);
   for (const axis of ['x', 'y', 'z'] as const) {

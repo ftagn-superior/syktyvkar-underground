@@ -6,17 +6,17 @@ import { planSupportPlacement } from '../../packages/terrain-build/src/supports.
 import { patchRange, rectangle, terrainPatch } from '../../packages/terrain-build/src/terrain.js';
 import {
   generateFullRingTerrain,
-  readFullRingTerrainInputs,
   type FullRingTerrainConfig,
 } from '../../tools/world-build/src/ring-full-terrain.js';
 import { ringTerrainGridStatistics } from '../../tools/world-build/src/ring-terrain-candidate.js';
+import { readRevalidatedFullGridFixture } from '../helpers/revalidated-ring-grids.js';
 
 // The saved user export is intentionally untracked. Dataset checks are mandatory when it is present;
-// readFullRingTerrainInputs verifies its exact pinned SHA before any actual-owner assertions.
+// The fixture verifies its exact pinned SHA before any actual-owner assertions.
 describe.skipIf(!existsSync('data/map-layout.json'))(
   'full-map terrain with exact saved export (requires data/map-layout.json)',
   () => {
-    let inputs: Awaited<ReturnType<typeof readFullRingTerrainInputs>>;
+    let inputs: Awaited<ReturnType<typeof readRevalidatedFullGridFixture>>;
     let ready: TerrainGrid;
     const generate = (config = inputs.config) =>
       generateFullRingTerrain(
@@ -29,7 +29,7 @@ describe.skipIf(!existsSync('data/map-layout.json'))(
         config,
       );
     beforeAll(async () => {
-      inputs = await readFullRingTerrainInputs();
+      inputs = await readRevalidatedFullGridFixture();
       ready = JSON.parse(
         await readFile('content/worlds/ring-block/terrain-candidate/full-grid-ready.json', 'utf8'),
       );

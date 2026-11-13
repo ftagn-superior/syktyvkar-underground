@@ -5,5 +5,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Светофор трёхсекционный",
+    "description": "Тёмная опора и корпус с красным, жёлтым и зелёным сигналами.",
+    "category": "street-furniture",
+    "tags": ["road", "traffic-light"]
   }
 }

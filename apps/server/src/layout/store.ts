@@ -6,6 +6,8 @@ import {
   STATIC_PLACEMENT_COOLDOWN_MS,
   type PlaceStaticRequest,
   type PlaceStaticResult,
+  type RemoveStaticRequest,
+  type RemoveStaticResult,
   type StaticObjectInstance,
   type WorldLayoutSnapshot,
   type WorldLayoutPatch,
@@ -250,8 +252,8 @@ export class StaticLayoutStore {
     const prior = await this.db.query(
       `SELECT o.*, i.entity_id AS present FROM world_static_operations o
       LEFT JOIN world_static_instances i ON i.world_id=o.world_id AND i.entity_id=o.entity_id
-      WHERE o.world_id=$1 AND o.operation_id=$2 AND o.entity_id=$3`,
-      [this.release.definition.worldId, request.operationId, i.entityId],
+      WHERE o.world_id=$1 AND o.operation_id=$2`,
+      [this.release.definition.worldId, request.operationId],
     );
     if (!prior.rowCount) {
       const partial = await this.db.query(
@@ -263,13 +265,16 @@ export class StaticLayoutStore {
     }
     const row = prior.rows[0],
       after = row.after_state;
-    if (!row.present || !after) throw new Error('Successful placement is incomplete');
     if (
+      prior.rowCount !== 1 ||
       row.source !== 'game' ||
       row.account_id !== accountId ||
+      row.entity_id !== i.entityId ||
+      row.before_state !== null ||
+      !after ||
+      after.enabled !== true ||
       after.asset_id !== i.assetId ||
       after.position_x !== i.position.x ||
-      after.position_y !== i.position.y ||
       after.position_z !== i.position.z ||
       after.rotation_x !== i.rotation.x ||
       after.rotation_y !== i.rotation.y ||
@@ -277,10 +282,38 @@ export class StaticLayoutStore {
       after.rotation_w !== i.rotation.w
     )
       return { operationId: request.operationId, ok: false, code: 'OPERATION_CONFLICT' };
+    if (!row.present) throw new Error('Successful placement is incomplete');
     return {
       operationId: request.operationId,
       ok: true,
       entityId: i.entityId,
+      layoutRevision: row.layout_revision,
+    };
+  }
+  /** A removal is identified by the durable enabled -> disabled transition, not ownership. */
+  async replayRemoval(
+    accountId: string,
+    request: RemoveStaticRequest,
+  ): Promise<RemoveStaticResult | undefined> {
+    const prior = await this.db.query(
+      'SELECT * FROM world_static_operations WHERE world_id=$1 AND operation_id=$2',
+      [this.release.definition.worldId, request.operationId],
+    );
+    if (!prior.rowCount) return;
+    const row = prior.rows[0];
+    if (
+      prior.rowCount !== 1 ||
+      row.source !== 'game' ||
+      row.account_id !== accountId ||
+      row.entity_id !== request.entityId ||
+      row.before_state?.enabled !== true ||
+      row.after_state?.enabled !== false
+    )
+      return { operationId: request.operationId, ok: false, code: 'OPERATION_CONFLICT' };
+    return {
+      operationId: request.operationId,
+      ok: true,
+      entityId: request.entityId,
       layoutRevision: row.layout_revision,
     };
   }
@@ -299,6 +332,7 @@ export class StaticLayoutStore {
     request: PlaceStaticRequest,
     validatedHash: string,
     compatibilityHash: string,
+    acceptedInstance = placedStaticInstance(request),
   ) {
     const db = this.db;
     try {
@@ -311,7 +345,7 @@ export class StaticLayoutStore {
         await db.query('ROLLBACK');
         return undefined;
       }
-      const i = placedStaticInstance(request);
+      const i = acceptedInstance;
       await db.query(
         `SELECT set_config('su.layout_operation',$1,true),set_config('su.layout_source','game',true),set_config('su.layout_account',$2,true)`,
         [request.operationId, accountId],
@@ -332,6 +366,52 @@ export class StaticLayoutStore {
           i.rotation.w,
         ],
       );
+      const updated = await db.query(
+        'UPDATE world_layouts SET validated_revision=revision,validated_hash=$2 WHERE world_id=$1 RETURNING revision',
+        [this.release.definition.worldId, validatedHash],
+      );
+      await db.query('UPDATE persistent_worlds SET compatibility_hash=$2 WHERE id=$1', [
+        this.release.definition.worldId,
+        compatibilityHash,
+      ]);
+      await db.query('COMMIT');
+      return updated.rows[0].revision as number;
+    } catch (error) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw error;
+    }
+  }
+
+  /** Shares the layout lock, transaction journal and commit-replay semantics with creation. */
+  async removeGame(
+    accountId: string,
+    request: RemoveStaticRequest,
+    validatedHash: string,
+    compatibilityHash: string,
+  ) {
+    const db = this.db;
+    try {
+      await db.query('BEGIN');
+      const row = await db.query(
+        'SELECT revision FROM world_layouts WHERE world_id=$1 FOR UPDATE',
+        [this.release.definition.worldId],
+      );
+      if (row.rows[0]?.revision !== request.expectedLayoutRevision) {
+        await db.query('ROLLBACK');
+        return undefined;
+      }
+      await db.query(
+        `SELECT set_config('su.layout_operation',$1,true),set_config('su.layout_source','game',true),set_config('su.layout_account',$2,true)`,
+        [request.operationId, accountId],
+      );
+      const changed = await db.query(
+        'UPDATE world_static_instances SET enabled=false WHERE world_id=$1 AND entity_id=$2 AND enabled=true',
+        [this.release.definition.worldId, request.entityId],
+      );
+      if (changed.rowCount !== 1) {
+        await db.query('ROLLBACK');
+        return undefined;
+      }
       const updated = await db.query(
         'UPDATE world_layouts SET validated_revision=revision,validated_hash=$2 WHERE world_id=$1 RETURNING revision',
         [this.release.definition.worldId, validatedHash],

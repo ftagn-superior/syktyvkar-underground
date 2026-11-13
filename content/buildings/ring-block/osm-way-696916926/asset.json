@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Одноэтажное здание с светло-серым фасадом",
+    "description": "Городское здание с светло-серым фасадом и плоской крышей.",
+    "category": "buildings",
+    "tags": ["building", "floors-1"]
   }
 }

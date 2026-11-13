@@ -28,6 +28,8 @@ export interface PreparationPlan {
 
 /** Connection state survives a transport reconnect; physics remains owned by the world. */
 export interface PlayerSession {
+  appliedLayoutRevision?: number;
+  preparedLayout?: { revision: number; cellIds: string[] };
   plan?: PreparationPlan;
   areaResults: Map<string, AreaResult>;
   entityId: string;

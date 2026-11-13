@@ -145,7 +145,7 @@ describe('verified server placement catalog', () => {
       });
       expect(physics).not.toHaveBeenCalled();
       expect(spies[3]).not.toHaveBeenCalled();
-      expect(paused).toHaveBeenLastCalledWith(false);
+      expect(paused).not.toHaveBeenCalled();
     } finally {
       spies.forEach((spy) => spy.mockRestore());
     }

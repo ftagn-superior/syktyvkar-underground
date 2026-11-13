@@ -99,7 +99,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live whole-object static rem
     return new Set(cells.flatMap((cell) => cell.buildings.map((item: any) => item.entityId)));
   }
   async function settle() {
-    await until(() => !app.room.state.paused && app.room.isReady());
+    await until(
+      () =>
+        !app.room.state.paused && app.room.isReady() && !app.room.diagnostics().staticPlacementBusy,
+    );
     await refresh();
   }
 
@@ -167,8 +170,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live whole-object static rem
     await settle();
     expect(player.removals[0]).toMatchObject({ ok: true, entityId: req.entityId });
     expect(player.removals[1]).toEqual(player.removals[0]);
-    expect(player.preparation.plans.at(-1)?.reason).toBe('layout');
-    expect(observer.preparation.plans.at(-1)?.reason).toBe('layout');
+    expect(player.preparation.changes).toHaveLength(1);
+    expect(observer.preparation.changes).toHaveLength(1);
     expect(app.room.diagnostics().bodies).toBeLessThan(beforeBodies);
     const ids = await publishedIds();
     expect(ids.has(req.entityId)).toBe(false);

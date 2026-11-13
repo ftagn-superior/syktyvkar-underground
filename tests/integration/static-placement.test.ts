@@ -14,6 +14,8 @@ import type {
   WorldInfo,
   ActionResult,
 } from '../../packages/contracts/src/index.js';
+import { MoveInputSchema } from '../../packages/protocol/src/index.js';
+import { LayoutPreparation } from '../../apps/server/src/layout/preparation.js';
 import type { WorldState } from '../../packages/protocol/src/index.js';
 import { AuthoritativeWorld } from '../../packages/simulation/src/server.js';
 import { StaticLayoutStore } from '../../apps/server/src/layout/store.js';
@@ -42,6 +44,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     info = await fetch(app.url + '/api/world').then((r) => r.json());
   }
   async function connect(cookie?: string, automatic = true) {
+    info = await fetch(app.url + '/api/world').then((r) => r.json());
     const room = await new Client(
       app.url,
       cookie ? { headers: { Cookie: cookie } } : {},
@@ -87,7 +90,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     await fixture?.close();
     await rm(directory, { recursive: true, force: true });
   });
-  it('opens privately, commits once, switches both clients under pause and survives restart', async () => {
+  it('opens privately, commits once, switches both client revisions and survives restart', async () => {
     const cookie = responseCookie((await loginAccount(app.url, 'builder')).result, 'su_session');
     const owner = await connect(cookie),
       observer = await connect();
@@ -105,8 +108,14 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     await until(() => owner.results.length === 2 && !app.room.state.paused);
     expect(owner.results[0]).toMatchObject({ ok: true, entityId: `placed_${req.operationId}` });
     expect(owner.results[1]).toEqual(owner.results[0]);
-    expect(owner.preparation.plans.at(-1)?.reason).toBe('layout');
-    expect(observer.preparation.plans.at(-1)?.reason).toBe('layout');
+    expect(owner.preparation.changes).toHaveLength(1);
+    expect(observer.preparation.changes).toHaveLength(1);
+    expect(owner.preparation.changes[0]).toMatchObject({
+      operationId: req.operationId,
+      previousLayoutRevision: req.expectedLayoutRevision,
+      publication: { layoutRevision: req.expectedLayoutRevision + 1 },
+    });
+    expect(owner.preparation.changes[0].changedCellIds.length).toBeGreaterThan(0);
     expect(app.room.state.players.get(owner.room.sessionId)!.x).toBeCloseTo(initial.x);
     expect(observer.actions).toEqual([]);
     expect(app.room.state.players.get(owner.room.sessionId)!.chatText).toBe('');
@@ -197,7 +206,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     expect(app.room.isReady()).toBe(true);
   }, 20000);
 
-  it('publishes several additions and releases old runtime publications after every barrier', async () => {
+  it('publishes several additions and releases old runtime publications after every client acknowledgement', async () => {
     const owner = await connect(
       responseCookie((await loginAccount(app.url, 'sequential')).result, 'su_session'),
     );
@@ -215,6 +224,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
       await until(() => owner.results.length === n + 1 && !app.room.state.paused);
       expect(owner.results[n]).toMatchObject({ ok: true });
       const current = await fetch(app.url + '/api/world').then((r) => r.json());
+      await until(async () => (await fetch(app.url + previous)).status === 404);
       expect((await fetch(app.url + previous)).status).toBe(404);
       expect((await fetch(app.url + current.manifestUrl)).status).toBe(200);
       expect(app.room.diagnostics().bodies).toBe(bodies + n + 1);
@@ -230,7 +240,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     const publications = join(worldDirectory, 'layouts', info.assetReleaseVersion);
     await until(async () => (await readdir(publications)).length === 2);
     await app.close();
-    expect((await readdir(publications)).length).toBe(1); // The startup/operator publication is preserved.
+    expect((await readdir(publications)).length).toBe(2); // Shutdown preserves startup and the confirmed current publication.
   }, 20000);
 
   it('rolls back a failed SQL insert and preserves item ownership before retrying the same operation', async () => {
@@ -301,29 +311,220 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     ).toEqual(itemOwnership);
   }, 20000);
 
-  it('rejects an old readiness acknowledgement and releases the group when one client times out', async () => {
+  it('keeps simulation, entry and item commands ready while an old client is retained, then evicts it', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'barrier')).result, 'su_session'),
+      responseCookie((await loginAccount(app.url, 'nonblocking')).result, 'su_session'),
     );
     const slow = await connect(undefined, false);
     const old = slow.preparation.plans.at(-1)!;
+    const oldManifest = info.manifestUrl;
     owner.room.send('placeStatic', request());
-    await until(() => owner.results.length === 1);
+    await until(() => owner.results.length === 1 && slow.preparation.changes.length === 1);
     expect(owner.results[0]).toMatchObject({ ok: true });
-    expect(app.room.state.paused).toBe(true);
+    expect(app.room.state.paused).toBe(false);
     const tick = app.room.state.serverTick;
     slow.preparation.ready(old);
+    slow.preparation.applied({
+      ...slow.preparation.changes[0],
+      publication: { ...slow.preparation.changes[0].publication, mapVersion: old.mapVersion },
+    });
     await wait(100);
-    expect(app.room.state.paused).toBe(true);
-    expect(app.room.state.serverTick).toBe(tick);
-    const during = await fetch(app.url + '/api/world').then((r) => r.json());
-    expect(app.room.isReady()).toBe(false);
-    expect((await fetch(app.url + '/health/ready')).status).toBe(503);
-    expect((await fetch(app.url + during.manifestUrl)).status).toBe(200);
-    await until(() => !app.room.state.paused);
+    expect(app.room.state.paused).toBe(false);
+    expect(app.room.state.serverTick).toBeGreaterThan(tick);
+    expect(app.room.isReady()).toBe(true);
+    expect((await fetch(app.url + '/health/ready')).status).toBe(200);
+    expect((await fetch(app.url + oldManifest)).status).toBe(200);
+    info = await fetch(app.url + '/api/world').then((r) => r.json());
+    owner.room.send('placeStatic', { ...request(), position: { x: 10, z: 14 } });
+    await until(() => owner.results.length === 2);
+    expect(owner.results[1]).toMatchObject({ code: 'WORLD_NOT_READY' });
+    owner.room.send('requestChat', {
+      requestId: 9,
+      worldEpoch: info.worldEpoch,
+      text: '/giveme wooden-crate',
+    });
+    await until(() => owner.actions.length === 1);
+    expect(owner.actions[0].ok).toBe(true);
+    const joined = await connect();
+    expect(joined.preparation.plans[0].layoutRevision).toBe(info.layoutRevision);
+    expect(joined.preparation.plans[0].mapVersion).toBe(info.mapVersion);
+    await until(() => !app.room.state.players.has(slow.room.sessionId));
+    await until(async () => (await fetch(app.url + oldManifest)).status === 404);
     expect(app.room.isReady()).toBe(true);
     expect(app.room.state.players.has(owner.room.sessionId)).toBe(true);
   }, 15000);
+
+  it('does not recreate a successful local plan while layoutApplied is still in flight', async () => {
+    const owner = await connect(
+      responseCookie((await loginAccount(app.url, 'local-ready')).result, 'su_session'),
+    );
+    const observer = await connect(undefined, false);
+    owner.room.send('placeStatic', request());
+    await until(
+      () => owner.results.length === 1 && observer.preparation.plans.at(-1)?.reason === 'layout',
+    );
+    const plan = observer.preparation.plans.at(-1)!;
+    observer.preparation.ready(plan);
+    await until(() =>
+      observer.preparation.results.some(
+        (result) => result.prepareId === plan.prepareId && result.ok,
+      ),
+    );
+    const count = observer.preparation.plans.length;
+    const tick = app.room.state.serverTick;
+    await wait(150);
+    expect(app.room.state.serverTick).toBeGreaterThan(tick);
+    expect(observer.preparation.plans).toHaveLength(count);
+    expect(app.room.state.players.has(observer.room.sessionId)).toBe(true);
+    observer.preparation.applied();
+    await until(() => app.room.diagnostics().layoutTransitionPending.length === 0);
+  }, 15000);
+
+  it('supplies the current publication when authentication overlaps a layout commit', async () => {
+    const owner = await connect(
+      responseCookie((await loginAccount(app.url, 'join-race')).result, 'su_session'),
+    );
+    const old = { ...info };
+    const original = app.room.onAuth;
+    let release!: () => void;
+    let authenticated = false;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(app.room, 'onAuth').mockImplementationOnce(async (...args) => {
+      const result = await original.apply(app.room, args);
+      authenticated = true;
+      await gate;
+      return result;
+    });
+    const joining = new Client(app.url).joinById<WorldState>(old.roomId, {
+      ...old,
+      accountMode: 'guest',
+    });
+    try {
+      await until(() => authenticated);
+      owner.room.send('placeStatic', request());
+      await until(() => owner.results.length === 1);
+      expect(owner.results[0].ok).toBe(true);
+    } finally {
+      release();
+    }
+    const joined = await joining;
+    rooms.push(joined);
+    joined.reconnection.enabled = false;
+    for (const message of ['problem', 'resync', 'inventory']) joined.onMessage(message, () => {});
+    const preparation = prepareSdk(joined);
+    await until(
+      () => preparation.changes.length === 1 && joined.state?.players?.has(joined.sessionId),
+    );
+    expect(preparation.changes[0].publication).toMatchObject({
+      mapVersion: app.room.state.mapVersion,
+      layoutRevision: app.room.state.layoutRevision,
+    });
+    expect(preparation.changes[0].publication.mapVersion).not.toBe(old.mapVersion);
+    expect(preparation.plans.at(-1)?.mapVersion).toBe(app.room.state.mapVersion);
+  }, 15000);
+
+  it('serves movement, inventory commands and new entry while publication preparation is pending', async () => {
+    const owner = await connect(
+      responseCookie((await loginAccount(app.url, 'background')).result, 'su_session'),
+    );
+    const observer = await connect();
+    const original = LayoutPreparation.prototype.prepare;
+    let release!: () => void;
+    let preparing = false;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(LayoutPreparation.prototype, 'prepare').mockImplementationOnce(async function (
+      this: LayoutPreparation,
+      ...args
+    ) {
+      preparing = true;
+      await gate;
+      return original.apply(this, args);
+    });
+    const req = request();
+    try {
+      owner.room.send('placeStatic', req);
+      await until(() => preparing);
+      const tick = app.room.state.serverTick;
+      const x = app.room.state.players.get(observer.room.sessionId)!.x;
+      const input = observer.room.input({ type: MoveInputSchema, mode: 'reliable' });
+      input.data.moveX = 1;
+      const movement = setInterval(() => input.send(), 16);
+      try {
+        await until(() => app.room.state.players.get(observer.room.sessionId)!.x > x + 0.2);
+      } finally {
+        clearInterval(movement);
+      }
+      expect(app.room.state.serverTick).toBeGreaterThan(tick);
+      expect(app.room.state.paused).toBe(false);
+      expect((await fetch(app.url + '/health/ready')).status).toBe(200);
+      owner.room.send('requestChat', {
+        requestId: 1,
+        worldEpoch: info.worldEpoch,
+        text: '/giveme wooden-crate',
+      });
+      await until(() => owner.actions.length === 1);
+      expect(owner.actions[0].ok).toBe(true);
+      const joined = await connect();
+      expect(joined.preparation.plans[0].layoutRevision).toBe(req.expectedLayoutRevision);
+      expect(owner.results).toHaveLength(0);
+    } finally {
+      release();
+    }
+    await until(() => owner.results.length === 1);
+    expect(owner.results[0]).toMatchObject({ ok: true });
+  }, 20000);
+  it('rechecks live geometry when a player arrives at the prepared placement', async () => {
+    const owner = await connect(
+      responseCookie((await loginAccount(app.url, 'occupied-during-build')).result, 'su_session'),
+    );
+    const observer = await connect();
+    const original = LayoutPreparation.prototype.prepare;
+    let release!: () => void;
+    let preparing = false;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(LayoutPreparation.prototype, 'prepare').mockImplementationOnce(async function (
+      this: LayoutPreparation,
+      ...args
+    ) {
+      preparing = true;
+      await gate;
+      return original.apply(this, args);
+    });
+    const req = request();
+    const bodies = app.room.diagnostics().bodies;
+    const previous = info.mapVersion;
+    try {
+      owner.room.send('placeStatic', req);
+      await until(() => preparing);
+      const world = (app.room as unknown as { world: AuthoritativeWorld }).world;
+      expect(
+        world.respawnPlayer(app.room.state.players.get(observer.room.sessionId)!.entityId, {
+          x: req.position.x,
+          y: 0,
+          z: req.position.z,
+        }),
+      ).toBe(true);
+    } finally {
+      release();
+    }
+    await until(() => owner.results.length === 1);
+    expect(owner.results[0]).toMatchObject({ ok: false, code: 'BLOCKED' });
+    expect(app.room.diagnostics().bodies).toBe(bodies);
+    expect((await fetch(app.url + '/api/world').then((r) => r.json())).mapVersion).toBe(previous);
+    expect(
+      (await fixture.pool.query("SELECT 1 FROM world_static_operations WHERE source='game'"))
+        .rowCount,
+    ).toBe(0);
+    expect(app.room.state.paused).toBe(false);
+    expect(app.room.state.players.get(observer.room.sessionId)!.x).toBeCloseTo(req.position.x);
+  }, 20000);
+
   it('rejects guests, changed headers and blocked geometry without a game row', async () => {
     const guest = await connect();
     guest.room.send('placeStatic', request());

@@ -221,14 +221,28 @@ export function createWorldPublication(
 export async function writeWorldPublication(
   publication: WorldPublication,
   outputDirectory: string,
+  concurrency = 1,
 ) {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 16)
+    throw new Error('Publication write concurrency must be between 1 and 16');
   const { manifest, payloads } = publication;
   await mkdir(outputDirectory, { recursive: true });
-  for (const [path, bytes] of payloads) {
-    const destination = resolve(outputDirectory, path);
-    await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, bytes);
-  }
+  const entries = [...payloads];
+  let next = 0;
+  const write = async () => {
+    while (next < entries.length) {
+      const [path, bytes] = entries[next++];
+      const destination = resolve(outputDirectory, path);
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, bytes);
+    }
+  };
+  // Drain every writer before reporting failure so callers can safely remove staging.
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(concurrency, entries.length) }, write),
+  );
+  const failed = results.find((result) => result.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
   // Content files are immutable; publishing the small manifest is the final step.
   const temporary = resolve(outputDirectory, '.manifest.tmp');
   await writeFile(temporary, JSON.stringify(manifest, null, 2) + '\n');

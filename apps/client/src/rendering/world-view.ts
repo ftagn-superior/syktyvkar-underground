@@ -135,6 +135,8 @@ export class WorldView {
   };
   private frameHook?: (now: number, delta: number) => void;
   private cameraFrameHook?: (now: number, delta: number) => void;
+  private renderDeferred = false;
+  private deferredFrames = 0;
   private lastFrame = performance.now();
   private readonly visibilityChanged = () => {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
@@ -261,16 +263,22 @@ export class WorldView {
         );
       }
       const active = this.activeCamera;
+      active.getViewMatrix(true);
+      active.getProjectionMatrix(true);
+      this.scene.updateTransformMatrix(true);
+      this.cameraFrameHook?.(now, delta);
+      // Keep RAF, streaming and UI active while local preparation owns the frame budget.
+      if (this.renderDeferred) {
+        this.deferredFrames++;
+        return;
+      }
       this.environment.update({
         target: this.ownPosition ?? this.target,
         // On foot the cloud shadows remain, while the overhead layer is hidden.
         zoom: this.firstPerson ? 0 : this.zoom,
         visible: this.radial,
       });
-      active.getViewMatrix(true);
-      active.getProjectionMatrix(true);
-      this.scene.updateTransformMatrix(true);
-      this.cameraFrameHook?.(now, delta);
+
       const desiredRadius = this.firstPerson
         ? Math.min(FIRST_PERSON.radius, this.streamingRadius)
         : this.streamingRadius;
@@ -481,7 +489,7 @@ export class WorldView {
     if (this.staticHighlight?.target === entityId) this.highlightStaticObject(entityId);
   }
   buildingDiagnostics() {
-    return this.buildings.diagnostics();
+    return { ...this.buildings.diagnostics(), primitives: this.statics.diagnostics() };
   }
   avatarDiagnostics() {
     return Array.from(this.entities.values()).flatMap((view) =>
@@ -492,6 +500,8 @@ export class WorldView {
     const shadows = this.environment.shadowDiagnostics();
     return {
       quality: this.quality,
+      renderDeferred: this.renderDeferred,
+      deferredFrames: this.deferredFrames,
       canvasSize: { width: this.canvas.clientWidth, height: this.canvas.clientHeight },
       renderSize: {
         width: this.engine.getRenderWidth(true),
@@ -640,6 +650,10 @@ export class WorldView {
       this.sizeCamera();
     }
   }
+  setRenderDeferred(deferred: boolean): void {
+    this.renderDeferred = deferred;
+  }
+
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
   }

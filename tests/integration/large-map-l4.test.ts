@@ -10,9 +10,9 @@ import type { WorldInfo } from '../../packages/contracts/src/index.js';
 import { prepareSdk } from '../helpers/prepare.js';
 const firstItem = (state: WorldState) => state.items.values().next().value;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-async function until(check: () => boolean, timeout = 3500) {
+async function until(check: () => boolean | Promise<boolean>, timeout = 3500) {
   const deadline = performance.now() + timeout;
-  while (!check()) {
+  while (!(await check())) {
     if (performance.now() > deadline) throw new Error('L4 visibility timed out');
     await delay(10);
   }

@@ -413,6 +413,28 @@ export function worldManifestIdentity(manifest: WorldManifest) {
   const { mapVersion: _mapVersion, ...identity } = manifest;
   return identity;
 }
+/** Static dependencies which must stay identical when transferring live scene ownership. */
+export function worldPublicationBaseIdentity(manifest: WorldManifest) {
+  return {
+    formatVersion: manifest.formatVersion,
+    worldId: manifest.worldId,
+    bounds: manifest.bounds,
+    grid: manifest.grid,
+    worldFile: manifest.worldFile,
+    worldHash: manifest.files[manifest.worldFile],
+    assets: Object.fromEntries(
+      Object.entries(manifest.assets).map(([id, asset]) => [
+        id,
+        {
+          ...asset,
+          modelHash: asset.modelFile ? manifest.files[asset.modelFile] : undefined,
+          collisionHash: manifest.files[asset.collisionFile],
+          partsHash: manifest.files[asset.partsFile],
+        },
+      ]),
+    ),
+  };
+}
 /** Explicit domain projection: render metadata can never accidentally alter the physics hash. */
 export function simulationProjection(world: WorldDefinition) {
   const usedAssets = new Set(world.buildings.map((instance) => instance.assetId));

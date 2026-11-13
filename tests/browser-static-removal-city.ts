@@ -167,6 +167,15 @@ try {
   };
   await writeFile(`${output}/result.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
+} catch (error) {
+  for (const context of browser?.contexts() ?? [])
+    for (const page of context.pages())
+      console.error(
+        'City failure state',
+        await page.evaluate(() => (window as any).__SU_DEBUG__?.snapshot()).catch(() => null),
+      );
+  console.error('Browser errors', errors);
+  throw error;
 } finally {
   await browser?.close();
   await app?.close();

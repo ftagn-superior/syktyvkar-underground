@@ -9,6 +9,26 @@ import {
 import { WorldState } from './index.js';
 
 describe('shared day clock wire', () => {
+  it('replicates layout identity and the commit tick with the dynamic snapshot', () => {
+    const source = new WorldState();
+    const target = new WorldState();
+    const encoder = new Encoder(source);
+    const decoder = new Decoder(target);
+    source.layoutRevision = 3707;
+    source.layoutAppliedTick = 1234;
+    source.serverTick = 1235;
+    decoder.decode(encoder.encode());
+    encoder.discardChanges();
+    expect(target.layoutRevision).toBe(3707);
+    expect(target.layoutAppliedTick).toBe(1234);
+    source.layoutRevision++;
+    source.layoutAppliedTick = 1260;
+    source.serverTick = 1260;
+    decoder.decode(encoder.encode());
+    expect(target.layoutRevision).toBe(3708);
+    expect(target.layoutAppliedTick).toBe(1260);
+    expect(target.serverTick).toBe(1260);
+  });
   it('replicates time changes, freeze at midnight and reset over consecutive deltas', () => {
     const source = new WorldState();
     const target = new WorldState();
@@ -16,7 +36,7 @@ describe('shared day clock wire', () => {
     const decoder = new Decoder(target);
     const now = 1_800_000_123_456;
     expect(source.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(PROTOCOL_VERSION).toBe(18);
+    expect(PROTOCOL_VERSION).toBe(19);
     for (const clock of [
       applyDayClockAction(DEFAULT_DAY_CLOCK, { kind: 'set', hour: 18.5 }, now),
       { offsetMs: 1234, frozenHour: 0 },

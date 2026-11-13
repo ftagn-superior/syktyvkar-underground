@@ -20,6 +20,9 @@ import {
 import type { PredictionWorld } from '@su/simulation/prediction';
 import {
   MAX_INPUT_QUEUE,
+  canonicalJson,
+  worldPublicationBaseIdentity,
+  type LayoutChanged,
   type WorldPublicationInfo,
   type StaticPlacementEffect,
   type StaticRemovalEffect,
@@ -71,7 +74,7 @@ import {
   type Vec3,
 } from '@su/contracts';
 import { predictionCells } from '../streaming/prediction-area';
-import { VerifiedResources } from '../streaming/resources';
+import { VerifiedResources, VerifiedByteCache } from '../streaming/resources';
 import {
   CellStreamer,
   cellNeighborhood,
@@ -141,10 +144,19 @@ export class GameSession {
   );
   private publicationTarget?: string;
   private switchingPublication = false;
+  private livePublication = false;
+  private liveManifestVerified = false;
+  private liveChangedCells = new Set<string>();
+  private layoutPredictionBlocked = false;
+  private readonly layoutHistoryCells = new Set<string>();
+  private layoutPauseStarted?: number;
+  private readonly layoutPauseSamples: { revision: number; ms: number }[] = [];
+  private pendingLayoutAck?: WorldPublicationInfo;
+  private snapshotWait?: { revision: number; resolve: () => void };
+  private readonly verifiedBytes = new VerifiedByteCache();
+  private readonly layoutTransitions: { revision: number; ms: number; full: boolean }[] = [];
   onStaticPlacementOpen?: (effect: StaticPlacementEffect) => void;
-  onStaticPlacementResult?: (result: PlaceStaticResult) => void;
   onStaticRemovalOpen?: (effect: StaticRemovalEffect) => void;
-  onStaticRemovalResult?: (result: RemoveStaticResult) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
   private readonly itemOperation = new PersistentOperation<ItemCommand>(
@@ -272,7 +284,7 @@ export class GameSession {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
       if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
-      const publication = await loadWorldPublication(info);
+      const publication = await loadWorldPublication(info, this.verifiedBytes);
       if (generation !== this.generation) {
         publication.resources.dispose();
         return;
@@ -294,7 +306,11 @@ export class GameSession {
     }
   }
   /** Replaces the resource/physics generation while preserving the room and character. */
-  private changePublication(info: WorldInfo | WorldPublicationInfo): Promise<void> {
+  private changePublication(
+    info: WorldInfo | WorldPublicationInfo,
+    change?: LayoutChanged,
+  ): Promise<void> {
+    const started = performance.now();
     if (
       info.worldEpoch === this.info.worldEpoch &&
       info.assetReleaseVersion === this.info.assetReleaseVersion &&
@@ -307,7 +323,20 @@ export class GameSession {
       return this.publicationTask;
     if (this.info.mapVersion === info.mapVersion && !this.switchingPublication)
       return Promise.resolve();
+    if (
+      change &&
+      this.room &&
+      this.physics &&
+      this.streamer &&
+      info.worldEpoch === this.info.worldEpoch &&
+      info.assetReleaseVersion === this.info.assetReleaseVersion &&
+      change.previousMapVersion === this.info.mapVersion &&
+      change.previousLayoutRevision === this.info.layoutRevision
+    )
+      return this.changeLivePublication(change);
     const generation = ++this.generation;
+    this.livePublication = false;
+    this.layoutHistoryCells.clear();
     this.publicationTarget = info.mapVersion;
     this.switchingPublication = true;
     this.cancelPhysicsPreparation();
@@ -330,7 +359,7 @@ export class GameSession {
     const playing = !!this.room;
     this.setState(playing ? 'preparing' : 'loading');
     const task = (async () => {
-      const publication = await loadWorldPublication(info);
+      const publication = await loadWorldPublication(info, this.verifiedBytes);
       if (generation !== this.generation) {
         publication.resources.dispose();
         return;
@@ -345,6 +374,13 @@ export class GameSession {
       this.ensureStreamer();
       this.switchingPublication = false;
       this.resetFrameMeasurements();
+      if (playing) this.room?.send('requestArea');
+      this.layoutTransitions.push({
+        revision: info.layoutRevision,
+        ms: performance.now() - started,
+        full: true,
+      });
+      if (this.layoutTransitions.length > 32) this.layoutTransitions.shift();
       if (!playing) this.setState('ready');
     })().catch((error: unknown) => {
       if (generation !== this.generation) return;
@@ -352,12 +388,149 @@ export class GameSession {
       throw error;
     });
     this.publicationTask = task;
-    return task.finally(() => {
-      if (this.publicationTask === task) {
+    return task
+      .finally(() => {
+        if (this.publicationTask === task) {
+          this.publicationTask = undefined;
+          this.publicationTarget = undefined;
+        }
+      })
+      .then(() => this.acknowledgeReadyArea());
+  }
+  /** A live publication owns a new immutable resource context, while the scene and Havok survive. */
+  private changeLivePublication(change: LayoutChanged): Promise<void> {
+    const info = change.publication;
+    const generation = this.generation;
+    const started = performance.now();
+    this.publicationTarget = info.mapVersion;
+    this.switchingPublication = true;
+    this.livePublication = true;
+    this.liveManifestVerified = false;
+    this.liveChangedCells = new Set(change.changedCellIds);
+    this.updateLayoutPredictionGate();
+    const task = (async () => {
+      const publication = await loadWorldPublication(info, this.verifiedBytes);
+      if (generation !== this.generation || !this.room) {
+        publication.resources.dispose();
+        return;
+      }
+      if (
+        canonicalJson(publication.definition) !== canonicalJson(this.definition) ||
+        canonicalJson(worldPublicationBaseIdentity(publication.manifest)) !==
+          canonicalJson(worldPublicationBaseIdentity(this.manifest))
+      ) {
+        publication.resources.dispose();
+        // Incompatible static dependencies use the ordinary full recovery path for this client.
         this.publicationTask = undefined;
         this.publicationTarget = undefined;
+        this.switchingPublication = false;
+        this.livePublication = false;
+        await this.changePublication(info);
+        return;
       }
-    });
+      const previous = new Map(
+        this.manifest.cells.map((cell) => [cell.cellId, this.manifest.files[cell.file]]),
+      );
+      this.liveChangedCells = new Set(
+        publication.manifest.cells
+          .filter((cell) => previous.get(cell.cellId) !== publication.manifest.files[cell.file])
+          .map((cell) => cell.cellId),
+      );
+      this.liveManifestVerified = true;
+      this.updateLayoutPredictionGate();
+      // Never reconcile new geometry against a state published before the commit.
+      if (this.room.state.layoutRevision < info.layoutRevision) {
+        await new Promise<void>((resolve) => {
+          this.snapshotWait = { revision: info.layoutRevision, resolve };
+        });
+      }
+      if (generation !== this.generation || !this.room) {
+        publication.resources.dispose();
+        return;
+      }
+      const resources = this.resources;
+      const streamer = this.streamer!;
+      try {
+        await streamer.transition(publication.manifest, publication.resources);
+      } catch (error) {
+        publication.resources.dispose();
+        if (streamer.failed) {
+          this.reloadRequired = true;
+          this.pausePrediction();
+          this.physics?.dispose();
+          this.physics = undefined;
+          if (this.streamer === streamer) this.streamer = undefined;
+        }
+        throw error;
+      }
+      if (generation !== this.generation || !this.room) {
+        publication.resources.dispose();
+        return;
+      }
+      this.manifest = publication.manifest;
+      this.manifestUrl = publication.url;
+      this.definition = publication.definition;
+      this.resources = publication.resources;
+      this.info = { ...this.info, ...info };
+      resources?.dispose();
+      this.switchingPublication = false;
+      this.livePublication = false;
+      this.liveManifestVerified = false;
+      this.liveChangedCells.clear();
+      this.layoutHistoryCells.clear();
+      this.layoutPredictionBlocked = false;
+      this.pendingLayoutAck = info;
+      this.layoutTransitions.push({
+        revision: info.layoutRevision,
+        ms: performance.now() - started,
+        full: false,
+      });
+      if (this.layoutTransitions.length > 32) this.layoutTransitions.shift();
+    })();
+    this.publicationTask = task;
+    return task
+      .finally(() => {
+        if (this.publicationTask === task) {
+          this.publicationTask = undefined;
+          this.publicationTarget = undefined;
+        }
+      })
+      .then(() => this.acknowledgeReadyArea());
+  }
+  private updateLayoutPredictionGate() {
+    const room = this.room;
+    const self = room?.state?.players?.get(room.sessionId);
+    // Pausing disposes the reconciler and clears replay history. Keep the cells that
+    // history touched until the new geometry has actually replaced the old context.
+    const historyCells = new Set([
+      ...this.layoutHistoryCells,
+      ...[...this.history.values()].flatMap((entry) => entry.cells),
+    ]);
+    const intersects =
+      !!self &&
+      this.livePublication &&
+      (cellNeighborhood(this.manifest, { x: self.x, y: self.y, z: self.z }).some((id) =>
+        this.liveChangedCells.has(id),
+      ) ||
+        [...historyCells].some((id) => this.liveChangedCells.has(id)));
+    const unknownSnapshot =
+      !!room?.state?.layoutRevision &&
+      room.state.layoutRevision !== this.info.layoutRevision &&
+      !(
+        this.livePublication &&
+        this.liveManifestVerified &&
+        room.state.mapVersion === this.publicationTarget
+      );
+    const blocked = intersects || unknownSnapshot;
+    if (blocked && !this.layoutPredictionBlocked) {
+      for (const id of historyCells) this.layoutHistoryCells.add(id);
+      this.layoutPauseStarted ??= performance.now();
+      if (this.simulation) this.predictionPauses++;
+      this.pausePrediction();
+      this.neutral();
+    }
+    if (!this.livePublication && !unknownSnapshot) this.layoutHistoryCells.clear();
+    this.layoutPredictionBlocked = blocked;
   }
   async refreshPublication(): Promise<void> {
     if (
@@ -424,6 +597,7 @@ export class GameSession {
     });
     if (!request) return false;
     this.removalOperation.begin(request, this.accountId);
+    this.onNotice('Запрос отправлен. Проверяем и сохраняем…');
     this.removalOperation.sendIfDue(performance.now(), (value) =>
       this.room!.send('removeStatic', value),
     );
@@ -456,6 +630,7 @@ export class GameSession {
       },
       this.accountId,
     );
+    this.onNotice('Запрос отправлен. Проверяем и сохраняем…');
     this.staticOperation.sendIfDue(performance.now(), (request) =>
       this.room!.send('placeStatic', request),
     );
@@ -502,7 +677,9 @@ export class GameSession {
     this.ensureStreamer();
   }
   private ensureStreamer(): void {
-    this.resources ??= new VerifiedResources(this.manifest, new URL('.', this.manifestUrl!).href);
+    this.resources ??= new VerifiedResources(this.manifest, new URL('.', this.manifestUrl!).href, {
+      cache: this.verifiedBytes,
+    });
     if (!this.streamer && this.graphics)
       this.streamer = new CellStreamer(
         this.manifest,
@@ -662,10 +839,18 @@ export class GameSession {
         this.inventory = inventory;
         this.onInventoryChange?.();
       });
-      room.onMessage<WorldPublicationInfo>('layoutChanged', (publication) => {
+      room.onMessage<LayoutChanged>('layoutChanged', (change) => {
+        const publication = change.publication;
         if (this.room !== room || publication.worldEpoch !== this.info.worldEpoch) return;
-        void this.changePublication(publication).catch((error) => {
-          if (this.room === room) void this.leave(readableError(error));
+        if (publication.layoutRevision >= this.info.layoutRevision)
+          this.pendingLayoutAck = publication;
+        void this.changePublication(publication, change).catch((error) => {
+          if (
+            this.room === room &&
+            publication.layoutRevision >= this.info.layoutRevision &&
+            (!this.publicationTarget || this.publicationTarget === publication.mapVersion)
+          )
+            void this.leave(readableError(error));
         });
       });
       room.onMessage<PlaceStaticResult>('staticPlacementResult', (result) => {
@@ -684,7 +869,6 @@ export class GameSession {
                 messages[result.code] ??
                 result.code),
         );
-        this.onStaticPlacementResult?.(result);
       });
       room.onMessage<RemoveStaticResult>('staticRemovalResult', (result) => {
         if (this.room !== room || result.operationId !== this.removalOperation.current?.operationId)
@@ -696,13 +880,12 @@ export class GameSession {
         this.removalOperation.complete();
         this.onNotice(
           result.ok
-            ? 'Объект удалён.'
+            ? 'Удаление сохранено.'
             : (result.message ??
                 staticRemovalMessages[result.code] ??
                 messages[result.code] ??
                 result.code),
         );
-        this.onStaticRemovalResult?.(result);
       });
       room.onMessage<unknown>('worldSound', (value) => {
         if (this.room !== room) return;
@@ -835,6 +1018,8 @@ export class GameSession {
         const self = room.state.players?.get(room.sessionId);
         this.resumeRevision = plan.reason === 'respawn' && self ? self.revision + 1 : undefined;
         this.setState('preparing');
+        this.planArea();
+        this.acknowledgeReadyArea();
       });
       room.onMessage<AreaResult>('areaResult', (result) => {
         if (
@@ -869,6 +1054,7 @@ export class GameSession {
           this.resumeRevision = undefined;
           this.onNotice(messages[result.code ?? ''] ?? 'Подготовка области отменена.');
         }
+        this.acknowledgeReadyArea();
       });
       room.onMessage<{ serverTick: number }>('resync', (message) => {
         if (this.room !== room) return;
@@ -963,6 +1149,11 @@ export class GameSession {
   private receiveState(): void {
     const room = this.room!;
     this.lastPatchAt = performance.now();
+    if (this.snapshotWait && room.state.layoutRevision >= this.snapshotWait.revision) {
+      this.snapshotWait.resolve();
+      this.snapshotWait = undefined;
+    }
+    this.updateLayoutPredictionGate();
     if (room.state.worldEpoch !== this.info.worldEpoch) {
       void this.leave('Мир был перезапущен. Войдите снова.');
       return;
@@ -1039,6 +1230,41 @@ export class GameSession {
     this.history.clear();
     this.simulation?.dispose();
     this.simulation = undefined;
+  }
+  /** Resource readiness is independent of when the browser next draws the scene. */
+  private acknowledgeReadyArea(): void {
+    const room = this.room;
+    if (!room?.state?.worldEpoch || !this.streamer?.criticalReady || this.state === 'reconnecting')
+      return;
+    const plan = this.plan;
+    if (
+      plan &&
+      this.planAcknowledged !== plan.prepareId &&
+      plan.worldEpoch === this.info.worldEpoch &&
+      plan.mapVersion === this.info.mapVersion &&
+      plan.layoutRevision === this.info.layoutRevision &&
+      room.state.layoutRevision === plan.layoutRevision
+    ) {
+      this.planAcknowledged = plan.prepareId;
+      room.send('areaReady', {
+        prepareId: plan.prepareId,
+        layoutRevision: plan.layoutRevision,
+        worldEpoch: plan.worldEpoch,
+        mapVersion: plan.mapVersion,
+      });
+    }
+    if (
+      this.pendingLayoutAck &&
+      this.preparationConfirmed &&
+      !this.switchingPublication &&
+      !this.plan &&
+      room.state.layoutRevision === this.pendingLayoutAck.layoutRevision &&
+      this.info.mapVersion === this.pendingLayoutAck.mapVersion
+    ) {
+      const { worldEpoch, layoutRevision, mapVersion } = this.pendingLayoutAck;
+      room.send('layoutApplied', { worldEpoch, layoutRevision, mapVersion });
+      this.pendingLayoutAck = undefined;
+    }
   }
   private planArea(): void {
     if (!this.streamer || !this.room) return;
@@ -1171,8 +1397,9 @@ export class GameSession {
       this.staticOperation.sendIfDue(now, (request) => room.send('placeStatic', request));
       this.removalOperation.sendIfDue(now, (request) => room.send('removeStatic', request));
     }
-    if (this.switchingPublication)
+    if (this.switchingPublication && !this.livePublication)
       return room ? this.authoritativeDisplay() : { entities: this.preview() };
+    this.updateLayoutPredictionGate();
     this.planArea();
     this.streamer?.pumpFrame(delta);
     if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
@@ -1187,18 +1414,11 @@ export class GameSession {
         code: 'RESOURCE_UNAVAILABLE',
       } satisfies AreaFailed);
     }
-    if (this.plan && this.streamer.criticalReady && this.planAcknowledged !== this.plan.prepareId) {
-      this.planAcknowledged = this.plan.prepareId;
-      room.send('areaReady', {
-        prepareId: this.plan.prepareId,
-        layoutRevision: this.plan.layoutRevision,
-        worldEpoch: this.plan.worldEpoch,
-        mapVersion: this.plan.mapVersion,
-      });
-    }
+    this.acknowledgeReadyArea();
     const ready =
       selfNow &&
       this.preparationConfirmed &&
+      !this.layoutPredictionBlocked &&
       !this.plan &&
       this.streamer.criticalReady &&
       (this.resumeRevision === undefined || selfNow.revision >= this.resumeRevision) &&
@@ -1235,6 +1455,14 @@ export class GameSession {
     }
     this.resumeRevision = undefined;
     this.waitingTarget = undefined;
+    if (this.layoutPauseStarted !== undefined) {
+      this.layoutPauseSamples.push({
+        revision: room.state.layoutRevision,
+        ms: performance.now() - this.layoutPauseStarted,
+      });
+      if (this.layoutPauseSamples.length > 32) this.layoutPauseSamples.shift();
+      this.layoutPauseStarted = undefined;
+    }
     if (!this.simulation) this.startPrediction();
     if (this.state !== 'playing') {
       this.setState('playing');
@@ -1442,7 +1670,9 @@ export class GameSession {
     );
   }
   get layoutUpdating() {
-    return this.room?.state.pauseReason === 'LAYOUT_UPDATING';
+    return (
+      this.switchingPublication || this.layoutPredictionBlocked || this.plan?.reason === 'layout'
+    );
   }
   /** Eyes follow the collision controller, never the SDK's decorative correction offset. */
   ownPhysicalPosition(): Vec3 | undefined {
@@ -1700,6 +1930,7 @@ export class GameSession {
       });
   }
   private cleanup(preserveRecovery = false): void {
+    this.streamer?.cancelTransition();
     this.worldSounds.clear();
     this.pendingSpawnSound = false;
     this.liveItemOperation = undefined;
@@ -1718,6 +1949,15 @@ export class GameSession {
     this.switchingPublication = false;
     this.publicationTask = undefined;
     this.publicationTarget = undefined;
+    this.livePublication = false;
+    this.liveManifestVerified = false;
+    this.layoutPredictionBlocked = false;
+    this.layoutHistoryCells.clear();
+    this.layoutPauseStarted = undefined;
+    this.liveChangedCells.clear();
+    this.pendingLayoutAck = undefined;
+    this.snapshotWait?.resolve();
+    this.snapshotWait = undefined;
     this.persistencePaused = false;
     this.setDayClock(DEFAULT_DAY_CLOCK);
     this.setWeather(DEFAULT_WEATHER);
@@ -1817,6 +2057,15 @@ export class GameSession {
         remotePlayers: 0,
       },
       predictionWorlds: this.predictionWorlds,
+      layoutTransitions: this.layoutTransitions.slice(),
+      layoutPredictionBlocked: this.layoutPredictionBlocked,
+      layoutPredictionPauses: this.layoutPauseSamples.slice(),
+      layoutPredictionPauseActiveMs:
+        this.layoutPauseStarted === undefined ? 0 : performance.now() - this.layoutPauseStarted,
+      snapshotLayoutRevision: room?.state?.layoutRevision,
+      snapshotLayoutAppliedTick: room?.state?.layoutAppliedTick,
+      preparationConfirmed: this.preparationConfirmed,
+      waitingResync: this.waitingResync,
       historyInputs: this.history.size,
       historyMaxAgeMs: Math.max(
         0,
@@ -1862,8 +2111,11 @@ export class GameSession {
   dispose(): void {
     this.generation++;
     this.cleanup();
+    this.snapshotWait?.resolve();
+    this.snapshotWait = undefined;
     this.streamer?.dispose();
     this.physics?.dispose();
     this.resources?.dispose();
+    this.verifiedBytes.dispose();
   }
 }

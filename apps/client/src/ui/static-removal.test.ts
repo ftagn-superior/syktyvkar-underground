@@ -150,7 +150,12 @@ describe('static removal confirmation', () => {
     expect(f.session.removeStatic).toHaveBeenCalledExactlyOnceWith('house', publication);
     expect(f.confirm.disabled).toBe(true);
     fire(f.win, 'keydown', { code: 'Escape', repeat: false });
-    expect(f.tool.active).toBe(true);
+    expect(f.tool.active).toBe(false);
+    expect(f.panel.hidden).toBe(true);
+    expect(f.mode).toHaveBeenLastCalledWith(false);
+    expect(f.view.highlightStaticObject).toHaveBeenLastCalledWith();
+    expect(f.canvas.focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    expect(f.session.staticRemovalPending).toBe(true);
   });
 
   it('ignores right clicks and stale input after blur, then requires a fresh selection', () => {
@@ -237,25 +242,18 @@ describe('static removal confirmation', () => {
     expect(f.mode).not.toHaveBeenCalled();
   });
 
-  it('keeps a server rejection visible across frames until a new deliberate selection', () => {
+  it('keeps the sent request pending when the tool is closed and another panel opens', () => {
     const f = fixture();
     f.tool.open(effect);
     f.clickCanvas();
     f.clickConfirm();
-    f.session.staticRemovalPending = false;
-    (f.session as unknown as GameSession).onStaticRemovalResult?.({
-      operationId: 'operation',
-      ok: false,
-      code: 'RATE_LIMITED',
-      message: 'Подождите перед удалением.',
-    });
+    f.tool.close();
     f.tool.frame();
-    f.tool.frame();
-    expect(f.status.textContent).toBe('Подождите перед удалением.');
-    expect(f.confirm.disabled).toBe(true);
-    f.clickCanvas();
-    expect(f.status.textContent).toContain('Удалится объект целиком');
-    expect(f.confirm.disabled).toBe(false);
+    f.tool.open(effect);
+    expect(f.tool.active).toBe(false);
+    expect(f.session.staticRemovalPending).toBe(true);
+    expect(f.session.removeStatic).toHaveBeenCalledOnce();
+    expect(f.view.highlightStaticObject).toHaveBeenLastCalledWith();
   });
 
   it('caps hover picking at 20 Hz while keeping explicit clicks exact and locked selection stable', () => {

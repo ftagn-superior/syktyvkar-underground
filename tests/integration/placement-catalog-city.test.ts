@@ -83,6 +83,7 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
           room.onMessage(name, () => {});
         const preparation = prepareSdk(room);
         await until(() => room.state?.players?.has(room.sessionId));
+        expect(room.state.layoutRevision).toBe(info.layoutRevision);
         return { room, results, preparation };
       };
       let owner = await connect(cookie);
@@ -134,9 +135,11 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
         ).rows[0];
         expect(row.asset_id).toBe(model.assetId);
         expect((await discover()).placementCatalog).toEqual(info.placementCatalog);
+        await until(() => !app!.room.diagnostics().staticPlacementBusy);
       }
-      expect(observer.preparation.plans.filter((plan) => plan.reason === 'layout')).toHaveLength(
-        22,
+      expect(observer.preparation.changes).toHaveLength(22);
+      expect(observer.preparation.changes.every((change) => change.changedCellIds.length > 0)).toBe(
+        true,
       );
       expect(
         (

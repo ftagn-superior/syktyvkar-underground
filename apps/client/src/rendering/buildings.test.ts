@@ -12,9 +12,11 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { AssetContainer } from '@babylonjs/core/assetContainer';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
+import '@babylonjs/core/Rendering/edgesRenderer';
 import { loadWorldBundle, type WorldDefinition, type WorldManifest } from '@su/contracts';
 import { buildWorld } from '../../../../tools/world-build/src/index.js';
 import { BuildingViews } from './buildings';
+import { StaticViews } from './statics';
 
 let directory: string;
 let manifest: WorldManifest;
@@ -403,14 +405,49 @@ describe('incremental building ownership', () => {
       view.buildings.remove(instance.entityId);
       releaseA();
       expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 1, assets: 1 });
+      expect(view.buildings.diagnostics().lifecycle).toEqual({
+        modelImports: 1,
+        instancesCreated: 1,
+        instancesRemoved: 0,
+      });
       expect(() => view.buildings.add(instance, 'different')).toThrow('version');
       view.buildings.remove(instance.entityId);
       releaseB();
       expect(view.buildings.aggregateDiagnostics()).toMatchObject({ instances: 0, assets: 0 });
+      expect(view.buildings.diagnostics().lifecycle).toEqual({
+        modelImports: 1,
+        instancesCreated: 1,
+        instancesRemoved: 1,
+      });
       expect(view.scene.geometries).toHaveLength(0);
       expect(view.scene.materials).toHaveLength(0);
       expect(view.shadow.getShadowMap()!.renderList).toHaveLength(0);
     } finally {
+      view.dispose();
+    }
+  });
+  it('counts primitive creations and final releases independently of shared-cell references', () => {
+    const view = fixture();
+    const statics = new StaticViews(view.scene, view.shadow);
+    const primitive = definition.entities[0];
+    try {
+      statics.add(primitive, 'primitive-v1');
+      statics.add(primitive, 'primitive-v1');
+      statics.remove(primitive.entityId);
+      expect(statics.diagnostics()).toEqual({
+        instances: 1,
+        instancesCreated: 1,
+        instancesRemoved: 0,
+      });
+      statics.remove(primitive.entityId);
+      statics.remove(primitive.entityId);
+      expect(statics.diagnostics()).toEqual({
+        instances: 0,
+        instancesCreated: 1,
+        instancesRemoved: 1,
+      });
+    } finally {
+      statics.dispose();
       view.dispose();
     }
   });

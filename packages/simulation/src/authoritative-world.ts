@@ -134,5 +134,5 @@ export async function createAuthoritativeWorld(
   definition: WorldDefinition,
   wasmBinary?: WasmBinary,
 ): Promise<AuthoritativeWorld> {
-  return new AuthoritativeWorld(await createPhysicsWorld(definition, wasmBinary, false));
+  return new AuthoritativeWorld(await createPhysicsWorld({ ...definition }, wasmBinary, false));
 }

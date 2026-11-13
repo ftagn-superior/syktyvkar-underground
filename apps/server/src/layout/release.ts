@@ -56,9 +56,26 @@ export function layoutHash(snapshot: WorldLayoutSnapshot) {
     }),
   );
 }
-export async function createLayoutPublication(
+/** Default/offline callers re-read and verify their source on every publication. */
+export function createLayoutPublication(release: AuthoringRelease, snapshot: WorldLayoutSnapshot) {
+  return prepareLayoutPublication(release, snapshot, () => readCompiledLayoutAssets(release));
+}
+
+/** A publisher thread pins only verified bytes from its one immutable asset release. */
+export function createReleaseLayoutPublisher(release: AuthoringRelease) {
+  let assets: Promise<Record<string, CompiledWorldAsset>> | undefined;
+  return (snapshot: WorldLayoutSnapshot) =>
+    prepareLayoutPublication(
+      release,
+      snapshot,
+      () => (assets ??= readCompiledLayoutAssets(release)),
+    );
+}
+
+async function prepareLayoutPublication(
   release: AuthoringRelease,
   snapshot: WorldLayoutSnapshot,
+  compiledAssets: () => Promise<Record<string, CompiledWorldAsset>>,
 ) {
   if (
     snapshot.formatVersion !== 1 ||
@@ -124,6 +141,15 @@ export async function createLayoutPublication(
       ...instances.filter((_, index) => snapshot.instances[index].enabled),
     ],
   };
+  const assets = await compiledAssets();
+  return {
+    world,
+    publication: createWorldPublication(world, release.manifest.grid, assets),
+    hash: layoutHash(snapshot),
+  };
+}
+
+async function readCompiledLayoutAssets(release: AuthoringRelease) {
   const read = async (path: string) => {
     const bytes = await readFile(resolve(release.directory, path));
     if (hash(bytes) !== release.manifest.files[path])
@@ -146,9 +172,5 @@ export async function createLayoutPublication(
       parts,
     };
   }
-  return {
-    world,
-    publication: createWorldPublication(world, release.manifest.grid, assets),
-    hash: layoutHash(snapshot),
-  };
+  return assets;
 }

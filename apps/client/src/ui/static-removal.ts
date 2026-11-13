@@ -1,6 +1,5 @@
-import type { RemoveStaticResult, StaticRemovalEffect } from '@su/contracts';
+import type { StaticRemovalEffect } from '@su/contracts';
 import type { GameSession } from '../network/session';
-import { messages, staticRemovalMessages } from '../network/errors';
 import type { WorldView } from '../rendering/world-view';
 import { ICONS } from './icons';
 
@@ -19,7 +18,6 @@ export class StaticRemoval {
   private focused = !document.hidden;
   private freshPointer = false;
   private freshKey = false;
-  private errorMessage = '';
   private hoverAt = 0;
 
   constructor(
@@ -64,7 +62,6 @@ export class StaticRemoval {
           const object = this.view()?.pickStaticObject(this.protectedIds);
           this.selected = object?.entityId;
           this.hovered = object?.entityId;
-          this.errorMessage = '';
           this.render();
         }
         this.freshPointer = false;
@@ -142,7 +139,6 @@ export class StaticRemoval {
       },
       options,
     );
-    session.onStaticRemovalResult = (result) => this.result(result);
   }
   get active() {
     return !!this.effect;
@@ -168,7 +164,6 @@ export class StaticRemoval {
     this.effect = effect;
     this.protectedIds = new Set(effect.protectedEntityIds);
     this.selected = this.hovered = undefined;
-    this.errorMessage = '';
     this.hoverAt = 0;
     this.freshPointer = this.freshKey = false;
     this.focused = !document.hidden;
@@ -180,7 +175,6 @@ export class StaticRemoval {
   close() {
     const wasActive = this.active;
     this.effect = undefined;
-    this.errorMessage = '';
     this.selected = this.hovered = undefined;
     this.freshPointer = this.freshKey = false;
     this.panel.hidden = true;
@@ -206,23 +200,10 @@ export class StaticRemoval {
       this.render();
       return;
     }
-    if (this.session.removeStatic(this.selected, this.effect.publication)) this.render();
-  }
-  private result(result: RemoveStaticResult) {
-    if (result.ok || !this.active) {
+    if (this.session.removeStatic(this.selected, this.effect.publication)) {
       this.close();
-      return;
+      this.canvas.focus({ preventScroll: true });
     }
-    if (
-      ['AUTH_REQUIRED', 'LAYOUT_CHANGED', 'STALE_WORLD', 'VERSION_MISMATCH'].includes(result.code)
-    ) {
-      this.close();
-      return;
-    }
-    this.selected = this.hovered = undefined;
-    this.errorMessage =
-      result.message ?? staticRemovalMessages[result.code] ?? messages[result.code] ?? result.code;
-    this.render();
   }
   private render() {
     const pending = this.session.staticRemovalPending;
@@ -236,11 +217,9 @@ export class StaticRemoval {
     if (this.title.textContent !== title) this.title.textContent = title;
     const status = pending
       ? 'Сохраняем удаление…'
-      : this.errorMessage
-        ? this.errorMessage
-        : this.selected
-          ? 'Удалится объект целиком. Восстановление пока недоступно.'
-          : 'Щёлкните по объекту, затем нажмите «Удалить» · Esc — отмена';
+      : this.selected
+        ? 'Удалится объект целиком. Восстановление пока недоступно.'
+        : 'Щёлкните по объекту, затем нажмите «Удалить» · Esc — отмена';
     if (this.status.textContent !== status) this.status.textContent = status;
     this.view()?.highlightStaticObject(this.selected ?? this.hovered);
   }

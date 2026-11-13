@@ -7,6 +7,7 @@ import {
   validateBuildingPhysicsAsset,
   validateWorldCell,
   validateWorldManifest,
+  worldPublicationBaseIdentity,
   type BuildingPhysicsAsset,
   type WorldManifest,
 } from './index.js';
@@ -78,6 +79,20 @@ const manifest: WorldManifest = {
 };
 
 describe('world bundle validation', () => {
+  it('separates layout changes from changes to static dependency bytes', () => {
+    const changed = structuredClone(manifest);
+    changed.mapVersion = 'b'.repeat(64);
+    changed.simulationConfigHash = 'c'.repeat(64);
+    changed.files['cell.json'] = 'd'.repeat(64);
+    expect(worldPublicationBaseIdentity(changed)).toEqual(worldPublicationBaseIdentity(manifest));
+    for (const file of ['world.json', 'model.glb', 'colliders.json', 'parts.json']) {
+      const incompatible = structuredClone(changed);
+      incompatible.files[file] = 'e'.repeat(64);
+      expect(worldPublicationBaseIdentity(incompatible)).not.toEqual(
+        worldPublicationBaseIdentity(manifest),
+      );
+    }
+  });
   it('validates the optional GLB instancing contract without changing ordinary parts', () => {
     expect(validateBuildingParts(parts)).toBe(parts);
     const instanced = {

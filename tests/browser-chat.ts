@@ -120,7 +120,10 @@ try {
   assert.equal(await sender.locator('#chat-input').inputValue(), '/giveme/');
   await sender.keyboard.press('Escape');
   await sender.keyboard.press('t');
-  assert.equal(await sender.locator('#chat-input').inputValue(), '');
+  // Collapsing keeps the unsent draft.
+  assert.equal(await sender.locator('#chat-input').inputValue(), '/giveme/');
+  await sender.locator('#chat-input').fill('');
+  await sender.keyboard.press('Escape');
   await sender.locator('#help-toggle').click();
   await sender.locator('#chat-toggle').focus();
   await sender.keyboard.press('Escape');
@@ -131,7 +134,7 @@ try {
   assert.equal(await sender.locator('#chat-console').isVisible(), true);
   assert.equal(await observer.locator('.player-chat').count(), 0);
   checks.push(
-    'T opens empty input, / opens with one slash and preserves typing, held movement stops, typing triggers no game shortcuts, Escape clears, blank messages stay unsent',
+    'T opens empty input, / opens with one slash and preserves typing, held movement stops, typing triggers no game shortcuts, Escape collapses and keeps the draft, blank messages stay unsent',
   );
 
   const input = sender.locator('#chat-input');
@@ -147,9 +150,16 @@ try {
   await input.press('Enter');
   const bubble = `.player-chat[data-entity-id="${senderId}"]`;
   await Promise.all([sender.locator(bubble).waitFor(), observer.locator(bubble).waitFor()]);
-  await sender.locator('#chat-console').waitFor({ state: 'hidden' });
+  // The field stays open after sending, empty and focused, until the player collapses it.
+  await sender.locator('#chat-input:focus').waitFor();
+  assert.equal(await input.inputValue(), '');
+  assert.equal(await sender.locator('#chat-console').isVisible(), true);
   assert.equal(await observer.locator(bubble).textContent(), message);
   assert.equal(await observer.locator(`${bubble} b`).count(), 0);
+  await observer.locator('#chat-log .chat-line').filter({ hasText: message }).waitFor();
+  await sender.locator('#chat-log .chat-line').filter({ hasText: 'Вы:' }).waitFor();
+  await sender.keyboard.press('Escape');
+  assert.equal(await sender.locator('#chat-console').isVisible(), false);
   assert.equal(await sender.locator('#world:focus').count(), 1);
   await sender.keyboard.press('t');
   await input.fill('Следующее');
@@ -205,6 +215,7 @@ try {
   await sender.locator('#chat-send:not([disabled])').waitFor();
   await input.press('Enter');
   await observer.locator(bubble).waitFor();
+  await sender.keyboard.press('Escape');
   assert.equal((await observer.locator(bubble).textContent())!.length, CHAT_MAX_LENGTH);
   for (const page of [sender, observer]) {
     assert.equal(

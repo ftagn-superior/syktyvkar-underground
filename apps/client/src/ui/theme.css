@@ -1,171 +1,309 @@
-/* Design tokens and low-poly primitives. The accent variables are set live by applyAccent(). */
+/*
+ * Токены и примитивы интерфейса: печатная бумага, чернильная рамка, жёсткая тень.
+ * Тема задаётся атрибутом `data-ui-theme` на <html> («day» — берёста, «night» — полночь).
+ * Компоненты читают только токены; цвет игрока (`--me`) — только для элементов «про игрока».
+ */
 :root {
-  --accent: #6ee0c4;
-  --accent-soft: rgba(110, 224, 196, 0.16);
-  --accent-line: rgba(110, 224, 196, 0.55);
-  --accent-ink: #0c1412;
-  --accent-text: #6ee0c4;
-  --panel: rgba(13, 18, 21, 0.94);
-  --card: #141b1f;
-  --ink: #e9efed;
-  --ink-muted: #a3b2af;
-  --ink-dim: #93a29f;
-  --divider: rgba(255, 255, 255, 0.07);
-  --font-display: 'Unbounded', 'Manrope', system-ui, sans-serif;
-  --font-body: 'Manrope', Inter, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  --mint: var(--accent);
-  --facet: linear-gradient(
-    150deg,
-    rgba(255, 255, 255, 0.4) 0 34%,
-    transparent 34% 62%,
-    rgba(0, 0, 0, 0.22) 62%
-  );
-}
-:root {
+  --p: #f3ead8;
+  --p2: #e7dcc6;
+  --ink: #1f2420;
+  --mut: #6a685c;
+  --ln: #2b2f2a;
+  --hard: #8a8170;
+  --pri: #c8342f;
+  --pri-ink: #fff4e6;
+  --amber: #e8a33a;
+  --taiga: #2f7d55;
+  --vychegda: #2e6fa8;
+  --me: #6ee0c4;
+  /* Подложка строк чата и подписей над головой — единственное полупрозрачное место. */
+  --p-veil: color-mix(in srgb, var(--p) 84%, transparent);
+  --p-tag: color-mix(in srgb, var(--p) 72%, transparent);
+  --spring: cubic-bezier(0.3, 1.55, 0.5, 1);
+  --font-display: 'Rubik', 'Golos Text', system-ui, sans-serif;
+  --font-body: 'Golos Text', 'Segoe UI', system-ui, sans-serif;
+  /* Базовый кегль HUD: около 15px на 1440px, не меньше 11px на узких экранах. */
+  --hud-size: clamp(11px, 1.04vw, 15px);
+  --edge: 1.2em;
+  --orn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='10' viewBox='0 0 16 10'%3E%3Cpath d='M0 5L4 1L8 5L4 9ZM8 5L12 1L16 5L12 9Z' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3Crect x='3' y='4' width='2' height='2'/%3E%3Crect x='11' y='4' width='2' height='2'/%3E%3C/svg%3E");
+  color-scheme: light;
   font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--p);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+:root[data-ui-theme='night'] {
+  --p: #18213f;
+  --p2: #232d52;
+  --ink: #f1ecdf;
+  --mut: #a3abc6;
+  --ln: #5d6a99;
+  --hard: #0a0e1f;
+  color-scheme: dark;
 }
 
-/* ---------- cut-corner surface ---------- */
-.su-facet {
+/* ---------- текст ---------- */
+.disp {
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- панель ---------- */
+.ui-panel {
+  background: var(--p);
+  color: var(--ink);
+  border: 2px solid var(--ln);
+  border-radius: 0.9em;
+  box-shadow: 0 0.24em 0 var(--hard);
+}
+.ui-orn {
+  height: 10px;
+  flex: none;
+  background: var(--pri);
+  -webkit-mask: var(--orn) repeat-x center / auto 10px;
+  mask: var(--orn) repeat-x center / auto 10px;
+}
+
+/* ---------- кнопка ---------- */
+.ui-btn {
   position: relative;
-  isolation: isolate;
+  display: inline-grid;
+  place-items: center;
+  margin: 0;
+  padding: 0.55em 1em;
+  font: inherit;
+  color: var(--ink);
+  background: var(--p2);
+  border: 2px solid var(--ln);
+  border-radius: 0.75em;
+  box-shadow: 0 0.2em 0 var(--hard);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    transform 0.28s var(--spring),
+    border-radius 0.4s var(--spring),
+    box-shadow 0.1s;
 }
-.su-facet::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--fbg, var(--panel));
-  clip-path: polygon(
-    var(--cut, 20px) 0,
-    100% 0,
-    100% calc(100% - var(--cut, 20px)),
-    calc(100% - var(--cut, 20px)) 100%,
-    0 100%,
-    0 var(--cut, 20px)
-  );
+.ui-btn:hover:not(:disabled) {
+  transform: translateY(-0.08em);
 }
-.su-corner {
+.ui-btn:active:not(:disabled) {
+  transform: translateY(0.16em) scale(0.95);
+  box-shadow: 0 0.04em 0 var(--hard);
+}
+.ui-btn[aria-pressed='true'],
+.ui-btn[aria-expanded='true'] {
+  border-radius: 1.35em;
+  background: var(--ink);
+  color: var(--p);
+}
+.ui-btn.ui-pri {
+  background: var(--pri);
+  color: var(--pri-ink);
+}
+.ui-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ui-btn > svg {
+  display: block;
+  width: 1.25em;
+  height: 1.25em;
+}
+/* Квадратная кнопка с иконкой; размер задаёт место (3em в чате, 3.4em у «?», 3.8em в доке). */
+.ui-icon-btn {
+  width: 3em;
+  height: 3em;
+  padding: 0;
+}
+/* Подпись клавиши бледнее иконки. */
+.ui-btn .k {
   position: absolute;
-  right: 0;
-  top: 0;
-  width: 22px;
-  height: 22px;
-  background: var(--accent);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  right: 0.65em;
+  bottom: 0.45em;
+  font-size: 0.6em;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.42;
   pointer-events: none;
 }
-.su-gem {
-  display: inline-block;
-  width: 14px;
-  height: 16px;
-  flex: none;
-  background: var(--facet), var(--gem, var(--accent));
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-}
-.su-gem.sm {
-  width: 9px;
-  height: 10px;
-}
-.su-hex {
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-}
-@media (forced-colors: active) {
-  .su-facet::before {
-    background: Canvas;
-  }
-}
-
-/* ---------- controls ---------- */
-.su-kbd {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(
-    155deg,
-    rgba(255, 255, 255, 0.14) 0 34%,
-    rgba(255, 255, 255, 0.06) 34%
-  );
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink);
-  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
-}
-.su-btn {
-  height: 44px;
-  padding: 0 16px;
-  margin: 0;
-  border: 0;
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  clip-path: polygon(
-    10px 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    0 100%,
-    0 10px
-  );
-}
-.su-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-}
-.su-btn.accent {
-  background:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.3) 0 30%, transparent 30%), var(--accent);
-  color: var(--accent-ink);
-}
-.su-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.su-close {
-  width: 40px;
-  height: 40px;
+.ui-link {
+  min-height: 24px;
   margin: 0;
   padding: 0;
   border: 0;
-  background: rgba(255, 255, 255, 0.07);
+  background: none;
   color: var(--ink);
-  font-size: 20px;
-  line-height: 1;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
 }
-.su-close:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-.su-btn:focus-visible,
-.su-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+.ui-link:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
-@keyframes su-pop {
+/* ---------- поле ввода ---------- */
+.ui-input {
+  min-width: 0;
+  padding: 0.55em 0.8em;
+  font: inherit;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--p2);
+  border: 2px solid var(--ln);
+  border-radius: 0.7em;
+}
+.ui-input::placeholder {
+  color: var(--mut);
+}
+
+/* ---------- чип, значок, клавиша ---------- */
+.ui-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.55em 0.95em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ui-chip > svg,
+.ui-chip .ic > svg {
+  display: block;
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+}
+button.ui-chip {
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: border-radius 0.4s var(--spring);
+}
+button.ui-chip[aria-expanded='true'] {
+  background: var(--ink);
+  color: var(--p);
+  border-radius: 1.35em;
+}
+.ui-badge {
+  position: absolute;
+  left: -0.6em;
+  top: -0.6em;
+  display: grid;
+  place-items: center;
+  min-width: 2em;
+  height: 2em;
+  padding: 0 0.5em;
+  border: 2px solid var(--ln);
+  border-radius: 1em;
+  background: var(--pri);
+  color: var(--pri-ink);
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* Клавиша в тексте: Golos Text 700, без моноширинного шрифта и без обрезки. */
+.ui-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.9em;
+  height: 1.9em;
+  padding: 0 0.45em;
+  font: inherit;
+  font-size: 0.82em;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--p2);
+  border: 2px solid var(--ln);
+  border-radius: 0.5em;
+  box-shadow: 0 0.12em 0 var(--hard);
+}
+
+/* ---------- всплывающее окно ---------- */
+.ui-pop {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.9em 0.9em;
+  overflow: hidden;
+  animation: ui-pop 0.32s var(--spring) both;
+}
+.ui-pop > .ui-orn {
+  margin: 0.5em -0.9em 0.6em;
+}
+.pop-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1em;
+  margin: 0 0 0.55em;
+  font-size: 0.95em;
+}
+.pop-h small,
+.pop-sub {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.78em;
+  color: var(--mut);
+}
+.pop-sub {
+  display: block;
+  margin: 0.5em 0 0.35em;
+}
+.pop-close {
+  align-self: center;
+  width: 2em;
+  height: 2em;
+  padding: 0;
+  font-size: 0.9em;
+  box-shadow: 0 0.15em 0 var(--hard);
+}
+@keyframes ui-pop {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.94);
+    scale: 0.9;
   }
   to {
     opacity: 1;
-    transform: none;
+    scale: 1;
   }
 }
+
+/* ---------- фокус ---------- */
+.ui-btn:focus-visible,
+.ui-link:focus-visible,
+.ui-input:focus-visible,
+button.ui-chip:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+input[type='range']:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* ---------- движение и доступность ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -173,5 +311,26 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .ui-panel,
+  .ui-btn,
+  .ui-input,
+  .ui-kbd,
+  .ui-badge {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    forced-color-adjust: none;
+  }
+  .ui-btn[aria-pressed='true'],
+  .ui-btn[aria-expanded='true'],
+  button.ui-chip[aria-expanded='true'] {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .ui-orn {
+    background: CanvasText;
   }
 }

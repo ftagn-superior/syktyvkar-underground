@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-ui-theme="day">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#101820" />
+    <meta name="theme-color" content="#F3EAD8" />
     <meta
       name="description"
       content="Syktyvkar Underground — небольшой общий мир. Войдите на полигон, исследуйте площадку и двигайте предметы вместе."
@@ -12,18 +12,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;800&family=Golos+Text:wght@400;500;600;700&display=swap"
     />
     <title>Syktyvkar Underground · Полигон</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23101820'/%3E%3Cpath d='M16 21 32 12l16 9v22L32 52l-16-9Z' fill='none' stroke='%2365d6bc' stroke-width='4'/%3E%3Cpath d='m16 21 16 10 16-10M32 31v21' stroke='%2365d6bc' stroke-width='4' fill='none'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23F3EAD8'/%3E%3Cg fill='%23C8342F'%3E%3Crect x='6' y='21.3' width='12' height='1.7'/%3E%3Crect x='9.7' y='11' width='1.5' height='10.5'/%3E%3Crect x='12.8' y='11' width='1.5' height='10.5'/%3E%3Crect x='8.3' y='8.6' width='7.4' height='3.6'/%3E%3Crect x='10.5' y='1.4' width='1.2' height='7.6'/%3E%3Crect x='12.3' y='1.9' width='1.2' height='7.1'/%3E%3Crect x='8.6' y='2.7' width='1.2' height='6.3'/%3E%3Crect x='14.2' y='3.2' width='1.2' height='5.8'/%3E%3Crect x='6.7' y='4.3' width='1.2' height='4.7'/%3E%3Crect x='16.1' y='4.8' width='1.2' height='4.2'/%3E%3C/g%3E%3C/svg%3E"
     />
   </head>
-  <body>
+  <body data-scene="lobby">
     <canvas id="world" aria-label="Трёхмерный сетевой полигон" tabindex="0"></canvas>
     <div id="labels" aria-hidden="true"></div>
-    <div class="vignette" aria-hidden="true"></div>
     <div
       id="touch-stick"
       class="touch-stick"
@@ -33,502 +32,553 @@
     >
       <span id="touch-thumb" class="touch-thumb" aria-hidden="true"></span>
     </div>
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="Syktyvkar Underground, главная">
-        <svg width="34" height="38" viewBox="0 0 34 38" fill="none" aria-hidden="true">
-          <path d="M17 2 L32 10.5 L17 19 L2 10.5 Z" fill="var(--accent)" fill-opacity="0.85" />
-          <path d="M2 10.5 L17 19 V36 L2 27.5 Z" fill="var(--accent)" fill-opacity="0.45" />
-          <path d="M17 19 L32 10.5 V27.5 L17 36 Z" fill="var(--accent)" fill-opacity="0.2" />
-          <path
-            d="M17 2 L32 10.5 V27.5 L17 36 L2 27.5 V10.5 Z M2 10.5 L17 19 L32 10.5 M17 19 V36"
-            stroke="var(--accent)"
-            stroke-width="1.6"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span class="brand-text"
-          ><span class="su-wm1">SYKTYVKAR</span><span class="su-wm2">UNDERGROUND</span></span
-        >
-      </a>
-      <div class="world-status su-facet" style="--cut: 10px; --fbg: rgba(13, 18, 21, 0.88)">
-        <span class="status-dot su-gem sm" id="status-dot"></span
-        ><span id="connection-status" role="status">Загрузка</span
-        ><span class="status-divider"></span
-        ><span><b id="player-count">0 / 8</b> <span class="count-label">игроков</span></span>
-      </div>
-    </header>
+
+    <!-- Лобби: шапка, персонаж в сцене, карточка-пропуск, полоса персонажей. -->
     <main id="welcome" class="lobby" aria-labelledby="welcome-title">
-      <section class="su-win su-panel su-facet" aria-label="Профиль">
-        <span class="su-corner"></span>
-        <div class="su-eyebrow">
-          <span class="l"><span class="su-gem sm"></span> ПОЛИГОН 01</span>
-          <span class="r">TECH DEMO · V0.1</span>
+      <header class="l-head">
+        <a class="brand ui-panel" href="/" aria-label="Syktyvkar Underground, главная">
+          <span class="brand-mark" data-icon="brand"></span>
+          <span class="brand-words"
+            ><span class="w1 disp">СЫКТЫВКАР</span><span class="w2">Underground</span></span
+          >
+        </a>
+        <div class="world-status ui-chip ui-panel">
+          <span id="status-dot" class="status-dot" aria-hidden="true"></span>
+          <span id="connection-status" role="status">Загрузка</span>
+          <span class="status-sep" aria-hidden="true">·</span>
+          <span id="player-count">0 из 8</span>
         </div>
-        <h1 id="welcome-title" class="su-title">Встретимся<br />на <span>полигоне.</span></h1>
-        <p id="welcome-description" class="su-sub">
-          Небольшой мир для общих экспериментов: двигайтесь, толкайте предметы, общайтесь.
-        </p>
-        <section id="account-panel" class="account-panel" aria-label="Аккаунт игрока" hidden>
-          <a id="telegram-login" class="su-btn accent telegram-login" href="/api/auth/telegram"
-            >Войти через Telegram</a
-          >
-          <form id="profile-form" class="profile-form" hidden>
-            <div class="su-field">
-              <label class="su-lbl" for="profile-name">Имя в игре</label>
-              <input
-                id="profile-name"
-                class="su-input"
-                name="displayName"
-                type="text"
-                autocomplete="nickname"
-                required
-                minlength="2"
-                maxlength="18"
-              />
-            </div>
-            <fieldset class="su-field su-colors" id="profile-colors">
-              <legend class="su-lbl"><span>Цвет</span><b id="profile-color-label"></b></legend>
-              <div id="profile-swatches" class="su-swatches"></div>
-            </fieldset>
-          </form>
-          <button id="account-retry" class="su-btn" type="button" hidden>
-            Повторить загрузку аккаунта
-          </button>
-          <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
-        </section>
-        <div class="su-spacer"></div>
-        <button id="join" class="su-enter" disabled>
-          <span id="join-label">Загружаем мир…</span>
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M5 12h14M13 6l6 6-6 6" />
-          </svg>
-        </button>
-        <div class="su-foot">
-          <span id="welcome-note" class="welcome-note"
-            >Без регистрации. Для второго игрока откройте ещё одну вкладку.</span
-          >
-          <button id="account-logout" class="su-link" type="button" hidden>
-            Выйти из аккаунта
-          </button>
-        </div>
-        <button
-          id="audio-lobby-toggle"
-          class="su-link audio-lobby-toggle"
-          type="button"
-          aria-pressed="true"
-        >
-          Звук включён
-        </button>
-      </section>
-      <section class="su-win su-preview su-facet" aria-label="Предпросмотр персонажа">
-        <div class="su-win-head">
-          <h2 class="su-win-title"><span class="su-gem"></span>Предпросмотр</h2>
-          <span class="su-chip" id="preview-index">1 / 2</span>
-        </div>
-        <div class="su-stagebox">
-          <svg
-            class="su-stage-art"
-            width="520"
-            height="540"
-            viewBox="0 0 520 540"
-            aria-hidden="true"
-          >
-            <g fill="var(--accent)" stroke="#ffffff" stroke-opacity="0.04" id="stage-mesh"></g>
-            <polygon points="0,430 520,430 520,540 0,540" fill="#0a1012" fill-opacity="0.55" />
+      </header>
+
+      <section class="l-fig" aria-label="Предпросмотр персонажа">
+        <div class="l-stage">
+          <svg class="l-pedestal" viewBox="0 0 200 70" aria-hidden="true">
             <polygon
-              points="40,470 260,392 480,470 260,540"
-              fill="var(--accent)"
-              fill-opacity="0.07"
-            />
-            <polygon
-              points="150,460 205,488 205,508 150,480"
-              fill="var(--accent)"
-              fill-opacity="0.5"
-            />
-            <polygon
-              points="205,488 315,488 315,508 205,508"
-              fill="var(--accent)"
-              fill-opacity="0.78"
-            />
-            <polygon
-              points="315,488 370,460 370,480 315,508"
-              fill="var(--accent)"
-              fill-opacity="0.34"
-            />
-            <polygon
-              points="150,460 205,432 315,432 370,460 315,488 205,488"
-              fill="#172126"
-              stroke="var(--accent)"
+              points="30,25 100,50 100,65 30,40"
+              fill="var(--p2)"
+              stroke="var(--ln)"
               stroke-width="2"
               stroke-linejoin="round"
             />
             <polygon
-              points="185,460 222,442 298,442 335,460 298,478 222,478"
-              fill="var(--accent)"
-              fill-opacity="0.16"
+              points="100,50 170,25 170,40 100,65"
+              fill="var(--p2)"
+              stroke="var(--ln)"
+              stroke-width="2"
+              stroke-linejoin="round"
             />
-            <polygon points="205,432 315,432 260,460" fill="#ffffff" fill-opacity="0.04" />
+            <polygon
+              points="100,0 170,25 100,50 30,25"
+              fill="var(--p)"
+              stroke="var(--ln)"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
           </svg>
-          <img id="preview-fallback" class="su-figbig" alt="" width="220" height="352" />
-          <canvas id="preview-canvas" class="su-figbig live" aria-hidden="true" hidden></canvas>
+          <img id="preview-fallback" class="l-figure" alt="" width="220" height="352" />
+          <canvas id="preview-canvas" class="l-figure live" aria-hidden="true" hidden></canvas>
+        </div>
+        <div class="fig-row">
           <button
             id="preview-prev"
-            class="su-arrow l"
+            class="ui-btn ui-icon-btn"
             type="button"
             aria-label="Предыдущий персонаж"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
-          </button>
+            data-icon="prev"
+          ></button>
+          <div class="plate ui-panel" aria-live="polite">
+            <span id="plate-name">Игрок</span>
+            <small id="plate-model"></small>
+          </div>
           <button
             id="preview-next"
-            class="su-arrow r"
+            class="ui-btn ui-icon-btn"
             type="button"
             aria-label="Следующий персонаж"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+            data-icon="next"
+          ></button>
         </div>
-        <div class="su-plate" aria-live="polite">
-          <div class="n"><span class="su-gem"></span><span id="plate-name">Игрок</span></div>
-          <div class="m" id="plate-model"></div>
-          <div class="d" id="plate-description"></div>
+        <p id="plate-description" class="sr-only"></p>
+      </section>
+
+      <section class="l-card ui-panel" aria-labelledby="welcome-title">
+        <div class="ui-orn"></div>
+        <div class="l-card-in">
+          <div class="pass-head"><span>Пропуск · Полигон 01</span><span>Tech demo</span></div>
+          <h1 id="welcome-title" class="disp">Видза оланныд!</h1>
+          <p id="welcome-description" class="l-lede">Встретимся на полигоне.</p>
+          <section id="account-panel" class="account-panel" aria-label="Аккаунт игрока" hidden>
+            <a id="telegram-login" class="ui-btn telegram-login" href="/api/auth/telegram"
+              >Войти через Telegram</a
+            >
+            <form id="profile-form" class="profile-form" hidden>
+              <div class="fld">
+                <label for="profile-name">Имя в игре</label>
+                <input
+                  id="profile-name"
+                  class="ui-input"
+                  name="displayName"
+                  type="text"
+                  autocomplete="nickname"
+                  required
+                  minlength="2"
+                  maxlength="18"
+                />
+              </div>
+              <fieldset class="fld" id="profile-colors">
+                <legend class="lb"><span>Цвет</span><b id="profile-color-label"></b></legend>
+                <div id="profile-swatches" class="dots"></div>
+                <div id="profile-own" class="own-box" hidden>
+                  <label for="profile-hue"
+                    >Оттенок
+                    <input
+                      id="profile-hue"
+                      class="track hue"
+                      type="range"
+                      min="0"
+                      max="359"
+                      value="20"
+                  /></label>
+                  <label for="profile-tone"
+                    >Тон
+                    <input
+                      id="profile-tone"
+                      class="track"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value="50"
+                  /></label>
+                </div>
+              </fieldset>
+              <div class="fld">
+                <span class="lb"><span>Ваш знак</span></span>
+                <div class="sign-row">
+                  <span id="profile-sign" class="sign-slot"></span>
+                  <span>Зависит от имени и цвета. Виден в чате и над головой.</span>
+                </div>
+              </div>
+            </form>
+            <button id="account-retry" class="ui-btn" type="button" hidden>
+              Повторить загрузку аккаунта
+            </button>
+            <p id="account-message" class="account-message" role="status" aria-live="polite"></p>
+          </section>
+          <button id="join" class="ui-btn ui-pri enter disp" disabled>
+            <span id="join-label">Загружаем мир…</span>
+          </button>
+          <div class="l-foot">
+            <span id="welcome-note" class="welcome-note"
+              >Без регистрации. Для второго игрока откройте ещё одну вкладку.</span
+            >
+            <span class="l-links">
+              <button id="account-logout" class="ui-link" type="button" hidden>
+                Выйти из аккаунта
+              </button>
+              <button id="audio-lobby-toggle" class="ui-link" type="button" aria-pressed="true">
+                Звук включён
+              </button>
+            </span>
+          </div>
         </div>
       </section>
-      <section class="su-win su-list su-facet" aria-label="Выбор персонажа">
-        <div class="su-win-head">
-          <h2 class="su-win-title"><span class="su-gem"></span>Персонажи</h2>
-          <span class="su-chip" id="list-count">2 / 12 открыто</span>
-        </div>
-        <div id="avatar-tabs" class="su-tabs" role="group" aria-label="Фильтр персонажей"></div>
-        <fieldset id="avatar-skins" class="su-scroll avatar-skins">
+
+      <section class="l-roster" aria-label="Выбор персонажа">
+        <fieldset id="avatar-skins" class="roster">
           <legend class="sr-only">Внешность персонажа</legend>
-          <div id="avatar-skin-options" class="su-cards"></div>
-          <div class="su-more">Новые персонажи появятся с обновлениями</div>
+          <div id="avatar-skin-options" class="roster-list"></div>
+          <div id="avatar-more" class="r-more ui-panel" hidden></div>
         </fieldset>
       </section>
     </main>
-    <div id="notice" class="notice su-facet" role="status" hidden></div>
+
+    <!-- Верх по центру: уведомление, подсказка размещения, загрузка области. -->
+    <div id="hud-top" class="hud-top">
+      <div id="notice" class="notice ui-panel" role="status" hidden></div>
+      <aside id="area-status" class="area-status ui-panel" role="status" hidden>
+        <span id="area-message"></span>
+        <button id="area-retry" class="ui-btn" hidden>Повторить загрузку</button>
+      </aside>
+    </div>
+
+    <!-- HUD в мире. -->
+    <div id="hud" class="hud">
+      <button
+        id="help-toggle"
+        class="ui-btn hud-help disp"
+        type="button"
+        aria-label="Управление и настройки"
+        aria-expanded="false"
+        aria-controls="help-panel"
+        aria-keyshortcuts="H"
+      >
+        <span aria-hidden="true">?</span>
+      </button>
+      <div id="help-tip" class="hud-tip ui-panel" role="status" hidden>
+        <p>Управление, звук и тема интерфейса — здесь.</p>
+        <button id="help-tip-ok" class="ui-btn ui-pri" type="button">Понятно</button>
+      </div>
+      <section
+        id="help-panel"
+        class="hud-helppanel ui-pop ui-panel"
+        aria-labelledby="help-title"
+        hidden
+      >
+        <div class="ui-orn"></div>
+        <div class="help-head">
+          <h2 id="help-title" class="pop-h disp">Управление</h2>
+          <button
+            id="help-close"
+            class="ui-btn pop-close"
+            type="button"
+            aria-label="Закрыть (Esc)"
+            data-icon="close"
+          ></button>
+        </div>
+        <div class="help-scroll">
+          <p class="help-mode"><strong id="controls-title">Свободное движение</strong></p>
+          <p class="help-note" id="controls-description"></p>
+          <p id="first-person-actions" class="help-note" hidden>
+            Предметы, реакции и анимации доступны в обзоре.
+          </p>
+          <dl class="keys">
+            <div data-touch-hidden>
+              <dt>Ходьба</dt>
+              <dd>
+                <kbd class="ui-kbd">W</kbd><kbd class="ui-kbd">A</kbd><kbd class="ui-kbd">S</kbd
+                ><kbd class="ui-kbd">D</kbd><span class="or">или</span
+                ><kbd class="ui-kbd" aria-label="стрелки" data-icon="arrows"></kbd>
+              </dd>
+            </div>
+            <div data-touch-hidden>
+              <dt>Бег</dt>
+              <dd><kbd class="ui-kbd">Shift</kbd></dd>
+            </div>
+            <div data-touch-hidden>
+              <dt>Камера</dt>
+              <dd id="overview-camera-controls">
+                <kbd class="ui-kbd">Q</kbd><kbd class="ui-kbd">E</kbd><span class="or">или</span
+                ><kbd class="ui-kbd">ПКМ</kbd>
+              </dd>
+              <dd id="first-person-camera-controls" hidden>
+                Мышь · <kbd class="ui-kbd">Esc</kbd> — курсор
+              </dd>
+            </div>
+            <div>
+              <dt>Действие у предмета</dt>
+              <dd>по подсказке</dd>
+            </div>
+            <div data-touch-hidden>
+              <dt>Чат · реакции · анимации</dt>
+              <dd>
+                <kbd class="ui-kbd">T</kbd><kbd class="ui-kbd">R</kbd><kbd class="ui-kbd">F</kbd>
+              </dd>
+            </div>
+            <div data-touch-hidden>
+              <dt>Вид · рюкзак</dt>
+              <dd><kbd class="ui-kbd">V</kbd><kbd class="ui-kbd">X</kbd></dd>
+            </div>
+            <div data-touch-hidden>
+              <dt>Поворот предмета, 15°</dt>
+              <dd>
+                <kbd class="ui-kbd">WS</kbd><kbd class="ui-kbd">AD</kbd><kbd class="ui-kbd">QE</kbd>
+              </dd>
+            </div>
+            <div data-touch-hidden>
+              <dt>Это меню</dt>
+              <dd><kbd class="ui-kbd">H</kbd></dd>
+            </div>
+          </dl>
+          <div class="setting">
+            <span class="setting-label" id="ui-theme-label">Тема интерфейса</span>
+            <div class="seg" role="group" aria-labelledby="ui-theme-label">
+              <button class="ui-btn" type="button" data-theme-mode="auto" aria-pressed="true">
+                Авто
+              </button>
+              <button class="ui-btn" type="button" data-theme-mode="day" aria-pressed="false">
+                День
+              </button>
+              <button class="ui-btn" type="button" data-theme-mode="night" aria-pressed="false">
+                Ночь
+              </button>
+            </div>
+          </div>
+          <label class="setting" for="quality"
+            ><span class="setting-label">Качество графики</span>
+            <select id="quality" class="ui-input">
+              <option value="standard">Обычное</option>
+              <option value="economy">Экономное</option>
+            </select>
+          </label>
+          <p class="help-note">Экономное — меньше разрешение, без теней.</p>
+          <details class="audio-settings">
+            <summary>Звук</summary>
+            <button id="audio-toggle" class="ui-btn audio-toggle" type="button" aria-pressed="true">
+              Звук включён
+            </button>
+            <label for="audio-volume"
+              >Общая громкость
+              <output id="audio-volume-value" for="audio-volume">100%</output></label
+            >
+            <input id="audio-volume" type="range" min="0" max="100" value="100" />
+            <label for="audio-world-volume"
+              >Окружение
+              <output id="audio-world-volume-value" for="audio-world-volume">100%</output></label
+            >
+            <input id="audio-world-volume" type="range" min="0" max="100" value="100" />
+            <label for="audio-ui-volume"
+              >Интерфейс
+              <output id="audio-ui-volume-value" for="audio-ui-volume">100%</output></label
+            >
+            <input id="audio-ui-volume" type="range" min="0" max="100" value="100" />
+          </details>
+          <button
+            id="diagnostics-toggle"
+            class="ui-btn help-wide"
+            type="button"
+            aria-expanded="false"
+            aria-controls="diagnostics"
+          >
+            Диагностика соединения
+          </button>
+        </div>
+        <div class="help-foot">
+          <button id="respawn" class="ui-btn" type="button" hidden>
+            <span id="respawn-label">На старт</span>
+          </button>
+          <button id="leave" class="ui-btn" type="button" hidden>Выйти</button>
+        </div>
+      </section>
+
+      <div class="hud-chips">
+        <div id="clock-chip" class="ui-chip ui-panel" aria-label="Время в мире">
+          <span id="clock-icon" class="ic" aria-hidden="true"></span>
+          <span id="clock-text">--:--</span>
+        </div>
+        <button
+          id="players-toggle"
+          class="ui-chip ui-panel"
+          type="button"
+          aria-expanded="false"
+          aria-controls="players-panel"
+          aria-label="Игроки в сети: 0"
+        >
+          <span class="ic" data-icon="people"></span><span id="players-count">0</span>
+        </button>
+      </div>
+      <section
+        id="players-panel"
+        class="hud-players ui-pop ui-panel"
+        aria-labelledby="players-title"
+        hidden
+      >
+        <div class="ui-orn"></div>
+        <h2 id="players-title" class="pop-h disp">
+          <span>В сети</span><small id="players-total">0 из 8</small>
+        </h2>
+        <ul id="players-list" class="plist"></ul>
+        <p id="players-note" class="pop-sub" hidden>Остальные далеко и в списке не видны.</p>
+      </section>
+
+      <div class="hud-chat">
+        <div id="chat-log" class="chat-log" role="log" aria-label="Последние сообщения"></div>
+        <section
+          id="reactions-panel"
+          class="catalog reactions-panel ui-pop ui-panel"
+          aria-labelledby="reactions-title"
+          hidden
+        >
+          <div class="ui-orn"></div>
+          <h2 id="reactions-title" class="pop-h disp">
+            <span>Реакции</span
+            ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
+          </h2>
+          <div class="filters" role="group" aria-label="Категория реакций"></div>
+          <div class="catalog-scroll">
+            <div class="catalog-recent" hidden>
+              <span class="pop-sub">Недавние</span>
+              <div class="rgrid reaction-recents" role="group" aria-label="Недавние реакции"></div>
+              <span class="pop-sub">Все</span>
+            </div>
+            <div class="rgrid reaction-choices" role="group" aria-label="Выбор реакции"></div>
+          </div>
+          <p id="reactions-status" class="catalog-status" role="status"></p>
+          <progress
+            class="reaction-cooldown"
+            aria-label="Ожидание следующей реакции"
+            hidden
+          ></progress>
+        </section>
+        <section
+          id="animations-panel"
+          class="catalog animation-panel ui-pop ui-panel"
+          aria-labelledby="animations-title"
+          hidden
+        >
+          <div class="ui-orn"></div>
+          <h2 id="animations-title" class="pop-h disp">
+            <span>Анимации</span
+            ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
+          </h2>
+          <div class="filters" role="group" aria-label="Категория анимаций"></div>
+          <div class="catalog-scroll">
+            <div class="elist animation-choices" role="group" aria-label="Выбор анимации"></div>
+          </div>
+          <p id="animations-status" class="catalog-status" role="status"></p>
+        </section>
+        <p id="chat-status" class="chat-status" role="status"></p>
+        <div id="chat-row" class="chat-row">
+          <button
+            id="chat-toggle"
+            class="ui-btn ui-icon-btn"
+            type="button"
+            aria-label="Чат"
+            aria-expanded="false"
+            aria-controls="chat-console"
+            aria-keyshortcuts="T"
+            data-icon="chat"
+            hidden
+          >
+            <span class="k" aria-hidden="true">T</span>
+          </button>
+          <form
+            id="chat-console"
+            class="chat-form"
+            autocomplete="off"
+            aria-label="Сообщение"
+            hidden
+          >
+            <input
+              id="chat-input"
+              class="ui-input"
+              type="text"
+              name="message"
+              maxlength="255"
+              placeholder="Enter — отправить"
+              aria-label="Сообщение рядом с персонажем"
+              aria-describedby="chat-status chat-counter"
+              spellcheck="false"
+            />
+            <span id="chat-counter" class="chat-counter" aria-live="off">0 / 255</span>
+            <button
+              id="chat-send"
+              class="chat-send"
+              type="submit"
+              aria-label="Отправить"
+              data-icon="send"
+              disabled
+            ></button>
+          </form>
+          <button
+            id="reactions-toggle"
+            class="ui-btn ui-icon-btn"
+            type="button"
+            aria-label="Реакции"
+            aria-expanded="false"
+            aria-controls="reactions-panel"
+            aria-keyshortcuts="R"
+            data-icon="react"
+            hidden
+          >
+            <span class="k" aria-hidden="true">R</span>
+          </button>
+          <button
+            id="animations-toggle"
+            class="ui-btn ui-icon-btn"
+            type="button"
+            aria-label="Анимации"
+            aria-expanded="false"
+            aria-controls="animations-panel"
+            aria-keyshortcuts="F"
+            data-icon="emote"
+            hidden
+          >
+            <span class="k" aria-hidden="true">F</span>
+          </button>
+        </div>
+      </div>
+
+      <section
+        id="inventory-panel"
+        class="hud-tray inventory-panel ui-pop ui-panel"
+        aria-labelledby="inventory-title"
+        hidden
+      >
+        <div class="ui-orn"></div>
+        <h2 id="inventory-title" class="pop-h disp">
+          <span>Рюкзак</span><small id="inventory-summary">0 шт.</small>
+        </h2>
+        <div class="tiles" role="group" aria-label="Предметы в рюкзаке"></div>
+        <p class="tray-note" id="inventory-note" role="status"></p>
+      </section>
+      <div class="hud-dock">
+        <button
+          id="view-toggle"
+          class="ui-btn"
+          type="button"
+          aria-label="Вид от первого лица"
+          aria-pressed="false"
+          aria-keyshortcuts="V"
+          data-icon="eye"
+          disabled
+          data-touch-hidden
+        >
+          <span class="k" aria-hidden="true">V</span>
+        </button>
+        <button
+          id="inventory-toggle"
+          class="ui-btn"
+          type="button"
+          aria-label="Рюкзак"
+          aria-expanded="false"
+          aria-controls="inventory-panel"
+          aria-keyshortcuts="X"
+          data-icon="pack"
+          hidden
+        >
+          <span class="k" aria-hidden="true">X</span
+          ><span id="inventory-count" class="ui-badge" aria-hidden="true" hidden>0</span>
+        </button>
+      </div>
+    </div>
+
+    <aside
+      id="diagnostics"
+      class="diagnostics ui-pop ui-panel"
+      aria-label="Диагностика соединения"
+      hidden
+    >
+      <div class="ui-orn"></div>
+      <h2 class="pop-h disp"><span>Диагностика</span><small>live</small></h2>
+      <dl id="metrics"></dl>
+      <button id="download-report" class="ui-btn report-button">Скачать отчёт</button>
+    </aside>
+
     <section
       id="graphics-recovery"
-      class="graphics-recovery"
+      class="graphics-recovery ui-panel"
       role="alert"
       aria-labelledby="graphics-title"
       hidden
     >
-      <div class="eyebrow">ОТОБРАЖЕНИЕ ПРИОСТАНОВЛЕНО</div>
-      <h2 id="graphics-title">Восстанавливаем графику</h2>
-      <p>
-        Движение отключено до восстановления изображения. Если ожидание затянулось, перезагрузите
-        страницу.
-      </p>
-      <button id="graphics-reload" class="button primary">Перезагрузить страницу</button>
-    </section>
-    <button
-      id="help-toggle"
-      class="su-help-btn"
-      type="button"
-      aria-label="Управление и меню"
-      aria-expanded="false"
-      aria-controls="help-panel"
-      aria-keyshortcuts="H"
-    >
-      ?
-    </button>
-    <div id="help-tip" class="su-pop su-coach su-facet" role="status" hidden>
-      <p>Интерфейс скрыт. Управление и меню — здесь.</p>
-      <button id="help-tip-ok" class="su-btn accent" type="button">Понятно</button>
-    </div>
-    <section id="help-panel" class="su-pop su-help su-facet" aria-labelledby="help-title" hidden>
-      <span class="su-corner"></span>
-      <div class="su-help-head">
-        <h2 id="help-title" class="su-h"><span class="su-gem"></span>Управление</h2>
-        <button id="help-close" class="su-close" type="button" aria-label="Закрыть (Esc)">×</button>
-      </div>
-      <p class="su-sub">Кнопки действий появляются сами, когда вы подходите к предмету.</p>
-      <div class="su-row mode">
-        <span><strong id="controls-title">Свободное движение</strong></span>
-      </div>
-      <p class="su-mode-note" id="controls-description"></p>
-      <details class="audio-settings">
-        <summary>Звуки</summary>
-        <button id="audio-toggle" class="su-row su-row-btn" type="button" aria-pressed="true">
-          Звук включён
-        </button>
-        <label for="audio-volume"
-          >Общая громкость <output id="audio-volume-value" for="audio-volume">100%</output></label
-        >
-        <input id="audio-volume" type="range" min="0" max="100" value="100" />
-        <label for="audio-world-volume"
-          >Окружение
-          <output id="audio-world-volume-value" for="audio-world-volume">100%</output></label
-        >
-        <input id="audio-world-volume" type="range" min="0" max="100" value="100" />
-        <label for="audio-ui-volume"
-          >Интерфейс <output id="audio-ui-volume-value" for="audio-ui-volume">100%</output></label
-        >
-        <input id="audio-ui-volume" type="range" min="0" max="100" value="100" />
-      </details>
-      <div class="su-row" data-touch-hidden>
-        <span>Ходьба</span
-        ><span class="k"
-          ><kbd class="su-kbd">W</kbd><kbd class="su-kbd">A</kbd><kbd class="su-kbd">S</kbd
-          ><kbd class="su-kbd">D</kbd><span class="su-or">или</span><kbd class="su-kbd">↑</kbd
-          ><kbd class="su-kbd">↓</kbd><kbd class="su-kbd">←</kbd><kbd class="su-kbd">→</kbd></span
-        >
-      </div>
-      <div class="su-row" data-touch-hidden>
-        <span>Бег</span><span class="k"><kbd class="su-kbd">Shift</kbd></span>
-      </div>
-      <div class="su-row" data-touch-hidden>
-        <span>Камера</span
-        ><span class="k" id="overview-camera-controls"
-          ><kbd class="su-kbd">Q</kbd><kbd class="su-kbd">E</kbd><span class="su-or">или</span
-          ><kbd class="su-kbd">ПКМ</kbd></span
-        >
-        <span id="first-person-camera-controls" class="hint" hidden>Мышь · Esc — курсор</span>
-      </div>
-      <div class="su-row"><span>Действие</span><span class="hint">по подсказке</span></div>
-      <div id="help-menu-rows" class="su-menu-rows">
-        <button
-          id="view-toggle"
-          class="su-row su-row-btn"
-          type="button"
-          aria-keyshortcuts="V"
-          disabled
-          data-touch-hidden
-        >
-          <span id="view-toggle-label">От первого лица</span><kbd class="su-kbd">V</kbd>
-        </button>
-        <p id="first-person-actions" class="su-mode-note" hidden>
-          Предметы, реакции и анимации доступны в обзоре.
+      <div class="ui-orn"></div>
+      <div class="recovery-in">
+        <p class="pop-sub">Отображение приостановлено</p>
+        <h2 id="graphics-title" class="disp">Восстанавливаем графику</h2>
+        <p>
+          Движение отключено до восстановления изображения. Если ожидание затянулось, перезагрузите
+          страницу.
         </p>
-        <button
-          id="chat-toggle"
-          class="su-row su-row-btn"
-          type="button"
-          aria-expanded="false"
-          aria-controls="chat-console"
-          aria-keyshortcuts="T"
-          hidden
-        >
-          <span>Чат</span><kbd class="su-kbd">T</kbd>
-        </button>
-        <button
-          id="reactions-toggle"
-          class="su-row su-row-btn"
-          type="button"
-          aria-expanded="false"
-          aria-controls="reactions-panel"
-          aria-keyshortcuts="R"
-          hidden
-        >
-          <span>Реакции</span><kbd class="su-kbd">R</kbd>
-        </button>
-        <button
-          id="animations-toggle"
-          class="su-row su-row-btn"
-          type="button"
-          aria-expanded="false"
-          aria-controls="animations-panel"
-          aria-keyshortcuts="F"
-          hidden
-        >
-          <span>Анимации</span><kbd class="su-kbd">F</kbd>
-        </button>
-      </div>
-      <div class="su-row" data-touch-hidden>
-        <span>Это меню</span><span class="k"><kbd class="su-kbd">H</kbd></span>
-      </div>
-      <button
-        id="diagnostics-toggle"
-        class="su-row su-row-btn"
-        type="button"
-        aria-expanded="false"
-        aria-controls="diagnostics"
-      >
-        <span>Диагностика соединения</span>
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <path d="M4 17v-4m5 4V7m5 10V4m5 13v-7" />
-        </svg>
-      </button>
-      <div class="su-help-foot">
-        <span class="su-online"
-          ><span class="su-gem sm"></span><span id="help-online">0 / 8 в сети</span></span
-        >
-        <span class="su-btns">
-          <button id="respawn" class="su-btn" type="button" hidden>
-            ⟲ <span id="respawn-label">На старт</span>
-          </button>
-          <button id="leave" class="su-btn" type="button" hidden>Выйти</button>
-        </span>
+        <button id="graphics-reload" class="ui-btn ui-pri">Перезагрузить страницу</button>
       </div>
     </section>
-    <section
-      id="reactions-panel"
-      class="reactions-panel hud-panel"
-      aria-labelledby="reactions-title"
-      hidden
-    >
-      <div class="catalog-heading">
-        <div>
-          <span class="catalog-eyebrow">Быстрый выбор</span>
-          <h2 id="reactions-title">
-            Реакции <span class="catalog-count" data-catalog-count></span>
-          </h2>
-        </div>
-        <button
-          class="reaction-close catalog-close"
-          data-close
-          aria-label="Закрыть реакции (Escape)"
-          title="Закрыть (Esc)"
-        >
-          ×
-        </button>
-      </div>
-      <p class="catalog-description">
-        В покое стикер остаётся над персонажем. После начала движения исчезнет через 5 секунд.
-        Прокрутите каталог, чтобы увидеть все реакции.
-      </p>
-      <div class="reaction-choices" role="group" aria-label="Выбор реакции"></div>
-      <div class="catalog-feedback">
-        <p id="reactions-status" class="catalog-status" role="status"></p>
-        <progress
-          class="reaction-cooldown"
-          aria-label="Ожидание следующей реакции"
-          hidden
-        ></progress>
-      </div>
-      <div class="catalog-footer">
-        <span>1–9 — первые девять</span><span><kbd>Esc</kbd> закрыть</span>
-      </div>
-    </section>
-    <section
-      id="animations-panel"
-      class="reactions-panel animation-panel hud-panel"
-      aria-labelledby="animations-title"
-      hidden
-    >
-      <div class="catalog-heading">
-        <div>
-          <span class="catalog-eyebrow">В движении</span>
-          <h2 id="animations-title">
-            Анимации <span class="catalog-count" data-catalog-count></span>
-          </h2>
-        </div>
-        <button
-          class="reaction-close catalog-close"
-          data-close
-          aria-label="Закрыть анимации (Escape)"
-          title="Закрыть (Esc)"
-        >
-          ×
-        </button>
-      </div>
-      <p class="catalog-description">
-        Общайтесь, танцуйте и разминайтесь. Прокрутите каталог, чтобы увидеть все анимации.
-      </p>
-      <div class="animation-choices" role="group" aria-label="Выбор анимации"></div>
-      <div class="catalog-feedback">
-        <p id="animations-status" class="catalog-status" role="status"></p>
-      </div>
-      <div class="catalog-footer">
-        <span>1–9 — первые девять</span><span><kbd>Esc</kbd> закрыть</span>
-      </div>
-    </section>
-    <form
-      id="chat-console"
-      class="chat-console"
-      aria-labelledby="chat-title"
-      autocomplete="off"
-      hidden
-    >
-      <div class="reactions-heading">
-        <label id="chat-title" for="chat-input">Сообщение рядом с персонажем</label>
-        <button type="button" class="reaction-close" data-close aria-label="Закрыть чат (Escape)">
-          ×
-        </button>
-      </div>
-      <input
-        id="chat-input"
-        type="text"
-        name="message"
-        maxlength="255"
-        placeholder="Что скажем окружающим?"
-        aria-describedby="chat-status chat-counter"
-        spellcheck="false"
-      />
-      <div class="chat-footer">
-        <span id="chat-status" role="status">Enter — отправить · Esc — отменить</span>
-        <span id="chat-counter">0 / 255</span>
-        <button id="chat-send" type="submit" class="button quiet" disabled>Отправить</button>
-      </div>
-    </form>
-    <aside id="diagnostics" class="diagnostics" aria-label="Диагностика соединения" hidden>
-      <div class="diagnostics-heading">ДИАГНОСТИКА <span>LIVE</span></div>
-      <label class="quality-setting" for="quality"
-        >Качество графики
-        <select id="quality">
-          <option value="standard">Обычное</option>
-          <option value="economy">Экономное</option>
-        </select>
-      </label>
-      <p class="quality-note">Экономное — меньше разрешение, без теней.</p>
-      <dl id="metrics"></dl>
-      <button id="download-report" class="button quiet report-button">Скачать отчёт</button>
-    </aside>
-    <aside id="area-status" class="area-status" role="status" hidden>
-      <span id="area-message"></span>
-      <button id="area-retry" class="button quiet" hidden>Повторить загрузку</button>
-    </aside>
-    <script type="module" src="/src/main.ts"></script>
-    <div id="first-person-hud" class="first-person-hud" hidden>
-      <button id="overview-button" class="su-btn" type="button">Обзор · V</button>
+
+    <div id="first-person-hud" class="first-person-hud ui-panel" hidden>
+      <button id="overview-button" class="ui-btn" type="button">Обзор · V</button>
       <span id="first-person-hint" role="status"
         >Щёлкните по миру, чтобы продолжить · Esc — курсор</span
       >
     </div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

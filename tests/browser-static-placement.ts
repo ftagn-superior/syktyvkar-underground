@@ -8,7 +8,7 @@ import { createAccountFixture } from './helpers/account-fixture.js';
 import { buildStaticPlacementWorld } from './helpers/static-placement-world.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
-import { hudClick } from './helpers/hud.js';
+import { chatSent, openChat } from './helpers/hud.js';
 import { placedStaticInstance, type PlaceStaticRequest } from '../packages/contracts/src/index.js';
 if (!process.env.SU_TEST_DATABASE_URL)
   throw new Error('Set SU_TEST_DATABASE_URL to a test PostgreSQL database.');
@@ -32,7 +32,7 @@ async function command(page: Page, text: string) {
   if (await page.evaluate(() => (window as any).__SU_DEBUG__.controls().view === 'first-person')) {
     await page.locator('#world').focus();
     await page.keyboard.press('t');
-  } else await hudClick(page, '#chat-toggle');
+  } else await openChat(page);
   await page.locator('#chat-input').fill(text);
   await page.locator('#chat-send:not([disabled])').click();
 }
@@ -77,7 +77,7 @@ try {
   await observer.locator('#notice').filter({ hasText: 'Telegram' }).waitFor();
   await observer.keyboard.press('Escape');
   await command(owner, 'Обычная реплика перед командой');
-  await owner.locator('#chat-console').waitFor({ state: 'hidden' });
+  await chatSent(owner);
   await owner.waitForFunction(() => (window as any).__SU_DEBUG__.controls().firstPersonAvailable);
   await owner.locator('#world').focus();
   await owner.keyboard.press('v');

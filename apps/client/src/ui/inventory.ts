@@ -1,27 +1,66 @@
 import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { canonicalJson, type InventoryItem, type ItemPose } from '@su/contracts';
+import {
+  canonicalJson,
+  type InventoryItem,
+  type InventoryView,
+  type ItemPose,
+} from '@su/contracts';
+import { isTextInput } from '../input/keyboard';
 import type { GameSession } from '../network/session';
 import type { WorldView } from '../rendering/world-view';
+import { ICONS } from './icons';
 
-/** Private inventory and a local preview. Only server confirmation moves an instance. */
+/** Одна плитка рюкзака: все экземпляры одного типа с одинаковыми свойствами. */
+export interface InventoryGroup {
+  key: string;
+  typeId: string;
+  count: number;
+  /** Any instance of the group; placing takes this one. */
+  item: InventoryItem;
+}
+
+/**
+ * Groups server slots into one entry per item type. Items with different properties stay apart,
+ * so future per-item properties are never merged by the interface.
+ */
+export function groupInventory(inventory: InventoryView): InventoryGroup[] {
+  const groups = new Map<string, InventoryGroup>();
+  for (const slot of inventory.slots)
+    for (const item of slot.items) {
+      const key = `${item.typeId}|${canonicalJson(item.properties ?? {})}`;
+      const group = groups.get(key);
+      if (group) group.count++;
+      else groups.set(key, { key, typeId: item.typeId, count: 1, item });
+    }
+  return [...groups.values()];
+}
+export const inventoryTotal = (inventory: InventoryView): number =>
+  inventory.slots.reduce((total, slot) => total + slot.items.length, 0);
+
+/**
+ * Рюкзак: кнопка в доке со счётчиком и лоток с плиткой на каждый тип. Выбор плитки закрывает
+ * лоток и включает размещение; подсказка размещения — плашка наверху. Стопок, ячеек, разделения
+ * и объединения в интерфейсе нет: действия `split`, `merge`, `move` остаются только на сервере.
+ * Предмет сдвигается только после подтверждения сервера.
+ */
 export class InventoryPanel {
   private enabled = true;
+  private placementAllowed = true;
   private readonly controller = new AbortController();
-  private readonly toggle = document.createElement('button');
-  private readonly panel = document.createElement('section');
-  private readonly grid = document.createElement('div');
-  private readonly message = document.createElement('p');
-  private readonly summary = document.createElement('span');
-  private readonly details = document.createElement('section');
-  private readonly toolbar = document.createElement('section');
-  private readonly placementTitle = document.createElement('strong');
+  private readonly toggle = document.getElementById('inventory-toggle') as HTMLButtonElement;
+  private readonly badge = document.getElementById('inventory-count')!;
+  private readonly panel = document.getElementById('inventory-panel')!;
+  private readonly tiles: HTMLElement;
+  private readonly note = document.getElementById('inventory-note')!;
+  private readonly summary = document.getElementById('inventory-summary')!;
+  private readonly pill = document.createElement('section');
+  private readonly pillIcon = document.createElement('span');
+  private readonly pillName = document.createElement('b');
   private readonly placementStatus = document.createElement('p');
-  private readonly confirm: HTMLButtonElement;
+  private readonly confirm = document.createElement('button');
+  private groups: InventoryGroup[] = [];
   private selected?: InventoryItem;
-  private activeSlot?: string;
-  private pendingFocusKey?: string;
-  private pendingPickup?: string;
-  private targetSlot?: string;
+  private pendingPickup?: { name: string; icon: string };
   private rotation = Quaternion.Identity();
   private pose?: ItemPose;
   private valid = false;
@@ -31,104 +70,56 @@ export class InventoryPanel {
     private readonly canvas: HTMLCanvasElement,
     private readonly onOpen?: () => void,
     private readonly onPlacementChange?: (active: boolean) => void,
-    private readonly onPickedUp?: (name: string) => void,
+    private readonly onPickedUp?: (name: string, icon: string) => void,
   ) {
-    this.toggle.type = 'button';
-    this.toggle.className = 'su-row su-row-btn';
-    this.toggle.id = 'inventory-toggle';
-    this.toggle.append(
-      Object.assign(document.createElement('span'), { textContent: 'Инвентарь' }),
-      Object.assign(document.createElement('kbd'), { className: 'su-kbd', textContent: 'X' }),
-    );
-    this.toggle.setAttribute('aria-label', 'Инвентарь · X');
-    this.toggle.hidden = true;
-    this.toggle.setAttribute('aria-controls', 'inventory-panel');
-    this.toggle.setAttribute('aria-expanded', 'false');
-    this.toggle.setAttribute('aria-keyshortcuts', 'X');
-    document.getElementById('help-menu-rows')!.append(this.toggle);
-    this.panel.id = 'inventory-panel';
-    this.panel.className = 'inventory-panel hud-panel';
-    this.panel.hidden = true;
-    this.panel.setAttribute('aria-label', 'Личный инвентарь');
-    const heading = document.createElement('div');
-    heading.className = 'catalog-heading';
-    const titles = document.createElement('div');
-    const eyebrow = document.createElement('span');
-    eyebrow.className = 'catalog-eyebrow';
-    eyebrow.textContent = 'Личные вещи';
-    const title = document.createElement('h2');
-    title.textContent = 'Инвентарь ';
-    this.summary.className = 'catalog-count';
-    title.append(this.summary);
-    titles.append(eyebrow, title);
-    const close = this.button('×', () => this.open(false));
-    close.className = 'reaction-close catalog-close';
-    close.setAttribute('aria-label', 'Закрыть инвентарь');
-    close.title = 'Закрыть (Esc)';
-    heading.append(titles, close);
-    const description = document.createElement('p');
-    description.className = 'catalog-description';
-    description.textContent = 'Выберите стопку, затем действие.';
-    this.message.className = 'catalog-status inventory-status';
-    this.message.setAttribute('role', 'status');
-    this.message.tabIndex = -1;
-    this.grid.className = 'inventory-grid';
-    this.grid.setAttribute('role', 'group');
-    this.grid.setAttribute('aria-label', 'Предметы в инвентаре');
-    this.details.className = 'inventory-details';
-    this.details.setAttribute('aria-label', 'Действия с выбранной стопкой');
-    const footer = document.createElement('div');
-    footer.className = 'catalog-footer';
-    for (const text of ['Подобрать — по подсказке (Z)', 'Закрыть — Esc']) {
-      const hint = document.createElement('span');
-      hint.textContent = text;
-      footer.append(hint);
-    }
-    this.panel.append(heading, description, this.message, this.grid, this.details, footer);
-    this.toolbar.id = 'item-placement';
-    this.toolbar.className = 'placement-toolbar';
-    this.toolbar.hidden = true;
-    this.toolbar.setAttribute('aria-label', 'Размещение предмета');
+    this.tiles = this.panel.querySelector('.tiles')!;
+    this.pill.id = 'item-placement';
+    this.pill.className = 'place-pill ui-panel';
+    this.pill.hidden = true;
+    this.pill.setAttribute('aria-label', 'Размещение предмета');
+    this.pillIcon.className = 'ic';
+    this.pillIcon.setAttribute('aria-hidden', 'true');
+    const copy = document.createElement('span');
+    copy.className = 'place-copy';
+    const line = document.createElement('span');
+    const optional = document.createElement('span');
+    optional.className = 'opt';
+    optional.textContent = ' · Esc — отмена';
+    line.append(this.pillName, ' · щёлкните по миру', optional);
+    this.placementStatus.className = 'place-status';
     this.placementStatus.setAttribute('role', 'status');
-    this.placementTitle.className = 'placement-title';
-    this.placementStatus.className = 'catalog-status';
-    this.toolbar.append(this.placementTitle, this.placementStatus);
-    const hints = document.createElement('div');
-    hints.className = 'placement-keys';
-    hints.id = 'placement-keys';
-    for (const [keys, label] of [
-      ['W S', 'наклон'],
-      ['A D', 'поворот'],
-      ['Q E', 'крен'],
-    ]) {
-      const hint = document.createElement('span');
-      for (const key of keys.split(' ')) {
-        const keycap = document.createElement('kbd');
-        keycap.textContent = key;
-        hint.append(keycap);
-      }
-      hint.append(` — ${label}`);
-      hints.append(hint);
-    }
-    const step = document.createElement('span');
-    step.textContent = 'Шаг 15° · персонаж стоит на месте';
-    hints.append(step);
-    this.toolbar.setAttribute('aria-describedby', hints.id);
-    this.confirm = this.button('Разместить', () => this.place());
-    this.confirm.className = 'button inventory-primary';
-    const placementActions = document.createElement('div');
-    placementActions.className = 'inventory-actions';
-    placementActions.append(
-      this.confirm,
-      this.button('Отмена · Esc', () => {
+    copy.append(line, this.placementStatus);
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'ui-btn ui-icon-btn';
+    cancel.setAttribute('aria-label', 'Отменить размещение (Esc)');
+    cancel.innerHTML = ICONS.close;
+    this.confirm.type = 'button';
+    this.confirm.className = 'ui-btn ui-pri';
+    this.confirm.textContent = 'Поставить';
+    this.confirm.disabled = true;
+    this.pill.append(this.pillIcon, copy, this.confirm, cancel);
+    document.getElementById('hud-top')!.append(this.pill);
+
+    const options = { signal: this.controller.signal };
+    cancel.addEventListener(
+      'click',
+      () => {
         this.cancel();
         this.canvas.focus({ preventScroll: true });
-      }),
+      },
+      options,
     );
-    this.toolbar.append(hints, placementActions);
-    document.body.append(this.panel, this.toolbar);
-    const options = { signal: this.controller.signal };
+    this.confirm.addEventListener('click', () => this.place(), options);
     this.toggle.addEventListener('click', () => this.open(this.panel.hidden), options);
+    this.tiles.addEventListener(
+      'click',
+      (event) => {
+        const tile = (event.target as Element).closest<HTMLButtonElement>('[data-group]');
+        if (tile && !tile.disabled) this.choose(tile.dataset.group!);
+      },
+      options,
+    );
     canvas.addEventListener(
       'click',
       () => {
@@ -141,23 +132,33 @@ export class InventoryPanel {
       (event) => {
         if (
           !this.enabled ||
+          !this.placementAllowed ||
           event.repeat ||
           event.ctrlKey ||
           event.metaKey ||
           event.altKey ||
-          (event.target instanceof HTMLElement &&
-            (event.target.matches('input,textarea,select') || event.target.isContentEditable))
+          isTextInput(event.target)
         )
           return;
         if (event.code === 'KeyX') {
           event.preventDefault();
           this.open(this.panel.hidden);
+          return;
         }
         if (event.code === 'Escape' && (!this.panel.hidden || this.selected)) {
           event.preventDefault();
           this.cancel();
           this.open(false);
-          this.canvas.focus({ preventScroll: true });
+          return;
+        }
+        const digit = /^(?:Digit|Numpad)([1-9])$/.exec(event.code);
+        if (digit && !this.panel.hidden) {
+          const tile =
+            this.tiles.querySelectorAll<HTMLButtonElement>('[data-group]')[Number(digit[1]) - 1];
+          if (tile && !tile.disabled) {
+            event.preventDefault();
+            this.choose(tile.dataset.group!);
+          }
         }
       },
       options,
@@ -179,59 +180,52 @@ export class InventoryPanel {
     session.onItemResult = (result) => {
       const picked = this.pendingPickup;
       this.pendingPickup = undefined;
-      if (result.ok && picked) this.onPickedUp?.(picked);
+      if (result.ok && picked) this.onPickedUp?.(picked.name, picked.icon);
       if (result.ok) this.cancel();
       this.update();
     };
     this.update();
   }
-  private button(text: string, click: () => void) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'button quiet';
-    button.textContent = text;
-    button.dataset.focusKey = text;
-    button.addEventListener(
-      'click',
-      () => {
-        if (this.enabled) click();
-      },
-      { signal: this.controller.signal },
-    );
-    return button;
+  private get inWorld(): boolean {
+    return ['playing', 'preparing', 'waiting'].includes(this.session.state) && !!this.session.room;
   }
   private open(open: boolean, restoreFocus = true) {
-    if (
-      open &&
-      (!this.enabled ||
-        !['playing', 'preparing', 'waiting'].includes(this.session.state) ||
-        !this.session.accountId ||
-        !this.session.room)
-    )
-      return;
-    if (open) this.onOpen?.();
+    if (open && (!this.enabled || !this.inWorld)) return;
+    const wasOpen = !this.panel.hidden;
+    if (open) {
+      this.onOpen?.();
+      this.cancel();
+    }
     this.panel.hidden = !open;
     this.toggle.setAttribute('aria-expanded', String(open));
     if (open) {
-      this.cancel();
+      this.signature = '';
       this.update();
-      (
-        this.panel.querySelector<HTMLButtonElement>(
-          '.inventory-choice[aria-pressed="true"]:not(:disabled)',
-        ) ?? this.panel.querySelector('button')
-      )?.focus({ preventScroll: true });
-    } else if (restoreFocus) this.canvas.focus({ preventScroll: true });
+      this.tiles.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({
+        preventScroll: true,
+      });
+    } else if (wasOpen && restoreFocus) this.canvas.focus({ preventScroll: true });
   }
   close(): void {
     this.panel.hidden = true;
     this.toggle.setAttribute('aria-expanded', 'false');
-    this.pendingFocusKey = undefined;
     this.cancel();
   }
   setEnabled(enabled: boolean): void {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) this.close();
+    this.update();
+  }
+  /**
+   * Placing aims with the mouse and turns with keys; in touch mode the backpack opens by tap only
+   * and its tiles are for viewing. Hotkeys stay inert there, as do all other HUD hotkeys.
+   */
+  setTouch(touch: boolean): void {
+    if (this.placementAllowed === !touch) return;
+    this.placementAllowed = !touch;
+    if (touch) this.cancel();
+    this.signature = '';
     this.update();
   }
   /** True when a contextual pickup prompt may be shown and activated. */
@@ -246,10 +240,25 @@ export class InventoryPanel {
     );
   }
   /** Picks up a specific item; called by the interaction prompt. */
-  pickup(itemId: string, name = 'Предмет'): void {
+  pickup(itemId: string, name = 'Предмет', typeId?: string): void {
     if (!this.canCollect) return;
-    this.pendingPickup = name;
+    const icon = (typeId && this.session.definition.itemCatalog.types[typeId]?.icon) || '📦';
+    this.pendingPickup = { name, icon };
     this.session.itemAction({ kind: 'pickup', itemId });
+  }
+  private choose(key: string): void {
+    const group = this.groups.find((entry) => entry.key === key);
+    if (!group || !this.placementAllowed || !this.enabled) return;
+    const type = this.session.definition.itemCatalog.types[group.typeId];
+    this.open(false, false);
+    this.selected = group.item;
+    this.rotation = Quaternion.Identity();
+    this.pillIcon.textContent = type.icon;
+    this.pillName.textContent = type.name;
+    this.placementStatus.textContent = '';
+    this.pill.hidden = false;
+    this.onPlacementChange?.(true);
+    this.canvas.focus({ preventScroll: true });
   }
   private place() {
     if (this.enabled && this.selected && this.pose && this.valid)
@@ -260,8 +269,7 @@ export class InventoryPanel {
     this.selected = undefined;
     this.pose = undefined;
     this.valid = false;
-    this.targetSlot = undefined;
-    this.toolbar.hidden = true;
+    this.pill.hidden = true;
     if (wasPlacing) this.onPlacementChange?.(false);
   }
   rotatePlacement(axis: 'x' | 'y' | 'z', direction: -1 | 1): void {
@@ -273,218 +281,96 @@ export class InventoryPanel {
       .normalize();
   }
   update() {
-    const preparing = ['preparing', 'waiting'].includes(this.session.state);
-    const available =
-      this.enabled &&
-      (this.session.state === 'playing' || preparing) &&
-      !!this.session.accountId &&
-      !!this.session.room;
+    const available = this.enabled && this.inWorld;
     this.toggle.hidden = !available;
     if (!available) {
       this.panel.hidden = true;
       this.cancel();
       this.toggle.setAttribute('aria-expanded', 'false');
     }
+    // A selected item that left the inventory (placed elsewhere, world reset) ends placement.
+    if (
+      this.selected &&
+      !this.session.inventory.slots.some((slot) =>
+        slot.items.some((item) => item.itemId === this.selected!.itemId),
+      )
+    )
+      this.cancel();
+    const preparing = ['preparing', 'waiting'].includes(this.session.state);
     const busy = preparing || this.session.itemPending || this.session.worldPaused;
-    this.toggle.disabled = false;
-    const slots = this.session.inventory.slots;
-    if (!slots.some((slot) => slot.slotId === this.activeSlot)) this.activeSlot = slots[0]?.slotId;
-    if (!slots.some((slot) => slot.slotId === this.targetSlot)) this.targetSlot = undefined;
+    const guest = !this.session.accountId;
+    const total = inventoryTotal(this.session.inventory);
+    this.badge.textContent = String(total);
+    this.badge.hidden = total === 0;
+    this.toggle.setAttribute('aria-label', total ? `Рюкзак: ${total} шт.` : 'Рюкзак');
     const signature = canonicalJson({
       inventory: this.session.inventory,
       busy,
-      target: this.targetSlot,
-      active: this.activeSlot,
+      guest,
+      place: this.placementAllowed,
     });
     if (signature === this.signature) return;
     this.signature = signature;
-    const focusKey = this.panel.contains(document.activeElement)
-      ? (document.activeElement as HTMLElement).dataset.focusKey
+    this.groups = guest ? [] : groupInventory(this.session.inventory);
+    const focused = this.panel.contains(document.activeElement)
+      ? (document.activeElement as HTMLElement).dataset.group
       : undefined;
-    const restorePendingFocus = document.activeElement === this.message && !!this.pendingFocusKey;
-    const gridScroll = this.grid.scrollTop;
     this.panel.setAttribute('aria-busy', String(busy));
-    const count = slots.reduce((total, slot) => total + slot.items.length, 0);
-    this.summary.textContent = String(count);
-    this.summary.setAttribute('aria-label', `Всего предметов: ${count}`);
-    this.message.dataset.state = busy || this.targetSlot ? 'waiting' : 'ready';
-    this.message.textContent = preparing
-      ? 'Готовим окружение. Инвентарь доступен для просмотра.'
-      : busy
-        ? 'Ожидаем подтверждение сервера…'
-        : this.targetSlot
-          ? 'Выберите другую ячейку для обмена или объединения.'
-          : 'Одинаковые вещи собираются в стопки.';
-    this.message.hidden = !slots.length;
-    this.grid.replaceChildren();
-    this.details.replaceChildren();
-    this.details.hidden = !slots.length;
-    this.grid.classList.toggle('is-empty', !slots.length);
-    if (!slots.length) {
-      const empty = document.createElement('div');
-      empty.className = 'inventory-empty';
-      const icon = document.createElement('span');
-      icon.className = 'inventory-empty-icon';
-      icon.textContent = '📦';
-      icon.setAttribute('aria-hidden', 'true');
-      const title = document.createElement('strong');
-      title.textContent = 'Здесь пока пусто';
-      const hint = document.createElement('p');
-      hint.textContent = 'Подойдите к предмету в мире и нажмите Z, чтобы забрать его с собой.';
-      empty.append(icon, title, hint);
-      this.grid.append(empty);
-    }
-    for (const [index, slot] of slots.entries()) {
-      const item = slot.items[0],
-        type = this.session.definition.itemCatalog.types[item.typeId];
-      const cell = document.createElement('article');
-      cell.className = 'inventory-slot';
-      cell.dataset.slotId = slot.slotId;
-      cell.dataset.source = String(this.targetSlot === slot.slotId);
-      const choose = this.button(`${type.icon} ${type.name} × ${slot.items.length}`, () => {
-        this.activeSlot = slot.slotId;
-        this.update();
-      });
-      choose.className = 'inventory-choice';
-      choose.dataset.focusKey = `slot:${slot.slotId}`;
-      choose.setAttribute('aria-pressed', String(this.activeSlot === slot.slotId));
-      choose.setAttribute('aria-label', choose.textContent!);
-      const icon = document.createElement('span');
-      icon.className = 'inventory-item-icon';
-      icon.textContent = type.icon;
-      icon.setAttribute('aria-hidden', 'true');
-      const name = document.createElement('strong');
-      name.textContent = type.name;
-      const amount = document.createElement('span');
-      amount.className = 'inventory-amount';
-      amount.textContent = `×${slot.items.length}`;
-      const number = document.createElement('span');
-      number.className = 'inventory-slot-number';
-      number.textContent =
-        this.targetSlot === slot.slotId ? 'Откуда' : String(index + 1).padStart(2, '0');
-      choose.replaceChildren(number, icon, name, amount);
-      choose.disabled = busy;
-      cell.append(choose);
-      this.grid.append(cell);
-    }
-    const active = slots.find((slot) => slot.slotId === this.activeSlot);
-    if (active) {
-      const item = active.items[0];
-      const type = this.session.definition.itemCatalog.types[item.typeId];
-      const title = document.createElement('h3');
-      title.textContent = type.name;
-      const meta = document.createElement('p');
-      meta.className = 'inventory-item-meta';
-      meta.textContent = `В стопке: ${active.items.length} / ${type.maxStack} · Масса предмета: ${type.mass} кг`;
-      const actions = document.createElement('div');
-      actions.className = 'inventory-actions';
-      this.details.append(title, meta, actions);
-      if (!this.targetSlot) {
-        const place = this.button('Разместить в мире', () => {
-          this.selected = item;
-          this.rotation = Quaternion.Identity();
-          this.placementTitle.textContent = `${type.icon} ${type.name}`;
-          this.open(false);
-          this.toolbar.hidden = false;
-          this.onPlacementChange?.(true);
-        });
-        place.className = 'button inventory-primary';
-        actions.append(place);
-        if (active.items.length > 1)
-          actions.append(
-            this.button('Разделить пополам', () =>
-              this.session.itemAction({
-                kind: 'split',
-                slotId: active.slotId,
-                count: Math.floor(active.items.length / 2),
-              }),
-            ),
-          );
-        const move = this.button('Переместить / объединить', () => {
-          this.targetSlot = active.slotId;
-          this.update();
-        });
-        move.disabled = slots.length < 2;
-        if (move.disabled) move.title = 'Нужна ещё одна стопка в инвентаре';
-        actions.append(move);
-      } else {
-        const source = slots.find((slot) => slot.slotId === this.targetSlot)!;
-        meta.textContent =
-          source === active
-            ? 'Выберите ячейку назначения в сетке выше.'
-            : `Из ячейки ${slots.indexOf(source) + 1} → в ячейку ${slots.indexOf(active) + 1}`;
-        if (source !== active) {
-          actions.append(
-            this.button('Поменять местами', () => {
-              const slotId = this.targetSlot!;
-              this.targetSlot = undefined;
-              this.session.itemAction({
-                kind: 'move',
-                slotId,
-                targetSlotId: active.slotId,
-              });
-              this.update();
-            }),
-          );
-          const merge = this.button('Объединить сюда', () => {
-            const slotId = this.targetSlot!;
-            this.targetSlot = undefined;
-            this.session.itemAction({
-              kind: 'merge',
-              slotId,
-              targetSlotId: active.slotId,
-            });
-            this.update();
-          });
-          const compatible = source.items.every(
-            (entry) =>
-              entry.typeId === item.typeId &&
-              canonicalJson(entry.properties) === canonicalJson(item.properties),
-          );
-          merge.disabled = !compatible || active.items.length >= type.maxStack;
-          merge.className = 'button inventory-primary';
-          if (merge.disabled) {
-            const reason = document.createElement('p');
-            reason.className = 'inventory-item-meta';
-            reason.textContent = compatible
-              ? 'Эта стопка уже заполнена.'
-              : 'Объединять можно только одинаковые предметы.';
-            merge.title = reason.textContent;
-            this.details.append(reason);
-          }
-          actions.append(merge);
+    this.summary.textContent = guest ? '' : `${total} шт.`;
+    this.note.textContent = guest
+      ? 'Войдите через Telegram, чтобы носить вещи.'
+      : preparing
+        ? 'Готовим окружение…'
+        : busy
+          ? 'Ожидаем подтверждение сервера…'
+          : !this.groups.length
+            ? this.placementAllowed
+              ? 'Пусто. Подойдите к предмету и нажмите Z.'
+              : 'Пусто. Подойдите к предмету и коснитесь подсказки.'
+            : this.placementAllowed
+              ? ''
+              : 'Ставить предметы можно мышью и клавиатурой.';
+    // The constructor renders before the world definition has loaded.
+    const types =
+      (this.session.definition as typeof this.session.definition | undefined)?.itemCatalog.types ??
+      {};
+    this.tiles.replaceChildren(
+      ...this.groups.map((group, index) => {
+        const type = types[group.typeId];
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'ui-btn tile inventory-choice';
+        tile.dataset.group = group.key;
+        tile.dataset.typeId = group.typeId;
+        tile.setAttribute('aria-label', `${type?.name ?? group.typeId}, ${group.count} шт.`);
+        tile.title = type?.name ?? group.typeId;
+        tile.disabled = busy || !this.placementAllowed;
+        const icon = document.createElement('span');
+        icon.className = 'ic';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = type?.icon ?? '📦';
+        const count = document.createElement('span');
+        count.className = 'n';
+        count.setAttribute('aria-hidden', 'true');
+        count.textContent = String(group.count);
+        tile.append(icon, count);
+        if (index < 9) {
+          const key = document.createElement('span');
+          key.className = 'catalog-choice-key';
+          key.setAttribute('aria-hidden', 'true');
+          key.textContent = String(index + 1);
+          tile.setAttribute('aria-keyshortcuts', String(index + 1));
+          tile.append(key);
         }
-        actions.append(
-          this.button('Отменить выбор', () => {
-            this.targetSlot = undefined;
-            this.update();
-          }),
-        );
-      }
-      if (busy) for (const button of actions.querySelectorAll('button')) button.disabled = true;
-    }
-    this.grid.scrollTop = gridScroll;
-    if (!this.panel.hidden && (focusKey || restorePendingFocus)) {
-      const key = focusKey ?? this.pendingFocusKey;
-      const matching = Array.from(
-        this.panel.querySelectorAll<HTMLButtonElement>('[data-focus-key]'),
-      ).find((button) => button.dataset.focusKey === key && !button.disabled);
-      if (matching) {
-        this.pendingFocusKey = undefined;
-        matching.focus({ preventScroll: true });
-      } else if (busy) {
-        this.pendingFocusKey = key;
-        this.message.focus({ preventScroll: true });
-      } else {
-        this.pendingFocusKey = undefined;
-        const choices = Array.from(this.grid.querySelectorAll<HTMLButtonElement>('button'));
-        (
-          choices.find(
-            (button) => this.targetSlot && button.dataset.focusKey !== `slot:${this.targetSlot}`,
-          ) ?? choices.find((button) => button.getAttribute('aria-pressed') === 'true')
-        )?.focus({ preventScroll: true });
-      }
-    }
+        return tile;
+      }),
+    );
+    if (focused && !this.panel.hidden)
+      (
+        this.tiles.querySelector<HTMLButtonElement>(
+          `[data-group="${CSS.escape(focused)}"]:not(:disabled)`,
+        ) ?? this.tiles.querySelector<HTMLButtonElement>('button:not(:disabled)')
+      )?.focus({ preventScroll: true });
   }
   frame(view: WorldView) {
     if (!this.enabled || !this.selected || this.session.state !== 'playing') {
@@ -503,11 +389,11 @@ export class InventoryPanel {
     this.valid = !!result.pose && !result.error;
     view.showPlacement(this.selected.typeId, this.pose, this.valid);
     const text = this.session.itemPending
-      ? 'Сохраняем размещение…'
+      ? 'Сохраняем…'
       : this.valid
-        ? 'Место доступно · щелчок или «Разместить»'
+        ? 'Место подходит · щелчок или «Поставить»'
         : result.error === 'OUT_OF_REACH'
-          ? 'Подойдите ближе · не более 3 метров'
+          ? 'Подойдите ближе · не дальше 3 метров'
           : 'Выберите свободную поверхность с опорой';
     if (this.placementStatus.textContent !== text) this.placementStatus.textContent = text;
     this.placementStatus.dataset.state =
@@ -517,8 +403,6 @@ export class InventoryPanel {
   dispose() {
     this.cancel();
     this.controller.abort();
-    this.panel.remove();
-    this.toolbar.remove();
-    this.toggle.remove();
+    this.pill.remove();
   }
 }

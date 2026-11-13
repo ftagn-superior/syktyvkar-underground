@@ -325,8 +325,7 @@ try {
 
   await owner.keyboard.press('x');
   await owner.locator('.inventory-choice').first().click();
-  await owner.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
-  const confirm = owner.getByRole('button', { name: 'Разместить', exact: true });
+  const confirm = owner.getByRole('button', { name: 'Поставить', exact: true });
   let validPlacement = false;
   for (const y of [420, 400, 440, 460, 480, 500, 380]) {
     for (const x of [580, 600, 620, 660, 680, 700, 540, 740]) {

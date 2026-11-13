@@ -6,6 +6,7 @@ import {
 } from '@su/contracts';
 import type { GameSession } from '../network/session';
 import type { WorldView } from '../rendering/world-view';
+import { ICONS } from './icons';
 
 /** One desktop tool. A pending durable request belongs to GameSession, beyond the ghost's life. */
 export class StaticPlacement {
@@ -31,24 +32,32 @@ export class StaticPlacement {
     private available: () => boolean,
   ) {
     this.panel.id = 'static-placement';
-    this.panel.className = 'placement-toolbar';
+    this.panel.className = 'place-pill ui-panel';
     this.panel.hidden = true;
     this.panel.setAttribute('aria-label', 'Размещение скамейки');
     this.status.setAttribute('role', 'status');
-    const title = Object.assign(document.createElement('strong'), {
-      textContent: 'Размещение скамейки',
+    this.status.className = 'place-status';
+    const copy = document.createElement('span');
+    copy.className = 'place-copy';
+    const title = Object.assign(document.createElement('span'), {
+      textContent: ' · A / D — поворот на 15°',
     });
-    const hints = Object.assign(document.createElement('p'), {
-      textContent: 'A / D — поворот на 15° · колесо — масштаб · Esc — отмена',
+    title.prepend(Object.assign(document.createElement('b'), { textContent: 'Скамейка' }));
+    const optional = Object.assign(document.createElement('span'), {
+      className: 'opt',
+      textContent: ' · Esc — отмена',
     });
+    title.append(optional);
+    copy.append(title, this.status);
     this.confirm.type = this.cancelButton.type = 'button';
     this.confirm.id = 'static-placement-confirm';
-    this.confirm.textContent = 'Разместить';
-    this.confirm.className = 'button inventory-primary';
-    this.cancelButton.textContent = 'Отмена · Esc';
-    this.cancelButton.className = 'button quiet';
-    this.panel.append(title, this.status, hints, this.confirm, this.cancelButton);
-    document.body.append(this.panel);
+    this.confirm.textContent = 'Поставить';
+    this.confirm.className = 'ui-btn ui-pri';
+    this.cancelButton.className = 'ui-btn ui-icon-btn';
+    this.cancelButton.setAttribute('aria-label', 'Отменить размещение (Esc)');
+    this.cancelButton.innerHTML = ICONS.close;
+    this.panel.append(copy, this.confirm, this.cancelButton);
+    (document.getElementById('hud-top') ?? document.body).append(this.panel);
     const options = { signal: this.listeners.signal };
     this.confirm.addEventListener(
       'click',

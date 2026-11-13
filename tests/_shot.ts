@@ -27,8 +27,9 @@ try {
   await page.locator('input[name="profile-color"][value="rose"]').check();
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${out}/lobby-rose.png` });
-  await page.locator('#profile-color-custom').evaluate((el: HTMLInputElement) => {
-    el.value = '#1b2a6b';
+  await page.locator('input[name="profile-color"][value="custom"]').check();
+  await page.locator('#profile-hue').evaluate((el: HTMLInputElement) => {
+    el.value = '230';
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await page.waitForTimeout(800);

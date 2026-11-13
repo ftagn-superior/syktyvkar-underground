@@ -260,12 +260,11 @@ try {
     '#reactions-panel',
     '#animations-toggle',
     '#animations-panel',
-    '#inventory-toggle',
     '#inventory-panel',
-    '[aria-keyshortcuts="Z"]',
-    '.placement-toolbar',
+    '#item-placement',
   ])
     assert.equal(await page.locator(selector).isHidden(), true, `${selector} remains unavailable`);
+  // The backpack button stays on screen for touch, but hardware keys do not open it.
   assert.equal(
     (await snapshot(page)).items.length,
     1,
@@ -276,7 +275,7 @@ try {
   await fingers.up(1);
   assert.equal(magnitude((await controls(page)).input), 0, 'left canvas is not a movement target');
   recordCheck(
-    'signed-in touch player cannot open social panels or inventory, collect or place through hotkeys or swipes',
+    'signed-in touch player cannot open social panels or the backpack, collect or place through hotkeys or swipes',
   );
 
   await fingers.down(1, center.x, center.y - 35);
@@ -507,11 +506,11 @@ try {
     () => (window as any).__SU_DEBUG__.snapshot().inventory.slots.length === 1,
   );
   await page.keyboard.press('x');
-  await page.getByRole('button', { name: 'Разместить в мире', exact: true }).click();
-  await page.locator('.placement-toolbar').waitFor({ state: 'visible' });
+  await page.locator('.inventory-choice').first().click();
+  await page.locator('#item-placement').waitFor({ state: 'visible' });
   await fingers.down(1, 300, 400);
   await fingers.up(1);
-  await page.locator('.placement-toolbar').waitFor({ state: 'hidden' });
+  await page.locator('#item-placement').waitFor({ state: 'hidden' });
   assert.equal(
     (await snapshot(page)).items.length,
     0,

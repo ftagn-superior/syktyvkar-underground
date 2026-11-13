@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Пятиэтажное здание с светло-бежевым фасадом",
+    "description": "Городское здание с светло-бежевым фасадом и вальмовой крышей.",
+    "category": "buildings",
+    "tags": ["building", "floors-5", "hipped-roof"]
   }
 }

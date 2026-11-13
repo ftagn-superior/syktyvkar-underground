@@ -207,6 +207,12 @@ describe('world v5 release', () => {
       await writeJson(join(directory, 'asset.json'), {
         formatVersion: 1,
         assetId: 'arch',
+        metadata: {
+          name: 'Арка',
+          description: 'Тестовая арка со свободным проходом.',
+          category: 'buildings',
+          tags: ['arch', 'test'],
+        },
         source: { kind: 'glb', file: 'source.glb', collisionFile: 'colliders.json' },
       });
       const catalogPath = join(root, 'content/buildings/catalog.json'),

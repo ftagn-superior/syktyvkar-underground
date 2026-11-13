@@ -358,6 +358,18 @@ describe('independent static-object extraction evidence', () => {
         const source = await readFile(path, 'utf8');
         expect(JSON.parse(source).formatVersion).toBe(5);
         expect(sha256(source.replace('"formatVersion": 5', '"formatVersion": 4'))).toBe(hash);
+      } else if (path.endsWith('/asset.json')) {
+        // Human-readable cards are outside the historical geometry invariant.
+        // Keep checking every pre-existing descriptor field against the frozen bytes.
+        const descriptor = await json(path);
+        delete descriptor.metadata;
+        const expanded = JSON.stringify(descriptor, null, 2) + '\n';
+        const sourceBlock = JSON.stringify(descriptor.source, null, 2).replace(/\n/g, '\n  ');
+        const inlineSource = `{ ${Object.entries(descriptor.source)
+          .map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
+          .join(', ')} }`;
+        const compactSource = expanded.replace(sourceBlock, inlineSource);
+        expect([sha256(expanded), sha256(compactSource)], path).toContain(hash);
       } else expect(sha256(await readFile(path)), path).toBe(hash);
     }
     const ground = await json('content/buildings/ring-block/ring-block-ground/source.json');

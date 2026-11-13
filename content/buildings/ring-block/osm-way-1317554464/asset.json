@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Коммунистическая, 31",
+    "description": "Светлый кирпич, магазины, балконы.",
+    "category": "buildings",
+    "tags": ["balconies", "building", "documented-address", "floors-5", "shopfront"]
   }
 }

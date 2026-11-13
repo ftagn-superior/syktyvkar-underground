@@ -136,6 +136,12 @@ beforeAll(async () => {
     await writeJson(join(directory, id, 'asset.json'), {
       formatVersion: 1,
       assetId: id,
+      metadata: {
+        name: id === 'signal' ? 'Светофор' : 'Ограда',
+        description: 'Независимая модель для проверки жизненного цикла.',
+        category: id === 'signal' ? 'street-furniture' : 'barriers',
+        tags: ['test'],
+      },
       source: { kind: 'kit', file: 'source.json' },
     });
     await writeJson(join(directory, id, 'source.json'), recipe);

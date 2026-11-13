@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Коммунистическая, 44",
+    "description": "Панели, лоджии.",
+    "category": "buildings",
+    "tags": ["balconies", "building", "documented-address", "floors-9"]
   }
 }

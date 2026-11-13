@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Двухэтажное здание с светло-зелёным фасадом",
+    "description": "Городское здание с светло-зелёным фасадом и вальмовой крышей.",
+    "category": "buildings",
+    "tags": ["building", "floors-2", "hipped-roof"]
   }
 }

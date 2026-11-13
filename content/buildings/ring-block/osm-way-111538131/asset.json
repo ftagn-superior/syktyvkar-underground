@@ -4,5 +4,11 @@
   "source": {
     "kind": "footprint",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Школа №1, основной корпус",
+    "description": "Школьный корпус на улице Чернова, 12, с охристыми фасадами и входным тамбуром. Часть комплекса школы №1.",
+    "category": "buildings",
+    "tags": ["building", "documented-address", "floors-3", "landmark", "school"]
   }
 }

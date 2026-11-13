@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Подпорная стенка, вариант 08",
+    "description": "Низкая серая подпорная стенка, повторяющая локальную геометрию участка.",
+    "category": "barriers",
+    "tags": ["retaining", "wall"]
   }
 }

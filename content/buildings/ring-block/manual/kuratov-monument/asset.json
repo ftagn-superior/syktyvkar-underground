@@ -1,5 +1,14 @@
 {
   "formatVersion": 1,
   "assetId": "kuratov-monument",
-  "source": { "kind": "kit", "file": "source.json" }
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Памятник И. А. Куратову",
+    "description": "Бронзовая фигура с птицей на шесте, гранитный постамент и приподнятый газон с бортом на Театральной площади.",
+    "category": "landmarks",
+    "tags": ["kuratov", "monument"]
+  }
 }

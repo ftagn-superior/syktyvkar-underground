@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Знак остановки, вариант 05",
+    "description": "Металлическая стойка с синим знаком остановки без павильона.",
+    "category": "street-furniture",
+    "tags": ["bus-stop", "sign"]
   }
 }

@@ -1,5 +1,14 @@
 {
   "formatVersion": 1,
   "assetId": "water-kiosk",
-  "source": { "kind": "kit", "file": "source.json" }
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Киоск питьевой воды",
+    "description": "Синий киоск с баком, краном, плакатом и вывеской у магазина на Октябрьском проспекте, 54.",
+    "category": "street-furniture",
+    "tags": ["kiosk", "water"]
+  }
 }

@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Игровая конструкция, вариант 06",
+    "description": "Красно-жёлтая конструкция детской площадки с геометрией и коллайдером целого объекта.",
+    "category": "playgrounds",
+    "tags": ["playground", "red", "yellow"]
   }
 }

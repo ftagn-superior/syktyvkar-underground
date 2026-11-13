@@ -4,5 +4,11 @@
   "source": {
     "kind": "kit",
     "file": "source.json"
+  },
+  "metadata": {
+    "name": "Берёза, малый размер",
+    "description": "Берёза со светлым стволом и гранёной зелёной кроной.",
+    "category": "vegetation",
+    "tags": ["birch", "small", "tree"]
   }
 }

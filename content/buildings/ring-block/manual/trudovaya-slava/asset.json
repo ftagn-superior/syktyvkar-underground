@@ -1,5 +1,14 @@
 {
   "formatVersion": 1,
   "assetId": "trudovaya-slava",
-  "source": { "kind": "kit", "file": "source.json" }
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Памятник «Трудовая слава»",
+    "description": "Ансамбль в центре кольца: травяной холм, четыре пандуса, постамент, пилоны, медальон и венец из вертикальных пластин.",
+    "category": "landmarks",
+    "tags": ["monument", "ring"]
+  }
 }

@@ -96,6 +96,58 @@ describe('окна зданий по контуру', () => {
       if ('TEXCOORD_1' in attributes) expect(attributes).toHaveProperty('TEXCOORD_0');
   });
 
+  it('переопределения раскладки меняют окна только на своих фасадах', () => {
+    const plain = generateFootprint('test-overrides', box);
+    const sparse = generateFootprint('test-overrides', {
+      ...box,
+      windowLayout: {
+        overrides: [
+          { facing: ['E', 'W'], none: true },
+          { facing: ['N'], spacing: 5 },
+        ],
+      },
+    });
+    const glassAt = (
+      parts: typeof plain.parts,
+      x: (v: number) => boolean,
+      z: (v: number) => boolean,
+    ) => {
+      const glass = parts.find((p) => p.partId === 'windows')!.positions;
+      let n = 0;
+      for (let i = 0; i < glass.length; i += 3) if (x(glass[i]) && z(glass[i + 2])) n++;
+      return n / 4;
+    };
+    const east = (parts: typeof plain.parts) =>
+      glassAt(
+        parts,
+        (x) => x > 5.5,
+        () => true,
+      );
+    const north = (parts: typeof plain.parts) =>
+      glassAt(
+        parts,
+        () => true,
+        (z) => z < -3.5,
+      );
+    const south = (parts: typeof plain.parts) =>
+      glassAt(
+        parts,
+        () => true,
+        (z) => z > 3.5,
+      );
+    expect(east(plain.parts)).toBeGreaterThan(0);
+    expect(east(sparse.parts)).toBe(0);
+    // Север 12 м: floor((12 − 1) / 5) = 2 окна на этаж вместо 3.
+    expect(north(sparse.parts)).toBe(2 * 3);
+    expect(south(sparse.parts)).toBe(south(plain.parts));
+    expect(() =>
+      generateFootprint('test-bad', {
+        ...box,
+        windowLayout: { overrides: [{ facing: [], spacing: 3 }] },
+      }),
+    ).toThrow(/override/);
+  });
+
   it('панели размечаются в шагах окон и этажах', () => {
     const { parts } = generateFootprint('test-panel', { ...box, wallMaterial: 'panel' });
     const walls = parts.find((p) => p.partId === 'walls')!;

@@ -19,6 +19,7 @@ import {
   addFrame,
   addReveals,
   DEFAULT_RECESS,
+  layoutForEdge,
   markSurface,
   onEdge,
   quadWithHoles,
@@ -263,18 +264,20 @@ function generatePrism(
   // для такого обхода внешняя нормаль ребра p → q равна up × (q − p).
   const edges = edgesOf(ring);
   const shopEdges = shopfrontEdges(edges, recipe.details);
-  const holes = edges.map((edge) =>
-    recipe.windows
+  const edgeLayouts = edges.map((edge) => layoutForEdge(layout, edge));
+  const holes = edges.map((edge, i) => {
+    const edgeLayout = edgeLayouts[i];
+    return recipe.windows && edgeLayout !== null
       ? windowHoles(
           edge.length,
           e,
           storey,
           recipe.floors,
-          layout,
+          edgeLayout,
           (floor) => floor === 0 && shopEdges.has(edge.index),
         )
-      : [],
-  );
+      : [];
+  });
   const facade = buildFacade(ring, h, recipe.floors, recipe.details, e, {
     random,
     windows: windowGlow === 'none' ? undefined : windowGlow,
@@ -326,7 +329,7 @@ function generatePrism(
     if (recipe.wallMaterial) {
       const scale =
         recipe.wallMaterial === 'panel'
-          ? { u: windowPitch(edge.length, layout), v: storey }
+          ? { u: windowPitch(edge.length, edgeLayouts[i] ?? layout), v: storey }
           : undefined;
       markSurface(walls, wallStart, recipe.wallMaterial, edge, e, scale);
       if (reveals.positions.length / 3 > revealStart)

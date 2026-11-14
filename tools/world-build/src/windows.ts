@@ -1,7 +1,7 @@
 import { SURFACE_KIND, type SurfaceKind } from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
 import { addFace } from './house.js';
-import { addOutwardFace, type Edge } from './facade.js';
+import { addOutwardFace, faces, type Edge, type Facing } from './facade.js';
 
 /**
  * Окна зданий по контуру: раскладка по фасаду, проёмы в стене с откосами и подоконником,
@@ -25,6 +25,28 @@ export interface WindowLayout {
   recess?: number;
   /** Цвет переплёта: рамка по контуру, импост и фрамуга. */
   frameColor?: string;
+  /**
+   * Другая раскладка на фасадах `facing`, например редкие окна торцов; `none` — глухая
+   * стена. Глубина проёма и переплёт общие для здания.
+   */
+  overrides?: WindowOverride[];
+}
+
+export type WindowOverride = Pick<
+  WindowLayout,
+  'spacing' | 'width' | 'height' | 'sill' | 'group' | 'gap' | 'margin'
+> & { facing: Facing[]; none?: boolean };
+
+/** Раскладка ребра с учётом переопределений; `null` — окон нет. */
+export function layoutForEdge(
+  layout: WindowLayout | undefined,
+  edge: Edge,
+): WindowLayout | undefined | null {
+  const override = layout?.overrides?.find((o) => faces(edge, o.facing));
+  if (!override) return layout;
+  if (override.none) return null;
+  const { facing: _facing, none: _none, ...fields } = override;
+  return { ...layout, ...fields };
 }
 
 /** Проём окна на ребре: s — метры вдоль ребра от его начала, y — высота. */
@@ -62,6 +84,12 @@ export function validateLayout(layout: WindowLayout | undefined): void {
     throw new Error('Invalid window layout spacing');
   if (layout.frameColor !== undefined && !/^#[0-9a-f]{6}$/i.test(layout.frameColor))
     throw new Error('Invalid window layout frameColor');
+  for (const override of layout.overrides ?? []) {
+    if (!Array.isArray(override.facing) || !override.facing.length)
+      throw new Error('Invalid window layout override facing');
+    const { facing: _facing, none: _none, ...fields } = override;
+    validateLayout(fields);
+  }
 }
 
 /**

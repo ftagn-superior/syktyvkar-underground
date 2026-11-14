@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
@@ -6,6 +6,7 @@ import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { WorldLighting } from './lighting';
 
 describe('static shadow cache', () => {
@@ -21,6 +22,25 @@ describe('static shadow cache', () => {
     };
     return { engine, scene, lighting, frames };
   };
+
+  it('does not publish or count prewarming as a rendered shadow map', () => {
+    const { engine, scene, lighting, frames } = fixture();
+    try {
+      const map = lighting.staticShadow.getShadowMap()!;
+      map.isReadyForRendering();
+      expect(lighting.staticShadow.refreshes).toBe(0);
+      frames(1);
+      lighting.follow(new Vector3(200, 0, 40));
+      map.isReadyForRendering();
+      expect(lighting.staticShadow.refreshes).toBe(1);
+      expect(lighting.shadowDiagnostics().staticDiscarded).toBe(0);
+      frames(1);
+      expect(lighting.staticShadow.refreshes).toBe(2);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
 
   it('draws immovable casters once and again only after their set changes', () => {
     const { engine, scene, lighting, frames } = fixture();
@@ -40,6 +60,8 @@ describe('static shadow cache', () => {
         staticCasters: 0,
         dynamicCasters: 1,
         staticRefreshes: 3,
+        staticDiscarded: 0,
+        staticFallbacks: 0,
       });
     } finally {
       scene.dispose();
@@ -115,6 +137,97 @@ describe('static shadow cache', () => {
       lighting.setQuality('standard');
       expect(frames(3)).toBe(2);
     } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it('holds a complete projection across rejected camera and sun updates, then retries it', () => {
+    const { engine, scene, lighting, frames } = fixture();
+    const house = MeshBuilder.CreateBox('house', {}, scene);
+    house.alwaysSelectAsActiveMesh = true;
+    lighting.staticShadow.addShadowCaster(house);
+    frames(3);
+    // NullEngine does not draw depth; exercise the pass's readiness boundary explicitly.
+    const readiness = lighting.staticShadow
+      .getShadowMap()!
+      .onClearObservable.add(() =>
+        lighting.staticShadow.isReady(house.subMeshes[0], false, false),
+      );
+    const sun = lighting.shadow.getLight() as DirectionalLight;
+    const position = sun.position.clone();
+    const direction = sun.direction.clone();
+    const transform = lighting.shadow.getTransformMatrix().clone();
+    const ready = ShadowGenerator.prototype.isReady;
+    const spy = vi.spyOn(ShadowGenerator.prototype, 'isReady').mockImplementation(function (
+      this: ShadowGenerator,
+      ...args
+    ) {
+      return this === lighting.staticShadow ? false : ready.apply(this, args);
+    });
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        lighting.follow(new Vector3(150 + attempt * 20, 0, -90));
+        lighting.setTimeOfDay(18 + attempt);
+        frames(1);
+        expect(sun.position.equals(position)).toBe(true);
+        expect(sun.direction.equals(direction)).toBe(true);
+        expect(lighting.shadow.getTransformMatrix().equals(transform)).toBe(true);
+      }
+      expect(lighting.shadowDiagnostics().staticDiscarded).toBe(2);
+      spy.mockRestore();
+      lighting.staticShadow.getShadowMap()!.onClearObservable.remove(readiness);
+      // A fresh game update is not required: the queued projection is retried by the pass.
+      frames(1);
+      expect(sun.position.equals(position)).toBe(false);
+      expect(sun.direction.equals(direction)).toBe(false);
+      expect(lighting.shadowDiagnostics().staticFallbacks).toBe(0);
+      const refreshes = lighting.staticShadow.refreshes;
+      frames(3);
+      expect(lighting.staticShadow.refreshes).toBe(refreshes);
+    } finally {
+      spy.mockRestore();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it('bounds rejection of a permanently unready caster and recovers when it becomes ready', () => {
+    const { engine, scene, lighting, frames } = fixture();
+    const house = MeshBuilder.CreateBox('house', {}, scene);
+    house.alwaysSelectAsActiveMesh = true;
+    lighting.staticShadow.addShadowCaster(house);
+    frames(3);
+    const readiness = lighting.staticShadow
+      .getShadowMap()!
+      .onClearObservable.add(() =>
+        lighting.staticShadow.isReady(house.subMeshes[0], false, false),
+      );
+    const sun = lighting.shadow.getLight() as DirectionalLight;
+    const position = sun.position.clone();
+    const ready = ShadowGenerator.prototype.isReady;
+    const spy = vi.spyOn(ShadowGenerator.prototype, 'isReady').mockImplementation(function (
+      this: ShadowGenerator,
+      ...args
+    ) {
+      return this === lighting.staticShadow ? false : ready.apply(this, args);
+    });
+    try {
+      lighting.follow(new Vector3(200, 0, 50));
+      frames(5);
+      expect(sun.position.equals(position)).toBe(true);
+      expect(lighting.shadowDiagnostics().staticDiscarded).toBe(5);
+      frames(1);
+      expect(sun.position.equals(position)).toBe(false);
+      expect(lighting.shadowDiagnostics().staticFallbacks).toBe(1);
+      spy.mockRestore();
+      lighting.staticShadow.getShadowMap()!.onClearObservable.remove(readiness);
+      frames(1);
+      const refreshes = lighting.staticShadow.refreshes;
+      frames(3);
+      expect(lighting.staticShadow.refreshes).toBe(refreshes);
+    } finally {
+      spy.mockRestore();
       scene.dispose();
       engine.dispose();
     }

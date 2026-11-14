@@ -8,6 +8,8 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture';
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import type { SubMesh } from '@babylonjs/core/Meshes/subMesh';
+import type { Observer } from '@babylonjs/core/Misc/observable';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
@@ -74,19 +76,61 @@ class WorldSun extends DirectionalLight {
   }
 }
 
+/** A rejected refresh can restore a projection within the same Babylon render id. */
+class WorldShadowGenerator extends ShadowGenerator {
+  resetProjection(): void {
+    this._currentRenderId = -1;
+    this.getLight().forceProjectionMatrixCompute();
+  }
+}
+
+type ShadowProjection = {
+  position: Vector3;
+  direction: Vector3;
+  extent: number;
+  near: number;
+  far: number;
+  bias: number;
+  normalBias: number;
+};
+
+const MAX_INCOMPLETE_REFRESHES = 5;
+
 /**
  * Тени неподвижного мира. Карта рисуется один раз и обновляется только по запросу:
  * при изменении списка источников, их геометрии или проекции солнца.
  */
-export class StaticShadowGenerator extends ShadowGenerator {
+export class StaticShadowGenerator extends WorldShadowGenerator {
   /** Сколько раз карта действительно перерисована; для диагностики. */
   refreshes = 0;
+  incomplete = false;
+  private rendering = false;
 
   /** Call after the generator's filtering is configured: reconfiguring recreates the map. */
-  cache(): void {
+  cache(before: () => void, after: () => void): void {
     const map = this.getShadowMap()!;
     map.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-    map.onAfterRenderObservable.add(() => this.refreshes++);
+    map.onBeforeBindObservable.add(() => {
+      before();
+      this.incomplete = false;
+      this.rendering = false;
+    });
+    // Prewarming also emits before/after-render, but never clears a target.
+    map.onClearObservable.add(() => {
+      this.rendering = true;
+    });
+    map.onAfterRenderObservable.add(() => {
+      if (!this.rendering) return;
+      this.rendering = false;
+      this.refreshes++;
+      after();
+    });
+  }
+  override isReady(subMesh: SubMesh, useInstances: boolean, isTransparent: boolean): boolean {
+    const ready = super.isReady(subMesh, useInstances, isTransparent);
+    // Prewarming is not an attempted map: only actual skipped draws reject a refresh.
+    if (this.rendering && !ready) this.incomplete = true;
+    return ready;
   }
   /** Requests one redraw on the next frame. Cheap to call repeatedly. */
   invalidate(): void {
@@ -136,12 +180,19 @@ export class StaticShadowGenerator extends ShadowGenerator {
  */
 export class WorldLighting {
   /** Per-frame casters: avatars and items. This is the map receivers sample. */
-  readonly shadow: ShadowGenerator;
+  readonly shadow: WorldShadowGenerator;
   /** Immovable casters: buildings, trees, primitives. Cached between invalidations. */
   readonly staticShadow: StaticShadowGenerator;
   private readonly fill: HemisphericLight;
   private readonly sun: DirectionalLight;
   private pipeline?: DefaultRenderingPipeline;
+  private readonly heldDepth?: RenderTargetTexture;
+  private heldProjection?: ShadowProjection;
+  private pendingProjection?: ShadowProjection;
+  private incompleteRefreshes = 0;
+  private discardedRefreshes = 0;
+  private fallbackRefreshes = 0;
+  private readonly contextRestored: Observer<AbstractEngine>;
   /** 0 днём, 1 ночью; управляет ореолом огней. */
   private dark = 0;
   private readonly forward = new Vector3();
@@ -192,7 +243,7 @@ export class WorldLighting {
     // The default generator is the cache. All receivers use the composed generator,
     // which is registered once after the cache and rendered after it within the frame.
     this.staticShadow = new StaticShadowGenerator(SHADOW_MAP_SIZE, sun);
-    this.shadow = new ShadowGenerator(SHADOW_MAP_SIZE, sun, undefined, camera);
+    this.shadow = new WorldShadowGenerator(SHADOW_MAP_SIZE, sun, undefined, camera);
     for (const shadow of [this.staticShadow, this.shadow]) {
       // PCF даёт чёткий край у основания и мягкий на расстоянии, в отличие от размытой ESM.
       shadow.usePercentageCloserFiltering = true;
@@ -201,7 +252,27 @@ export class WorldLighting {
       shadow.normalBias = 0.08;
       shadow.setDarkness(0.22);
     }
-    this.staticShadow.cache();
+    const engine = scene.getEngine();
+    if ((engine as { _gl?: WebGL2RenderingContext })._gl?.blitFramebuffer) {
+      // This target is never rendered by Babylon: it holds only the last published depth.
+      this.heldDepth = new RenderTargetTexture('held-static-shadow', SHADOW_MAP_SIZE, scene, {
+        generateMipMaps: false,
+        generateDepthBuffer: true,
+        noColorAttachment: true,
+      });
+      // A depth renderbuffer is attached immediately and blits like a depth texture.
+      // A depth texture would defer its attachment until Babylon binds this target.
+    }
+    this.staticShadow.cache(
+      () => this.restorePendingProjection(),
+      () => this.publishStatic(),
+    );
+    this.contextRestored = engine.onContextRestoredObservable.add(() => {
+      // Restored textures have no pixels from the old context.
+      this.heldProjection = undefined;
+      this.incompleteRefreshes = 0;
+      this.staticShadow.invalidate();
+    });
     this.shadow.getShadowMap()!.onClearObservable.add((engine) => this.startFromStatic(engine));
     this.setTimeOfDay(REFERENCE_HOUR);
   }
@@ -213,6 +284,7 @@ export class WorldLighting {
    * advances in small steps, each of which redraws the cached static shadows once.
    */
   setTimeOfDay(hour: number, weather: WeatherAmounts = CLEAR_AMOUNTS): Sky {
+    this.restorePendingProjection();
     const sky = weatherSky(skyAt(hour), weather);
     this.fill.intensity = sky.skyIntensity;
     this.fill.diffuse.set(...sky.skyColor);
@@ -236,19 +308,21 @@ export class WorldLighting {
    * Replaces the per-frame clear of the sampled map with a copy of the cached static depth.
    * Both maps share size, format and projection, so this is a plain depth blit.
    */
-  private startFromStatic(engine: AbstractEngine): void {
+  private copyDepth(
+    engine: AbstractEngine,
+    sourceMap: RenderTargetTexture | null | undefined,
+    targetMap: RenderTargetTexture | null | undefined,
+    restoreMap: RenderTargetTexture | null | undefined,
+  ): boolean {
     const gl = (engine as { _gl?: WebGL2RenderingContext })._gl;
-    const framebuffer = (shadow: ShadowGenerator) =>
-      (shadow.getShadowMap()?.renderTarget as { _framebuffer?: WebGLFramebuffer | null } | null)
-        ?._framebuffer;
-    const source = framebuffer(this.staticShadow);
-    const target = framebuffer(this.shadow);
-    if (!gl?.blitFramebuffer || !source || !target) {
-      // No WebGL2 target (unit tests): moving casters still render, static ones do not.
-      engine.clear(null, false, true, false);
-      return;
-    }
+    const framebuffer = (map: RenderTargetTexture | null | undefined) =>
+      (map?.renderTarget as { _framebuffer?: WebGLFramebuffer | null } | null)?._framebuffer;
+    const source = framebuffer(sourceMap);
+    const target = framebuffer(targetMap);
+    const restore = framebuffer(restoreMap);
+    if (!gl?.blitFramebuffer || !source || !target || !restore) return false;
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, source);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, target);
     gl.blitFramebuffer(
       0,
       0,
@@ -262,7 +336,72 @@ export class WorldLighting {
       gl.NEAREST,
     );
     // Babylon tracks one binding for both targets; leave them equal again.
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, target);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, restore);
+    return true;
+  }
+
+  private captureProjection(): ShadowProjection {
+    return {
+      position: this.sun.position.clone(),
+      direction: this.sun.direction.clone(),
+      extent: this.sun.shadowFrustumSize,
+      near: this.sun.shadowMinZ,
+      far: this.sun.shadowMaxZ,
+      bias: this.shadow.bias,
+      normalBias: this.shadow.normalBias,
+    };
+  }
+
+  private applyProjection(projection: ShadowProjection): void {
+    this.sun.position.copyFrom(projection.position);
+    this.sun.direction.copyFrom(projection.direction);
+    this.sun.shadowFrustumSize = projection.extent;
+    this.sun.shadowMinZ = projection.near;
+    this.sun.shadowMaxZ = projection.far;
+    for (const shadow of [this.staticShadow, this.shadow]) {
+      shadow.bias = projection.bias;
+      shadow.normalBias = projection.normalBias;
+      shadow.resetProjection();
+    }
+  }
+
+  private restorePendingProjection(): void {
+    if (!this.pendingProjection) return;
+    this.applyProjection(this.pendingProjection);
+    this.pendingProjection = undefined;
+  }
+
+  private publishStatic(): void {
+    if (this.staticShadow.incomplete) {
+      this.incompleteRefreshes++;
+      this.staticShadow.invalidate();
+      if (this.incompleteRefreshes <= MAX_INCOMPLETE_REFRESHES) {
+        this.discardedRefreshes++;
+        if (this.heldProjection) {
+          this.pendingProjection = this.captureProjection();
+          this.applyProjection(this.heldProjection);
+        }
+        return;
+      }
+      // A permanently unready caster must not freeze the world's shadow projection.
+      // Retry again next frame, and expose the degraded publication in diagnostics.
+      this.fallbackRefreshes++;
+    } else this.incompleteRefreshes = 0;
+    this.copyDepth(
+      this.scene.getEngine(),
+      this.staticShadow.getShadowMap(),
+      this.heldDepth,
+      this.staticShadow.getShadowMap(),
+    );
+    this.heldProjection = this.captureProjection();
+  }
+
+  private startFromStatic(engine: AbstractEngine): void {
+    const target = this.shadow.getShadowMap();
+    if (!this.heldProjection || !this.copyDepth(engine, this.heldDepth, target, target)) {
+      // Initial compilation or no WebGL2 target (NullEngine): dynamic casters still render.
+      engine.clear(null, false, true, false);
+    }
   }
 
   /** Standard adds HDR and MSAA; economy retains the same tone curve in its materials. */
@@ -342,6 +481,7 @@ export class WorldLighting {
    * only when a step is crossed.
    */
   follow(target: Vector3): void {
+    this.restorePendingProjection();
     this.target.copyFrom(target);
     const forward = this.forward.copyFrom(this.sun.direction).normalize();
     // Те же оси, что у видовой матрицы направленного света Babylon.
@@ -366,14 +506,18 @@ export class WorldLighting {
       staticCasters: this.staticShadow.getShadowMap()?.renderList?.length ?? 0,
       dynamicCasters: this.shadow.getShadowMap()?.renderList?.length ?? 0,
       staticRefreshes: this.staticShadow.refreshes,
+      staticDiscarded: this.discardedRefreshes,
+      staticFallbacks: this.fallbackRefreshes,
     };
   }
 
   dispose(): void {
+    this.scene.getEngine().onContextRestoredObservable.remove(this.contextRestored);
     this.pipeline?.dispose();
     this.pipeline = undefined;
     this.shadow.dispose();
     this.staticShadow.dispose();
+    this.heldDepth?.dispose();
     this.sun.dispose();
     this.fill.dispose();
   }

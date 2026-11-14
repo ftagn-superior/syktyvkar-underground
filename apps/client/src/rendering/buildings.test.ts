@@ -94,7 +94,7 @@ describe('building rendering from the real world bundle', () => {
         return readBytes(path);
       });
       expect(reads.filter((path) => path.endsWith('.glb'))).toHaveLength(2);
-      expect(view.buildings.aggregateDiagnostics()).toEqual({
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({
         instances: 3,
         assets: 2,
         modelLoads: 2,

@@ -7,6 +7,7 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import {
   validateBuildingParts,
   type BuildingInstance,
@@ -257,7 +258,9 @@ describe('tree instancing', () => {
       f.views.remove('distant');
       f.update();
       expect(f.views.aggregateDiagnostics()).toMatchObject({ treeInstances: 0, treeBatches: 0 });
-      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(0);
+      expect(f.shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled())).toHaveLength(
+        0,
+      );
       f.release();
       expect(f.views.aggregateDiagnostics().assets).toBe(0);
       f.views.dispose();
@@ -335,10 +338,12 @@ describe('tree instancing', () => {
       f.update();
       const times = () =>
         Array.from(
-          f.scene.meshes
-            .find((mesh) => mesh.name.startsWith('tree-batch:'))!
-            .getVertexBuffer('suTreeState')!
-            .getData() as Float32Array,
+          (
+            f.scene.meshes
+              .find((mesh) => mesh.name.startsWith('tree-batch:') && mesh.isEnabled())!
+              .getVertexBuffer('suTreeState')!
+              .getData() as Float32Array
+          ).slice(0, f.views.aggregateDiagnostics().treeInstances * 4),
         ).filter((_, i) => i % 4 === 0);
       expect(times()).toEqual([100, 200]);
       f.views.remove('old');
@@ -346,6 +351,74 @@ describe('tree instancing', () => {
       expect(times()).toEqual([200]);
     } finally {
       clock.mockRestore();
+      f.dispose();
+    }
+  });
+
+  it('uploads added slots within capacity without replacing GPU buffers, then grows safely', async () => {
+    const f = await fixture();
+    try {
+      f.add('first', 10);
+      f.update();
+      const mesh = f.scene.meshes.find(
+        (mesh) => mesh.name.startsWith('tree-batch:') && mesh.isEnabled(),
+      )! as Mesh;
+      const matrixBuffer = mesh.getVertexBuffer('world0')!.getBuffer();
+      expect(mesh.thinInstanceGetWorldMatrices()).toHaveLength(1);
+      const allocate = vi.spyOn(mesh, 'thinInstanceSetBuffer');
+      const upload = vi.spyOn(f.scene.getEngine(), 'updateDynamicVertexBuffer');
+      f.add('second', 20);
+      f.update();
+      expect(allocate).not.toHaveBeenCalled();
+      expect(mesh.getVertexBuffer('world0')!.getBuffer()).toBe(matrixBuffer);
+      const matrixUpload = upload.mock.calls.find(([buffer]) => buffer === matrixBuffer)!;
+      expect(matrixUpload[3]).toBe(2 * 16 * 4);
+      expect((matrixUpload[1] as Float32Array)[16 + 12]).toBe(20);
+      expect(
+        mesh.thinInstanceGetWorldMatrices().map((matrix) => matrix.getTranslation().x),
+      ).toEqual([10, 20]);
+      for (let i = 2; i < 9; i++) f.add(`tree-${i}`, 20 + i);
+      f.update();
+      expect(mesh.thinInstanceCount).toBe(9);
+      expect(mesh.getVertexBuffer('world0')!.getBuffer()).not.toBe(matrixBuffer);
+      expect(mesh.getVertexBuffer('suTreeState')!.isUpdatable()).toBe(true);
+      f.views.remove('first');
+      f.update();
+      expect(mesh.thinInstanceGetWorldMatrices()).toHaveLength(8);
+      expect(mesh.thinInstanceGetWorldMatrices()[0].getTranslation().x).toBe(20);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('bounds idle meshes and reuses their buffers across chunks without retaining live trees', async () => {
+    const f = await fixture();
+    try {
+      for (let i = 0; i < 30; i++) f.add(`tree-${i}`, i * 125 + 10);
+      f.update();
+      for (let i = 0; i < 30; i++) f.views.remove(`tree-${i}`);
+      f.update();
+      expect(f.views.aggregateDiagnostics()).toMatchObject({
+        treeInstances: 0,
+        treeBatches: 0,
+        treePooledBatches: 24,
+      });
+      expect(f.views.aggregateDiagnostics().treePoolBytes).toBeLessThanOrEqual(8 * 1024 * 1024);
+      const idle = f.scene.meshes.filter((mesh) => mesh.name.startsWith('tree-batch:')) as Mesh[];
+      expect(idle.every((mesh) => !mesh.isEnabled() && mesh.thinInstanceCount === 0)).toBe(true);
+      const buffers = new Set(idle.map((mesh) => mesh.getVertexBuffer('world0')!.getBuffer()));
+      f.add('returning', 6000);
+      f.update();
+      const active = idle.find((mesh) => mesh.isEnabled())!;
+      expect(active).toBeDefined();
+      expect(buffers.has(active.getVertexBuffer('world0')!.getBuffer())).toBe(true);
+      expect(active.thinInstanceGetWorldMatrices()[0].getTranslation().x).toBe(6000);
+      expect(active.getBoundingInfo().boundingBox.minimumWorld.x).toBeGreaterThan(5900);
+      f.views.dispose();
+      expect(f.scene.meshes).toHaveLength(0);
+      expect(f.scene.geometries).toHaveLength(0);
+      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(0);
+    } finally {
       f.dispose();
     }
   });

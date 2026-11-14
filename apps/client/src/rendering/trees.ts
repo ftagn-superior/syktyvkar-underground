@@ -42,16 +42,28 @@ type Tree = {
 };
 type Batch = {
   key: string;
+  variant: string;
   mesh: Mesh;
   trees: Set<Tree>;
+  capacity: number;
+  matrices: Float32Array;
+  attributes: Float32Array[];
+  geometryBytes: number;
 };
 const vector = (v: { x: number; y: number; z: number }) => new Vector3(v.x, v.y, v.z);
+const MAX_IDLE_PER_VARIANT = 24;
+const MAX_IDLE_BATCHES = 96;
+const MAX_IDLE_BYTES = 8 * 1024 * 1024;
+const bufferBytes = (batch: Batch) => batch.capacity * (16 + 4 * TREE_ATTRIBUTES.length) * 4;
+// Count both the CPU arrays and GPU copies, including each batch's unique geometry.
+const retainedBytes = (batch: Batch) => 2 * (batch.geometryBytes + bufferBytes(batch));
 
 /** Dense GPU batches by 125 m chunk, palette and render pass; no per-tree Babylon nodes. */
 export class TreeViews {
   readonly supported: boolean;
   private readonly trees = new Map<string, Tree>();
   private readonly batches = new Map<string, Batch>();
+  private readonly idle = new Set<Batch>();
   private readonly templates = new Map<string, Mesh>();
   private readonly materials = new Map<string, PBRMaterial>();
   private readonly dirty = new Set<Batch>();
@@ -157,6 +169,15 @@ export class TreeViews {
     const key = `${Math.floor(definition.position.x / 125)},${Math.floor(definition.position.z / 125)}:${palette}:${shadow}:${transparent ? definition.entityId : ''}`;
     let batch = this.batches.get(key);
     if (batch) return batch;
+    const variant = `${palette}:${shadow}:${transparent}`;
+    batch = [...this.idle].find((candidate) => candidate.variant === variant);
+    if (batch) {
+      this.idle.delete(batch);
+      batch.key = key;
+      batch.mesh.name = `tree-batch:${key}`;
+      this.batches.set(key, batch);
+      return batch;
+    }
     let template = this.templates.get(palette);
     if (!template) {
       template = new Mesh(`tree-template:${palette}`, this.scene);
@@ -201,7 +222,16 @@ export class TreeViews {
     mesh.freezeWorldMatrix();
     if (this.radial) applyRadialFog(mesh, this.radial, 0);
     if (shadow) this.shadows.addShadowCaster(mesh);
-    batch = { key, mesh, trees: new Set() };
+    batch = {
+      key,
+      variant,
+      mesh,
+      trees: new Set(),
+      capacity: 0,
+      matrices: new Float32Array(0),
+      attributes: [],
+      geometryBytes: template.getTotalVertices() * 11 * 4 + template.getTotalIndices() * 4,
+    };
     this.batches.set(key, batch);
     return batch;
   }
@@ -265,18 +295,55 @@ export class TreeViews {
     }
     this.flush();
   }
-  /** Rebuild only changed small chunks, once per frame. Empty chunks release their GPU buffers. */
+  private disposeBatch(batch: Batch): void {
+    this.shadows.removeShadowCaster(batch.mesh);
+    batch.mesh.dispose(false, false);
+    this.idle.delete(batch);
+  }
+  private retire(batch: Batch): void {
+    this.batches.delete(batch.key);
+    batch.mesh.setEnabled(false);
+    batch.mesh.thinInstanceCount = 0;
+    if (!batch.capacity || retainedBytes(batch) > MAX_IDLE_BYTES) {
+      this.disposeBatch(batch);
+      return;
+    }
+    // Disabled casters stay registered: retaining their mesh also retains the depth shader.
+    this.idle.add(batch);
+    let bytes = [...this.idle].reduce((sum, candidate) => sum + retainedBytes(candidate), 0);
+    for (const candidate of this.idle) {
+      const sameVariant = [...this.idle].filter((idle) => idle.variant === batch.variant).length;
+      if (
+        this.idle.size <= MAX_IDLE_BATCHES &&
+        bytes <= MAX_IDLE_BYTES &&
+        sameVariant <= MAX_IDLE_PER_VARIANT
+      )
+        break;
+      if (
+        this.idle.size <= MAX_IDLE_BATCHES &&
+        bytes <= MAX_IDLE_BYTES &&
+        candidate.variant !== batch.variant
+      )
+        continue;
+      bytes -= retainedBytes(candidate);
+      this.disposeBatch(candidate);
+    }
+  }
+  /** Upload changed chunks in place; allocation and shader invalidation happen only on growth. */
   flush() {
     for (const batch of this.dirty) {
       const { mesh, trees } = batch;
       if (!trees.size) {
-        this.shadows.removeShadowCaster(mesh);
-        mesh.dispose(false, false);
-        this.batches.delete(batch.key);
+        this.retire(batch);
         continue;
       }
-      const matrices = new Float32Array(trees.size * 16);
-      const attributes = TREE_ATTRIBUTES.map(() => new Float32Array(trees.size * 4));
+      const grew = trees.size > batch.capacity;
+      if (grew) {
+        batch.capacity = Math.max(8, 2 ** Math.ceil(Math.log2(trees.size)));
+        batch.matrices = new Float32Array(batch.capacity * 16);
+        batch.attributes = TREE_ATTRIBUTES.map(() => new Float32Array(batch.capacity * 4));
+      }
+      const { matrices, attributes } = batch;
       const minimum = new Vector3(Infinity, Infinity, Infinity),
         maximum = minimum.negate();
       let slot = 0;
@@ -290,9 +357,19 @@ export class TreeViews {
         Vector3.CheckExtends(tree.maximum, minimum, maximum);
         slot++;
       }
-      mesh.thinInstanceSetBuffer('matrix', matrices, 16, true);
-      for (let i = 0; i < TREE_ATTRIBUTES.length; i++)
-        mesh.thinInstanceSetBuffer(TREE_ATTRIBUTES[i], attributes[i], 4, true);
+      if (grew) {
+        mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
+        for (let i = 0; i < TREE_ATTRIBUTES.length; i++)
+          mesh.thinInstanceSetBuffer(TREE_ATTRIBUTES[i], attributes[i], 4, false);
+      }
+      // Babylon uploads only this many matrices: set the new count before updating the buffer.
+      mesh.thinInstanceCount = trees.size;
+      if (!grew) {
+        mesh.thinInstanceBufferUpdated('matrix');
+        for (const attribute of TREE_ATTRIBUTES) mesh.thinInstanceBufferUpdated(attribute);
+        // Direct array writes bypass Babylon's optional CPU matrix cache used by diagnostics.
+        mesh._thinInstanceDataStorage.worldMatrices = null;
+      }
       // Babylon cannot infer shader-deformed bounds from the unit template.
       mesh.setBoundingInfo(new BoundingInfo(minimum, maximum));
       mesh.setEnabled(true);
@@ -307,6 +384,12 @@ export class TreeViews {
     return {
       treeInstances: this.trees.size,
       treeBatches: this.batches.size,
+      treePooledBatches: this.idle.size,
+      treeInstanceBufferBytes: [...this.batches.values(), ...this.idle].reduce(
+        (bytes, batch) => bytes + bufferBytes(batch),
+        0,
+      ),
+      treePoolBytes: [...this.idle].reduce((bytes, batch) => bytes + retainedBytes(batch), 0),
       treeTemplates: this.templates.size,
       fadedTrees,
     };
@@ -329,6 +412,7 @@ export class TreeViews {
   dispose() {
     for (const id of this.trees.keys()) this.remove(id, true);
     this.flush();
+    for (const batch of this.idle) this.disposeBatch(batch);
     for (const mesh of this.templates.values()) mesh.dispose(false, false);
     for (const material of this.materials.values()) {
       material.shadowDepthWrapper?.dispose();

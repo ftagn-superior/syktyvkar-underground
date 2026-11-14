@@ -18,8 +18,10 @@
  */
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { validateTerrainGrid, type BuildingInstance } from '@su/contracts';
 import type { Point2 } from '@su/terrain-build/triangulate';
 import type { GroundRecipe } from './city.js';
+import { seedHeight } from './seed-height.js';
 import {
   Field,
   fieldPolygons,
@@ -30,8 +32,10 @@ import {
 
 const GROUND = 'content/buildings/ring-block/ring-block-ground/source.json';
 const SEED = 'content/worlds/ring-block/cells/0_0.json';
-const RELEASE = 'content/worlds/ring-block/terrain-release.json';
-const GRID = 'content/worlds/ring-block/terrain-expansion/grid.json';
+const WORLD_DIR = 'content/worlds/ring-block';
+const RELEASE = `${WORLD_DIR}/terrain-release.json`;
+/** Сетка исходного (до #59) рельефа: только для разовой правки content/ в исходной версии основания. */
+const GRID = `${WORLD_DIR}/terrain-expansion/grid.json`;
 /** SHA-256 основания до расширения (main 523197b): повторный запуск не расширяет дважды. */
 const ORIGINAL_SHA256 = 'a714b5f5885c79048114b58e9ff7eb2baf21818e67b7b75eedee865d5d54eaa6';
 export const OLD_MIN: Point2 = [-269, -745];
@@ -326,15 +330,17 @@ async function main() {
     const base = original ? recipe : await originalRecipe();
     const ctx = context(base);
     const exported = JSON.parse(await readFile(args[layoutIndex + 1], 'utf8'));
-    const grid = JSON.parse(await readFile(GRID, 'utf8'));
+    // Y — по рельефу текущего релиза (как ring-verge/street-pass), а не по старой сетке.
+    const { release, grid } = await releaseTerrain();
     const items: Placed[] = findPlaced(exported);
     const { moves, skipped } = objectMoves(ctx, items);
     for (const item of items) {
       const move = moves.get(item.entityId);
       if (!move) continue;
-      item.position.y +=
-        terrainHeight(grid, move.to[0], move.to[1]) -
-        terrainHeight(grid, move.from[0], move.from[1]);
+      item.position.y = seedHeight(release.groundTerrain, grid, {
+        ...item,
+        position: { x: move.to[0], y: 0, z: move.to[1] },
+      } as unknown as BuildingInstance);
       item.position.x = move.to[0];
       item.position.z = move.to[1];
     }
@@ -388,6 +394,14 @@ async function main() {
   }
   await writeFile(SEED, JSON.stringify(seed, null, 2) + '\n');
   await writeFile(RELEASE, releaseText.slice(0, start) + block + releaseText.slice(end));
+}
+
+async function releaseTerrain() {
+  const release = JSON.parse(await readFile(RELEASE, 'utf8'));
+  const gridBytes = await readFile(`${WORLD_DIR}/${release.groundTerrain.grid.file}`);
+  if (createHash('sha256').update(gridBytes).digest('hex') !== release.groundTerrain.grid.sha256)
+    throw new Error('Terrain grid hash mismatch: restore LF bytes (git show HEAD:<grid> > <grid>)');
+  return { release, grid: validateTerrainGrid(JSON.parse(gridBytes.toString())) };
 }
 
 function context(recipe: GroundRecipe): WidenContext {

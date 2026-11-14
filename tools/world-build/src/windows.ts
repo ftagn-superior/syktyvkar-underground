@@ -1,7 +1,7 @@
 import { SURFACE_KIND, type SurfaceKind } from '@su/contracts';
 import type { StaticMeshPart } from './glb.js';
 import { addFace } from './house.js';
-import { addOutwardFace, faces, type Edge, type Facing } from './facade.js';
+import { faces, type Edge, type Facing } from './facade.js';
 
 /**
  * Окна зданий по контуру: раскладка по фасаду, проёмы в стене с откосами и подоконником,
@@ -192,59 +192,54 @@ export function quadWithHoles(
 }
 
 /**
- * Откосы, верх и подоконник проёма: от плоскости стены до стекла. Вместо запекания AO
- * (дорого при сотнях окон) грани получают постоянное затенение в цветах вершин:
- * верх проёма темнее всего, подоконник светлее откосов.
+ * Откосы, верх и подоконник проёма: кольцо из восьми общих вершин (четыре у плоскости стены,
+ * четыре у стекла) и восьми треугольников. Общие вершины вдвое сокращают объём GLB по сравнению
+ * с отдельными гранями; нормали в углах усреднены, а вместо запекания AO цвет вершин темнеет
+ * от плоскости стены к стеклу.
  */
 export function addReveals(part: StaticMeshPart, edge: Edge, hole: WindowHole, recess: number) {
   const { s0, s1, y0, y1 } = hole;
-  const ym = (y0 + y1) / 2,
-    sm = (s0 + s1) / 2;
-  const shades = [0.78, 0.78, 0.65, 0.9];
-  let next = 0;
-  const face = (points: number[][], away: number[]) => {
-    const colors = (part.colors ??= []);
-    while (colors.length < part.positions.length) colors.push(1);
-    addOutwardFace(part, points, away);
-    const shade = shades[next++];
-    while (colors.length < part.positions.length) colors.push(shade);
-  };
-  face(
-    [
-      onEdge(edge, s0, y0, 0),
-      onEdge(edge, s0, y1, 0),
-      onEdge(edge, s0, y1, -recess),
-      onEdge(edge, s0, y0, -recess),
-    ],
-    onEdge(edge, s0 - 1, ym, -recess / 2),
-  );
-  face(
-    [
-      onEdge(edge, s1, y0, 0),
-      onEdge(edge, s1, y1, 0),
-      onEdge(edge, s1, y1, -recess),
-      onEdge(edge, s1, y0, -recess),
-    ],
-    onEdge(edge, s1 + 1, ym, -recess / 2),
-  );
-  face(
-    [
-      onEdge(edge, s0, y1, 0),
-      onEdge(edge, s1, y1, 0),
-      onEdge(edge, s1, y1, -recess),
-      onEdge(edge, s0, y1, -recess),
-    ],
-    onEdge(edge, sm, y1 + 1, -recess / 2),
-  );
-  face(
-    [
-      onEdge(edge, s0, y0, 0),
-      onEdge(edge, s1, y0, 0),
-      onEdge(edge, s1, y0, -recess),
-      onEdge(edge, s0, y0, -recess),
-    ],
-    onEdge(edge, sm, y0 - 1, -recess / 2),
-  );
+  const d = [edge.d[0], 0, edge.d[1]];
+  const corners: [number, number, number[]][] = [
+    // s, y, нормаль угла: сумма нормалей двух соседних граней (внутрь проёма)
+    [s0, y0, [d[0], 1, d[2]]],
+    [s1, y0, [-d[0], 1, -d[2]]],
+    [s1, y1, [-d[0], -1, -d[2]]],
+    [s0, y1, [d[0], -1, d[2]]],
+  ];
+  const colors = (part.colors ??= []);
+  while (colors.length < part.positions.length) colors.push(1);
+  const start = part.positions.length / 3;
+  for (const [out, shade] of [
+    [0, 0.92],
+    [-recess, 0.66],
+  ] as const)
+    for (const [s, y, n] of corners) {
+      part.positions.push(...onEdge(edge, s, y, out));
+      const length = Math.hypot(...n);
+      part.normals.push(n[0] / length, n[1] / length, n[2] / length);
+      colors.push(shade, shade, shade);
+    }
+  // Грань k соединяет углы k и k+1 снаружи (0..3) и у стекла (4..7); лицом внутрь проёма.
+  const faceNormals = [
+    [0, 1, 0],
+    [-d[0], 0, -d[2]],
+    [0, -1, 0],
+    [d[0], 0, d[2]],
+  ];
+  const at = (i: number) => part.positions.slice((start + i) * 3, (start + i) * 3 + 3);
+  for (let k = 0; k < 4; k++) {
+    const [a, b, c, e] = [k, (k + 1) % 4, 4 + ((k + 1) % 4), 4 + k];
+    const pa = at(a),
+      pb = at(b),
+      pc = at(c);
+    const u = pb.map((v, i) => v - pa[i]),
+      w = pc.map((v, i) => v - pa[i]);
+    const cross = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const facing = cross.reduce((sum, v, i) => sum + v * faceNormals[k][i], 0) >= 0;
+    const quad = facing ? [a, b, c, a, c, e] : [a, c, b, a, e, c];
+    for (const i of quad) part.indices.push(start + i);
+  }
 }
 
 /** Переплёт в плоскости стекла: рамка, импост посередине и фрамуга сверху. */

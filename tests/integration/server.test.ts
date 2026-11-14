@@ -33,6 +33,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
       protocolVersion: info.protocolVersion,
       mapVersion: info.mapVersion,
       simulationConfigHash: info.simulationConfigHash,
+      animationCatalogVersion: info.animationCatalogVersion,
       skinId,
     });
     room.reconnection.enabled = false;
@@ -115,12 +116,23 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);
   });
 
+  it('rejects missing and mismatched animation catalogs even with the same protocol', async () => {
+    for (const animationCatalogVersion of [undefined, '', 'old-catalog']) {
+      await expect(sdk.joinById(info.roomId, { ...info, animationCatalogVersion })).rejects.toThrow(
+        'VERSION_MISMATCH',
+      );
+    }
+    const room = await join();
+    expect(room.sessionId).toBeTruthy();
+  });
+
   it('rejects incompatible versions and room creation', async () => {
     await expect(
       sdk.joinById(info.roomId, {
         protocolVersion: info.protocolVersion - 1,
         mapVersion: info.mapVersion,
         simulationConfigHash: info.simulationConfigHash,
+        animationCatalogVersion: info.animationCatalogVersion,
       }),
     ).rejects.toThrow('VERSION_MISMATCH');
     await expect(sdk.create('world')).rejects.toThrow();

@@ -1,3 +1,6 @@
+import { ANIMATIONS, ANIMATION_CATALOG_VERSION } from './animation-catalog.generated.js';
+export { ANIMATIONS, ANIMATION_CATALOG_VERSION } from './animation-catalog.generated.js';
+
 /** Engine-independent catalog. IDs also key the client's procedural clip registry. */
 export interface AnimationDefinition {
   id: string;
@@ -6,134 +9,16 @@ export interface AnimationDefinition {
   cooldownMs: number;
   mode: 'upperBody' | 'fullBody';
   rig: 'humanoid-v1';
+  /** Keep hips and lift fixed on seated skins; the rig attenuates lean and roll. */
+  seated: 'preserve-seat';
 }
 
-export const ANIMATIONS = [
-  {
-    id: 'wave',
-    label: 'Помахать рукой',
-    category: 'Общение',
-    cooldownMs: 1000,
-    mode: 'upperBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'clap',
-    label: 'Хлопать',
-    category: 'Общение',
-    cooldownMs: 1000,
-    mode: 'upperBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'dance',
-    label: 'Танцевать',
-    category: 'Развлечения',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'point',
-    label: 'Указать',
-    category: 'Общение',
-    cooldownMs: 1000,
-    mode: 'upperBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'cheer',
-    label: 'Радоваться',
-    category: 'Эмоции',
-    cooldownMs: 1000,
-    mode: 'upperBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'shrug',
-    label: 'Пожать плечами',
-    category: 'Эмоции',
-    cooldownMs: 1000,
-    mode: 'upperBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'bow',
-    label: 'Поклониться',
-    category: 'Общение',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'stretch',
-    label: 'Потянуться',
-    category: 'Разминка',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'march',
-    label: 'Маршировать',
-    category: 'Разминка',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'balance',
-    label: 'Держать баланс',
-    category: 'Разминка',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'boxing',
-    label: 'Боксировать',
-    category: 'Разминка',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'disco',
-    label: 'Диско',
-    category: 'Танцы',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'robot',
-    label: 'Робот',
-    category: 'Танцы',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'sway',
-    label: 'Покачиваться',
-    category: 'Танцы',
-    cooldownMs: 1000,
-    mode: 'fullBody',
-    rig: 'humanoid-v1',
-  },
-  {
-    id: 'conduct',
-    label: 'Дирижировать',
-    category: 'Развлечения',
-    cooldownMs: 1000,
-    mode: 'upperBody',
-    rig: 'humanoid-v1',
-  },
-] as const satisfies readonly AnimationDefinition[];
-
 export type AnimationId = (typeof ANIMATIONS)[number]['id'];
+const animationById = new Map<string, (typeof ANIMATIONS)[number]>(
+  ANIMATIONS.map((entry) => [entry.id, entry]),
+);
 export function findAnimation(value: unknown) {
-  return typeof value === 'string' ? ANIMATIONS.find((entry) => entry.id === value) : undefined;
+  return typeof value === 'string' ? animationById.get(value) : undefined;
 }
 export interface AnimationRequest {
   requestId: number;
@@ -148,3 +33,7 @@ export interface AnimationPlayback {
   endsAtTick: number;
   changedAtTick: number;
 }
+
+/** Exact release matching: no implicit support for missing or newer IDs. */
+export const isAnimationCatalogCompatible = (value: unknown): boolean =>
+  value === ANIMATION_CATALOG_VERSION;

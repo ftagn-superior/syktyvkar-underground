@@ -1,3 +1,4 @@
+import { isAnimationCatalogCompatible } from '@su/contracts';
 import { LiveStaticPlacement, type LayoutPublications } from './layout/live.js';
 import type { ServerPlacementCatalog } from './layout/placement-catalog.js';
 import type { Pool } from 'pg';
@@ -263,6 +264,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (
       !options ||
       options.protocolVersion !== PROTOCOL_VERSION ||
+      !isAnimationCatalogCompatible(options.animationCatalogVersion) ||
       options.mapVersion !== this.state.mapVersion ||
       options.simulationConfigHash !== this.state.simulationConfigHash
     ) {

@@ -7,6 +7,7 @@ export * from './item-shapes.js';
 export * from './foliage-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
+export * from './animation-validation.js';
 export * from './sounds.js';
 export * from './world-layout-patch.js';
 export * from './simulation.js';

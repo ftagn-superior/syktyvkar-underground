@@ -8,7 +8,12 @@ import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { MAX_PLAYERS, PROTOCOL_VERSION, type WorldInfo } from '@su/contracts';
+import {
+  ANIMATION_CATALOG_VERSION,
+  MAX_PLAYERS,
+  PROTOCOL_VERSION,
+  type WorldInfo,
+} from '@su/contracts';
 import { WorldRoom } from './world-room.js';
 import { readAuthoringRelease } from './layout/release.js';
 import { AccountHttp } from './accounts/http.js';
@@ -123,6 +128,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           roomId: room.roomId,
           ...layouts.info(room.state.worldEpoch),
           protocolVersion: PROTOCOL_VERSION,
+          animationCatalogVersion: ANIMATION_CATALOG_VERSION,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
           ...(placementCatalog ? { placementCatalog: placementCatalog.reference } : {}),

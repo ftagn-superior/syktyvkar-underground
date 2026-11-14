@@ -4,10 +4,15 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
-import { ANIMATIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
+import {
+  ANIMATIONS,
+  AVATAR_SKINS,
+  WORLD_ACTIVITY_MOVE_DURATION_MS,
+} from '../packages/contracts/src/index.js';
 import { chatSent, hudClick } from './helpers/hud.js';
 
 const output = 'output/playwright/animations';
+const catalogOnly = process.argv.includes('--catalog-only');
 const app = await createGameServer({ port: 0 });
 const relay = await createDelayRelay(new URL(app.url), {
   name: 'animation-observer',
@@ -38,15 +43,19 @@ async function active(page: Page, id: string, animation: string) {
   );
 }
 async function idle(page: Page) {
-  await page.waitForFunction(() => {
-    const state = (window as any).__SU_DEBUG__.snapshot();
-    return (
-      !state.animation.busy &&
-      !state.animation.pending &&
-      state.animation.grounded &&
-      !state.animation.moving
-    );
-  });
+  await page.waitForFunction(
+    () => {
+      const state = (window as any).__SU_DEBUG__.snapshot();
+      return (
+        !state.animation.busy &&
+        !state.animation.pending &&
+        state.animation.grounded &&
+        !state.animation.moving
+      );
+    },
+    undefined,
+    { timeout: 35_000 },
+  );
 }
 try {
   await mkdir(output, { recursive: true });
@@ -69,7 +78,7 @@ try {
       () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
     );
   }
-  for (const [index, sender] of pages.entries()) {
+  for (const [index, sender] of catalogOnly ? [] : pages.entries()) {
     await sender.bringToFront();
     const observer = pages[1 - index];
     const id = (await snapshot(sender)).authoritative.entityId;
@@ -232,22 +241,87 @@ try {
       await idle(sender);
     }
   }
-  checks.push(
-    `all ${ANIMATIONS.length} clips on both skins reach independent clients, including an observer with 100ms RTT and jitter`,
-  );
-  checks.push(
-    'upper-body and full-body clips loop beyond five seconds while idle and permit another selection after the cooldown; wave preserves walking legs and shares the reaction sticker',
-  );
-  checks.push(
-    'movement starts a five-second countdown for every clip including dance; stopping does not cancel it and sprint alone does not start it',
-  );
-  checks.push(
-    'Tab reaches the last choice and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges; Escape and successful selection close the menu',
-  );
-  checks.push(
-    'catalogs leave the chat field open; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
-  );
+  if (!catalogOnly) {
+    checks.push(
+      `all ${ANIMATIONS.length} clips on both skins reach independent clients, including an observer with 100ms RTT and jitter`,
+    );
+    checks.push(
+      'upper-body and full-body clips loop beyond five seconds while idle and permit another selection after the cooldown; wave preserves walking legs and shares the reaction sticker',
+    );
+    checks.push(
+      'movement starts a five-second countdown for every clip including dance; stopping does not cancel it and sprint alone does not start it',
+    );
+    checks.push(
+      'Tab reaches the last choice and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges; Escape and successful selection close the menu',
+    );
+    checks.push(
+      'catalogs leave the chat field open; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
+    );
+  }
   const sender = pages[0];
+  await sender.setViewportSize({ width: 1280, height: 720 });
+  await hudClick(sender, '#animations-toggle');
+  await sender.locator('#animations-panel [data-filter="Танцы"]').click();
+  await sender.locator('#animation-search').fill('ТАНЦЫ robot');
+  const robotMatches = ANIMATIONS.filter(
+    (a) =>
+      a.category === 'Танцы' &&
+      `${a.id} ${a.label} ${a.category}`.toLocaleLowerCase('ru').includes('robot'),
+  );
+  assert.equal(
+    await sender.locator('.animation-choice:not([hidden])').count(),
+    robotMatches.length,
+  );
+  assert.equal(
+    await sender.locator('[data-animation-id="robot"]').getAttribute('aria-keyshortcuts'),
+    '1',
+  );
+  await sender.locator('#animation-search').fill('нет-такого-клипа');
+  assert.equal(await sender.locator('.animation-choice:not([hidden])').count(), 0);
+  assert.equal(await sender.locator('#animation-empty').isVisible(), true);
+  assert.equal(await sender.locator('.animation-choice[aria-keyshortcuts]').count(), 0);
+  await sender.locator('#animation-search').fill('robot');
+  await sender.locator('#animation-search').press('Enter');
+  await sender.keyboard.press('1');
+  const performer = (await snapshot(sender)).authoritative.entityId;
+  await active(sender, performer, robotMatches[0].id);
+  await sender.locator('#animations-panel').waitFor({ state: 'hidden' });
+  await idle(sender);
+  await hudClick(sender, '#animations-toggle');
+  await sender.locator('#animation-search').fill('');
+  await sender.locator('#animations-panel [data-filter="Все"]').click();
+  const replicated = () =>
+    [...app.room.state.players.values()].find((p) => p.entityId === performer)!;
+  const sequence = replicated().animationSequence;
+  await sender.locator('#animation-preview summary').click();
+  await sender.locator('#animation-preview-clip').selectOption('boxing');
+  for (const { id: skin } of AVATAR_SKINS) {
+    await sender.locator('#animation-preview-skin').selectOption(skin);
+    await sender.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await sender.waitForFunction(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('#animation-preview-canvas')!;
+      return canvas.width > 0 && !!canvas.getContext('webgl2');
+    });
+  }
+  await sender.locator('#animation-preview-reduced').check();
+  await sender.locator('#animation-preview-note').filter({ hasText: 'Сидячий вариант' }).waitFor();
+  await sender.screenshot({ path: `${output}/authoring-preview-wheelchair.png` });
+  assert.equal(
+    replicated().animationSequence,
+    sequence,
+    'preview must not send an animation action',
+  );
+  assert.equal(replicated().animationId, robotMatches[0].id);
+  await sender.locator('#animation-preview summary').click();
+  await sender.keyboard.press('Escape');
+  checks.push(
+    'search and category compose, empty results clear shortcuts, Enter + 1 selects the filtered ID; local preview selects all eight skins and reduced motion without changing server playback',
+  );
   await hudClick(sender, '#animations-toggle');
   await hudClick(sender, '#reactions-toggle');
   assert.equal(await sender.locator('#animations-panel').isVisible(), false);

@@ -1,3 +1,4 @@
+import { ANIMATION_CATALOG_VERSION } from '@su/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
 
@@ -24,6 +25,7 @@ const current: WorldInfo = {
   roomId: 'new-room',
   worldEpoch: 'terrain-live-weather-21',
   protocolVersion: 21,
+  animationCatalogVersion: ANIMATION_CATALOG_VERSION,
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
   layoutHash: 'b'.repeat(64),
@@ -39,7 +41,8 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(21);
+  expect(actual.PROTOCOL_VERSION).toBeGreaterThan(20);
+  current.protocolVersion = actual.PROTOCOL_VERSION;
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -93,3 +96,33 @@ describe.each([16, 17, 18, 19, 20])(
     });
   },
 );
+
+describe('animation catalog release compatibility independent of protocol number', () => {
+  beforeEach(async () => {
+    legacy.protocol = (
+      await vi.importActual<typeof import('@su/contracts')>('@su/contracts')
+    ).PROTOCOL_VERSION;
+  });
+  it.each([undefined, 'older-catalog', ''])(
+    'rejects catalog %s before resources or reservation',
+    async (version) => {
+      fetchWorld.mockImplementation(async () =>
+        Response.json({ ...current, animationCatalogVersion: version }),
+      );
+      await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
+      expect(instance.reloadRequired).toBe(true);
+      expect(fetchWorld).toHaveBeenCalledTimes(1);
+      expect(reserve).not.toHaveBeenCalled();
+    },
+  );
+  it('rejects a changed catalog during publication refresh', async () => {
+    instance.info = current;
+    instance.state = 'ready';
+    fetchWorld.mockImplementation(async () =>
+      Response.json({ ...current, animationCatalogVersion: 'new-catalog' }),
+    );
+    await expect(instance.refreshPublication()).rejects.toThrow('VERSION_MISMATCH');
+    expect(instance.reloadRequired).toBe(true);
+    expect(reserve).not.toHaveBeenCalled();
+  });
+});

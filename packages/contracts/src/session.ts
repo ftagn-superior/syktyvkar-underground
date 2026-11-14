@@ -18,6 +18,7 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
+  animationCatalogVersion: string;
   placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;
   layoutRevision: number;

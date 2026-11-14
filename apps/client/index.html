@@ -487,10 +487,42 @@
             <span>Анимации</span
             ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
           </h2>
+          <input
+            id="animation-search"
+            class="ui-input"
+            type="search"
+            aria-label="Поиск анимаций"
+            placeholder="Название, ID или категория…"
+            autocomplete="off"
+          />
           <div class="filters" role="group" aria-label="Категория анимаций"></div>
           <div class="catalog-scroll">
             <div class="elist animation-choices" role="group" aria-label="Выбор анимации"></div>
+            <p id="animation-empty" hidden>Ничего не найдено. Измените поиск или категорию.</p>
           </div>
+          <details id="animation-preview">
+            <summary>Предпросмотр на персонаже</summary>
+            <p>
+              Предпросмотр виден только вам. Нажмите карточку или цифру, чтобы выполнить анимацию в
+              мире.
+            </p>
+            <label
+              >Анимация
+              <select id="animation-preview-clip"></select
+            ></label>
+            <label
+              >Персонаж
+              <select id="animation-preview-skin"></select
+            ></label>
+            <label
+              ><input id="animation-preview-reduced" type="checkbox" /> Уменьшить движение</label
+            >
+            <canvas
+              id="animation-preview-canvas"
+              aria-label="Предпросмотр анимации. Потяните мышью для поворота персонажа."
+            ></canvas>
+            <p id="animation-preview-note" role="status"></p>
+          </details>
           <p id="animations-status" class="catalog-status" role="status"></p>
         </section>
         <p id="chat-status" class="chat-status" role="status"></p>

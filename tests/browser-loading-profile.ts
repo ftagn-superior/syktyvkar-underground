@@ -1,3 +1,4 @@
+import { ANIMATION_CATALOG_VERSION } from '../packages/contracts/src/index.js';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -46,6 +47,7 @@ const previewCenter =
     : { ...header.spawnPoints[0], y: 0 };
 const worldPath = '/worlds/profile/';
 const info: WorldInfo = {
+  animationCatalogVersion: ANIMATION_CATALOG_VERSION,
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 1,
   layoutHash: 'b'.repeat(64),

@@ -18,6 +18,8 @@
     "reference:streetview": "node --import tsx tools/streetview-capture.ts",
     "buildings:compare": "node --import tsx tools/building-compare.ts",
     "world:ring:layers": "node --import tsx tools/world-build/src/ring-layout.ts",
+    "world:ground:widen": "node --import tsx tools/world-build/src/widen-roads.ts",
+    "world:ground:expansion": "node --import tsx tools/world-build/src/expansion-ground.ts",
     "world:acceptance": "node --import tsx tests/streaming-fixture.ts",
     "dev": "pnpm world:build && node tools/dev.mjs",
     "check": "tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",

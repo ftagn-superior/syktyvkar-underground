@@ -1,0 +1,109 @@
+{
+  "formatVersion": 1,
+  "worldBoundsXZ": {
+    "west": -1500,
+    "east": 2000,
+    "north": -850,
+    "south": 850
+  },
+  "areaSquareMetres": 5950000,
+  "sourceConfigSha256": "78d2227d690f230fc737f0d76603e2aec5f770643208e02c52b905f52653dacf",
+  "preservedGridSha256": "d6e9ceb11508a43d542f5a3f6517c86d176b8af924ba4c218ce277483e7f864f",
+  "sources": {
+    "ground": {
+      "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.3857.3855_v1.2.tif",
+      "sha256": "8f7140cde87d0398ac132e79ad0aaf4b1a4235fe9f052ae1aa9b7e938b9861d7",
+      "bytes": 46522,
+      "crs": "EPSG:3857",
+      "resolution": [
+        76.66088349578423,
+        76.66176679267538
+      ],
+      "shape": [
+        69,
+        117
+      ],
+      "scale": 1.0,
+      "offset": 0.0
+    },
+    "geoid": {
+      "url": "https://cdn.proj.org/us_nga_egm08_25.tif",
+      "sha256": "a3217bde55cbdb3e4d81a3944e07a33d4e07706014751aaad2ba331a971e2610",
+      "bytes": 1514,
+      "crs": "EPSG:4979",
+      "resolution": [
+        0.041666666666666664,
+        0.041666666666666664
+      ],
+      "shape": [
+        5,
+        7
+      ],
+      "scale": 1.0,
+      "offset": 0.0
+    }
+  },
+  "heightFormula": "Y = H_GEDTM_EGM2008 + N_EGM2008 - 124",
+  "sourceInterpolation": "bilinear; no invented fine-scale terrain detail",
+  "transition": {
+    "metres": 200,
+    "method": "nearest old boundary residual, faded with smoothstep outside the old footprint only"
+  },
+  "preservedNodes": 33220,
+  "changedPreservedNodes": 0,
+  "grid": {
+    "formatVersion": 1,
+    "origin": {
+      "x": -1501.0,
+      "z": -853.0
+    },
+    "spacing": 4,
+    "columns": 877,
+    "rows": 427,
+    "bottom": -50.0
+  },
+  "heightY": {
+    "min": -45.31734,
+    "p05": -24.751001000000002,
+    "median": 4.26256,
+    "p95": 15.531256999999997,
+    "max": 22.07349
+  },
+  "slopeDegrees": {
+    "min": 0.0,
+    "p05": 0.4721077344988745,
+    "median": 2.4861390664322216,
+    "p95": 7.475511322709148,
+    "max": 27.681270851579743
+  },
+  "sourceHeightY": {
+    "min": -45.31734387178406,
+    "p05": -24.751004694323797,
+    "median": 5.851847966481557,
+    "p95": 16.07471597627925,
+    "max": 22.07348975321591
+  },
+  "geoidMetres": {
+    "min": 4.9317651268066225,
+    "p05": 4.952293421154031,
+    "median": 5.017250545269369,
+    "p95": 5.081248715217578,
+    "max": 5.100566983442425
+  },
+  "maxTransitionCorrectionMetres": 10.633598993457333,
+  "output": {
+    "file": "grid.json",
+    "sha256": "0e83797a4dca426a1a80fc7820fcf884b6bb14daea5441f9c5b76ee8a2b591a8"
+  },
+  "limitations": [
+    "GEDTM30 v1.2 is an inferred bare-earth model, not a local survey.",
+    "Nominal 30 m source (~36.4 m here); 4 m output is interpolation, not 4 m source accuracy.",
+    "Existing ArcticDEM-derived city heights/pads are preserved exactly; the 200 m join is an explicit game adaptation.",
+    "No buildings, trees, roads, water surfaces or other new objects were imported."
+  ],
+  "attribution": [
+    "GEDTM30 v1.2, OpenGeoHub, CC BY 4.0, https://zenodo.org/records/18887460",
+    "EGM2008, NGA / PROJ-data, https://cdn.proj.org/us_nga_README.txt",
+    "Preserved city: ArcticDEM Mosaic v4.1, PGC / University of Minnesota, Maxar imagery, CC BY 4.0, doi:10.7910/DVN/3VDC4W"
+  ]
+}

@@ -185,6 +185,8 @@ export interface BuildWorldOptions {
   groundTerrain?: {
     spacing: 2 | 4;
     grid?: TerrainGrid;
+    /** Add bare ground around the source recipe, retaining its original sample lattice. */
+    extendToWorldBounds?: true;
     supports?: FoundationSupportRuleV2[];
     placementModels?: TerrainPlacementModel[];
     /** Reviewed offline changes for a new authored release, never startup adjustments. */
@@ -367,18 +369,31 @@ export async function buildWorld(
       const converted = createGroundTerrain(recipe, instance, options.groundTerrain.spacing);
       if (options.groundTerrain.grid) {
         const explicit = validateTerrainGrid(options.groundTerrain.grid);
+        const original = converted.grid;
+        const extended = options.groundTerrain.extendToWorldBounds === true;
         if (
-          explicit.spacing !== converted.grid.spacing ||
-          explicit.columns !== converted.grid.columns ||
-          explicit.rows !== converted.grid.rows ||
-          explicit.origin.x !== converted.grid.origin.x ||
-          explicit.origin.z !== converted.grid.origin.z
+          explicit.spacing !== original.spacing ||
+          (extended
+            ? explicit.origin.x > original.origin.x ||
+              explicit.origin.z > original.origin.z ||
+              explicit.origin.x + (explicit.columns - 1) * explicit.spacing <
+                recipe.max[0] + instance.position.x ||
+              explicit.origin.z + (explicit.rows - 1) * explicit.spacing <
+                recipe.max[1] + instance.position.z ||
+              !Number.isInteger((original.origin.x - explicit.origin.x) / explicit.spacing) ||
+              !Number.isInteger((original.origin.z - explicit.origin.z) / explicit.spacing)
+            : explicit.columns !== converted.grid.columns ||
+              explicit.rows !== converted.grid.rows ||
+              explicit.origin.x !== converted.grid.origin.x ||
+              explicit.origin.z !== converted.grid.origin.z)
         )
           throw new Error(
-            'Explicit terrain grid must match the ground extent and selected spacing',
+            'Explicit terrain grid must match the ground extent and selected spacing, or explicitly extend its lattice',
           );
         converted.grid = structuredClone(explicit);
       }
+      if (options.groundTerrain.extendToWorldBounds && !options.groundTerrain.grid)
+        throw new Error('Terrain extension requires an explicit height grid');
       validateTerrainGrid(converted.grid);
       validateTerrainCoverage(converted.grid, base.bounds);
       privateTerrain = validateTerrainPrivateData({
@@ -390,7 +405,11 @@ export async function buildWorld(
         supports: supportRules ?? [],
       });
       const context = prepareTerrainBuildContext(converted.grid, converted.surfaces);
-      for (const cellId of cellsIntersectingBounds(base.bounds, grid, extent)) {
+      for (const cellId of cellsIntersectingBounds(
+        base.bounds,
+        grid,
+        options.groundTerrain.extendToWorldBounds ? base.bounds : extent,
+      )) {
         const cell = worldCellBounds(base.bounds, grid, cellId);
         const assetId = `${instance.assetId}-${cellId.replace('_', '-')}`;
         const boundary = rectangle(
@@ -407,6 +426,7 @@ export async function buildWorld(
           boundary,
           color: converted.color,
           merge: recipe.merge === true,
+          worldBounds: base.bounds,
         });
         for (const { suffix, asset } of tiles) {
           const id = assetId + suffix;

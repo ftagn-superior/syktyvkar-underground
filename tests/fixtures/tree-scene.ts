@@ -21,6 +21,7 @@ const engine = new Engine(canvas, false, { preserveDrawingBuffer: true, stencil:
 let scene: Scene, views: BuildingViews, release: (() => void) | undefined;
 let radial = { center: { x: 0, y: 0, z: 0 }, radius: 10000, time: 10000, appearMs: 300 };
 let camera: ArcRotateCamera;
+let shadow: ShadowGenerator;
 let placements: BuildingInstance[] = [];
 let own: Vector3 | undefined;
 let lastPixels: Uint8Array | undefined;
@@ -65,9 +66,12 @@ async function setup(optimized: boolean, shadows: boolean, faded = false) {
   const sun = new DirectionalLight('sun', new Vector3(-0.5, -1, -0.4), scene);
   sun.position = new Vector3(40, 80, 40);
   sun.intensity = 1;
-  const shadow = new ShadowGenerator(1024, sun);
+  shadow = new ShadowGenerator(1024, sun);
   shadow.useBlurExponentialShadowMap = true;
   shadow.blurKernel = 16;
+  // Occlusion fade reveals the player; both reference and instanced trees retain full shadows.
+  shadow.transparencyShadow = true;
+  shadow.enableSoftTransparentShadow = false;
   scene.shadowsEnabled = shadows;
   const ground = MeshBuilder.CreateGround('ground', { width: 200, height: 200 }, scene);
   ground.receiveShadows = true;
@@ -104,11 +108,19 @@ async function setup(optimized: boolean, shadows: boolean, faded = false) {
   return stats();
 }
 function stats() {
+  const casters = shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled());
   return {
     ...views.aggregateDiagnostics(),
     meshes: scene.meshes.length,
     materials: scene.materials.length,
     drawCalls,
+    shadowInstances: casters.reduce(
+      (count, mesh) => count + ((mesh as { thinInstanceCount?: number }).thinInstanceCount || 1),
+      0,
+    ),
+    transparentShadowCasters: casters.filter((mesh) =>
+      mesh.material?.needAlphaBlendingForMesh(mesh),
+    ).length,
     trees: views.diagnostics().buildings,
     ready: scene
       .getActiveMeshes()

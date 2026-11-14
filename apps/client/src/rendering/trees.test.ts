@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import { StaticShadowGenerator } from './environment/lighting';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -180,7 +180,7 @@ describe('tree instancing', () => {
     engine.getCaps().maxVertexAttribs = attributes;
     const scene = new Scene(engine);
     scene.useRightHandedSystem = true;
-    const shadow = new ShadowGenerator(
+    const shadow = new StaticShadowGenerator(
       128,
       new DirectionalLight('sun', new Vector3(0, -1, 0), scene),
     );
@@ -272,12 +272,14 @@ describe('tree instancing', () => {
     }
   });
 
-  it('fades each blocker, restores opaque batches/shadows, and rejects conflicting versions', async () => {
+  it('fades each blocker without losing shadows or redrawing unchanged silhouettes', async () => {
     const f = await fixture();
     try {
       f.add('near');
       f.add('far', 0, -4);
       f.add('clear', 12);
+      f.update();
+      const refresh = vi.spyOn(f.shadow.getShadowMap()!, 'resetRefreshCounter');
       const own = new Vector3(0, 1, -10);
       for (let i = 0; i < 30; i++) f.update(own, i * 100);
       expect(f.views.diagnostics().buildings.map((b) => b.opacity)).toEqual([0.22, 0.22, 1]);
@@ -287,9 +289,22 @@ describe('tree instancing', () => {
         fadedBuildings: 2,
       });
       expect(() => f.add('near', 20)).toThrow('Conflicting');
+      const activeCasters = () =>
+        f.shadow
+          .getShadowMap()!
+          .renderList!.filter((mesh) => mesh.isEnabled())
+          .reduce((count, mesh) => count + (mesh as Mesh).thinInstanceCount, 0);
+      expect(activeCasters()).toBe(3);
+      expect(refresh).not.toHaveBeenCalled();
       for (let i = 30; i < 60; i++) f.update(undefined, i * 100);
       expect(f.views.diagnostics().buildings.every((b) => b.opacity === 1)).toBe(true);
       expect(f.views.aggregateDiagnostics().treeBatches).toBe(2); // z=-4 is a neighboring chunk
+      expect(activeCasters()).toBe(3);
+      expect(refresh).not.toHaveBeenCalled();
+      f.views.remove('near');
+      f.update();
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(activeCasters()).toBe(2);
     } finally {
       f.dispose();
     }

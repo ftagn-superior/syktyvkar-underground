@@ -21,6 +21,7 @@ import { SpatialIndex } from './spatial-index';
 import { treeIntersectsRay, treeRayDistance, treeTemplate } from './tree-geometry';
 import { TreeMaterial, TREE_ATTRIBUTES } from './tree-material';
 import { shadowCasterRadius } from './shadow-range';
+import { withoutShadowInvalidation } from './shadow-casters';
 import {
   staticHitVisible,
   staticObjectSelection,
@@ -70,6 +71,7 @@ export class TreeViews {
   private readonly dirty = new Set<Batch>();
   private readonly fading = new Set<string>();
   private readonly shadowed = new Set<string>();
+  private shadowDirty = false;
   private readonly index = new SpatialIndex();
 
   constructor(
@@ -155,6 +157,7 @@ export class TreeViews {
     this.trees.delete(id);
     this.index.remove(id);
     this.fading.delete(id);
+    if (this.shadowed.has(id)) this.shadowDirty = true;
     this.shadowed.delete(id);
     tree.batch.trees.delete(tree);
     this.dirty.add(tree.batch);
@@ -222,7 +225,7 @@ export class TreeViews {
     mesh.receiveShadows = true;
     mesh.freezeWorldMatrix();
     if (this.radial) applyRadialFog(mesh, this.radial, 0);
-    if (shadow) this.shadows.addShadowCaster(mesh);
+    if (shadow) withoutShadowInvalidation(this.shadows, () => this.shadows.addShadowCaster(mesh));
     batch = {
       key,
       variant,
@@ -265,6 +268,7 @@ export class TreeViews {
           : new Set(this.trees.keys());
     for (const id of new Set([...this.shadowed, ...candidates])) {
       if (candidates.has(id) === this.shadowed.has(id)) continue;
+      this.shadowDirty = true;
       if (candidates.has(id)) this.shadowed.add(id);
       else this.shadowed.delete(id);
       selected.add(id);
@@ -281,7 +285,7 @@ export class TreeViews {
       const previousOpacity = tree.fade.opacity;
       if (opaque) tree.fade.clear();
       const opacity = tree.fade.update(blocked, now, seconds);
-      const shadow = this.shadowed.has(id) && opacity >= 0.98;
+      const shadow = this.shadowed.has(id);
       const transparent = opacity < 1;
       const batch = this.batch(tree.definition, tree.recipe, shadow, transparent);
       if (batch !== tree.batch) {
@@ -297,7 +301,7 @@ export class TreeViews {
     this.flush();
   }
   private disposeBatch(batch: Batch): void {
-    this.shadows.removeShadowCaster(batch.mesh);
+    withoutShadowInvalidation(this.shadows, () => this.shadows.removeShadowCaster(batch.mesh));
     batch.mesh.dispose(false, false);
     this.idle.delete(batch);
   }
@@ -375,8 +379,9 @@ export class TreeViews {
       mesh.setBoundingInfo(new BoundingInfo(minimum, maximum));
       mesh.setEnabled(true);
     }
-    // A batch keeps its place in the caster list while its instances change.
-    if (this.dirty.size) this.shadows.getShadowMap()?.resetRefreshCounter();
+    // Alpha and regrouping preserve the same silhouettes. Only membership changes redraw depth.
+    if (this.shadowDirty) this.shadows.getShadowMap()?.resetRefreshCounter();
+    this.shadowDirty = false;
     this.dirty.clear();
   }
   aggregateDiagnostics() {

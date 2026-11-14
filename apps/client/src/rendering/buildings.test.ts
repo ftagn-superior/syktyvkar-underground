@@ -228,7 +228,7 @@ describe('building rendering from the real world bundle', () => {
       expect(near.material!.alpha).toBeCloseTo(0.22);
       expect(near.material!.transparencyMode).toBe(Material.MATERIAL_ALPHABLEND);
       expect(clear.material!.alpha).toBe(1);
-      expect(view.shadow.getShadowMap()!.renderList).not.toContain(near);
+      expect(view.shadow.getShadowMap()!.renderList).toContain(near);
       expect(view.shadow.getShadowMap()!.renderList).toContain(clear);
       const own = new Vector3(0, 0.92, -14);
       view.buildings.update(

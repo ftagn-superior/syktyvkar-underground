@@ -54,7 +54,6 @@ type Group = {
   owned?: (Material | null)[];
   materials: FadingMaterial[];
   fade: OcclusionFade;
-  castsShadow: boolean;
 };
 type BuildingView = {
   definition: BuildingInstance;
@@ -517,7 +516,6 @@ export class BuildingViews {
               shared: [],
               materials: [],
               fade: new OcclusionFade(),
-              castsShadow: true,
             };
             groups.set(group.id, group);
           }
@@ -655,14 +653,6 @@ export class BuildingViews {
           material.alpha = alpha * opacity;
           material.transparencyMode = opacity < 1 ? Material.MATERIAL_ALPHABLEND : mode;
         }
-        const castsShadow = opacity >= 0.98;
-        if (castsShadow !== group.castsShadow) {
-          group.castsShadow = castsShadow;
-          for (const mesh of group.meshes) {
-            if (castsShadow && this.shadowed.has(id)) this.shadow.addShadowCaster(mesh);
-            else this.shadow.removeShadowCaster(mesh);
-          }
-        }
       }
       if (instance.groups.some((group) => group.fade.opacity < 1 || group.fade.blocked))
         this.fading.add(id);
@@ -679,9 +669,6 @@ export class BuildingViews {
     for (const mesh of view.meshes) this.shadow.removeShadowCaster(mesh);
     if (enabled) {
       for (const mesh of view.meshes) this.shadow.addShadowCaster(mesh);
-      for (const group of view.groups)
-        if (!group.castsShadow)
-          for (const mesh of group.meshes) this.shadow.removeShadowCaster(mesh);
     }
   }
 

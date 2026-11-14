@@ -20,6 +20,7 @@ import { darkness } from './night-schedule';
 import { CLEAR_AMOUNTS, type WeatherAmounts } from './weather-mix';
 import { weatherSky } from './weather-sky';
 import { GLOW_MASK_SUPPORTED, glowMaskPatches } from './glow-mask';
+import { shadowUpdatesMuted } from '../shadow-casters';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
 const SHADOW_EXTENT = 90;
@@ -137,11 +138,11 @@ export class StaticShadowGenerator extends WorldShadowGenerator {
     this.getShadowMap()?.resetRefreshCounter();
   }
   override addShadowCaster(mesh: AbstractMesh, includeDescendants = true): ShadowGenerator {
-    if (this.covers(mesh, includeDescendants)) this.invalidate();
+    if (!shadowUpdatesMuted(this) && this.covers(mesh, includeDescendants)) this.invalidate();
     return super.addShadowCaster(mesh, includeDescendants);
   }
   override removeShadowCaster(mesh: AbstractMesh, includeDescendants = true): ShadowGenerator {
-    if (this.covers(mesh, includeDescendants)) this.invalidate();
+    if (!shadowUpdatesMuted(this) && this.covers(mesh, includeDescendants)) this.invalidate();
     return super.removeShadowCaster(mesh, includeDescendants);
   }
   /**
@@ -244,6 +245,8 @@ export class WorldLighting {
     // The default generator is the cache. All receivers use the composed generator,
     // which is registered once after the cache and rendered after it within the frame.
     this.staticShadow = new StaticShadowGenerator(SHADOW_MAP_SIZE, sun);
+    // Occlusion alpha reveals the player; it does not change a building/tree silhouette.
+    this.staticShadow.transparencyShadow = true;
     this.shadow = new WorldShadowGenerator(SHADOW_MAP_SIZE, sun, undefined, camera);
     for (const shadow of [this.staticShadow, this.shadow]) {
       // PCF даёт чёткий край у основания и мягкий на расстоянии, в отличие от размытой ESM.

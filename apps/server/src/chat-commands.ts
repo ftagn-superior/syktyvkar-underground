@@ -77,7 +77,9 @@ const TIME_FORMAT = 'Формат команды: /time [ЧЧ[:ММ] | stop | st
 export function giveFailureMessage(code: ItemError | undefined): string {
   switch (code) {
     case 'AUTH_REQUIRED':
-      return 'Чтобы получить предмет, войдите через Telegram.';
+      return 'Консольные команды доступны только администраторам. Войдите через Telegram.';
+    case 'ADMIN_REQUIRED':
+      return 'Консольные команды доступны только администраторам.';
     case 'RATE_LIMITED':
       return `Получать предметы можно раз в ${ITEM_GIVE_COOLDOWN_MS / 1000} секунды.`;
     case 'STALE_WORLD':

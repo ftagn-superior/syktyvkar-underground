@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
-import { createAccountFixture } from './helpers/account-fixture.js';
+import { createAccountFixture, setAccountAdmin } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { chatSent, hudClick, openChat } from './helpers/hud.js';
 
@@ -48,6 +48,10 @@ try {
   await owner.goto(app.url);
   await owner.locator('#telegram-login').click();
   await owner.locator('#profile-form').waitFor({ state: 'visible' });
+  const adminCookie = (await owner.context().cookies()).find(
+    (cookie) => cookie.name === 'su_session',
+  )!;
+  await setAccountAdmin(fixture.store, `${adminCookie.name}=${adminCookie.value}`);
   for (const page of [owner, observer]) {
     await page.goto(app.url + '/?diagnostics=1');
     await page.locator('#join:not([disabled])').click();
@@ -67,7 +71,7 @@ try {
   await chatSent(owner);
   assert.equal(
     await observer.locator('#notice').textContent(),
-    'Чтобы получить предмет, войдите через Telegram.',
+    'Консольные команды доступны только администраторам. Войдите через Telegram.',
   );
   assert.equal(await observer.locator('.player-chat').count(), 0);
   assert.equal(app.room.state.items.size, initialWorldCount);

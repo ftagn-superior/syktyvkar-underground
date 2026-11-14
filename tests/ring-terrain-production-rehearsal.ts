@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { canonicalJson } from '../packages/contracts/src/index.js';
 import { hash } from '../packages/world-release/src/index.js';
 import { createDatabasePool } from '../apps/server/src/database.js';
-import { migrateDatabase } from '../apps/server/src/migrations.js';
+import { DATABASE_SCHEMA_VERSION, migrateDatabase } from '../apps/server/src/migrations.js';
 import { createGameServer } from '../apps/server/src/index.js';
 import type { TerrainMigrationPlan } from '../apps/server/src/layout/terrain-migration.js';
 
@@ -129,11 +129,27 @@ try {
     await migrateDatabase(pool);
     const upgraded = await readState();
     for (const [table, rows] of Object.entries(original)) {
-      if (table !== 'su_schema_migrations') assert.deepEqual(upgraded[table], rows);
+      if (table === 'accounts') {
+        assert.deepEqual(
+          upgraded[table]
+            .map((row) => {
+              const { is_admin, ...account } = JSON.parse(row);
+              assert.equal(is_admin, false);
+              return canonicalJson(account);
+            })
+            .sort(),
+          rows.map((row) => canonicalJson(JSON.parse(row))).sort(),
+        );
+      } else if (table !== 'su_schema_migrations') assert.deepEqual(upgraded[table], rows);
     }
     assert.deepEqual(upgraded.player_positions, []);
-    assert.equal(upgraded.su_schema_migrations.length, 7);
-    checks.schemaUpgrade = { from: 6, to: 7, existingRowsPreserved: true, savedPlayerPositions: 0 };
+    assert.equal(upgraded.su_schema_migrations.length, DATABASE_SCHEMA_VERSION);
+    checks.schemaUpgrade = {
+      from: 6,
+      to: DATABASE_SCHEMA_VERSION,
+      existingRowsPreserved: true,
+      savedPlayerPositions: 0,
+    };
   }
   const before = await readState();
   assert.equal(before.persistent_worlds.length, 1);

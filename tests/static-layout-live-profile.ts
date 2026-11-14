@@ -24,7 +24,11 @@ import {
   profilePlacementIsBlocked,
 } from './helpers/static-layout-profile-placement.js';
 import { createGameServer } from './helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from './helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAdminAccount,
+  responseCookie,
+} from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { prepareSdk } from './helpers/prepare.js';
 
@@ -112,7 +116,7 @@ for (const clients of clientCounts) {
     const discover = (): Promise<WorldInfo> => fetch(app!.url + '/api/world').then((r) => r.json());
     let info = await discover();
     const cookie = responseCookie(
-      (await loginAccount(app.url, `profile-${clients}`)).result,
+      (await loginAdminAccount(app.url, `profile-${clients}`, fixture.store)).result,
       'su_session',
     );
     owner = await new Client(app.url, { headers: { Cookie: cookie } }).joinById<WorldState>(

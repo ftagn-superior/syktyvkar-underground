@@ -1,3 +1,4 @@
+import { setAccountAdmin } from './helpers/account-fixture.js';
 /** Fresh full-city UI acceptance on a disposable exact-layout fixture. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -62,6 +63,10 @@ try {
   await page.goto(app.url + '/?diagnostics=1&time=12');
   await page.locator('#telegram-login').click();
   await page.locator('#profile-form').waitFor({ state: 'visible' });
+  const adminCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === 'su_session',
+  )!;
+  await setAccountAdmin(app.accounts.store, `${adminCookie.name}=${adminCookie.value}`);
   await page.goto(app.url + '/?diagnostics=1&time=12');
   await page.locator('#join:not([disabled])').click();
   await playing();

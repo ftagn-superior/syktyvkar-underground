@@ -2,7 +2,13 @@ import { prepareSdk } from '../helpers/prepare.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client, type Room } from '@colyseus/sdk';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAccount,
+  loginAdminAccount,
+  responseCookie,
+  setAccountAdmin,
+} from '../helpers/account-fixture.js';
 import { ItemStore } from '../../apps/server/src/items/store.js';
 import type { WorldState } from '../../packages/protocol/src/index.js';
 import type { ActionResult, InventoryView, WorldInfo } from '../../packages/contracts/src/index.js';
@@ -26,8 +32,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     fixture.config.publicOrigin = app.url;
     info = await fetch(app.url + '/api/world').then((r) => r.json());
   }
-  async function login(subject: string) {
-    const { result } = await loginAccount(app.url, subject);
+  async function login(subject: string, admin = true) {
+    const { result } = await (admin
+      ? loginAdminAccount(app.url, subject, fixture.store)
+      : loginAccount(app.url, subject));
     return responseCookie(result, 'su_session');
   }
   async function join(cookie?: string, ready = true) {
@@ -202,7 +210,106 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     expect(guest.inventories).toEqual([]);
   });
 
-  it('lets a signed-in player set, stop and reset the shared day clock, privately', async () => {
+  it('rejects every slash command for guests and non-admin accounts, including forged privileges', async () => {
+    const ordinary = await join(await login('ordinary-player', false));
+    const guest = await join();
+    const commands = [
+      '/giveme wooden-crate',
+      '/motherlode',
+      '/vilievna',
+      '/time',
+      '/time 12',
+      '/weather',
+      '/weather rain on',
+      '/clouds off',
+      '/giveme',
+      '/unknown-command',
+    ];
+    const before = {
+      offset: app.room.state.dayOffsetMs,
+      frozen: app.room.state.dayFrozenHour,
+      clouds: app.room.state.weatherClouds,
+      precipitation: app.room.state.weatherPrecipitation,
+      revision: app.room.state.layoutRevision,
+      items: app.room.state.items.size,
+    };
+    for (const [player, code] of [
+      [ordinary, 'ADMIN_REQUIRED'],
+      [guest, 'AUTH_REQUIRED'],
+    ] as const) {
+      for (const [index, text] of commands.entries()) {
+        player.room.send('requestChat', {
+          requestId: index + 1,
+          worldEpoch: info.worldEpoch,
+          text,
+          isAdmin: true,
+          is_admin: true,
+        });
+        await until(() => player.results.length === index + 1);
+        expect(player.results[index]).toMatchObject({
+          ok: false,
+          code,
+          message: expect.stringContaining('только администраторам'),
+        });
+        expect(player.results[index].effect).toBeUndefined();
+      }
+    }
+    expect({
+      offset: app.room.state.dayOffsetMs,
+      frozen: app.room.state.dayFrozenHour,
+      clouds: app.room.state.weatherClouds,
+      precipitation: app.room.state.weatherPrecipitation,
+      revision: app.room.state.layoutRevision,
+      items: app.room.state.items.size,
+    }).toEqual(before);
+    expect(
+      (await fixture.pool.query('SELECT count(*)::int AS n FROM item_operations')).rows[0].n,
+    ).toBe(0);
+    expect(app.room.state.players.get(ordinary.room.sessionId)!.chatText).toBe('');
+    expect(app.room.state.players.get(guest.room.sessionId)!.chatText).toBe('');
+    ordinary.send('Обычный чат работает', commands.length + 1);
+    await until(
+      () =>
+        guest.room.state.players.get(ordinary.room.sessionId)?.chatText === 'Обычный чат работает',
+    );
+  });
+
+  it('refreshes administrator privileges on a transport reconnect', async () => {
+    const cookie = await login('demoted-admin');
+    const owner = await join(cookie);
+    owner.send('/time', 1);
+    await until(() => owner.results.length === 1);
+    expect(owner.results[0].ok).toBe(true);
+    await setAccountAdmin(fixture.store, cookie, false);
+    const token = owner.room.reconnectionToken;
+    owner.room.connection.close(1000);
+    await until(() => app.room.diagnostics().reserved === 1);
+    const restored = await new Client(app.url).reconnect<WorldState>(token);
+    rooms.delete(owner.room);
+    rooms.add(restored);
+    restored.reconnection.enabled = false;
+    const results: ActionResult[] = [];
+    restored.onMessage('actionResult', (result) => results.push(result));
+    for (const message of ['problem', 'resync', 'inventory']) restored.onMessage(message, () => {});
+    prepareSdk(restored);
+    await until(() => restored.state?.players?.has(restored.sessionId));
+    restored.send('requestChat', { requestId: 2, worldEpoch: info.worldEpoch, text: '/time' });
+    await until(() => results.length === 1);
+    expect(results[0]).toMatchObject({ ok: false, code: 'ADMIN_REQUIRED' });
+  });
+
+  it('lets an administrator read weather and use the clouds alias', async () => {
+    const owner = await join(await login('weather-admin'));
+    owner.send('/weather', 1);
+    await until(() => owner.results.length === 1);
+    expect(owner.results[0].ok).toBe(true);
+    owner.send('/clouds off', 2);
+    await until(() => owner.results.length === 2);
+    expect(owner.results[1].ok).toBe(true);
+    expect(app.room.state.weatherClouds).toBe(false);
+  });
+
+  it('lets an administrator set, stop and reset the shared day clock, privately', async () => {
     const guest = await join();
     const owner = await join(await login('timekeeper'));
     guest.send('/time 12', 1);

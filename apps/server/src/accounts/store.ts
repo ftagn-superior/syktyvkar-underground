@@ -14,11 +14,13 @@ export interface Identity {
   subject: string;
 }
 export interface AuthenticatedAccount extends AccountView {
+  isAdmin: boolean;
   authSessionId: string;
   expiresAt: number;
 }
 interface AccountRow {
   account_id: string;
+  is_admin: boolean;
   display_name: string;
   color_id: PlayerProfile['colorId'];
   skin_id: string;
@@ -28,6 +30,7 @@ interface AccountRow {
 }
 const projection = (row: AccountRow): AuthenticatedAccount => ({
   accountId: row.account_id,
+  isAdmin: row.is_admin,
   authSessionId: row.session_id,
   expiresAt: row.expires_at.getTime(),
   profile: {
@@ -83,7 +86,8 @@ export class AccountStore {
         [sessionId, accountId, hashToken(token), new Date(Date.now() + SESSION_LIFETIME_MS)],
       );
       const result = await client.query<AccountRow>(
-        `SELECT p.*,s.id AS session_id,s.expires_at FROM player_profiles p
+        `SELECT p.*,a.is_admin,s.id AS session_id,s.expires_at FROM player_profiles p
+        JOIN accounts a ON a.id=p.account_id
         JOIN auth_sessions s ON s.account_id=p.account_id WHERE s.id=$1`,
         [sessionId],
       );
@@ -106,7 +110,8 @@ export class AccountStore {
   }
   private async findSession(column: 's.id' | 's.token_hash', value: string) {
     const result = await this.pool.query<AccountRow>(
-      `SELECT p.*,s.id AS session_id,s.expires_at FROM auth_sessions s
+      `SELECT p.*,a.is_admin,s.id AS session_id,s.expires_at FROM auth_sessions s
+      JOIN accounts a ON a.id=s.account_id
       JOIN player_profiles p ON p.account_id=s.account_id
       WHERE ${column}=$1 AND s.revoked_at IS NULL AND s.expires_at>now()`,
       [value],

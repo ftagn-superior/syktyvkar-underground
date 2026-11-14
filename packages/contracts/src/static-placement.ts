@@ -32,6 +32,7 @@ export type StaticPlacementError =
   | 'CATALOG_CHANGED'
   | 'ASSET_NOT_ALLOWED'
   | 'AUTH_REQUIRED'
+  | 'ADMIN_REQUIRED'
   | 'COMMAND_DISABLED'
   | 'WORLD_NOT_READY'
   | 'STALE_WORLD'

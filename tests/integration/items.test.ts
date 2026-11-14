@@ -143,6 +143,7 @@ describe.skipIf(!databaseUrl)(
       DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
       DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
       ALTER TABLE player_profiles DROP COLUMN skin_id;
+      ALTER TABLE accounts DROP COLUMN is_admin;
       DELETE FROM su_schema_migrations WHERE version>=2;`);
       await migrateDatabase(fixture.pool);
       await migrateDatabase(fixture.pool);
@@ -160,6 +161,7 @@ describe.skipIf(!databaseUrl)(
         { version: 5 },
         { version: 6 },
         { version: 7 },
+        { version: 8 },
       ]);
       expect(await open()).toHaveLength(1);
     });
@@ -171,6 +173,7 @@ describe.skipIf(!databaseUrl)(
       DROP FUNCTION world_static_before_change(),world_static_after_change(),world_layout_before_change(),su_finite(double precision);
       DROP TABLE item_operations,item_instances,inventory_slots,item_types,persistent_worlds CASCADE;
         DROP FUNCTION validate_inventory_slot(uuid),validate_item_stack_trigger(),validate_slot_trigger(),validate_item_type_trigger();
+        ALTER TABLE accounts DROP COLUMN is_admin;
         DELETE FROM su_schema_migrations WHERE version>=3;
       `);
       await fixture.pool.query(
@@ -201,6 +204,7 @@ describe.skipIf(!databaseUrl)(
         { version: 5 },
         { version: 6 },
         { version: 7 },
+        { version: 8 },
       ]);
       expect(await open()).toHaveLength(1);
     });

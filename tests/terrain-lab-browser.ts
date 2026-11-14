@@ -18,7 +18,7 @@ import { loadServerWasm } from '../packages/simulation/src/server.js';
 import { terrainPhysicsScenarios } from './terrain/physics-scenarios.js';
 import { terrainGeometryEvidence } from './terrain/geometry-evidence.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { createAccountFixture } from './helpers/account-fixture.js';
+import { createAccountFixture, setAccountAdmin } from './helpers/account-fixture.js';
 import { createGameServer } from './helpers/game-server.js';
 import { createDelayRelay } from './helpers/tcp-delay.js';
 import { hudClick } from './helpers/hud.js';
@@ -257,6 +257,10 @@ async function runGame(variant: 'flat' | 'hill', directory: string) {
     await pages[0].goto(relay.url);
     await pages[0].locator('#telegram-login').click();
     await pages[0].locator('#profile-form').waitFor({ state: 'visible' });
+    const adminCookie = (await pages[0].context().cookies()).find(
+      (cookie) => cookie.name === 'su_session',
+    )!;
+    await setAccountAdmin(fixture.store, `${adminCookie.name}=${adminCookie.value}`);
     for (const page of pages) {
       await page.bringToFront();
       await page.goto(relay.url + '/?diagnostics=1');

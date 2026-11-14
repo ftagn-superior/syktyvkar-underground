@@ -1,6 +1,6 @@
 # Каталог размещения `/motherlode`
 
-Дата: 13 ноября 2026 года. Основа: `84a2d6e` (ветка `map`, обновлена из `origin/main` быстрым слиянием). Реализация и документация включены в общий коммит, добавляющий этот отчёт. Production-развёртывание не выполнялось. План: [motherlode-placement-catalog](../docs/plans/motherlode-placement-catalog.md).
+Дата: 13 ноября 2026 года. Основа: `84a2d6e` (ветка `map`, обновлена из `origin/main` быстрым слиянием). Реализация и документация включены в общий коммит, добавляющий этот отчёт. Production-развёртывание не выполнялось. План: [motherlode-placement-catalog](../docs/archive/plans/motherlode-placement-catalog.md).
 
 ## Реализация и проверяемые требования
 

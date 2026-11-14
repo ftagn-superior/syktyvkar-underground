@@ -18,8 +18,10 @@ import {
   type WireMoveInput,
 } from '@su/protocol';
 import type { PredictionWorld } from '@su/simulation/prediction';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/reaction-release';
 import {
   MAX_INPUT_QUEUE,
+  matchingCatalogVersions,
   canonicalJson,
   worldPublicationBaseIdentity,
   changedWorldPublicationCells,
@@ -280,6 +282,12 @@ export class GameSession {
     this.reloadRequired = true;
     throw new Error('VERSION_MISMATCH');
   }
+  private compatibleVersion(info: WorldInfo): boolean {
+    return (
+      info.protocolVersion === PROTOCOL_VERSION &&
+      matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions)
+    );
+  }
   async load(): Promise<void> {
     const generation = ++this.generation;
     this.cancelPhysicsPreparation();
@@ -287,7 +295,7 @@ export class GameSession {
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
-      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      if (!this.compatibleVersion(info)) this.versionMismatch();
       const publication = await loadWorldPublication(info, this.verifiedBytes);
       if (generation !== this.generation) {
         publication.resources.dispose();
@@ -541,7 +549,7 @@ export class GameSession {
     const generation = this.generation;
     const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
     if (generation !== this.generation) return;
-    if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+    if (!this.compatibleVersion(info)) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
     else this.info = info;
   }
@@ -739,7 +747,7 @@ export class GameSession {
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
-      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      if (!this.compatibleVersion(info)) this.versionMismatch();
       if (info.mapVersion !== this.info.mapVersion) {
         await this.changePublication(info);
         generation = this.generation;
@@ -761,6 +769,7 @@ export class GameSession {
             info.roomId,
             {
               protocolVersion: PROTOCOL_VERSION,
+              catalogVersions: CLIENT_CATALOG_VERSIONS,
               mapVersion: info.mapVersion,
               simulationConfigHash: info.simulationConfigHash,
               accountMode: this.accountId ? 'account' : 'guest',
@@ -1068,10 +1077,8 @@ export class GameSession {
       if (!retried && error instanceof Error && error.message.includes('VERSION_MISMATCH')) {
         try {
           const latest = (await (await getResponse('/api/world')).json()) as WorldInfo;
-          if (
-            latest.protocolVersion === PROTOCOL_VERSION &&
-            latest.mapVersion !== this.info.mapVersion
-          ) {
+          if (!this.compatibleVersion(latest)) this.reloadRequired = true;
+          if (this.compatibleVersion(latest) && latest.mapVersion !== this.info.mapVersion) {
             await this.changePublication(latest);
             this.setState('ready');
             await this.join(restore, true);
@@ -1111,7 +1118,7 @@ export class GameSession {
           const info = (await response.json()) as WorldInfo;
           if (controller.signal.aborted || this.generation !== generation) return;
           if (typeof info.worldEpoch === 'string' && info.worldEpoch !== previous.worldEpoch) {
-            this.reloadRequired = info.protocolVersion !== PROTOCOL_VERSION;
+            this.reloadRequired = !this.compatibleVersion(info);
             // Keep the old map identity until preview refresh / join replaces its context.
             // A layout change across restart does not require a new application bundle.
             if (this.reloadRequired || info.mapVersion === previous.mapVersion) this.info = info;

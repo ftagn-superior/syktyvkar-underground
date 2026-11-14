@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION, WORLD_FORMAT_VERSION } from '@su/contracts';
 import type { GameSession } from '../network/session';
 import type { WorldView } from '../rendering/world-view';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/reaction-release';
 
 declare const __SU_BUILD_INFO__: { version: string; builtAt: string };
 
@@ -18,6 +19,7 @@ export function diagnosticReport(
     formatVersion: 2,
     generatedAt: new Date().toISOString(),
     build: { ...__SU_BUILD_INFO__, mode: import.meta.env.MODE },
+    catalogVersions: CLIENT_CATALOG_VERSIONS,
     environment: {
       userAgent: navigator.userAgent,
       language: navigator.language,

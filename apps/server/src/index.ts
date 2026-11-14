@@ -6,6 +6,12 @@ import { prepareLayoutWorld } from './layout/prepare.js';
 import { readPlacementCatalog } from './layout/placement-catalog.js';
 import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
+import {
+  bundledReactionVersion,
+  loadReactionRelease,
+  verifyReactionClientBuild,
+  ReactionReleaseError,
+} from './reactions/release.js';
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { MAX_PLAYERS, PROTOCOL_VERSION, type WorldInfo } from '@su/contracts';
@@ -37,6 +43,18 @@ export async function createGameServer(options: GameServerOptions = {}) {
     options.worldDirectory ?? `dist/worlds/${process.env.SU_WORLD ?? 'ring-block'}`,
   );
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
+  if (bundledReactionVersion)
+    await verifyReactionClientBuild(clientDirectory, bundledReactionVersion);
+  const reactions = await loadReactionRelease(
+    resolve(
+      bundledReactionVersion ? `${clientDirectory}/reactions` : 'apps/client/public/reactions',
+    ),
+  );
+  if (bundledReactionVersion && bundledReactionVersion !== reactions.version)
+    throw new ReactionReleaseError(
+      'Каталог реакций не совпадает со сборкой сервера. Выпустите клиент и сервер вместе.',
+    );
+  const catalogVersions = { reactions: reactions.version };
   const authored = await readAuthoringRelease(worldDirectory);
   const placementCatalog = await readPlacementCatalog(
     authored,
@@ -123,11 +141,29 @@ export async function createGameServer(options: GameServerOptions = {}) {
           roomId: room.roomId,
           ...layouts.info(room.state.worldEpoch),
           protocolVersion: PROTOCOL_VERSION,
+          catalogVersions,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
           ...(placementCatalog ? { placementCatalog: placementCatalog.reference } : {}),
         };
         res.json(info);
+      });
+      app.get('/reactions/:asset', (req, res) => {
+        const bytes = reactions.assets.get(req.params.asset);
+        if (!bytes) {
+          res.sendStatus(404);
+          return;
+        }
+        if (req.query.v !== undefined && req.query.v !== reactions.version) {
+          res.setHeader('Cache-Control', 'no-store');
+          res.sendStatus(410);
+          return;
+        }
+        res.setHeader(
+          'Cache-Control',
+          req.query.v ? 'public, max-age=31536000, immutable' : 'no-cache',
+        );
+        res.type('image/svg+xml').send(bytes);
       });
       app.get('/api/diagnostics', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
@@ -191,6 +227,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
   server.define('world', WorldRoom, {
     definition,
     manifest,
+    catalogVersions,
     pool,
     ownership,
     itemStore: prepared.items,

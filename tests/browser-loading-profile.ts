@@ -52,6 +52,10 @@ const info: WorldInfo = {
   roomId: 'loading-profile',
   worldEpoch: 'loading-profile',
   protocolVersion: PROTOCOL_VERSION,
+  catalogVersions: {
+    reactions: JSON.parse(await readFile(join(clientDirectory, 'reaction-release.json'), 'utf8'))
+      .version,
+  },
   mapVersion: manifest.mapVersion,
   simulationConfigHash: manifest.simulationConfigHash,
   manifestUrl: `${worldPath}manifest.json`,

@@ -20,6 +20,8 @@ import {
 } from '@colyseus/core';
 import {
   MAX_PLAYERS,
+  matchingCatalogVersions,
+  type ContentCatalogVersions,
   parseAreaFailed,
   parsePlaceStaticRequest,
   type StaticPlacementError,
@@ -80,6 +82,7 @@ import type { PlayerSession as Session, ClientAction } from './room/session.js';
 
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 export interface WorldRoomOptions {
+  catalogVersions: ContentCatalogVersions;
   layouts?: LayoutPublications;
   placementCatalog?: ServerPlacementCatalog;
   ownership?: WorldOwnership;
@@ -96,6 +99,7 @@ export interface WorldRoomOptions {
 
 /** Coordinates connections, world preparation and replication; gameplay rules live in gameplay/. */
 export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema }> {
+  private catalogVersions: ContentCatalogVersions = {};
   state = new WorldState();
   maxClients = MAX_PLAYERS;
   autoDispose = false;
@@ -162,6 +166,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }[] = [];
 
   async onCreate(options: WorldRoomOptions): Promise<void> {
+    this.catalogVersions = options.catalogVersions;
     this.manifest = options.manifest;
     this.definition = options.definition;
     this.interest = new DynamicInterest(options.manifest.grid);
@@ -263,6 +268,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (
       !options ||
       options.protocolVersion !== PROTOCOL_VERSION ||
+      !matchingCatalogVersions(this.catalogVersions, options.catalogVersions) ||
       options.mapVersion !== this.state.mapVersion ||
       options.simulationConfigHash !== this.state.simulationConfigHash
     ) {

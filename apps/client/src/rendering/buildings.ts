@@ -26,6 +26,8 @@ import { SpatialIndex } from './spatial-index';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
 import { GlbInstances } from './glb-instances';
+import { BuildingChunks } from './building-chunks';
+import { shadowCasterRadius } from './shadow-range';
 import { applyRadialFog, type RadialState } from './radial-fog';
 import {
   staticHitVisible,
@@ -52,7 +54,6 @@ type Group = {
   owned?: (Material | null)[];
   materials: FadingMaterial[];
   fade: OcclusionFade;
-  castsShadow: boolean;
 };
 type BuildingView = {
   definition: BuildingInstance;
@@ -102,6 +103,7 @@ export class BuildingViews {
   private prepared = false;
   private readonly trees: TreeViews;
   private readonly glbs: GlbInstances;
+  private readonly chunks: BuildingChunks;
   private lastOcclusionTest = -Infinity;
   private opaque = false;
   private minimumVisibleSize = 0;
@@ -118,6 +120,7 @@ export class BuildingViews {
   ) {
     this.trees = new TreeViews(scene, shadow, radial);
     this.glbs = new GlbInstances(scene, shadow, radial);
+    this.chunks = new BuildingChunks(scene, shadow, radial);
   }
 
   async prepare(
@@ -292,6 +295,14 @@ export class BuildingViews {
     this.lifecycle.instancesCreated++;
     this.index.add(definition.entityId, { min: plain(view.minimum), max: plain(view.maximum) });
     this.shadowed.add(definition.entityId);
+    this.chunks.add({
+      id: definition.entityId,
+      position: definition.position,
+      meshes: view.meshes,
+      eligible: () =>
+        view.root.isEnabled(false) &&
+        view.groups.every((group) => group.fade.opacity === 1 && !group.fade.blocked),
+    });
     return view.root;
   }
   remove(id: string): void {
@@ -321,6 +332,7 @@ export class BuildingViews {
     this.fading.delete(id);
     this.shadowed.delete(id);
     const instance = entry.view;
+    this.chunks.remove(id);
     this.instances.splice(this.instances.indexOf(instance), 1);
     for (const mesh of instance.meshes) this.shadow.removeShadowCaster(mesh);
     instance.entries.dispose();
@@ -349,7 +361,12 @@ export class BuildingViews {
       )
         continue;
       for (const mesh of view.meshes) {
-        if (!mesh.isVisible || mesh.visibility <= 0 || !mesh.isEnabled()) continue;
+        if (
+          !mesh.isVisible ||
+          mesh.visibility <= 0 ||
+          (!mesh.isEnabled() && !this.chunks.isMeshMerged(mesh))
+        )
+          continue;
         const hit = ray.intersectsMesh(mesh, false);
         if (
           hit.hit &&
@@ -375,6 +392,7 @@ export class BuildingViews {
     for (const view of this.instances) {
       const enabled = view.size >= minimum;
       if (view.root.isEnabled(false) === enabled) continue;
+      this.chunks.touch(view.definition.entityId);
       view.root.setEnabled(enabled);
       changed = true;
     }
@@ -508,7 +526,6 @@ export class BuildingViews {
               shared: [],
               materials: [],
               fade: new OcclusionFade(),
-              castsShadow: true,
             };
             groups.set(group.id, group);
           }
@@ -587,10 +604,18 @@ export class BuildingViews {
       shadowCenter && visibleRadius > 0
         ? this.index.query({
             min: shadowCenter.subtract(
-              new Vector3(Math.min(80, visibleRadius), 0, Math.min(80, visibleRadius)),
+              new Vector3(
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+                0,
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+              ),
             ),
             max: shadowCenter.add(
-              new Vector3(Math.min(80, visibleRadius), 0, Math.min(80, visibleRadius)),
+              new Vector3(
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+                0,
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+              ),
             ),
           })
         : visibleRadius > 0
@@ -608,6 +633,8 @@ export class BuildingViews {
     for (const id of selected) {
       const instance = this.references.get(id)?.view;
       if (!instance) continue;
+      // A long overview ray can cross a distant cell; restore before changing its alpha.
+      if (this.chunks.isMerged(id)) this.chunks.touch(id);
       const candidates = test
         ? rays.filter(
             (ray) => ray.length > 0 && ray.intersectsBoxMinMax(instance.minimum, instance.maximum),
@@ -636,31 +663,22 @@ export class BuildingViews {
           material.alpha = alpha * opacity;
           material.transparencyMode = opacity < 1 ? Material.MATERIAL_ALPHABLEND : mode;
         }
-        const castsShadow = opacity >= 0.98;
-        if (castsShadow !== group.castsShadow) {
-          group.castsShadow = castsShadow;
-          for (const mesh of group.meshes) {
-            if (castsShadow && this.shadowed.has(id)) this.shadow.addShadowCaster(mesh);
-            else this.shadow.removeShadowCaster(mesh);
-          }
-        }
       }
       if (instance.groups.some((group) => group.fade.opacity < 1 || group.fade.blocked))
         this.fading.add(id);
       else this.fading.delete(id);
     }
+    this.chunks.update(ownPosition, selected);
   }
 
   private setShadowed(id: string, enabled: boolean): void {
     const view = this.references.get(id)!.view;
+    this.chunks.touch(id);
     if (enabled) this.shadowed.add(id);
     else this.shadowed.delete(id);
     for (const mesh of view.meshes) this.shadow.removeShadowCaster(mesh);
     if (enabled) {
       for (const mesh of view.meshes) this.shadow.addShadowCaster(mesh);
-      for (const group of view.groups)
-        if (!group.castsShadow)
-          for (const mesh of group.meshes) this.shadow.removeShadowCaster(mesh);
     }
   }
 
@@ -677,6 +695,7 @@ export class BuildingViews {
         ).length + trees.fadedTrees,
       ...trees,
       ...glbs,
+      ...this.chunks.diagnostics(),
     };
   }
   diagnostics() {
@@ -722,6 +741,7 @@ export class BuildingViews {
       this.glbs.aggregateDiagnostics().glbInstances;
     this.trees.dispose();
     this.glbs.dispose();
+    this.chunks.dispose();
     for (const [id, entry] of this.references) {
       entry.count = 1;
       this.remove(id);

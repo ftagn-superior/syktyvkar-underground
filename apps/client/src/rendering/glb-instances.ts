@@ -8,6 +8,7 @@ import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { ShadowDepthWrapper } from '@babylonjs/core/Materials/shadowDepthWrapper';
+import { shadowCasterRadius } from './shadow-range';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Node } from '@babylonjs/core/node';
 import type { AssetContainer } from '@babylonjs/core/assetContainer';
@@ -50,9 +51,25 @@ type Instance = {
   shadow: boolean;
   visible: boolean;
 };
-type Batch = { key: string; mesh: Mesh; template: Template; instances: Set<Instance> };
+type Batch = {
+  key: string;
+  variant: string;
+  mesh: Mesh;
+  template: Template;
+  instances: Set<Instance>;
+  capacity: number;
+  matrices: Float32Array;
+  states: Float32Array;
+  geometryBytes: number;
+};
 const vector = (v: { x: number; y: number; z: number }) => new Vector3(v.x, v.y, v.z);
 const plain = ({ x, y, z }: Vector3) => ({ x, y, z });
+const MAX_IDLE_PER_VARIANT = 24;
+const MAX_IDLE_BATCHES = 96;
+const MAX_IDLE_BYTES = 8 * 1024 * 1024;
+const bufferBytes = (batch: Batch) => batch.capacity * 20 * 4;
+// Conservative CPU + GPU estimate, including geometry made unique for each batch.
+const retainedBytes = (batch: Batch) => 2 * (batch.geometryBytes + bufferBytes(batch));
 
 function semanticPart(node: Node): BuildingPart | undefined {
   for (let current: Node | null = node; current; current = current.parent) {
@@ -66,6 +83,7 @@ export class GlbInstances {
   private readonly assets = new Map<string, Prepared>();
   private readonly instances = new Map<string, Instance>();
   private readonly batches = new Map<string, Batch>();
+  private readonly idle = new Set<Batch>();
   private readonly dirty = new Set<Batch>();
   private readonly index = new SpatialIndex();
   private readonly shadowed = new Set<string>();
@@ -168,6 +186,8 @@ export class GlbInstances {
       throw new Error(
         `Releasing an instanced GLB still owned by placements: ${asset.descriptor.assetId}`,
       );
+    for (const batch of this.idle)
+      if (asset.templates.includes(batch.template)) this.disposeBatch(batch);
     for (const material of asset.materials) material.shadowDepthWrapper?.dispose();
     this.assets.delete(version);
   }
@@ -287,8 +307,18 @@ export class GlbInstances {
     const { definition, asset } = instance;
     const chunk = `${Math.floor(definition.position.x / 125)},${Math.floor(definition.position.z / 125)}`;
     for (const template of asset.templates) {
-      const key = `${chunk}:${asset.descriptor.version}:${template.part.partId}:${template.key}:${instance.shadow}`;
+      const variant = `${asset.descriptor.version}:${template.part.partId}:${template.key}:${instance.shadow}`;
+      const key = `${chunk}:${variant}`;
       let batch = this.batches.get(key);
+      if (!batch) {
+        batch = [...this.idle].find((candidate) => candidate.variant === variant);
+        if (batch) {
+          this.idle.delete(batch);
+          batch.key = key;
+          batch.mesh.name = `glb-batch:${key}`;
+          this.batches.set(key, batch);
+        }
+      }
       if (!batch) {
         const mesh = template.mesh.clone(`glb-batch:${key}`, null, true)!;
         try {
@@ -306,7 +336,28 @@ export class GlbInstances {
           mesh.freezeWorldMatrix(Matrix.Identity());
           if (this.radial) applyRadialFog(mesh, this.radial, 0);
           if (instance.shadow) this.shadows.addShadowCaster(mesh);
-          batch = { key, mesh, template, instances: new Set() };
+          batch = {
+            key,
+            variant,
+            mesh,
+            template,
+            instances: new Set(),
+            capacity: 0,
+            matrices: new Float32Array(0),
+            states: new Float32Array(0),
+            geometryBytes:
+              template.mesh
+                .getVerticesDataKinds()
+                .reduce(
+                  (bytes, kind) =>
+                    bytes +
+                    template.mesh.getTotalVertices() *
+                      template.mesh.getVertexBuffer(kind)!.getSize() *
+                      4,
+                  0,
+                ) +
+              template.mesh.getTotalIndices() * 4,
+          };
           this.batches.set(key, batch);
         } catch (error) {
           this.shadows.removeShadowCaster(mesh);
@@ -331,7 +382,7 @@ export class GlbInstances {
     }
   }
   update(center: Vector3 | undefined, visibleRadius: number) {
-    const radius = Math.min(80, visibleRadius);
+    const radius = Math.min(shadowCasterRadius(this.shadows), visibleRadius);
     const candidates =
       visibleRadius <= 0
         ? new Set<string>()
@@ -353,16 +404,53 @@ export class GlbInstances {
     }
     this.flush();
   }
+  private disposeBatch(batch: Batch): void {
+    this.shadows.removeShadowCaster(batch.mesh);
+    batch.mesh.dispose(false, false);
+    this.idle.delete(batch);
+  }
+  private retire(batch: Batch): void {
+    this.batches.delete(batch.key);
+    batch.mesh.setEnabled(false);
+    batch.mesh.thinInstanceCount = 0;
+    if (!batch.capacity || retainedBytes(batch) > MAX_IDLE_BYTES) {
+      this.disposeBatch(batch);
+      return;
+    }
+    // Leave disabled shadow casters registered so their compiled depth effects survive reuse.
+    this.idle.add(batch);
+    let bytes = [...this.idle].reduce((sum, candidate) => sum + retainedBytes(candidate), 0);
+    for (const candidate of this.idle) {
+      const sameVariant = [...this.idle].filter((idle) => idle.variant === batch.variant).length;
+      if (
+        this.idle.size <= MAX_IDLE_BATCHES &&
+        bytes <= MAX_IDLE_BYTES &&
+        sameVariant <= MAX_IDLE_PER_VARIANT
+      )
+        break;
+      if (
+        this.idle.size <= MAX_IDLE_BATCHES &&
+        bytes <= MAX_IDLE_BYTES &&
+        candidate.variant !== batch.variant
+      )
+        continue;
+      bytes -= retainedBytes(candidate);
+      this.disposeBatch(candidate);
+    }
+  }
   flush() {
     for (const batch of this.dirty) {
       if (!batch.instances.size) {
-        this.shadows.removeShadowCaster(batch.mesh);
-        batch.mesh.dispose(false, false);
-        this.batches.delete(batch.key);
+        this.retire(batch);
         continue;
       }
-      const matrices = new Float32Array(batch.instances.size * 16);
-      const states = new Float32Array(batch.instances.size * 4);
+      const grew = batch.instances.size > batch.capacity;
+      if (grew) {
+        batch.capacity = Math.max(8, 2 ** Math.ceil(Math.log2(batch.instances.size)));
+        batch.matrices = new Float32Array(batch.capacity * 16);
+        batch.states = new Float32Array(batch.capacity * 4);
+      }
+      const { matrices, states } = batch;
       const minimum = new Vector3(Infinity, Infinity, Infinity),
         maximum = minimum.negate();
       let slot = 0;
@@ -373,8 +461,17 @@ export class GlbInstances {
         Vector3.CheckExtends(instance.maximum, minimum, maximum);
         slot++;
       }
-      batch.mesh.thinInstanceSetBuffer('matrix', matrices, 16, true);
-      batch.mesh.thinInstanceSetBuffer(INSTANCE_STATE_ATTRIBUTE, states, 4, true);
+      if (grew) {
+        batch.mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
+        batch.mesh.thinInstanceSetBuffer(INSTANCE_STATE_ATTRIBUTE, states, 4, false);
+      }
+      // The matrix uploader reads thinInstanceCount; publishing it afterwards misses added slots.
+      batch.mesh.thinInstanceCount = batch.instances.size;
+      if (!grew) {
+        batch.mesh.thinInstanceBufferUpdated('matrix');
+        batch.mesh.thinInstanceBufferUpdated(INSTANCE_STATE_ATTRIBUTE);
+        batch.mesh._thinInstanceDataStorage.worldMatrices = null;
+      }
       batch.mesh.setBoundingInfo(new BoundingInfo(minimum, maximum));
       batch.mesh.setEnabled(true);
     }
@@ -385,14 +482,16 @@ export class GlbInstances {
     return {
       glbInstances: this.instances.size,
       glbBatches: this.batches.size,
+      glbPooledBatches: this.idle.size,
       glbTemplates: [...this.assets.values()].reduce(
         (count, asset) => count + asset.templates.length,
         0,
       ),
-      glbInstanceBufferBytes: [...this.batches.values()].reduce(
-        (bytes, batch) => bytes + batch.instances.size * 20 * 4,
+      glbInstanceBufferBytes: [...this.batches.values(), ...this.idle].reduce(
+        (bytes, batch) => bytes + bufferBytes(batch),
         0,
       ),
+      glbPoolBytes: [...this.idle].reduce((bytes, batch) => bytes + retainedBytes(batch), 0),
     };
   }
   diagnostics() {

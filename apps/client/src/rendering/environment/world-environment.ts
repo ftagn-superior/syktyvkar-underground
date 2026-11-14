@@ -134,7 +134,12 @@ export class WorldEnvironment {
     this.weatherMix.step(elapsed);
     const weather = this.weatherMix.current;
 
-    this.lighting.follow(frame.target);
+    this.lighting.follow(
+      frame.target,
+      frame.firstPerson
+        ? 0
+        : Math.abs((this.camera.orthoRight ?? 0) - (this.camera.orthoLeft ?? 0)),
+    );
     this.currentHour = this.fixedHour ?? dayClockHour(this.clock, epochMs);
     const sky = this.lighting.setTimeOfDay(this.currentHour, weather);
     // Окна перемешиваются раз в игровые сутки, в полдень, когда они погашены. Остановленные

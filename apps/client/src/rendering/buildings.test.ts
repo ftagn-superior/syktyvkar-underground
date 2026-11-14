@@ -7,6 +7,8 @@ import { Scene } from '@babylonjs/core/scene';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Ray } from '@babylonjs/core/Culling/ray';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Material } from '@babylonjs/core/Materials/material';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
@@ -16,6 +18,10 @@ import '@babylonjs/core/Rendering/edgesRenderer';
 import { loadWorldBundle, type WorldDefinition, type WorldManifest } from '@su/contracts';
 import { buildWorld } from '../../../../tools/world-build/src/index.js';
 import { BuildingViews } from './buildings';
+import { WorldNightLights } from './environment/night-lights';
+import { registerWallSurface } from './environment/wall-surface';
+import { WorldClouds } from './environment/clouds';
+import { WorldWeatherSurface } from './environment/weather-surface';
 import { StaticViews } from './statics';
 
 let directory: string;
@@ -78,6 +84,93 @@ async function modelBatch(count = 10) {
 }
 
 describe('building rendering from the real world bundle', () => {
+  it('keeps merged distant houses individually selectable and restores them for culling and edits', async () => {
+    const rotation = { x: 0, y: 0, z: 0, w: 1 };
+    const world = {
+      ...definition,
+      buildings: [
+        { entityId: 'chunk-a', assetId: 'house-a', position: { x: 510, y: 0, z: 0 }, rotation },
+        { entityId: 'chunk-b', assetId: 'house-a', position: { x: 530, y: 0, z: 0 }, rotation },
+      ],
+    };
+    const view = fixture(world);
+    const camera = new ArcRotateCamera('camera', 0, 1, 100, Vector3.Zero(), view.scene);
+    const night = new WorldNightLights(view.scene);
+    const clouds = new WorldClouds(view.scene, camera);
+    const weather = new WorldWeatherSurface(view.scene);
+    registerWallSurface(view.scene);
+    const advance = async () => {
+      for (let frame = 0; frame < 55; frame++) {
+        view.buildings.update(
+          Vector3.Zero(),
+          new Vector3(0, 5, 20),
+          new Vector3(0, -0.2, -1).normalize(),
+          0.1,
+          frame * 16,
+          1 / 60,
+        );
+        if (frame >= 45) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+    };
+    try {
+      await view.buildings.prepare(manifest, readBytes);
+      await advance();
+      expect(view.buildings.aggregateDiagnostics().buildingChunks).toBe(1);
+      const chunk = view.scene.meshes.find((mesh) => mesh.name.startsWith('building-chunk:'))!;
+      for (const plugin of [
+        'WorldNightLights',
+        'WorldWallSurface',
+        'WorldCloudShadow',
+        'WorldWeatherSurface',
+      ])
+        expect(chunk.material!.pluginManager!.getPlugin(plugin)).not.toBeNull();
+      const root = view.scene.getTransformNodeByName('chunk-a')!;
+      expect(root.isEnabled()).toBe(true);
+      expect(
+        root
+          .getChildMeshes()
+          .filter((mesh) => mesh.getTotalVertices() > 0)
+          .every((mesh) => !mesh.isEnabled()),
+      ).toBe(true);
+      expect(view.buildings.selection('chunk-a')?.entityId).toBe('chunk-a');
+      const bounds = view.buildings
+        .diagnostics()
+        .buildings.find((b) => b.entityId === 'chunk-a')!.bounds;
+      const ray = new Ray(
+        new Vector3(
+          (bounds.min.x + bounds.max.x) / 2,
+          (bounds.min.y + bounds.max.y) / 2,
+          bounds.max.z + 10,
+        ),
+        new Vector3(0, 0, -1),
+        30,
+      );
+      expect(view.buildings.pick(ray)?.entityId).toBe('chunk-a');
+      expect(view.buildings.pick(ray, new Set(['chunk-a']))).toBeUndefined();
+      view.buildings.setDetailScale(100);
+      expect(view.buildings.aggregateDiagnostics().buildingChunks).toBe(0);
+      expect(view.buildings.pick(ray)).toBeUndefined();
+      view.buildings.setDetailScale(0);
+      await advance();
+      expect(view.buildings.aggregateDiagnostics().buildingChunks).toBe(1);
+      view.buildings.remove('chunk-a');
+      expect(view.buildings.aggregateDiagnostics().buildingChunks).toBe(0);
+      expect(view.buildings.selection('chunk-a')).toBeUndefined();
+      expect(
+        view.scene
+          .getTransformNodeByName('chunk-b')!
+          .getChildMeshes()
+          .every((mesh) => mesh.isEnabled()),
+      ).toBe(true);
+      expect(view.buildings.aggregateDiagnostics().buildingChunkGeometryBytes).toBe(0);
+    } finally {
+      night.dispose();
+      clouds.dispose();
+      weather.dispose();
+      view.dispose();
+    }
+  });
+
   it('shares GLB geometry, fades every blocking building independently, restores shadows and releases instances', async () => {
     const rotation = { x: 0, y: 0, z: 0, w: 1 };
     const world = {
@@ -96,7 +189,7 @@ describe('building rendering from the real world bundle', () => {
         return readBytes(path);
       });
       expect(reads.filter((path) => path.endsWith('.glb'))).toHaveLength(2);
-      expect(view.buildings.aggregateDiagnostics()).toEqual({
+      expect(view.buildings.aggregateDiagnostics()).toMatchObject({
         instances: 3,
         assets: 2,
         modelLoads: 2,
@@ -137,7 +230,7 @@ describe('building rendering from the real world bundle', () => {
       expect(near.material!.alpha).toBeCloseTo(0.22);
       expect(near.material!.transparencyMode).toBe(Material.MATERIAL_ALPHABLEND);
       expect(clear.material!.alpha).toBe(1);
-      expect(view.shadow.getShadowMap()!.renderList).not.toContain(near);
+      expect(view.shadow.getShadowMap()!.renderList).toContain(near);
       expect(view.shadow.getShadowMap()!.renderList).toContain(clear);
       const own = new Vector3(0, 0.92, -14);
       view.buildings.update(

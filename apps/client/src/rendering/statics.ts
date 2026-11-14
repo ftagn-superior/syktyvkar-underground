@@ -6,6 +6,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { canonicalJson, type Vec3, type StaticEntityDefinition } from '@su/contracts';
 import { obstacleAccent } from './world-decoration';
+import { shadowCasterRadius } from './shadow-range';
 
 export class StaticViews {
   private readonly instances = new Map<
@@ -79,7 +80,7 @@ export class StaticViews {
     }
   }
   updateShadows(center: Vec3, radius: number) {
-    const limit = Math.min(80, radius);
+    const limit = Math.min(shadowCasterRadius(this.shadow), radius);
     // Состояние хранится в записи: список источников тени не копируется каждый кадр.
     for (const entry of this.instances.values()) {
       const { mesh } = entry;

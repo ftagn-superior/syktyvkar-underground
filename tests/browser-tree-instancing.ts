@@ -123,6 +123,14 @@ try {
     assert.equal(after.treeInstances, 144);
     assert.equal(after.modelLoads, 0);
     assert.ok(after.ready);
+    if (shadows) {
+      assert.equal(before.shadowInstances, 144, 'every reference tree retains its full shadow');
+      assert.equal(after.shadowInstances, 144, 'every instanced tree retains its full shadow');
+      if (faded) {
+        assert.ok(before.transparentShadowCasters > 0, 'reference includes faded casters');
+        assert.ok(after.transparentShadowCasters > 0, 'instancing includes faded casters');
+      }
+    }
     assert.deepEqual(
       after.trees.map((t: any) => [t.entityId, t.opacity, t.occluded]),
       before.trees.map((t: any) => [t.entityId, t.opacity, t.occluded]),

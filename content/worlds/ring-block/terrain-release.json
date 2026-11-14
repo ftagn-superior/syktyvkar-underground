@@ -32447,8 +32447,8 @@
     "extendToWorldBounds": true
   },
   "expected": {
-    "assetReleaseVersion": "14c0e28106565dacefbc1df2951b34bbfc051c6de7d4434ffd500cabb16e2ba6",
-    "seedVersion": "bf3953dc227cbfecb03b5ee0e5de3c5032d6bd86bd508469f228bcec7fa55f0c",
-    "mapVersion": "818d00281fb0c55fe02e89c21192eed81196d412f71ef07431a3c94473edf863"
+    "assetReleaseVersion": "c314b55afa8c935dfab86fda85de20d9c94075c7bafe3d8f083c94e9291cd786",
+    "seedVersion": "0ead8f2426a194a4b4acc3eecf3e2f02c20739d3cda0417c711405feb60478b3",
+    "mapVersion": "d14821216038e719bf10af25ea11b9de9e455f303a96b5497dd9f25b4a522cf2"
   }
 }

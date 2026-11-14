@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { encodeGraphicsPack, type WorldManifest } from '@su/contracts';
-import { VerifiedResources } from './resources';
+import { VerifiedByteCache, VerifiedResources } from './resources';
 const bytes = new TextEncoder().encode('verified');
 const manifest = {
   files: Object.fromEntries(
@@ -38,6 +38,91 @@ function packedFixture(entries?: [string, Uint8Array][]) {
 }
 
 describe('verified resources', () => {
+  it('shares verified hashes across immutable contexts without granting unlisted paths or sharing cancellation', async () => {
+    const cache = new VerifiedByteCache(16);
+    const fetches: string[] = [];
+    const first = new VerifiedResources(
+      { files: { 'old.bin': digest(bytes) } } as unknown as WorldManifest,
+      '/old/',
+      {
+        cache,
+        fetch: async (url) => {
+          fetches.push(String(url));
+          return new Response(bytes);
+        },
+      },
+    );
+    expect(await first.read('old.bin')).toEqual(bytes);
+    const changed = new Uint8Array([1, 2, 3]);
+    const next = new VerifiedResources(
+      {
+        files: { 'new.bin': digest(bytes), 'changed.bin': digest(changed) },
+      } as unknown as WorldManifest,
+      '/next/',
+      {
+        cache,
+        fetch: async (url) => {
+          fetches.push(String(url));
+          return new Response(changed);
+        },
+      },
+    );
+    first.dispose();
+    expect(await next.read('new.bin')).toEqual(bytes);
+    await expect(next.read('old.bin')).rejects.toThrow('Unlisted');
+    expect(await next.read('changed.bin')).toEqual(changed);
+    expect(fetches).toEqual(['/old/old.bin', '/next/changed.bin']);
+    expect(next.diagnostics()).toMatchObject({ cacheHits: 1, cacheBytes: 11 });
+    next.dispose();
+    expect(cache.diagnostics().cacheBytes).toBe(11);
+    cache.clear();
+    expect(cache.diagnostics().cacheBytes).toBe(0);
+  });
+
+  it('does not repopulate a permanently disposed session cache from late downloads', async () => {
+    const cache = new VerifiedByteCache();
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const resources = new VerifiedResources(manifest, '/', {
+      cache,
+      fetch: async () => {
+        await gate;
+        return new Response(bytes);
+      },
+    });
+    const pending = resources.read('0');
+    cache.dispose();
+    finish();
+    expect(await pending).toEqual(bytes);
+    expect(cache.diagnostics()).toEqual({ cacheBytes: 0, cacheEntries: 0 });
+    resources.dispose();
+  });
+
+  it('enforces one LRU budget across generations and distinct paths with the same hash', async () => {
+    const cache = new VerifiedByteCache(bytes.length + 1);
+    const options = { cache, fetch: async () => new Response(bytes) };
+    const first = new VerifiedResources(manifest, '/old/', options);
+    await first.read('0');
+    await first.read('1');
+    expect(cache.diagnostics()).toEqual({ cacheBytes: bytes.length, cacheEntries: 1 });
+    const extra = new Uint8Array([7, 8, 9]);
+    const next = new VerifiedResources(
+      { files: { x: digest(extra) } } as unknown as WorldManifest,
+      '/new/',
+      {
+        cache,
+        fetch: async () => new Response(extra),
+      },
+    );
+    await next.read('x');
+    expect(cache.diagnostics()).toEqual({ cacheBytes: extra.length, cacheEntries: 1 });
+    first.dispose();
+    next.dispose();
+    cache.clear();
+  });
+
   it('loads verified physics packs into original collision entries and retains individual-file fallback', async () => {
     const collision = new Uint8Array([7, 8, 9]);
     const fixture = packedFixture();
@@ -126,6 +211,97 @@ describe('verified resources', () => {
     await tick();
     expect(resources.diagnostics().cacheBytes).toBe(0);
     resources.dispose();
+  });
+
+  it('transfers verified graphics and physics pack witnesses across contexts without downloading unchanged packs', async () => {
+    const fixture = packedFixture();
+    const collision = new Uint8Array([7, 8, 9]);
+    fixture.payloads.set('collision.json', collision);
+    fixture.payloads.set('physics/a.pack', encodeGraphicsPack([['collision.json', collision]]));
+    fixture.manifest.cells[0].physicsPacks = ['physics/a.pack'];
+    for (const [path, bytes] of fixture.payloads) fixture.manifest.files[path] = digest(bytes);
+    const cache = new VerifiedByteCache();
+    const calls: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      calls.push(String(url));
+      return new Response(
+        Uint8Array.from(fixture.payloads.get(String(url).split('/').slice(2).join('/'))!).buffer,
+      );
+    };
+    const previous = new VerifiedResources(fixture.manifest, '/old/', { cache, fetch: fetcher });
+    await previous.prefetchGraphics('0_0');
+    await previous.prefetchPhysics('0_0');
+    const next = structuredClone(fixture.manifest);
+    const modelB = new Uint8Array([10, 11]),
+      partsB = new Uint8Array([12]),
+      collisionB = new Uint8Array([13]);
+    fixture.payloads.set('b.glb', modelB);
+    fixture.payloads.set('b.parts', partsB);
+    fixture.payloads.set('b.collision', collisionB);
+    fixture.payloads.set(
+      'graphics/b.pack',
+      encodeGraphicsPack([
+        ['b.glb', modelB],
+        ['b.parts', partsB],
+      ]),
+    );
+    fixture.payloads.set('physics/b.pack', encodeGraphicsPack([['b.collision', collisionB]]));
+    for (const [path, bytes] of fixture.payloads) next.files[path] = digest(bytes);
+    next.assets.b = {
+      ...next.assets.a,
+      modelFile: 'b.glb',
+      partsFile: 'b.parts',
+      collisionFile: 'b.collision',
+    };
+    next.cells[0].assetIds.push('b');
+    next.cells[0].graphicsPacks!.push('graphics/b.pack');
+    next.cells[0].physicsPacks!.push('physics/b.pack');
+    const current = new VerifiedResources(next, '/next/', { cache, fetch: fetcher });
+    previous.dispose();
+    await current.prefetchGraphics('0_0');
+    await current.prefetchPhysics('0_0');
+    expect(calls).toEqual([
+      '/old/graphics/a.pack',
+      '/old/physics/a.pack',
+      '/next/graphics/b.pack',
+      '/next/physics/b.pack',
+    ]);
+    expect(await current.read('b.collision')).toEqual(collisionB);
+    current.dispose();
+    cache.dispose();
+  });
+
+  it('checks current entry hashes and cell membership before sharing a pack witness', async () => {
+    const fixture = packedFixture();
+    const cache = new VerifiedByteCache();
+    const original = new VerifiedResources(fixture.manifest, '/old/', {
+      cache,
+      fetch: async () => new Response(Uint8Array.from(fixture.packed).buffer),
+    });
+    await original.prefetchGraphics('0_0');
+    const changed = structuredClone(fixture.manifest);
+    changed.files['model.glb'] = 'f'.repeat(64);
+    const current = new VerifiedResources(changed, '/new/', {
+      cache,
+      fetch: async () => new Response(Uint8Array.from(fixture.packed).buffer),
+    });
+    await expect(current.prefetchGraphics('0_0')).rejects.toThrow('SHA-256');
+    const unrelated = structuredClone(fixture.manifest);
+    unrelated.assets.b = { ...unrelated.assets.a, modelFile: 'b.glb', partsFile: 'b.parts' };
+    unrelated.files['b.glb'] = digest(new Uint8Array([21]));
+    unrelated.files['b.parts'] = digest(new Uint8Array([22]));
+    unrelated.cells[0].assetIds = ['b'];
+    const unauthorized = new VerifiedResources(unrelated, '/other/', {
+      cache,
+      fetch: async () => new Response(Uint8Array.from(fixture.packed).buffer),
+    });
+    await expect(unauthorized.prefetchGraphics('0_0')).rejects.toThrow(
+      'Unexpected graphics pack entry',
+    );
+    original.dispose();
+    current.dispose();
+    unauthorized.dispose();
+    cache.dispose();
   });
 
   it('unpacks one verified request into independent cached assets without retaining the envelope', async () => {
@@ -313,7 +489,7 @@ describe('verified resources', () => {
     }
     await Promise.all([duplicate, ...requests]);
     expect(calls).toBe(9);
-    expect(resources.diagnostics()).toMatchObject({ httpPeak: 4, cacheEntries: 2, cacheBytes: 16 });
+    expect(resources.diagnostics()).toMatchObject({ httpPeak: 4, cacheEntries: 1, cacheBytes: 8 });
     resources.dispose();
     expect(resources.diagnostics().cacheBytes).toBe(0);
   });

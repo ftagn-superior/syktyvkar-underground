@@ -412,6 +412,11 @@ try {
       if (!refusals.length)
         await owner.screenshot({ path: 'output/playwright/static-placement-preview.png' });
       await confirm.click();
+      await owner.locator('#static-placement').waitFor({ state: 'hidden' });
+      assert.equal(
+        await owner.evaluate(() => (window as any).__SU_DEBUG__.placement().hasGhost),
+        false,
+      );
       await owner.waitForFunction(
         () => !(window as any).__SU_DEBUG__.snapshot().staticPlacementPending,
         undefined,
@@ -428,6 +433,9 @@ try {
         break;
       }
       refusals.push(await owner.locator('#notice').innerText());
+      await command(owner, '/motherlode');
+      await beginPlacement(owner);
+      await owner.keyboard.press('d');
     }
     if (placed) break;
   }
@@ -660,6 +668,16 @@ try {
   assert.deepEqual(errors, []);
   console.log(JSON.stringify(result));
 } catch (error) {
+  for (const page of pages) {
+    await writeFile(
+      `output/playwright/static-live-failure-${pages.indexOf(page)}.json`,
+      JSON.stringify(
+        await page.evaluate(() => (window as any).__SU_DEBUG__?.snapshot()).catch(() => null),
+        null,
+        2,
+      ),
+    );
+  }
   console.error(error);
   for (const [i, page] of pages.entries()) {
     if (!page.isClosed()) {

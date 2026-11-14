@@ -7,6 +7,8 @@ import {
   validateBuildingPhysicsAsset,
   validateWorldCell,
   validateWorldManifest,
+  worldPublicationBaseIdentity,
+  changedWorldPublicationCells,
   type BuildingPhysicsAsset,
   type WorldManifest,
 } from './index.js';
@@ -78,6 +80,60 @@ const manifest: WorldManifest = {
 };
 
 describe('world bundle validation', () => {
+  it('tracks registered support geometry even when its cell and stable instance ID are unchanged', () => {
+    const before = structuredClone(manifest);
+    const id = `support-${'f'.repeat(64)}`;
+    before.assets[id] = {
+      ...before.assets['house-a'],
+      assetId: id,
+      modelFile: 'support.glb',
+      collisionFile: 'support.json',
+      partsFile: 'support-parts.json',
+    };
+    for (const file of ['support.glb', 'support.json', 'support-parts.json'])
+      before.files[file] = hash;
+    before.cells[0].assetIds = ['house-a', id];
+    before.generatedSupports = { [id]: { ownerId: 'building-a', role: 'foundation' } };
+    validateWorldManifest(before);
+    const next = structuredClone(before);
+    next.files['support.json'] = 'b'.repeat(64);
+    expect(worldPublicationBaseIdentity(next)).toEqual(worldPublicationBaseIdentity(before));
+    expect(changedWorldPublicationCells(before, next)).toEqual(['0_0']);
+    const authored = structuredClone(next);
+    delete authored.generatedSupports;
+    expect(worldPublicationBaseIdentity(authored)).not.toEqual(worldPublicationBaseIdentity(next));
+    expect(() =>
+      validateWorldManifest({
+        ...before,
+        generatedSupports: { 'house-a': { ownerId: 'building-a', role: 'foundation' } },
+      }),
+    ).toThrow('generated support identity');
+    expect(() =>
+      validateWorldManifest({
+        ...before,
+        generatedSupports: { [id]: { ownerId: 'building-a', role: 'other' } },
+      }),
+    ).toThrow('generated support identity');
+  });
+  it('separates layout changes from changes to static dependency bytes', () => {
+    const changed = structuredClone(manifest);
+    changed.mapVersion = 'b'.repeat(64);
+    changed.simulationConfigHash = 'c'.repeat(64);
+    changed.files['cell.json'] = 'd'.repeat(64);
+    expect(worldPublicationBaseIdentity(changed)).toEqual(worldPublicationBaseIdentity(manifest));
+    const repacked = structuredClone(manifest);
+    repacked.files['transport.pack'] = hash;
+    repacked.cells[0].graphicsPacks = ['transport.pack'];
+    repacked.cells[0].physicsPacks = ['transport.pack'];
+    expect(changedWorldPublicationCells(manifest, repacked)).toEqual([]);
+    for (const file of ['world.json', 'model.glb', 'colliders.json', 'parts.json']) {
+      const incompatible = structuredClone(changed);
+      incompatible.files[file] = 'e'.repeat(64);
+      expect(worldPublicationBaseIdentity(incompatible)).not.toEqual(
+        worldPublicationBaseIdentity(manifest),
+      );
+    }
+  });
   it('validates the optional GLB instancing contract without changing ordinary parts', () => {
     expect(validateBuildingParts(parts)).toBe(parts);
     const instanced = {

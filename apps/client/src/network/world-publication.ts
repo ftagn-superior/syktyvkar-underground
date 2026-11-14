@@ -7,7 +7,7 @@ import {
   type WorldInfo,
   type WorldPublicationInfo,
 } from '@su/contracts';
-import { VerifiedResources } from '../streaming/resources';
+import { VerifiedResources, type VerifiedByteCache } from '../streaming/resources';
 
 export class WorldVersionMismatch extends Error {
   constructor() {
@@ -31,7 +31,10 @@ export async function getResponse(
 }
 
 /** Initial load and live layout changes use the same verified, immutable resource context. */
-export async function loadWorldPublication(info: WorldInfo | WorldPublicationInfo) {
+export async function loadWorldPublication(
+  info: WorldInfo | WorldPublicationInfo,
+  cache?: VerifiedByteCache,
+) {
   const url = new URL(info.manifestUrl, location.href);
   const raw = await (await getResponse(url.href)).json();
   if (raw.formatVersion !== WORLD_FORMAT_VERSION) throw new WorldVersionMismatch();
@@ -46,7 +49,7 @@ export async function loadWorldPublication(info: WorldInfo | WorldPublicationInf
     hash !== manifest.mapVersion
   )
     throw new WorldVersionMismatch();
-  const resources = new VerifiedResources(manifest, new URL('.', url).href);
+  const resources = new VerifiedResources(manifest, new URL('.', url).href, { cache });
   try {
     const definition = await loadWorldHeader(manifest, (path) => resources.read(path));
     return { url, manifest, resources, definition };

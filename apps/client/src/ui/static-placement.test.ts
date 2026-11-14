@@ -1,109 +1,151 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { PlaceStaticResult } from '@su/contracts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { staticPlacementRotation } from '@su/contracts';
 import { StaticPlacement } from './static-placement';
 
-const methods = StaticPlacement.prototype as unknown as {
-  result: (this: unknown, result: PlaceStaticResult) => Promise<void>;
-  recoverLayout: (this: unknown) => Promise<void>;
-};
-const handleResult = methods.result;
+type PlacementMethods = { place(): void };
 
-function recoveryFixture() {
-  let finish!: () => void;
-  const refresh = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
-  const state = {
-    active: true,
-    generation: 1,
-    recovering: false,
-    errorMessage: '',
-    effect: { catalog: { placementCatalogVersion: 'old' } },
-    confirm: { disabled: false },
-    otherModel: { disabled: false },
-    cancelButton: { disabled: true },
-    retryModel: { hidden: true, textContent: '', focus: vi.fn() },
-    retryRecovery: undefined as (() => void) | undefined,
-    status: { textContent: '' },
-    freshPointer: true,
-    freshConfirmKey: true,
-    releaseGhost: vi.fn(),
-    loadCatalog: vi.fn(),
-    recoverLayout: methods.recoverLayout,
-    session: {
-      refreshPublication: vi.fn(() => refresh),
-      info: { placementCatalog: { placementCatalogVersion: 'current' } },
-    },
+function fixture(accepted = true) {
+  const tool = Object.create(StaticPlacement.prototype);
+  const session = {
+    state: 'playing',
+    staticPlacementPending: false,
+    staticRemovalPending: false,
+    placeStatic: vi.fn(() => {
+      session.staticPlacementPending = accepted;
+      return accepted;
+    }),
   };
-  return { state, finish };
+  const ghost = { dispose: vi.fn(), show: vi.fn() };
+  const controller = new AbortController();
+  const mode = vi.fn();
+  const canvas = { focus: vi.fn() };
+  Object.assign(tool, {
+    session,
+    canvas,
+    mode,
+    available: () => true,
+    effect: { kind: 'staticPlacement' },
+    catalog: { placementCatalogVersion: 'catalog-version' },
+    catalogPanel: { hide: vi.fn(), diagnostics: () => ({}) },
+    assetId: 'bench',
+    pose: { position: { x: 12, y: 0, z: 8 } },
+    yawStep: 3,
+    focused: true,
+    confirm: { disabled: false },
+    cancelButton: { disabled: false },
+    otherModel: { disabled: false },
+    status: { textContent: '' },
+    panel: { hidden: false },
+    generation: 1,
+    controller,
+    ghost,
+  });
+  const submit = () => (tool as PlacementMethods).place();
+  return { tool: tool as StaticPlacement, session, ghost, controller, mode, canvas, submit };
 }
 
-describe('placement result recovery ownership', () => {
-  it('does not reopen or reset a replacement tool after its refresh completes', async () => {
-    const { state, finish } = recoveryFixture();
-    const recovering = handleResult.call(state, {
-      operationId: 'op',
-      ok: false,
-      code: 'CATALOG_CHANGED',
-    });
-    expect(state.recovering).toBe(true);
-    // The user closed this tool and opened another while discovery was in flight.
-    state.generation++;
-    state.recovering = false;
-    const replacement = { placementCatalogVersion: 'replacement' };
-    state.effect.catalog = replacement;
-    finish();
-    await recovering;
-    expect(state.loadCatalog).not.toHaveBeenCalled();
-    expect(state.effect.catalog).toBe(replacement);
-    expect(state.recovering).toBe(false);
+afterEach(() => vi.unstubAllGlobals());
+
+describe('static placement submission ownership', () => {
+  it('releases the ghost and input mode immediately while the persisted request stays pending', () => {
+    const f = fixture();
+    f.submit();
+    expect(f.session.placeStatic).toHaveBeenCalledExactlyOnceWith(
+      { x: 12, z: 8 },
+      3,
+      'bench',
+      'catalog-version',
+    );
+    expect(f.tool.active).toBe(false);
+    expect(f.ghost.dispose).toHaveBeenCalledOnce();
+    expect(f.controller.signal.aborted).toBe(true);
+    expect(f.mode).toHaveBeenLastCalledWith(false);
+    expect(f.canvas.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(f.session.staticPlacementPending).toBe(true);
+    f.submit();
+    f.tool.close();
+    expect(f.session.placeStatic).toHaveBeenCalledOnce();
+    expect(f.session.staticPlacementPending).toBe(true);
   });
-  it('blocks confirmation until the new revision is discovered and requires fresh input', async () => {
-    const { state, finish } = recoveryFixture();
-    const recovering = handleResult.call(state, {
-      operationId: 'op',
-      ok: false,
-      code: 'LAYOUT_CHANGED',
+
+  it('previews a nonzero terrain support height but submits only X/Z and releases controls', () => {
+    vi.stubGlobal('document', { hidden: false });
+    const f = fixture();
+    const bounds = { min: { x: -100, y: -20, z: -100 }, max: { x: 100, y: 100, z: 100 } };
+    const surface = vi.fn((from: { x: number; z: number }) => ({
+      entityId: 'terrain-ground',
+      point: { x: from.x, y: 11.4, z: from.z },
+      normal: { x: 0, y: 1, z: 0 },
+    }));
+    Object.assign(f.session, {
+      definition: { bounds },
+      manifest: {
+        assets: {
+          bench: { bounds: { min: { x: -0.5, y: 0, z: -0.5 }, max: { x: 0.5, y: 2, z: 0.5 } } },
+        },
+      },
+      staticPlacementSurface: surface,
+      worldPaused: false,
     });
-    expect(state.confirm.disabled).toBe(true);
-    expect(state.otherModel.disabled).toBe(true);
-    expect(state.freshPointer).toBe(false);
-    expect(state.freshConfirmKey).toBe(false);
-    expect(state.recovering).toBe(true);
-    finish();
-    await recovering;
-    expect(state.recovering).toBe(false);
-  });
-  it('reopens from the refreshed catalog reference rather than fetching the old process URL', async () => {
-    const { state, finish } = recoveryFixture();
-    const recovering = handleResult.call(state, {
-      operationId: 'op',
-      ok: false,
-      code: 'ASSET_NOT_ALLOWED',
+    Object.assign(f.tool, {
+      catalog: {
+        placementCatalogVersion: 'catalog-version',
+        groundY: null,
+        yawSteps: 24,
+        terrain: { groundEntityIds: ['terrain-ground'] },
+        models: [
+          {
+            assetId: 'bench',
+            placement: {
+              kind: 'ground-anchor',
+              anchor: { x: 0, y: 1, z: 0 },
+              contactRadius: 0.1,
+              maximumTerrainReliefMetres: 0.3,
+              contactDatum: 'anchor',
+            },
+          },
+        ],
+      },
+      view: () => ({
+        pointerRay: () => ({ from: { x: 12, y: 50, z: 8 }, to: { x: 12, y: -50, z: 8 } }),
+      }),
     });
-    finish();
-    await recovering;
-    expect(state.effect.catalog).toBe(state.session.info.placementCatalog);
-    expect(state.loadCatalog).toHaveBeenCalledOnce();
+    f.tool.frame();
+    const pose = { position: { x: 12, y: 10.4, z: 8 }, rotation: staticPlacementRotation(3) };
+    expect(f.ghost.show).toHaveBeenLastCalledWith(pose);
+    expect(f.tool.diagnostics().pose).toEqual(pose);
+    expect(surface).toHaveBeenCalledTimes(10);
+    f.submit();
+    expect(f.session.placeStatic).toHaveBeenCalledExactlyOnceWith(
+      { x: 12, z: 8 },
+      3,
+      'bench',
+      'catalog-version',
+    );
+    expect(f.session.staticPlacementPending).toBe(true);
+    expect(f.tool.active).toBe(false);
+    expect(f.ghost.dispose).toHaveBeenCalledOnce();
+    expect(f.mode).toHaveBeenLastCalledWith(false);
   });
-  it('keeps confirmation disabled after discovery fails and requires an explicit successful refresh', async () => {
-    const { state, finish } = recoveryFixture();
-    state.session.refreshPublication.mockRejectedValueOnce(new Error('Offline'));
-    await handleResult.call(state, { operationId: 'op', ok: false, code: 'LAYOUT_CHANGED' });
-    expect(state.recovering).toBe(true);
-    expect(state.confirm.disabled).toBe(true);
-    expect(state.otherModel.disabled).toBe(true);
-    expect(state.cancelButton.disabled).toBe(false);
-    expect(state.retryModel.hidden).toBe(false);
-    expect(state.retryModel.textContent).toBe('Повторить обновление');
-    expect(state.session.refreshPublication).toHaveBeenCalledOnce();
-    state.retryRecovery!();
-    expect(state.session.refreshPublication).toHaveBeenCalledTimes(2);
-    expect(state.confirm.disabled).toBe(true);
-    finish();
-    await vi.waitFor(() => expect(state.recovering).toBe(false));
-    expect(state.retryModel.hidden).toBe(true);
-    expect(state.freshPointer).toBe(false);
-    expect(state.freshConfirmKey).toBe(false);
+
+  it('preserves the preview when the session cannot persist and send the request', () => {
+    const f = fixture(false);
+    f.submit();
+    expect(f.tool.active).toBe(true);
+    expect(f.ghost.dispose).not.toHaveBeenCalled();
+    expect(f.controller.signal.aborted).toBe(false);
+    expect(f.mode).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new submission and opening while either static operation is pending', async () => {
+    for (const key of ['staticPlacementPending', 'staticRemovalPending'] as const) {
+      const f = fixture();
+      f.session[key] = true;
+      f.submit();
+      expect(f.session.placeStatic).not.toHaveBeenCalled();
+      f.tool.close();
+      await f.tool.open({ kind: 'staticPlacement' } as Parameters<StaticPlacement['open']>[0]);
+      expect(f.tool.active).toBe(false);
+    }
   });
 });

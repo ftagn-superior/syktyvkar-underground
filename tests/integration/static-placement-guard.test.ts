@@ -11,6 +11,7 @@ import {
 } from '../../packages/contracts/src/index.js';
 import { LayoutPublications, LiveStaticPlacement } from '../../apps/server/src/layout/live.js';
 import * as releases from '../../apps/server/src/layout/release.js';
+import { LayoutPreparation } from '../../apps/server/src/layout/preparation.js';
 import { StaticLayoutStore } from '../../apps/server/src/layout/store.js';
 import type { ItemRuntime } from '../../apps/server/src/items/runtime.js';
 import type { AuthoritativeWorld } from '../../packages/simulation/src/server.js';
@@ -22,11 +23,16 @@ describe('live single-box publication guard', () => {
   let temporary: string;
   let release: releases.AuthoringRelease;
   const createPublication = releases.createLayoutPublication;
+  const prepareLayout = LayoutPreparation.prototype.prepare;
   beforeAll(async () => {
     temporary = await mkdtemp(join(tmpdir(), 'su-live-publication-guard-'));
     release = await releases.readAuthoringRelease(await buildStaticPlacementWorld(temporary));
   });
-  afterEach(() => vi.restoreAllMocks());
+  const lives: LiveStaticPlacement[] = [];
+  afterEach(async () => {
+    for (const live of lives.splice(0)) await live.close();
+    vi.restoreAllMocks();
+  });
   afterAll(async () => {
     if (temporary) await rm(temporary, { recursive: true, force: true });
   });
@@ -50,7 +56,7 @@ describe('live single-box publication guard', () => {
       layoutHash: publication.hash,
     } as ConstructorParameters<typeof LayoutPublications>[0];
     const publications = new LayoutPublications(prepared);
-    const write = vi.spyOn(publications, 'write');
+    const write = vi.spyOn(publications, 'adopt');
     const activate = vi.spyOn(publications, 'activate');
     const read = vi.spyOn(StaticLayoutStore.prototype, 'readCandidate').mockResolvedValue({
       initialized: true,
@@ -72,6 +78,10 @@ describe('live single-box publication guard', () => {
     };
     const world = {
       checkStaticPlacement: () => undefined,
+      getPlayerSpawnPosition: (p: { x: number; y: number; z: number }) => ({
+        ...p,
+        y: p.y + publication.world.simulation.character.height / 2 + 0.02,
+      }),
       getSnapshot: vi.fn(() => ({ items: [] as ItemState[], players: [] })),
       prepareStaticReplacement: vi.fn(() => ({ commit: vi.fn(), dispose: vi.fn() })),
     };
@@ -85,6 +95,7 @@ describe('live single-box publication guard', () => {
       () => {},
       await readPlacementCatalog(release, join(release.directory, 'model-catalog')),
     );
+    lives.push(live);
     const request: PlaceStaticRequest = {
       operationId: '12345678-1234-1234-1234-123456789abc',
       assetId: 'bench-0152a250d22ef0a9',
@@ -110,22 +121,21 @@ describe('live single-box publication guard', () => {
     await f.publications.close();
   });
 
-  it('rejects extra derived instances before publication writes, database commit or physics activation', async () => {
+  it('rejects extra worker geometry before publication adoption, database commit or physics activation', async () => {
     const f = await fixture();
     const before = canonicalJson(f.publications.current);
-    vi.spyOn(releases, 'createLayoutPublication').mockImplementation(async (authored, snapshot) =>
-      createPublication(authored, {
-        ...snapshot,
-        instances: [
-          ...snapshot.instances,
-          {
-            ...snapshot.instances[0],
-            entityId: 'derived-support',
-            position: { x: -10, y: 0, z: 10 },
-          },
-        ],
-      }),
-    );
+    vi.spyOn(LayoutPreparation.prototype, 'prepare').mockImplementation(async function (
+      this: LayoutPreparation,
+      ...args
+    ) {
+      const candidate = await prepareLayout.apply(this, args);
+      candidate.geometryDelta!.buildings.push({
+        ...candidate.geometryDelta!.buildings[0],
+        entityId: 'derived-support',
+        position: { x: -10, y: 0, z: 10 },
+      });
+      return candidate;
+    });
     expect(await f.live.place('account', f.request, () => undefined)).toMatchObject({
       ok: false,
       code: 'COMMAND_DISABLED',
@@ -147,7 +157,7 @@ describe('live single-box publication guard', () => {
       code: 'BLOCKED',
     });
     expect(f.runtime.layoutPaused).toBe(false);
-    expect(f.write).not.toHaveBeenCalled();
+    expect(f.activate).not.toHaveBeenCalled();
     expect(f.commit).not.toHaveBeenCalled();
   });
 
@@ -166,16 +176,19 @@ describe('live single-box publication guard', () => {
       code: 'BLOCKED',
     });
     expect(f.runtime.layoutPaused).toBe(false);
-    expect(f.write).not.toHaveBeenCalled();
+    expect(f.activate).not.toHaveBeenCalled();
     expect(f.commit).not.toHaveBeenCalled();
   });
 
   it('rejects a changed prior resource even when instance poses and physics are unchanged', async () => {
     const f = await fixture();
-    vi.spyOn(releases, 'createLayoutPublication').mockImplementation(async (...args) => {
-      const candidate = await createPublication(...args);
-      const file = Object.values(candidate.publication.manifest.assets)[0].modelFile!;
-      candidate.publication.manifest.files[file] = 'f'.repeat(64);
+    vi.spyOn(LayoutPreparation.prototype, 'prepare').mockImplementation(async function (
+      this: LayoutPreparation,
+      ...args
+    ) {
+      const candidate = await prepareLayout.apply(this, args);
+      const file = Object.values(candidate.manifest.assets)[0].modelFile!;
+      candidate.manifest.files[file] = 'f'.repeat(64);
       return candidate;
     });
     expect(await f.live.place('account', f.request, () => undefined)).toMatchObject({
@@ -186,6 +199,27 @@ describe('live single-box publication guard', () => {
     expect(f.write).not.toHaveBeenCalled();
     expect(f.commit).not.toHaveBeenCalled();
     expect(f.world.prepareStaticReplacement).not.toHaveBeenCalled();
+  });
+
+  it('rejects changing the generated-support registry of a protected model', async () => {
+    const f = await fixture();
+    vi.spyOn(LayoutPreparation.prototype, 'prepare').mockImplementation(async function (
+      this: LayoutPreparation,
+      ...args
+    ) {
+      const candidate = await prepareLayout.apply(this, args);
+      candidate.manifest.generatedSupports = {
+        [f.request.assetId]: { ownerId: 'unrelated-owner', role: 'foundation' },
+      };
+      return candidate;
+    });
+    expect(await f.live.place('account', f.request, () => undefined)).toMatchObject({
+      ok: false,
+      code: 'COMMAND_DISABLED',
+    });
+    expect(f.write).not.toHaveBeenCalled();
+    expect(f.commit).not.toHaveBeenCalled();
+    expect(f.activate).not.toHaveBeenCalled();
   });
 
   it('keeps placement disabled when the ground is represented only by terrain meshes', async () => {

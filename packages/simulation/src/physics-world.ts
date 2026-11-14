@@ -862,7 +862,12 @@ export class PhysicsWorld {
   checkStaticPlacement(
     instance: BuildingInstance,
     asset: BuildingPhysicsAsset,
+    ignoredStaticIds?: ReadonlySet<string>,
   ): StaticPlacementError | undefined {
+    if (ignoredStaticIds?.size)
+      return this.buildings.without(ignoredStaticIds, () =>
+        this.checkStaticPlacement(instance, asset),
+      );
     const collider = asset.colliders[0];
     if (asset.colliders.length !== 1 || collider?.kind !== 'box') return 'INVALID_INPUT';
     const q = new Quaternion(
@@ -936,12 +941,12 @@ export class PhysicsWorld {
     this.impacts.clear(true);
   }
   /**
-   * Stage the complete building layer between fixed steps, while the room is paused.
+   * Stage changed buildings between fixed steps; native shapes remain inactive until commit.
    * Existing dynamic bodies/controllers are never recreated, so sleep state, contacts,
    * angular velocities and inputs cannot be rewound by an awaited database commit.
    * All allocation/validation happens before commit; abandon disposes only the staging layer.
    */
-  prepareStaticReplacement(definition: WorldDefinition) {
+  prepareStaticReplacement(definition: WorldDefinition, changedIds?: ReadonlySet<string>) {
     if (this.prediction || !('buildings' in this.definition) || this.disposed)
       throw new Error('Static replacement requires a live authoritative world');
     // Authoritative rooms intentionally initialize dynamics from ItemStore with an
@@ -954,11 +959,32 @@ export class PhysicsWorld {
     }: WorldDefinition) => rest;
     if (canonicalJson(header(definition)) !== canonicalJson(header(this.definition)))
       throw new Error('Live static replacement cannot change the world header or primitives');
-    const previous = this.buildings;
+    const before = new Map(
+      this.definition.buildings.map((instance) => [instance.entityId, instance]),
+    );
+    const after = new Map(definition.buildings.map((instance) => [instance.entityId, instance]));
+    const changed = changedIds ?? new Set([...before.keys(), ...after.keys()]);
+    if (changedIds) {
+      for (const id of new Set([...before.keys(), ...after.keys()])) {
+        if (changed.has(id)) continue;
+        const a = before.get(id),
+          b = after.get(id);
+        if (
+          !a ||
+          !b ||
+          canonicalJson(a) !== canonicalJson(b) ||
+          (this.definition.buildingAssets[a.assetId] !== definition.buildingAssets[b.assetId] &&
+            canonicalJson(this.definition.buildingAssets[a.assetId]) !==
+              canonicalJson(definition.buildingAssets[b.assetId]))
+        )
+          throw new Error(`Unlisted static replacement: ${id}`);
+      }
+    }
     const staged = new BuildingColliders(this.scene);
-    const references = new Map([...this.staticReferences].filter(([, entry]) => !entry.building));
+    const references = new Map([...this.staticReferences].filter(([id]) => !changed.has(id)));
     try {
       for (const instance of definition.buildings) {
+        if (!changed.has(instance.entityId)) continue;
         if (
           references.has(instance.entityId) ||
           this.objects.has(instance.entityId) ||
@@ -976,6 +1002,7 @@ export class PhysicsWorld {
           building: true,
         });
       }
+      staged.suspend();
     } catch (error) {
       staged.dispose();
       throw error;
@@ -985,11 +1012,11 @@ export class PhysicsWorld {
       commit: () => {
         if (!pending) return;
         pending = false;
-        this.buildings = staged;
+        for (const id of changed) this.buildings.remove(id);
+        staged.transferTo(this.buildings);
         this.staticReferences = references;
         Object.assign(this.definition, definition);
         this.impacts.clear(true);
-        previous.dispose();
       },
       dispose: () => {
         if (!pending) return;

@@ -44,6 +44,64 @@ async function fixture() {
   return { definition, world };
 }
 describe('atomic authoritative static replacement', () => {
+  it('stages only a changed support, leaves it inactive and retains all other native bodies', async () => {
+    const { definition, world } = await fixture();
+    try {
+      const owner = world.physics.getBodies().find((body) => body.transformNode.name === 'owner');
+      const approach = world.physics
+        .getBodies()
+        .find((body) => body.transformNode.name === 'derived-approach');
+      const retainedShapes = world.staticDiagnostics().buildings;
+      const raised = box('foundation', 8, 3, 8);
+      const next = {
+        ...definition,
+        buildingAssets: { ...definition.buildingAssets, foundation: raised },
+      };
+      const change = world.prepareStaticReplacement(next, new Set(['derived-foundation']));
+      expect(world.staticDiagnostics().buildings).toEqual(retainedShapes);
+      expect(world.surfaceRay({ x: -2, y: 5, z: 0 }, { x: -2, y: -1, z: 0 })!.point.y).toBeCloseTo(
+        2,
+        5,
+      );
+      change.commit();
+      expect(world.physics.getBodies()).toContain(owner);
+      expect(world.physics.getBodies()).toContain(approach);
+      expect(world.surfaceRay({ x: -2, y: 5, z: 0 }, { x: -2, y: -1, z: 0 })!.point.y).toBeCloseTo(
+        3,
+        5,
+      );
+      expect(world.staticDiagnostics().buildings).toEqual(retainedShapes);
+      expect(() =>
+        world.prepareStaticReplacement(
+          { ...next, buildings: next.buildings.filter((item) => item.entityId !== 'owner') },
+          new Set(['derived-foundation']),
+        ),
+      ).toThrow('Unlisted static replacement');
+    } finally {
+      world.dispose();
+    }
+  });
+  it('ignores designated terrain ground only during a placement query and restores its collision shape', async () => {
+    const { world } = await fixture();
+    try {
+      const candidate = instance('candidate', 'owner', -2, 1, -2);
+      const shape = box('owner', 0.4, 1, 0.4);
+      expect(world.checkStaticPlacement(candidate, shape)).toBe('BLOCKED');
+      expect(
+        world.checkStaticPlacement(candidate, shape, new Set(['derived-foundation'])),
+      ).toBeUndefined();
+      expect(world.checkStaticPlacement(candidate, shape)).toBe('BLOCKED');
+      expect(
+        world.checkStaticPlacement(
+          instance('candidate', 'owner', 0, 2, 0),
+          shape,
+          new Set(['derived-foundation']),
+        ),
+      ).toBe('BLOCKED');
+    } finally {
+      world.dispose();
+    }
+  });
   it('removes owner and every derived body while retaining live dynamics and current velocities', async () => {
     const { definition, world } = await fixture();
     try {

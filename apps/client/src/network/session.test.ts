@@ -16,12 +16,14 @@ import {
   loadWorldBundle,
   type WorldInfo,
   type WorldManifest,
+  type LayoutChanged,
   type PrepareArea,
   worldNeighborhood,
 } from '@su/contracts';
 import type { PredictionWorld } from '@su/simulation/prediction';
 import { buildWorld } from '../../../../tools/world-build/src/index.js';
 import { GameSession } from './session';
+import { cellNeighborhood } from '../streaming/cells';
 
 const mocks = vi.hoisted(() => ({
   createPhysics: vi.fn(),
@@ -43,7 +45,9 @@ vi.mock('@colyseus/sdk', () => ({
 let directory: string;
 let manifest: WorldManifest;
 let info: WorldInfo;
-let publicationA: WorldPublication, publicationB: WorldPublication;
+let publicationA: WorldPublication,
+  publicationB: WorldPublication,
+  livePublication: WorldPublication;
 const sessions: GameSession[] = [];
 const requests: string[] = [];
 const events: string[] = [];
@@ -127,6 +131,11 @@ beforeAll(async () => {
         ],
       },
     },
+    manifest.grid,
+    compiled,
+  );
+  livePublication = createWorldPublication(
+    { ...world, buildings: world.buildings.slice(1) },
     manifest.grid,
     compiled,
   );
@@ -249,7 +258,14 @@ describe('saved spawn resource preparation', () => {
       sessionId: 'self',
       reconnectionToken: 'token',
       reconnection: {},
-      state: { worldEpoch: '', players: new Map(), items: new Map(), serverTick: 0 },
+      state: {
+        worldEpoch: '',
+        layoutRevision: info.layoutRevision,
+        mapVersion: info.mapVersion,
+        players: new Map(),
+        items: new Map(),
+        serverTick: 0,
+      },
       onStateChange: vi.fn(),
       onDrop: vi.fn(),
       onReconnect: vi.fn(),
@@ -266,6 +282,7 @@ describe('saved spawn resource preparation', () => {
     const streamer = {
       setArea: vi.fn(),
       setPreparationArea: vi.fn(),
+      cancelTransition: vi.fn(),
       pumpFrame: vi.fn(),
       dispose: vi.fn(),
       problem: undefined as string | undefined,
@@ -385,6 +402,299 @@ describe('saved spawn resource preparation', () => {
       'Не удалось вернуться на прежнее место. Появляемся на старте',
     );
   });
+});
+
+describe('layout prediction gate', () => {
+  function fixture() {
+    const instance = session();
+    instance.info = { ...info };
+    instance.manifest = {
+      ...manifest,
+      bounds: { min: { x: 0, y: -10, z: 0 }, max: { x: 1000, y: 100, z: 1000 } },
+      grid: { origin: { x: 0, z: 0 }, cellSize: 125, columns: 8, rows: 8 },
+    };
+    const state = {
+      layoutRevision: 1,
+      mapVersion: info.mapVersion,
+      players: new Map([['self', { x: 850, y: 1, z: 850 }]]),
+    };
+    instance.room = { state, sessionId: 'self' } as unknown as NonNullable<GameSession['room']>;
+    const context = instance as unknown as {
+      updateLayoutPredictionGate(): void;
+      layoutPredictionBlocked: boolean;
+      livePublication: boolean;
+      liveManifestVerified: boolean;
+      liveChangedCells: Set<string>;
+      layoutHistoryCells: Set<string>;
+      publicationTarget: string;
+      history: Map<number, { at: number; cells: string[] }>;
+      simulation?: { dispose(): void };
+    };
+    const dispose = vi.fn();
+    context.simulation = { dispose };
+    return { instance, context, state, dispose };
+  }
+  it('allows an initial snapshot with the seeded city revision', () => {
+    const { instance, context, state, dispose } = fixture();
+    instance.info.layoutRevision = state.layoutRevision = 3707;
+    context.updateLayoutPredictionGate();
+    expect(context.layoutPredictionBlocked).toBe(false);
+    expect(dispose).not.toHaveBeenCalled();
+    instance.room = undefined;
+  });
+  it('keeps a history-only overlap blocked after pausing clears replay history', () => {
+    const { instance, context, dispose } = fixture();
+    context.livePublication = context.liveManifestVerified = true;
+    context.publicationTarget = info.mapVersion;
+    context.liveChangedCells.add('0_0');
+    context.history.set(7, { at: performance.now(), cells: ['0_0'] });
+    context.updateLayoutPredictionGate();
+    expect(context.layoutPredictionBlocked).toBe(true);
+    expect(context.history.size).toBe(0);
+    context.updateLayoutPredictionGate();
+    expect(context.layoutPredictionBlocked).toBe(true);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    instance.room = undefined;
+  });
+  it.each([true, false])(
+    'preserves snapshot-first history until the verified diff is known (overlap: %s)',
+    (overlap) => {
+      const { instance, context, state, dispose } = fixture();
+      state.layoutRevision = 2;
+      state.mapVersion = 'f'.repeat(64);
+      context.history.set(7, { at: performance.now(), cells: [overlap ? '0_0' : '3_3'] });
+      context.updateLayoutPredictionGate();
+      expect(context.layoutPredictionBlocked).toBe(true);
+      expect(context.history.size).toBe(0);
+      context.livePublication = true;
+      context.publicationTarget = state.mapVersion;
+      context.updateLayoutPredictionGate();
+      expect(context.layoutPredictionBlocked).toBe(true);
+      context.liveChangedCells.add('0_0');
+      context.liveManifestVerified = true;
+      context.updateLayoutPredictionGate();
+      expect(context.layoutPredictionBlocked).toBe(overlap);
+      context.updateLayoutPredictionGate();
+      expect(context.layoutPredictionBlocked).toBe(overlap);
+      expect(dispose).toHaveBeenCalledTimes(1);
+      context.livePublication = false;
+      instance.info.layoutRevision = state.layoutRevision;
+      instance.info.mapVersion = state.mapVersion;
+      context.updateLayoutPredictionGate();
+      expect(context.layoutPredictionBlocked).toBe(false);
+      expect(context.layoutHistoryCells.size).toBe(0);
+      instance.room = undefined;
+    },
+  );
+  it('blocks a near change and leaves a distant character with unrelated history running', () => {
+    const { instance, context, state, dispose } = fixture();
+    context.livePublication = context.liveManifestVerified = true;
+    context.publicationTarget = info.mapVersion;
+    context.liveChangedCells.add('0_0');
+    context.history.set(7, { at: performance.now(), cells: ['3_3'] });
+    context.updateLayoutPredictionGate();
+    expect(context.layoutPredictionBlocked).toBe(false);
+    expect(dispose).not.toHaveBeenCalled();
+    state.players.set('self', { x: 10, y: 1, z: 10 });
+    context.updateLayoutPredictionGate();
+    expect(context.layoutPredictionBlocked).toBe(true);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    instance.room = undefined;
+  });
+});
+
+describe('event-driven preparation acknowledgements', () => {
+  it('sends areaReady and layoutApplied from callbacks without waiting for a rendered frame', async () => {
+    const handlers = new Map<string, (value: any) => void | Promise<void>>();
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      state: { players: new Map(), items: new Map(), serverTick: 0 } as any,
+      onStateChange: vi.fn(),
+      onDrop: vi.fn(),
+      onReconnect: vi.fn(),
+      onLeave: vi.fn(),
+      onError: vi.fn(),
+      onMessage: (name: string, handler: (value: any) => void | Promise<void>) =>
+        handlers.set(name, handler),
+      send: vi.fn(),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    const instance = session();
+    await instance.load();
+    instance.connectGraphics({
+      prepareCellAssets: async () => () => {},
+      retainStatic: vi.fn(),
+      releaseStatic: vi.fn(),
+    });
+    await instance.join();
+    room.state.worldEpoch = info.worldEpoch;
+    room.state.layoutRevision = info.layoutRevision;
+    room.state.mapVersion = info.mapVersion;
+    const position = instance.definition.spawnPoints[0];
+    const context = instance as unknown as {
+      streamer: { setArea(value: typeof position): void; pump(): void; criticalReady: boolean };
+      pendingLayoutAck: WorldInfo;
+    };
+    context.streamer.setArea(position);
+    await until(() => {
+      context.streamer.pump();
+      return context.streamer.criticalReady;
+    });
+    context.pendingLayoutAck = info;
+    const plan = {
+      prepareId: 'prepared-current',
+      worldEpoch: info.worldEpoch,
+      layoutRevision: info.layoutRevision,
+      mapVersion: info.mapVersion,
+      reason: 'layout',
+      position,
+      cellIds: cellNeighborhood(instance.manifest, position),
+      expiresAt: Date.now() + 15000,
+    };
+    room.send.mockClear();
+    await handlers.get('prepareArea')!(plan);
+    expect(room.send).toHaveBeenCalledExactlyOnceWith('areaReady', {
+      prepareId: plan.prepareId,
+      worldEpoch: plan.worldEpoch,
+      layoutRevision: plan.layoutRevision,
+      mapVersion: plan.mapVersion,
+    });
+    await handlers.get('prepareArea')!(plan);
+    await handlers.get('areaResult')!({ ...plan, prepareId: 'stale', ok: true });
+    expect(room.send).toHaveBeenCalledTimes(1);
+    await handlers.get('areaResult')!({ ...plan, ok: true });
+    expect(room.send).toHaveBeenLastCalledWith('layoutApplied', {
+      worldEpoch: info.worldEpoch,
+      layoutRevision: info.layoutRevision,
+      mapVersion: info.mapVersion,
+    });
+    expect(room.send).toHaveBeenCalledTimes(2);
+    await handlers.get('areaResult')!({ ...plan, ok: true });
+    await handlers.get('prepareArea')!({ ...plan, prepareId: 'old', layoutRevision: 0 });
+    expect(room.send).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('live publication reconciliation', () => {
+  async function fixture(snapshotFirst: boolean) {
+    const instance = session();
+    await instance.load();
+    instance.connectGraphics({
+      prepareCellAssets: async () => () => {},
+      retainStatic: vi.fn(),
+      releaseStatic: vi.fn(),
+    });
+    instance.updateVisualArea({ x: 0, y: 0, z: 0 }, 500);
+    await until(() => {
+      instance.frame(performance.now(), 1 / 60, { moveX: 0, moveZ: 0 });
+      return !!instance.diagnostics().streaming?.backgroundReady;
+    });
+    await instance.join(); // Initializes the single physics world; reservation deliberately ends in this fixture.
+    const publication = {
+      ...info,
+      layoutRevision: 2,
+      mapVersion: livePublication.manifest.mapVersion,
+      simulationConfigHash: livePublication.manifest.simulationConfigHash,
+      manifestUrl: '/worlds/live/manifest.json',
+    };
+    const oldFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(url), location.href).pathname;
+      if (path.startsWith('/worlds/live/')) {
+        const file = path.slice('/worlds/live/'.length);
+        return file === 'manifest.json'
+          ? Response.json(livePublication.manifest)
+          : new Response(Uint8Array.from(livePublication.payloads.get(file)!));
+      }
+      return oldFetch(url, init);
+    });
+    const state = {
+      players: new Map(),
+      layoutRevision: snapshotFirst ? 2 : 1,
+      mapVersion: snapshotFirst ? publication.mapVersion : info.mapVersion,
+    };
+    instance.room = {
+      state,
+      sessionId: 'self',
+      send: vi.fn(),
+      clock: { smoothedRtt: () => 0 },
+    } as unknown as NonNullable<GameSession['room']>;
+    const context = instance as unknown as {
+      changePublication: (info: WorldInfo, change: LayoutChanged) => Promise<void>;
+      updateLayoutPredictionGate: () => void;
+      layoutPredictionBlocked: boolean;
+      snapshotWait?: { resolve: () => void };
+      streamer: { pump: () => void };
+    };
+    const change: LayoutChanged = {
+      operationId: 'operation',
+      previousLayoutRevision: 1,
+      previousMapVersion: info.mapVersion,
+      publication,
+      changedCellIds: [],
+    };
+    return { instance, state, context, change, publication };
+  }
+  it('cancels live preparation on leave and preserves the previous preview context', async () => {
+    const { instance, context, change, publication } = await fixture(true);
+    Object.assign(instance.room!, { leave: vi.fn(async () => {}) });
+    const previous = instance.manifest;
+    const stream = context.streamer as unknown as {
+      transitioning: boolean;
+      manifest: WorldManifest;
+      pump(): void;
+    };
+    const switching = context.changePublication(publication, change);
+    const rejected = expect(switching).rejects.toMatchObject({ name: 'AbortError' });
+    await until(() => stream.transitioning);
+    await instance.leave();
+    await rejected;
+    stream.pump();
+    expect(instance.manifest).toBe(previous);
+    expect(stream.manifest).toBe(previous);
+    expect(stream.transitioning).toBe(false);
+    expect(instance.state).toBe('ready');
+  });
+  it.each([false, true])(
+    'keeps Havok and ignores duplicate/old transitions (snapshot first: %s)',
+    async (snapshotFirst) => {
+      const { instance, state, context, change, publication } = await fixture(snapshotFirst);
+      if (snapshotFirst) {
+        context.updateLayoutPredictionGate();
+        expect(context.layoutPredictionBlocked).toBe(true);
+      }
+      const switching = context.changePublication(publication, change);
+      if (!snapshotFirst) {
+        await until(() => !!context.snapshotWait);
+        expect(instance.info.layoutRevision).toBe(1);
+        state.layoutRevision = 2;
+        state.mapVersion = publication.mapVersion;
+        context.snapshotWait!.resolve();
+      }
+      let done = false;
+      void switching.then(() => {
+        done = true;
+      });
+      await until(() => {
+        context.streamer.pump();
+        return done;
+      });
+      expect(instance.info.layoutRevision).toBe(2);
+      expect(instance.diagnostics().predictionWorlds).toBe(1);
+      expect(mocks.createPhysics).toHaveBeenCalledTimes(1);
+      expect(instance.diagnostics().layoutTransitions).toEqual([
+        expect.objectContaining({ revision: 2, full: false }),
+      ]);
+      const count = requests.length;
+      await context.changePublication(publication, change);
+      await context.changePublication(info, { ...change, publication: info });
+      expect(instance.info.layoutRevision).toBe(2);
+      expect(requests).toHaveLength(count);
+      instance.room = undefined;
+    },
+  );
 });
 
 describe('lazy gameplay physics', () => {
@@ -649,6 +959,66 @@ describe('lazy gameplay physics', () => {
     itemResult(replay);
     expect(instance.itemPending).toBe(false);
     expect(feedback).toHaveBeenCalledExactlyOnceWith('error');
+  });
+
+  it('ignores a cancelled old publication failure after a newer transition owns the session', async () => {
+    const handlers = new Map<string, (value: unknown) => void>();
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      state: { players: new Map(), items: new Map(), serverTick: 0 },
+      onStateChange: vi.fn(),
+      onDrop: vi.fn(),
+      onReconnect: vi.fn(),
+      onLeave: vi.fn(),
+      onError: vi.fn(),
+      onMessage: (name: string, handler: (value: unknown) => void) => handlers.set(name, handler),
+      send: vi.fn(),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    const instance = session();
+    await instance.load();
+    await instance.join();
+    const context = instance as unknown as {
+      changePublication(info: WorldInfo, change: LayoutChanged): Promise<void>;
+      publicationTarget?: string;
+    };
+    let reject!: (error: Error) => void;
+    const changing = vi.spyOn(context, 'changePublication').mockImplementationOnce(
+      () =>
+        new Promise<void>((_yes, no) => {
+          reject = no;
+        }),
+    );
+    const leave = vi.spyOn(instance, 'leave').mockResolvedValue(undefined);
+    const publication = { ...info, layoutRevision: 2, mapVersion: 'c'.repeat(64) };
+    const changed = handlers.get('layoutChanged')!;
+    changed({
+      operationId: 'old',
+      previousLayoutRevision: 1,
+      previousMapVersion: info.mapVersion,
+      changedCellIds: [],
+      publication,
+    });
+    instance.info.layoutRevision = 3;
+    context.publicationTarget = 'd'.repeat(64);
+    reject(new Error('cancelled obsolete publication'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(leave).not.toHaveBeenCalled();
+    changing.mockRejectedValueOnce(new Error('current publication failed'));
+    changed({
+      operationId: 'new',
+      previousLayoutRevision: 2,
+      previousMapVersion: publication.mapVersion,
+      changedCellIds: [],
+      publication: { ...publication, layoutRevision: 3, mapVersion: context.publicationTarget },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(leave).toHaveBeenCalledTimes(1);
+    instance.room = undefined;
   });
 
   it('loads and streams a graphical preview without requesting WASM or creating physics', async () => {

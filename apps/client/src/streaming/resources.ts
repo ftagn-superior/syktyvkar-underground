@@ -13,20 +13,98 @@ type Job = {
   consumers: Set<Consumer>;
   started: boolean;
 };
+/** Session-owned, content-addressed LRU. Contexts never authorize access through cache keys. */
+export class VerifiedByteCache {
+  private readonly entries = new Map<string, Uint8Array>();
+  private bytes = 0;
+  private readonly packs = new Map<string, readonly (readonly [string, string])[]>();
+  private witnessedFiles = 0;
+  private disposed = false;
+  constructor(readonly limit = 64 * 1024 * 1024) {
+    if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Invalid byte cache budget');
+  }
+  get(hash: string): Uint8Array | undefined {
+    const value = this.entries.get(hash);
+    if (value) {
+      this.entries.delete(hash);
+      this.entries.set(hash, value);
+    }
+    return value;
+  }
+  has(hash: string): boolean {
+    return this.entries.has(hash);
+  }
+  set(hash: string, value: Uint8Array): void {
+    if (this.disposed || value.byteLength > this.limit) return;
+    this.delete(hash);
+    this.entries.set(hash, value);
+    this.bytes += value.byteLength;
+    while (this.bytes > this.limit) this.delete(this.entries.keys().next().value!);
+  }
+  delete(hash: string): void {
+    const value = this.entries.get(hash);
+    if (value) this.bytes -= value.byteLength;
+    this.entries.delete(hash);
+  }
+  hasVerifiedPack(hash: string, manifest: WorldManifest, allowed: ReadonlySet<string>): boolean {
+    const entries = this.packs.get(hash);
+    if (
+      !entries ||
+      !entries.every(
+        ([path, expected]) =>
+          allowed.has(path) &&
+          Object.hasOwn(manifest.files, path) &&
+          manifest.files[path] === expected &&
+          this.has(expected),
+      )
+    )
+      return false;
+    this.packs.delete(hash);
+    this.packs.set(hash, entries);
+    return true;
+  }
+  rememberVerifiedPack(hash: string, paths: Iterable<string>, manifest: WorldManifest): void {
+    const entries = [...paths].map((path) => [path, manifest.files[path]] as const);
+    if (this.disposed || entries.length > 4096) return;
+    this.witnessedFiles -= this.packs.get(hash)?.length ?? 0;
+    this.packs.delete(hash);
+    this.packs.set(hash, entries);
+    this.witnessedFiles += entries.length;
+    // Metadata is bounded independently, and a witness hits only while all bytes
+    // still exist in the same session LRU. Never retain old URL generations.
+    while (this.packs.size > 128 || this.witnessedFiles > 4096) {
+      const oldest = this.packs.keys().next().value!;
+      this.witnessedFiles -= this.packs.get(oldest)!.length;
+      this.packs.delete(oldest);
+    }
+  }
+  clear(): void {
+    this.entries.clear();
+    this.packs.clear();
+    this.witnessedFiles = 0;
+    this.bytes = 0;
+  }
+  diagnostics() {
+    return { cacheBytes: this.bytes, cacheEntries: this.entries.size };
+  }
+  dispose(): void {
+    this.disposed = true;
+    this.clear();
+  }
+}
 export interface ResourceOptions {
+  cache?: VerifiedByteCache;
   fetch?: typeof fetch;
   cacheBytes?: number;
 }
 
 /** One immutable world version. Only verified bytes enter the bounded LRU. */
 export class VerifiedResources {
-  private readonly cache = new Map<string, Uint8Array>();
+  private readonly cache: VerifiedByteCache;
+  private readonly ownsCache: boolean;
   private readonly jobs = new Map<string, Job>();
   private readonly fetcher: typeof fetch;
-  private readonly limit: number;
   private readonly packPaths: Set<string>;
-  private readonly packEntries = new Map<string, string[]>();
-  private bytes = 0;
   private running = 0;
   private peakRunning = 0;
   private disposed = false;
@@ -49,25 +127,22 @@ export class VerifiedResources {
     options: ResourceOptions = {},
   ) {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
-    this.limit = options.cacheBytes ?? 64 * 1024 * 1024;
+    this.ownsCache = !options.cache;
+    this.cache = options.cache ?? new VerifiedByteCache(options.cacheBytes);
     this.packPaths = new Set(
       (manifest.cells ?? []).flatMap((cell) => [
         ...(cell.graphicsPacks ?? []),
         ...(cell.physicsPacks ?? []),
       ]),
     );
-    if (!Number.isSafeInteger(this.limit) || this.limit < 0)
-      throw new Error('Invalid byte cache budget');
   }
   read(path: string, signal?: AbortSignal, priority = 0): Promise<Uint8Array> {
     if (this.disposed || signal?.aborted) return Promise.reject(aborted());
     if (!Object.hasOwn(this.manifest.files, path))
       return Promise.reject(new Error(`Unlisted resource: ${path}`));
-    const cached = this.cache.get(path);
+    const cached = this.cache.get(this.manifest.files[path]);
     if (cached) {
       this.cacheHits++;
-      this.cache.delete(path);
-      this.cache.set(path, cached);
       return Promise.resolve(cached.slice());
     }
     let job = this.jobs.get(path);
@@ -135,8 +210,8 @@ export class VerifiedResources {
       }),
     );
     for (const pack of packs) {
-      if ([...allowed].every((path) => this.cache.has(path))) break;
-      if (this.packEntries.get(pack)?.every((path) => this.cache.has(path))) continue;
+      if ([...allowed].every((path) => this.cache.has(this.manifest.files[path]))) break;
+      if (this.cache.hasVerifiedPack(this.manifest.files[pack], this.manifest, allowed)) continue;
       const entries = decodeGraphicsPack(await this.read(pack, signal, priority));
       // Validate the entire envelope before adding anything to the asset cache.
       for (const [path, bytes] of entries) {
@@ -146,7 +221,7 @@ export class VerifiedResources {
           throw new Error(`${kind} pack entry SHA-256 mismatch: ${path}`);
       }
       if (this.disposed || signal?.aborted) throw aborted();
-      this.packEntries.set(pack, [...entries.keys()]);
+      this.cache.rememberVerifiedPack(this.manifest.files[pack], entries.keys(), this.manifest);
       for (const [path, bytes] of entries) {
         this.cacheVerified(path, bytes.slice());
         // A neighboring cell may already be waiting for this same individual file.
@@ -163,11 +238,7 @@ export class VerifiedResources {
     }
   }
   private cacheVerified(path: string, bytes: Uint8Array): void {
-    if (bytes.byteLength > this.limit) return;
-    this.invalidate(path);
-    this.cache.set(path, bytes);
-    this.bytes += bytes.byteLength;
-    while (this.bytes > this.limit) this.invalidate(this.cache.keys().next().value!);
+    this.cache.set(this.manifest.files[path], bytes);
   }
   private pump() {
     while (!this.disposed && this.running < 4) {
@@ -251,16 +322,11 @@ export class VerifiedResources {
     return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   }
   invalidate(path: string) {
-    const bytes = this.cache.get(path);
-    if (bytes) {
-      this.bytes -= bytes.byteLength;
-      this.cache.delete(path);
-    }
+    if (Object.hasOwn(this.manifest.files, path)) this.cache.delete(this.manifest.files[path]);
   }
   diagnostics() {
     return {
-      cacheBytes: this.bytes,
-      cacheEntries: this.cache.size,
+      ...this.cache.diagnostics(),
       pending: this.jobs.size,
       httpActive: this.running,
       httpPeak: this.peakRunning,
@@ -285,8 +351,6 @@ export class VerifiedResources {
       job.consumers.clear();
     }
     this.jobs.clear();
-    this.cache.clear();
-    this.packEntries.clear();
-    this.bytes = 0;
+    if (this.ownsCache) this.cache.clear();
   }
 }

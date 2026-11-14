@@ -6,6 +6,9 @@ import {
   validateWorld,
   type StaticObjectInstance,
   type WorldLayoutSnapshot,
+  type WorldDefinition,
+  type BuildingInstance,
+  type BuildingPhysicsAsset,
 } from '@su/contracts';
 import {
   authoringMetadata,
@@ -101,9 +104,23 @@ export function layoutHash(snapshot: WorldLayoutSnapshot) {
 export function terrainSupportId(worldId: string, ownerId: string, role: string) {
   return `support-${hash(canonicalJson({ worldId, ownerId, role }))}`;
 }
-export async function createLayoutPublication(
+/** Offline callers re-read source files, while a worker can pin one verified release. */
+export function createLayoutPublication(release: AuthoringRelease, snapshot: WorldLayoutSnapshot) {
+  return prepareLayoutPublication(release, snapshot, () => readCompiledLayoutAssets(release));
+}
+export function createReleaseLayoutPublisher(release: AuthoringRelease) {
+  let assets: Promise<Record<string, CompiledWorldAsset>> | undefined;
+  return (snapshot: WorldLayoutSnapshot) =>
+    prepareLayoutPublication(
+      release,
+      snapshot,
+      () => (assets ??= readCompiledLayoutAssets(release)),
+    );
+}
+async function prepareLayoutPublication(
   release: AuthoringRelease,
   snapshot: WorldLayoutSnapshot,
+  compiledAssets: () => Promise<Record<string, CompiledWorldAsset>>,
 ) {
   if (
     snapshot.formatVersion !== 1 ||
@@ -170,28 +187,8 @@ export async function createLayoutPublication(
       ...instances.filter((_, index) => snapshot.instances[index].enabled),
     ],
   };
-  const read = async (path: string) => {
-    const bytes = await readFile(resolve(release.directory, path));
-    if (hash(bytes) !== release.manifest.files[path])
-      throw new Error(`World resource changed during preparation: ${path}`);
-    return bytes;
-  };
-  const assets: Record<string, CompiledWorldAsset> = {};
-  for (const [id, descriptor] of Object.entries(release.manifest.assets)) {
-    const [model, collision, parts] = await Promise.all([
-      descriptor.modelFile ? read(descriptor.modelFile) : undefined,
-      read(descriptor.collisionFile),
-      read(descriptor.partsFile),
-    ]);
-    assets[id] = {
-      version: descriptor.version,
-      bounds: descriptor.bounds,
-      physics: release.definition.buildingAssets[id],
-      model,
-      collision,
-      parts,
-    };
-  }
+  const assets = { ...(await compiledAssets()) };
+  const generatedSupports: Record<string, { ownerId: string; role: string }> = {};
   // Start from the immutable authored release every time. Dynamic supports are
   // never source buildings, DB rows or editable catalog entries, so disabling,
   // deleting or changing a model cannot retain an earlier generated resource.
@@ -227,6 +224,11 @@ export async function createLayoutPublication(
           );
         }
       })();
+      for (const [id, role] of [
+        [derivedIds.foundation, 'foundation'],
+        ...Object.entries(derivedIds.approaches).map(([role, id]) => [id, `approach:${role}`]),
+      ])
+        generatedSupports[id] = { ownerId: owner.entityId, role };
       for (const { asset } of generated) {
         const assetId = asset.physics.assetId;
         const compiled = compileGeneratedAsset(assetId, asset);
@@ -241,11 +243,80 @@ export async function createLayoutPublication(
       }
     }
   }
+  world.buildings.sort((a, b) => a.entityId.localeCompare(b.entityId));
   return {
     world,
     publication: createWorldPublication(world, release.manifest.grid, assets, {
       physicsPacks: release.manifest.cells.some((cell) => cell.physicsPacks?.length),
+      ...(Object.keys(generatedSupports).length ? { generatedSupports } : {}),
     }),
     hash: layoutHash(snapshot),
+  };
+}
+
+async function readCompiledLayoutAssets(release: AuthoringRelease) {
+  const read = async (path: string) => {
+    const bytes = await readFile(resolve(release.directory, path));
+    if (hash(bytes) !== release.manifest.files[path])
+      throw new Error(`World resource changed during preparation: ${path}`);
+    return bytes;
+  };
+  const assets: Record<string, CompiledWorldAsset> = {};
+  for (const [id, descriptor] of Object.entries(release.manifest.assets)) {
+    const [model, collision, parts] = await Promise.all([
+      descriptor.modelFile ? read(descriptor.modelFile) : undefined,
+      read(descriptor.collisionFile),
+      read(descriptor.partsFile),
+    ]);
+    assets[id] = {
+      version: descriptor.version,
+      bounds: descriptor.bounds,
+      physics: release.definition.buildingAssets[id],
+      model,
+      collision,
+      parts,
+    };
+  }
+  return assets;
+}
+
+/** Only the changed owner and its declared generated collision geometry cross the worker boundary. */
+export interface StaticLayoutGeometryDelta {
+  removedIds: string[];
+  buildings: BuildingInstance[];
+  assets: Record<string, BuildingPhysicsAsset>;
+}
+/** Assemble the same world as the publisher without regenerating terrain meshes or GLB payloads. */
+export function applyPreparedLayoutDelta(
+  release: AuthoringRelease,
+  snapshot: WorldLayoutSnapshot,
+  current: WorldDefinition,
+  delta: StaticLayoutGeometryDelta,
+): WorldDefinition {
+  const fixed = new Set(release.metadata.fixedInstanceIds);
+  const owners = new Set(snapshot.instances.map((i) => i.entityId));
+  const removed = new Set(delta.removedIds);
+  const derived = [
+    ...current.buildings.filter(
+      (i) => !fixed.has(i.entityId) && !owners.has(i.entityId) && !removed.has(i.entityId),
+    ),
+    ...delta.buildings.filter((i) => !fixed.has(i.entityId) && !owners.has(i.entityId)),
+  ];
+  const buildingAssets = { ...release.definition.buildingAssets };
+  for (const instance of derived) {
+    const asset = delta.assets[instance.assetId] ?? current.buildingAssets[instance.assetId];
+    if (!asset) throw new Error(`Missing prepared terrain asset: ${instance.assetId}`);
+    buildingAssets[instance.assetId] = asset;
+  }
+  return {
+    ...release.definition,
+    buildingAssets,
+    buildings: [
+      ...release.definition.buildings.filter((i) => fixed.has(i.entityId)),
+      ...snapshot.instances
+        .filter((i) => i.enabled)
+        .map(({ instanceRevision: _r, enabled: _e, ...i }) => i),
+      ...derived,
+    ].sort((a, b) => a.entityId.localeCompare(b.entityId)),
   };
 }

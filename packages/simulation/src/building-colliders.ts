@@ -49,6 +49,9 @@ export class BuildingColliders {
   private readonly worldPoint = Vector3.Zero();
   private readonly bodyPoint = Vector3.Zero();
   private readonly shapePoint = Vector3.Zero();
+  private readonly ignored = new Set<string>();
+  private inactiveShape?: PhysicsShapeContainer;
+  private readonly suspendedFilters = new Map<PhysicsShape, [number, number]>();
   constructor(private readonly scene: Scene) {}
 
   add(instance: BuildingInstance, asset: BuildingPhysicsAsset): void {
@@ -155,7 +158,8 @@ export class BuildingColliders {
       b = Vector3.Zero(),
       c = Vector3.Zero(),
       projected = Vector3.Zero();
-    for (const { asset, inverse } of this.bodies.values()) {
+    for (const [id, { asset, inverse }] of this.bodies) {
+      if (this.ignored.has(id)) continue;
       const bodyPoint = Vector3.TransformCoordinates(worldPoint, inverse);
       for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
         const p = Vector3.TransformCoordinates(bodyPoint, shapeInverse);
@@ -193,7 +197,8 @@ export class BuildingColliders {
 
   private containsStrict(point: Vec3): boolean {
     this.worldPoint.set(point.x, point.y, point.z);
-    for (const { asset, inverse } of this.bodies.values()) {
+    for (const [id, { asset, inverse }] of this.bodies) {
+      if (this.ignored.has(id)) continue;
       if (asset.volumes.length === 0) continue;
       Vector3.TransformCoordinatesToRef(this.worldPoint, inverse, this.bodyPoint);
       for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
@@ -254,6 +259,76 @@ export class BuildingColliders {
     this.assets.delete(assetId);
   }
 
+  /** Synchronous query scope: ignore designated terrain ground, retaining all other bodies. */
+  without<T>(ids: ReadonlySet<string>, query: () => T): T {
+    const restore: [string, BuildingBody, PhysicsShape | null][] = [];
+    try {
+      for (const id of ids) {
+        const item = this.bodies.get(id);
+        if (!item || this.ignored.has(id)) continue;
+        restore.push([id, item, item.body.shape]);
+        this.ignored.add(id);
+        this.detach(item.body);
+      }
+      return query();
+    } finally {
+      for (const [id, item, shape] of restore) {
+        item.body.shape = shape;
+        this.ignored.delete(id);
+      }
+    }
+  }
+
+  /** Prepared bodies have no active collision geometry until the confirmed commit. */
+  suspend() {
+    for (const { container, children } of this.assets.values())
+      for (const shape of [container, ...children]) {
+        this.suspendedFilters.set(shape, [shape.filterMembershipMask, shape.filterCollideMask]);
+        shape.filterMembershipMask = 0;
+        shape.filterCollideMask = 0;
+      }
+  }
+
+  private detach(body: PhysicsBody) {
+    // Babylon's nullable setter does not detach native geometry. An empty
+    // container disables contacts and queries without removing/recreating the body.
+    body.shape = this.inactiveShape ??= new PhysicsShapeContainer(this.scene);
+  }
+
+  /** Transfer already-allocated bodies; existing instances and shared shapes retain identity. */
+  transferTo(target: BuildingColliders) {
+    for (const [id, item] of this.bodies) {
+      const assetId = item.asset.definition.assetId;
+      const existing = target.assets.get(assetId);
+      if (
+        target.bodies.has(id) ||
+        (existing && canonicalJson(existing.definition) !== canonicalJson(item.asset.definition))
+      )
+        throw new Error(`Conflicting prepared building: ${id}`);
+    }
+    for (const [shape, [membership, collide]] of this.suspendedFilters) {
+      shape.filterMembershipMask = membership;
+      shape.filterCollideMask = collide;
+    }
+    this.suspendedFilters.clear();
+    for (const [id, item] of this.bodies) {
+      const assetId = item.asset.definition.assetId;
+      const existing = target.assets.get(assetId);
+      if (existing && existing !== item.asset) {
+        const previous = item.asset;
+        item.asset = existing;
+        existing.users++;
+        if (--previous.users === 0) this.releaseAsset(assetId, previous);
+      } else target.assets.set(assetId, item.asset);
+      item.body.shape = item.asset.container;
+      target.bodies.set(id, item);
+    }
+    this.bodies.clear();
+    this.assets.clear();
+    this.inactiveShape?.dispose();
+    this.inactiveShape = undefined;
+  }
+
   diagnostics() {
     return {
       instances: this.bodies.size,
@@ -268,5 +343,8 @@ export class BuildingColliders {
       item.references = 1;
       this.remove(id);
     }
+    this.inactiveShape?.dispose();
+    this.inactiveShape = undefined;
+    this.suspendedFilters.clear();
   }
 }

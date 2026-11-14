@@ -499,6 +499,13 @@ export function startGame(): void {
   storageStatus.textContent =
     'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
   element('hud-top').append(storageStatus);
+  const staticOperationStatus = document.createElement('div');
+  staticOperationStatus.id = 'static-operation-status';
+  staticOperationStatus.className = 'static-operation-status ui-panel';
+  staticOperationStatus.setAttribute('role', 'status');
+  staticOperationStatus.hidden = true;
+  staticOperationStatus.textContent = 'Запрос отправлен. Проверяем и сохраняем…';
+  element('hud-top').append(staticOperationStatus);
   const accounts = new AccountPanel(
     () => {
       if (session.accountId !== accounts.account?.accountId) {
@@ -951,6 +958,7 @@ export function startGame(): void {
           if (command.moveX || command.moveZ) help?.noteMovement();
           const frame = session.frame(now, delta, command);
           syncGamepadReadiness();
+          view!.setRenderDeferred(session.state === 'preparing');
           if (!firstPersonEligible()) firstPerson?.suspend();
           if (!frame.ownId && session.state !== 'reconnecting' && session.state !== 'preparing')
             firstPerson?.overview();
@@ -1118,10 +1126,8 @@ export function startGame(): void {
   const uiTimer = setInterval(() => {
     audioSettings.refresh();
     syncTouchInput();
-    storageStatus.hidden = !session.storageUnavailable && !session.layoutUpdating;
-    storageStatus.textContent = session.layoutUpdating
-      ? 'Обновляется окружение. Игра продолжится после подготовки игроков.'
-      : 'Мир приостановлен: сохранение недоступно. Игра продолжится после восстановления связи.';
+    storageStatus.hidden = !session.storageUnavailable;
+    staticOperationStatus.hidden = !session.staticPlacementPending && !session.staticRemovalPending;
     renderRespawn();
     renderMetrics();
     renderWorldHud();
@@ -1132,7 +1138,9 @@ export function startGame(): void {
       ? session.reloadRequired
         ? 'Ресурсы мира изменились. Обновите страницу.'
         : 'Не удалось загрузить окружение. Повторите попытку.'
-      : `Загружаем окружение… После подготовки: ${continuationHint()}`;
+      : session.layoutUpdating
+        ? 'Обновляем окружение…'
+        : `Загружаем окружение… После подготовки: ${continuationHint()}`;
     element('area-retry').hidden = !problem;
     element('area-retry').textContent = session.reloadRequired
       ? 'Обновить страницу'

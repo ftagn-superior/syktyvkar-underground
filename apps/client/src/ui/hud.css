@@ -271,6 +271,7 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .notice,
 .place-pill,
 .area-status,
+.static-operation-status,
 .storage-status {
   display: flex;
   align-items: center;
@@ -296,10 +297,14 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   font-weight: 500;
 }
 .area-status,
+.static-operation-status,
 .storage-status {
   flex-wrap: wrap;
   justify-content: center;
   font-weight: 500;
+}
+.static-operation-status {
+  pointer-events: none;
 }
 .storage-status {
   border-color: var(--amber);

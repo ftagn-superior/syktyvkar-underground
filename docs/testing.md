@@ -24,11 +24,13 @@ pnpm test:giveme:browser
 pnpm test:items:browser
 ```
 
-Для медленного стенда с городскими fixtures допустим `pnpm test --testTimeout=120000 --hookTimeout=120000`. Это лимит тестового runner; клиентский барьер по-прежнему ограничен 15 секундами.
+Для медленного стенда с городскими fixtures допустим `pnpm test --testTimeout=120000 --hookTimeout=120000`. Это лимит тестового runner; клиентский переход и серверная подготовка worker имеют отдельные лимиты по 15 секунд.
 
 Новый сценарий сам создаёт маленький выпуск с реальной скамейкой, локальный OIDC, два браузерных контекста и временную схему. SDK-проверки находятся в `tests/integration/static-placement.test.ts`, `placement-catalog.test.ts` и `placement-catalog-city.test.ts`, геометрия — в `packages/simulation/src/static-placement.test.ts`. Без `SU_TEST_DATABASE_URL` SQL-наборы пропускаются и не подтверждают готовность MVP. Свидетельства браузера записываются в `output/playwright/static-placement*`; текущие результаты и измерения — в [отчёте каталога](../reports/motherlode-placement-catalog.md). Исторические замеры ядра сохранены в [прежнем отчёте](../reports/static-placement-core-mvp.md).
 
-Удаление проверяют `tests/integration/static-removal.test.ts`, `packages/simulation/src/static-removal.test.ts`, клиентские контракты/состояния и `rendering/static-selection.test.ts`. Браузерный сценарий `test:static-removal:browser` использует два клиента, исходное здание вне палитры, два одинаковых экземпляра скамейки и процедурное дерево; проверяет отмену, выход из первого лица, блокировку движения, потерю фокуса/ответа и перезапуск. `test:static-removal:city` проверяет выбор и удаление исходного здания в настоящем `ring-block`, общую паузу и двух клиентов. Все записи используют временную изолированную схему PostgreSQL. Свидетельства: `output/playwright/static-removal/` и `output/playwright/static-removal-city/`.
+Удаление проверяют `tests/integration/static-removal.test.ts`, `packages/simulation/src/static-removal.test.ts`, клиентские контракты/состояния и `rendering/static-selection.test.ts`. Браузерный сценарий `test:static-removal:browser` использует два клиента, исходное здание вне палитры, два одинаковых экземпляра скамейки и процедурное дерево; проверяет отмену, выход из первого лица, блокировку движения, потерю фокуса/ответа и перезапуск. `test:static-removal:city` проверяет выбор и удаление исходного здания в настоящем `ring-block`, короткую паузу записи, сохранение клиентского PhysicsWorld и двух клиентов. Все записи используют временную изолированную схему PostgreSQL. Свидетельства: `output/playwright/static-removal/` и `output/playwright/static-removal-city/`.
+
+Новый путь live-публикаций дополнительно проверяют `apps/server/src/layout/preparation.test.ts`, `apps/client/src/streaming/cells.test.ts`, `resources.test.ts` и `network/session.test.ts`: TS/built worker, timeout/очистка, перенос удержаний без пересоздания, поздние продолжения, общий SHA-256 LRU и оба порядка snapshot/уведомления. При замерах отдельно учитывать worker, writer, validation/flush/commit/Havok, общую паузу, локальный swap и клиентскую готовность. Отказы и cooldown не входят в успешные перцентили.
 
 ## Сохранение позиции игрока
 
@@ -65,25 +67,25 @@ pnpm build
 
 Файловые патчи размещений проверяются в `packages/contracts/src/world-layout-patch.test.ts` (офлайн diff, формат и конфликты) и `tests/integration/static-layout.test.ts` (настоящие CLI export/patch/check/apply, сохранность предметов, аудит, откат SQL-сбоя и блокировка работающего мира). Второй набор требует `SU_TEST_DATABASE_URL`.
 
-| Проверка                                                                                                        | Команда                                                                                 |
-| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Рельеф, покрытия, фундамент, движение и сохранения | `pnpm test:terrain`, `pnpm test:terrain:browser` — [сценарий и параметры](terrain-lab.md) |
-| Аккаунты, профиль, локальный OIDC с RS256                                                                       | `pnpm test:accounts`, `pnpm test:accounts:browser`                                      |
-| Хранение, сетевые операции, миграции и физика предметов                                                         | `pnpm test:items`, `pnpm test:items:browser`                                            |
-| Выдача предметов и приватность ответов                                                                          | `pnpm test:giveme:browser`                                                              |
-| Сенсорный MVP: мультитач, режимы, прерывания и DPR                                                              | `pnpm test:touch:browser`                                                               |
-| Xbox-геймпад: имитация API, лобби, два стика, меню и восстановление                                             | `pnpm test:gamepad:browser`                                                             |
-| Первое лицо: два клиента, Pointer Lock, чат, качества и восстановление                                          | `pnpm test:first-person:browser`                                                        |
-| Первое лицо: стены, физические лучи, глаза и авторизованные предметы                                            | `pnpm test:first-person:geometry`                                                       |
-| Эквивалентность физики Node/Chromium                                                                            | `pnpm test:physics:browser`                                                             |
-| GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser`                                                           |
-| Повреждённый кеш и неверные ресурсы                                                                             | `pnpm test:assets:browser`                                                              |
-| Скины, походка, возврат и переподключение                                                                       | `pnpm test:avatars:browser`                                                             |
-| Реакции, выбираемые анимации, чат                                                                               | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser` |
-| Общие часы `/time`, темы, список игроков и совместимость панелей                                                | `pnpm test:world-ui:browser`                                                            |
-| Перезапуск и восстановление                                                                                     | `pnpm test:restart:browser`                                                             |
-| Город, подготовка, камера 30× и выход в просмотр                                                                | `pnpm test:dynamic-map:browser`                                                         |
-| Загрузка предпросмотра: холодный/тёплый кеш, задержка, запросы и отсутствие ранней физики                       | `pnpm test:loading:browser`                                                             |
+| Проверка                                                                                                        | Команда                                                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Рельеф, покрытия, фундамент, движение и сохранения                                                              | `pnpm test:terrain`, `pnpm test:terrain:browser` — [сценарий и параметры](terrain-lab.md) |
+| Аккаунты, профиль, локальный OIDC с RS256                                                                       | `pnpm test:accounts`, `pnpm test:accounts:browser`                                        |
+| Хранение, сетевые операции, миграции и физика предметов                                                         | `pnpm test:items`, `pnpm test:items:browser`                                              |
+| Выдача предметов и приватность ответов                                                                          | `pnpm test:giveme:browser`                                                                |
+| Сенсорный MVP: мультитач, режимы, прерывания и DPR                                                              | `pnpm test:touch:browser`                                                                 |
+| Xbox-геймпад: имитация API, лобби, два стика, меню и восстановление                                             | `pnpm test:gamepad:browser`                                                               |
+| Первое лицо: два клиента, Pointer Lock, чат, качества и восстановление                                          | `pnpm test:first-person:browser`                                                          |
+| Первое лицо: стены, физические лучи, глаза и авторизованные предметы                                            | `pnpm test:first-person:geometry`                                                         |
+| Эквивалентность физики Node/Chromium                                                                            | `pnpm test:physics:browser`                                                               |
+| GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser`                                                             |
+| Повреждённый кеш и неверные ресурсы                                                                             | `pnpm test:assets:browser`                                                                |
+| Скины, походка, возврат и переподключение                                                                       | `pnpm test:avatars:browser`                                                               |
+| Реакции, выбираемые анимации, чат                                                                               | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser`   |
+| Общие часы `/time`, темы, список игроков и совместимость панелей                                                | `pnpm test:world-ui:browser`                                                              |
+| Перезапуск и восстановление                                                                                     | `pnpm test:restart:browser`                                                               |
+| Город, подготовка, камера 30× и выход в просмотр                                                                | `pnpm test:dynamic-map:browser`                                                           |
+| Загрузка предпросмотра: холодный/тёплый кеш, задержка, запросы и отсутствие ранней физики                       | `pnpm test:loading:browser`                                                               |
 
 Настоящий вход через Telegram проверяется на зарегистрированном callback; локальный OIDC-провайдер проверяет протокол и поведение приложения, не доступность внешнего провайдера.
 

@@ -196,4 +196,6 @@ export interface WorldManifest {
   worldFile: string;
   cells: WorldCellManifest[];
   assets: Record<string, BuildingAssetManifest>;
+  /** Deterministic owner-local terrain geometry; authored assets never enter this registry. */
+  generatedSupports?: Record<string, { ownerId: string; role: string }>;
 }

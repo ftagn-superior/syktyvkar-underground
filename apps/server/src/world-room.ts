@@ -41,7 +41,10 @@ import {
   TICK_RATE,
   NEUTRAL_INPUT,
   worldNeighborhood,
+  changedWorldPublicationCells,
   type PrepareArea,
+  type LayoutChanged,
+  type LayoutApplied,
   type AreaResult,
   type Vec3,
   normalizeChatText,
@@ -123,7 +126,12 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private readonly dayClock = new WorldClock(this.state);
   private readonly weather = new WorldWeatherControl(this.state);
   private staticPlacement?: LiveStaticPlacement;
-  private layoutGroup?: Set<string>;
+  private layoutTransition?: {
+    pending: Set<string>;
+    changed: Set<string>;
+    deadline: number;
+    startedAt: number;
+  };
   private layoutFailureReported = false;
   private shutdown?: Promise<void>;
   private sessions = new Map<string, Session>();
@@ -165,6 +173,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.itemCreationEnabled = options.itemCreationEnabled ?? true;
     this.state.worldEpoch = options.ownership?.epoch ?? randomUUID();
     this.state.protocolVersion = PROTOCOL_VERSION;
+    this.state.layoutRevision = options.layouts?.current.snapshot.revision ?? 1;
     this.state.mapVersion = options.manifest.mapVersion;
     this.state.simulationConfigHash = options.manifest.simulationConfigHash;
     this.seatReservationTimeout = 10;
@@ -199,13 +208,15 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.world.dispose();
       throw error;
     }
+    // Seeding through the ownership transaction can advance the candidate revision.
+    this.state.layoutRevision = options.layouts?.current.snapshot.revision ?? 1;
     if (options.layouts)
       this.staticPlacement = new LiveStaticPlacement(
         options.layouts,
         this.items,
         this.world,
         this.state.worldEpoch,
-        () => this.layoutChanged(),
+        (operationId) => this.layoutChanged(operationId),
         () => this.neutralAll(),
         options.placementCatalog,
       );
@@ -225,6 +236,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('requestArea', (client) => this.sendPlan(client));
     this.onMessage('areaReady', (client, data: unknown) => this.areaReady(client, data));
     this.onMessage('areaFailed', (client, data: unknown) => this.areaFailed(client, data));
+    this.onMessage('layoutApplied', (client, data: unknown) => this.layoutApplied(client, data));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
@@ -284,7 +296,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
 
-  onJoin(client: Client, options: { skinId?: unknown } = {}): void {
+  onJoin(client: Client, options: { skinId?: unknown; mapVersion?: string } = {}): void {
     if (!this.isReady()) throw new ServerError(503, 'WORLD_NOT_READY');
     const auth =
       typeof client.auth === 'object' && client.auth?.accountId
@@ -321,10 +333,26 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       },
       transport: client,
       connectionPeriod: 1,
+      appliedLayoutRevision: this.state.layoutRevision,
     });
     if (auth) this.accountPlayers.set(auth.accountId, client.sessionId);
     this.state.occupancy = this.sessions.size;
     this.interest.reset(client, this.sessions.get(client.sessionId)!.entityId);
+    // Authentication can finish against the old publication immediately before commit.
+    if (
+      options.mapVersion &&
+      options.mapVersion !== this.state.mapVersion &&
+      this.staticPlacement
+    ) {
+      const p = this.staticPlacement.publications;
+      client.send('layoutChanged', {
+        operationId: 'join',
+        previousLayoutRevision: p.previous?.snapshot.revision ?? this.state.layoutRevision,
+        previousMapVersion: p.previous?.manifest.mapVersion ?? this.state.mapVersion,
+        publication: p.info(this.state.worldEpoch),
+        changedCellIds: [],
+      } satisfies LayoutChanged);
+    }
     const session = this.sessions.get(client.sessionId)!;
     if (auth) void this.loadPosition(client, session);
     else this.beginSpawnStage(client, session, 'default');
@@ -395,8 +423,17 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   private sendPlan(client: Client): void {
-    const plan = this.sessions.get(client.sessionId)?.plan;
+    const session = this.sessions.get(client.sessionId);
+    if (this.stopping || !session?.connected || session.transport !== client) return;
+    const plan = session.plan;
     if (plan) client.send('prepareArea', plan.message);
+    else if (session?.connected)
+      this.createPlan(
+        client,
+        session,
+        this.state.players.has(client.sessionId) ? 'layout' : 'spawn',
+        performance.now() + this.prepareTimeoutMs,
+      );
   }
   private createPlan(
     client: Client,
@@ -499,14 +536,6 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       );
       if (plan.message.reason === 'spawn')
         session.initialSpawn.executionDeadline ??= plan.spawnDeadline;
-    }
-    if (this.layoutGroup) {
-      if (this.staticPlacement?.metrics)
-        this.staticPlacement.metrics.clients[client.sessionId] =
-          performance.now() - this.staticPlacement.metrics.pauseStarted;
-      this.layoutGroup.delete(client.sessionId);
-      if (plan.message.reason === 'layout') this.completePlan(client, session, true);
-      this.finishLayoutBarrier();
     }
     this.tryCompletePlan(client, session);
   }
@@ -666,6 +695,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (!plan) return;
     session.plan = undefined;
     const { prepareId, worldEpoch, mapVersion, layoutRevision, requestId } = plan.message;
+    if (ok)
+      session.preparedLayout = { revision: layoutRevision, cellIds: [...plan.message.cellIds] };
     const result: AreaResult = {
       prepareId,
       worldEpoch,
@@ -676,6 +707,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     };
     rememberResult(session.areaResults, prepareId, result);
     client?.send('areaResult', result);
+    this.finishClientLayout(client?.sessionId, session);
     if (finishAction && requestId !== undefined)
       this.rememberAction(client, session, requestId, ok, code);
   }
@@ -691,8 +723,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     this.completePlan(client, session, false, code);
     if (reason !== 'respawn') this.fail(client, code);
-    this.layoutGroup?.delete(client.sessionId);
-    this.finishLayoutBarrier();
+    this.layoutTransition?.pending.delete(client.sessionId);
+    this.finishLayoutTransition();
   }
 
   private fail(client: Client, code: ErrorCode): void {
@@ -706,6 +738,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (this.pendingCycleMs !== undefined) this.cycleTime.record(this.pendingCycleMs);
     this.pendingCycleMs = undefined;
     const now = performance.now();
+    if (this.layoutTransition && now >= this.layoutTransition.deadline) {
+      for (const id of [...this.layoutTransition.pending]) {
+        this.layoutTransition.pending.delete(id);
+        const client = this.clients.getById(id);
+        if (client) this.fail(client, 'PREPARE_TIMEOUT');
+      }
+      this.finishLayoutTransition();
+    }
     for (const [id, session] of this.sessions) {
       const plan = session.plan;
       const client = this.clients.getById(id);
@@ -723,6 +763,17 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const start = performance.now();
     for (const [sessionId, session] of this.sessions) {
       const client = this.clients.getById(sessionId);
+      const player = this.state.players.get(sessionId);
+      if (
+        client &&
+        session.connected &&
+        player &&
+        !session.plan &&
+        this.layoutTransition?.pending.has(sessionId) &&
+        session.appliedLayoutRevision !== this.state.layoutRevision &&
+        this.layoutNeedsPreparation(session, { x: player.x, y: player.y, z: player.z })
+      )
+        this.createPlan(client, session, 'layout', this.layoutTransition.deadline);
       if (session.plan) {
         this.inputs.get(sessionId).clear();
         this.world.setInput(session.entityId, NEUTRAL_INPUT);
@@ -997,8 +1048,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     if (!this.itemCreationEnabled)
       return fail('COMMAND_DISABLED', 'Создание предметов отключено на сервере.');
-    if (this.staticPlacement?.busy || this.items.layoutPaused)
-      return fail('WORLD_NOT_READY', 'Обновляется окружение.');
+    if (this.items.layoutPaused) return fail('WORLD_NOT_READY', 'Обновляется окружение.');
     const types = this.items.store.definition.itemCatalog.types;
     if (!Object.hasOwn(types, command.typeId))
       return fail('INVALID_INPUT', `Неизвестный тип предмета: ${command.typeId}.`);
@@ -1073,8 +1123,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const session = this.sessions.get(client.sessionId);
     if (!session || session.transport !== client || !session.connected) return;
     this.captureDisconnect(session);
-    this.layoutGroup?.delete(client.sessionId);
-    this.finishLayoutBarrier();
+    this.layoutTransition?.pending.delete(client.sessionId);
+    this.finishLayoutTransition();
     session.connected = false;
     this.interest.drop(client.sessionId);
     this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
@@ -1147,17 +1197,24 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const player = this.state.players.get(client.sessionId);
     if (player) player.connected = true;
     this.interest.reset(client, session.entityId);
-    this.staticPlacement &&
-      client.send('layoutChanged', this.staticPlacement.publications.info(this.state.worldEpoch));
+    if (this.staticPlacement) {
+      const publication = this.staticPlacement.publications.info(this.state.worldEpoch);
+      client.send('layoutChanged', {
+        operationId: 'reconnect',
+        previousLayoutRevision: publication.layoutRevision,
+        previousMapVersion: publication.mapVersion,
+        publication,
+        changedCellIds: [],
+      } satisfies LayoutChanged);
+    }
     this.createPlan(client, session, 'reconnect', performance.now() + this.prepareTimeoutMs);
-    if (this.layoutGroup) this.layoutGroup.add(client.sessionId);
   }
   onLeave(client: Client): void {
     const session = this.sessions.get(client.sessionId);
     if (!session || session.transport !== client) return;
     this.captureDisconnect(session);
-    this.layoutGroup?.delete(client.sessionId);
-    this.finishLayoutBarrier();
+    this.layoutTransition?.pending.delete(client.sessionId);
+    this.finishLayoutTransition();
     const player = this.state.players.get(client.sessionId);
     if (player) cancelAnimation(player, this.state.serverTick);
     this.completePlan(undefined, session, false, 'WORLD_NOT_READY');
@@ -1192,7 +1249,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       !this.items.unavailable &&
       !this.items.closing &&
       !this.staticPlacement?.fatal &&
-      (!includeLayout || (!this.items.layoutPaused && !this.staticPlacement?.busy))
+      (!includeLayout || !this.items.layoutPaused)
     );
   }
   private neutralAll() {
@@ -1202,51 +1259,111 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.world.setInput(session.entityId, NEUTRAL_INPUT);
     }
   }
-  private layoutChanged() {
+  private layoutChanged(operationId: string) {
     const p = this.staticPlacement!.publications;
+    const previous = p.previous!;
+    const changed = new Set(changedWorldPublicationCells(previous.manifest, p.current.manifest));
     this.definition = p.current.definition;
     this.manifest = p.current.manifest;
     this.state.mapVersion = this.manifest.mapVersion;
     this.state.simulationConfigHash = this.manifest.simulationConfigHash;
+    this.state.layoutRevision = p.current.snapshot.revision;
+    this.state.layoutAppliedTick = this.state.serverTick;
     this.neutralAll();
-    if (this.items.closing) {
-      this.layoutGroup = undefined;
+    // A confirmed commit must still update the publication during shutdown; no
+    // clients or spawn plans can acquire new work after the final captures.
+    if (this.stopping || this.items.closing) {
+      this.layoutTransition = undefined;
       return;
     }
-    this.layoutGroup = new Set(
-      [...this.sessions]
-        .filter(([, s]) => s.connected && s.initialSpawn.stage !== 'loading-position')
-        .map(([id]) => id),
-    );
-    this.broadcast('layoutChanged', p.info(this.state.worldEpoch));
+    const startedAt = performance.now();
+    this.layoutTransition = {
+      pending: new Set(
+        [...this.sessions].filter(([, session]) => session.connected).map(([id]) => id),
+      ),
+      changed,
+      startedAt,
+      deadline: startedAt + this.prepareTimeoutMs,
+    };
+    const message: LayoutChanged = {
+      operationId,
+      previousLayoutRevision: previous.snapshot.revision,
+      previousMapVersion: previous.manifest.mapVersion,
+      publication: p.info(this.state.worldEpoch),
+      changedCellIds: [...changed],
+    };
+    this.broadcast('layoutChanged', message);
     for (const client of this.clients) {
       const session = this.sessions.get(client.sessionId);
-      if (session?.connected && session.initialSpawn.stage !== 'loading-position')
-        this.createPlan(
-          client,
-          session,
-          this.state.players.has(client.sessionId)
-            ? session.plan?.message.reason === 'reconnect'
-              ? 'reconnect'
-              : 'layout'
-            : 'spawn',
-          this.state.players.has(client.sessionId)
-            ? performance.now() + this.prepareTimeoutMs
-            : session.initialSpawn.deadline,
-        );
+      // Loading the saved position owns initial-spawn selection. Its continuation
+      // will create a plan against this new publication once that read finishes.
+      if (!session?.connected || session.initialSpawn.stage === 'loading-position') continue;
+      const player = this.state.players.get(client.sessionId);
+      const oldPlan = session.plan;
+      if (!oldPlan && player && !this.layoutTouches({ x: player.x, y: player.y, z: player.z }))
+        continue;
+      const reason = player
+        ? oldPlan?.message.reason === 'reconnect'
+          ? 'reconnect'
+          : oldPlan?.message.reason === 'respawn'
+            ? 'respawn'
+            : 'layout'
+        : 'spawn';
+      const deadline = !player
+        ? session.initialSpawn.deadline
+        : oldPlan && reason !== 'layout'
+          ? Math.min(oldPlan.deadline, this.layoutTransition.deadline)
+          : this.layoutTransition.deadline;
+      this.createPlan(
+        client,
+        session,
+        reason,
+        deadline,
+        reason === 'respawn' ? oldPlan?.message.requestId : undefined,
+      );
     }
-    this.finishLayoutBarrier();
+    this.finishLayoutTransition();
   }
-  private finishLayoutBarrier() {
-    if (!this.layoutGroup || this.layoutGroup.size) return;
-    this.layoutGroup = undefined;
-    if (this.staticPlacement?.metrics)
-      this.staticPlacement.metrics.pauseMs =
-        performance.now() - this.staticPlacement.metrics.pauseStarted;
-    this.neutralAll();
-    this.items.setLayoutPaused(false);
-    void this.staticPlacement?.publications
-      .cleanup()
+  private layoutTouches(position: Vec3): boolean {
+    return worldNeighborhood(this.definition.bounds, this.manifest.grid, position).some((id) =>
+      this.layoutTransition?.changed.has(id),
+    );
+  }
+  private layoutNeedsPreparation(session: Session, position: Vec3): boolean {
+    const prepared = session.preparedLayout;
+    return worldNeighborhood(this.definition.bounds, this.manifest.grid, position).some(
+      (id) =>
+        this.layoutTransition?.changed.has(id) &&
+        (prepared?.revision !== this.state.layoutRevision || !prepared.cellIds.includes(id)),
+    );
+  }
+  private layoutApplied(client: Client, value: unknown) {
+    if (!value || typeof value !== 'object') return;
+    const data = value as LayoutApplied;
+    if (
+      data.worldEpoch !== this.state.worldEpoch ||
+      data.layoutRevision !== this.state.layoutRevision ||
+      data.mapVersion !== this.state.mapVersion
+    )
+      return;
+    const session = this.sessions.get(client.sessionId);
+    if (this.stopping || !session?.connected || session.transport !== client) return;
+    session.appliedLayoutRevision = data.layoutRevision;
+    this.finishClientLayout(client.sessionId, session);
+  }
+  private finishClientLayout(id: string | undefined, session: Session) {
+    if (id && !session.plan && session.appliedLayoutRevision === this.state.layoutRevision) {
+      if (this.layoutTransition?.pending.delete(id) && this.staticPlacement?.metrics)
+        this.staticPlacement.metrics.clients[id] =
+          performance.now() - this.layoutTransition.startedAt;
+      this.finishLayoutTransition();
+    }
+  }
+  private finishLayoutTransition() {
+    if (!this.layoutTransition || this.layoutTransition.pending.size) return;
+    this.layoutTransition = undefined;
+    void this.staticPlacement
+      ?.finishTransition()
       .catch((error) => console.error('Layout cleanup failed', error));
   }
   private placeStatic(client: Client, value: unknown) {
@@ -1367,7 +1484,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
   }
   private async itemCommand(client: Client, request: unknown) {
-    if (this.staticPlacement?.busy || this.items.layoutPaused) {
+    if (this.items.layoutPaused) {
       client.send('itemResult', {
         operationId: (request as { operationId?: string })?.operationId ?? '',
         ok: false,
@@ -1424,29 +1541,35 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
   shutdownWorld(): Promise<void> {
     if (this.shutdown) return this.shutdown;
-    // All captures precede stopping; later lifecycle callbacks only release sessions.
+    // Stop gameplay before all final captures, retaining item ownership until
+    // the independent position writer has finished its durable saves.
     this.items?.beginClose();
     this.neutralAll();
     for (const session of this.sessions.values())
       if (session.connected && !session.disconnectSnapshot) this.capturePosition(session);
     this.stopping = true;
-    this.layoutGroup = undefined;
+    this.layoutTransition = undefined;
     this.shutdown = (async () => {
-      let positionError: unknown;
+      const errors: unknown[] = [];
+      try {
+        await this.staticPlacement?.close();
+      } catch (error) {
+        errors.push(error);
+      }
       try {
         await this.positions?.close();
       } catch (error) {
-        positionError = error;
+        errors.push(error);
       }
-      // Item flush and ownership release are mandatory even if positions failed.
+      // Final item flush and ownership release remain mandatory if either the
+      // publisher or player-position shutdown failed.
       try {
         await this.items?.close();
       } catch (error) {
-        if (positionError)
-          throw new AggregateError([positionError, error], 'Final world saves failed');
-        throw error;
+        errors.push(error);
       }
-      if (positionError) throw positionError;
+      if (errors.length > 1) throw new AggregateError(errors, 'Final world saves failed');
+      if (errors.length === 1) throw errors[0];
     })();
     return this.shutdown;
   }
@@ -1481,6 +1604,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const { rss, heapUsed, external, arrayBuffers } = process.memoryUsage();
     return {
       staticPlacement: this.staticPlacement?.metrics,
+      staticPlacementBusy: this.staticPlacement?.busy ?? false,
+      layoutTransitionPending: [...(this.layoutTransition?.pending ?? [])],
       ...this.world.diagnostics(),
       sessions: this.sessions.size,
       occupied: this.sessions.size,

@@ -407,12 +407,89 @@ export function validateWorldManifest(value: unknown): WorldManifest {
   for (const cell of value.cells)
     for (const id of cell.assetIds)
       requireValue(Object.hasOwn(value.assets, id), `missing asset ${id}`);
+  if (value.generatedSupports !== undefined) {
+    requireValue(object(value.generatedSupports), 'generated support registry');
+    const owners = new Set<string>();
+    for (const [id, support] of Object.entries(value.generatedSupports)) {
+      requireValue(
+        /^support-[a-f0-9]{64}$/.test(id) &&
+          Object.hasOwn(value.assets, id) &&
+          object(support) &&
+          stringMatches(support.ownerId, idPattern) &&
+          typeof support.role === 'string' &&
+          /^(foundation|approach:[a-zA-Z0-9_-]{1,80})$/.test(support.role),
+        'generated support identity',
+      );
+      const identity = `${support.ownerId}:${support.role}`;
+      requireValue(!owners.has(identity), 'duplicate generated support role');
+      owners.add(identity);
+      requireValue(
+        value.cells.some((cell: { assetIds: string[] }) => cell.assetIds.includes(id)),
+        'unreferenced generated support',
+      );
+    }
+  }
   return value as WorldManifest;
 }
 /** Hash this canonical value to identify an immutable release, including every dependency. */
 export function worldManifestIdentity(manifest: WorldManifest) {
   const { mapVersion: _mapVersion, ...identity } = manifest;
   return identity;
+}
+/** Full descriptor and bytes identity, including dependencies outside a cell JSON file. */
+function publicationAssetIdentity(manifest: WorldManifest, id: string) {
+  const asset = manifest.assets[id];
+  if (!asset) return undefined;
+  return {
+    ...asset,
+    modelHash: asset.modelFile ? manifest.files[asset.modelFile] : undefined,
+    collisionHash: manifest.files[asset.collisionFile],
+    partsHash: manifest.files[asset.partsFile],
+  };
+}
+/** Authored static dependencies stay immutable; registered owner-local supports may change. */
+export function worldPublicationBaseIdentity(manifest: WorldManifest) {
+  return {
+    formatVersion: manifest.formatVersion,
+    worldId: manifest.worldId,
+    bounds: manifest.bounds,
+    grid: manifest.grid,
+    worldFile: manifest.worldFile,
+    worldHash: manifest.files[manifest.worldFile],
+    assets: Object.fromEntries(
+      Object.keys(manifest.assets)
+        .filter((id) => !Object.hasOwn(manifest.generatedSupports ?? {}, id))
+        .map((id) => [id, publicationAssetIdentity(manifest, id)]),
+    ),
+  };
+}
+/** A stable support ID can acquire new geometry without changing its instance's cell bytes. */
+export function changedWorldPublicationCells(
+  previous: WorldManifest,
+  next: WorldManifest,
+): string[] {
+  const oldCells = new Map(previous.cells.map((cell) => [cell.cellId, cell]));
+  const nextCells = new Map(next.cells.map((cell) => [cell.cellId, cell]));
+  return [...new Set([...oldCells.keys(), ...nextCells.keys()])]
+    .filter((id) => {
+      const before = oldCells.get(id),
+        after = nextCells.get(id);
+      if (
+        !before ||
+        !after ||
+        canonicalJson(before.assetIds) !== canonicalJson(after.assetIds) ||
+        previous.files[before.file] !== next.files[after.file]
+      )
+        return true;
+      return [...new Set([...before.assetIds, ...after.assetIds])].some(
+        (assetId) =>
+          canonicalJson(publicationAssetIdentity(previous, assetId)) !==
+            canonicalJson(publicationAssetIdentity(next, assetId)) ||
+          canonicalJson(previous.generatedSupports?.[assetId] ?? null) !==
+            canonicalJson(next.generatedSupports?.[assetId] ?? null),
+      );
+    })
+    .sort();
 }
 /** Explicit domain projection: render metadata can never accidentally alter the physics hash. */
 export function simulationProjection(world: WorldDefinition) {

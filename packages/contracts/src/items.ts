@@ -59,6 +59,7 @@ export interface ItemCommand {
 }
 export type ItemError =
   | 'AUTH_REQUIRED'
+  | 'ADMIN_REQUIRED'
   | 'WORLD_NOT_READY'
   | 'STALE_WORLD'
   | 'INVALID_INPUT'

@@ -18,7 +18,11 @@ import type { AuthoritativeWorld } from '../../packages/simulation/src/server.js
 import { StaticLayoutStore } from '../../apps/server/src/layout/store.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAdminAccount,
+  responseCookie,
+} from '../helpers/account-fixture.js';
 import { prepareSdk } from '../helpers/prepare.js';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,7 +70,7 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       ).rows[0].n;
       expect(initialCount).toBeGreaterThan(2048);
       const cookie = responseCookie(
-        (await loginAccount(app!.url, 'city-builder')).result,
+        (await loginAdminAccount(app!.url, 'city-builder', fixture.store)).result,
         'su_session',
       );
       const connect = async (authCookie?: string) => {
@@ -190,7 +194,7 @@ it.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       await until(() => owner.results.length === 3);
       expect(owner.results[2]).toMatchObject({ code: 'CATALOG_CHANGED' });
       const otherCookie = responseCookie(
-        (await loginAccount(app!.url, 'other-builder')).result,
+        (await loginAdminAccount(app!.url, 'other-builder', fixture.store)).result,
         'su_session',
       );
       const other = await connect(otherCookie);

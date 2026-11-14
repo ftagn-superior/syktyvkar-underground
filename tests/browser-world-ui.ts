@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Page } from 'playwright';
-import { createAccountFixture } from './helpers/account-fixture.js';
+import { createAccountFixture, setAccountAdmin } from './helpers/account-fixture.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { createGameServer } from './helpers/game-server.js';
 import { hudClick, openChat } from './helpers/hud.js';
@@ -44,6 +44,10 @@ async function theme(page: Page, expected: 'day' | 'night'): Promise<void> {
 }
 async function chooseTheme(page: Page, mode: 'auto' | 'day' | 'night'): Promise<void> {
   if (!(await page.locator('#help-panel').isVisible())) await page.locator('#help-toggle').click();
+  assert.doesNotMatch(
+    await page.locator('#help-panel').innerText(),
+    /\/(?:motherlode|vilievna|giveme|time|weather|clouds)\b/,
+  );
   await page.locator(`[data-theme-mode="${mode}"]`).click();
   assert.equal(
     await page.locator(`[data-theme-mode="${mode}"]`).getAttribute('aria-pressed'),
@@ -87,6 +91,7 @@ try {
     await context.addInitScript(() => {
       localStorage.setItem('su:render-quality:v1', 'economy');
       localStorage.setItem('su:help-tip:v1', '1');
+      localStorage.setItem('su:chat-close:v1', 'never');
     });
   const [owner, observer] = await Promise.all(contexts.map((context) => context.newPage()));
   const pages = [owner, observer];
@@ -97,6 +102,10 @@ try {
   await owner.goto(app.url);
   await owner.locator('#telegram-login').click();
   await owner.locator('#profile-form').waitFor({ state: 'visible' });
+  const adminCookie = (await owner.context().cookies()).find(
+    (cookie) => cookie.name === 'su_session',
+  )!;
+  await setAccountAdmin(fixture.store, `${adminCookie.name}=${adminCookie.value}`);
   for (const page of pages) {
     await page.goto(`${app.url}/?diagnostics=1`);
     await page.locator('#join:not([disabled])').click();

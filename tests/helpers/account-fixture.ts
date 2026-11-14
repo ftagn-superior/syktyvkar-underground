@@ -175,3 +175,19 @@ export async function loginAccount(base: string, subject: string, failure?: stri
   const result = await fetch(callback, { headers: { Cookie: flowCookie }, redirect: 'manual' });
   return { result, callback, flowCookie };
 }
+
+/** Explicitly assign test-only privileges; ordinary account fixtures stay non-admins. */
+export async function setAccountAdmin(store: AccountStore, cookie: string, isAdmin = true) {
+  const account = await store.authenticate(cookie.split('=')[1]);
+  assert(account, 'Expected an authenticated test account');
+  await store.pool.query('UPDATE accounts SET is_admin=$2 WHERE id=$1', [
+    account.accountId,
+    isAdmin,
+  ]);
+}
+
+export async function loginAdminAccount(base: string, subject: string, store: AccountStore) {
+  const login = await loginAccount(base, subject);
+  await setAccountAdmin(store, responseCookie(login.result, 'su_session'));
+  return login;
+}

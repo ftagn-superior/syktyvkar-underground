@@ -13,7 +13,11 @@ import {
 } from '../../packages/contracts/src/index.js';
 import type { WorldState } from '../../packages/protocol/src/index.js';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAdminAccount,
+  responseCookie,
+} from '../helpers/account-fixture.js';
 import { buildTerrainPlacementWorld } from '../helpers/terrain-placement-world.js';
 import { prepareSdk } from '../helpers/prepare.js';
 import { terrainSupportId } from '../../apps/server/src/layout/release.js';
@@ -44,7 +48,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('terrain live placement and r
       expect(catalog.terrain.groundEntityIds).toEqual(['placement-terrain']);
       expect(catalog.models[0].placement.kind).toBe('foundation');
       const cookie = responseCookie(
-        (await loginAccount(app!.url, 'terrain-builder')).result,
+        (await loginAdminAccount(app!.url, 'terrain-builder', fixture.store)).result,
         'su_session',
       );
       const connect = async () => {

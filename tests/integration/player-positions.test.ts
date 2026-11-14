@@ -15,7 +15,12 @@ import type {
 import { MoveInputSchema, type WorldState } from '../../packages/protocol/src/index.js';
 import { PlayerPositionStore } from '../../apps/server/src/players/position-store.js';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAccount,
+  responseCookie,
+  setAccountAdmin,
+} from '../helpers/account-fixture.js';
 import { prepareSdk } from '../helpers/prepare.js';
 import { buildStaticPlacementWorld } from '../helpers/static-placement-world.js';
 
@@ -551,6 +556,7 @@ describe.skipIf(!databaseUrl)(
       await start(4000, worldDirectory);
       const player = await savedPlayer('position-layout-player');
       const builderAccount = await login('position-layout-builder');
+      await setAccountAdmin(fixture.store, builderAccount.cookie);
       const builder = await join(builderAccount.cookie);
       const actions: ActionResult[] = [];
       const changes: PlaceStaticResult[] = [];

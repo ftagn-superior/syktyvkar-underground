@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import { Client, type Room } from '@colyseus/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAccount,
+  loginAdminAccount,
+  responseCookie,
+} from '../helpers/account-fixture.js';
 import { prepareSdk } from '../helpers/prepare.js';
 import { buildStaticPlacementWorld } from '../helpers/static-placement-world.js';
 import type {
@@ -91,7 +96,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     await rm(directory, { recursive: true, force: true });
   });
   it('opens privately, commits once, switches both client revisions and survives restart', async () => {
-    const cookie = responseCookie((await loginAccount(app.url, 'builder')).result, 'su_session');
+    const cookie = responseCookie(
+      (await loginAdminAccount(app.url, 'builder', fixture.store)).result,
+      'su_session',
+    );
     const owner = await connect(cookie),
       observer = await connect();
     owner.room.send('requestChat', {
@@ -154,7 +162,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     ).toBe(1);
   }, 30000);
   it('resolves a lost commit acknowledgement before resuming the changed geometry', async () => {
-    const cookie = responseCookie((await loginAccount(app.url, 'uncertain')).result, 'su_session');
+    const cookie = responseCookie(
+      (await loginAdminAccount(app.url, 'uncertain', fixture.store)).result,
+      'su_session',
+    );
     const owner = await connect(cookie);
     const req = request();
     const original = StaticLayoutStore.prototype.createGame;
@@ -179,7 +190,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
   }, 20000);
   it('keeps a committed geometry failure unavailable until a normal restart restores the saved instance', async () => {
     const cookie = responseCookie(
-      (await loginAccount(app.url, 'apply-failure')).result,
+      (await loginAdminAccount(app.url, 'apply-failure', fixture.store)).result,
       'su_session',
     );
     const owner = await connect(cookie);
@@ -220,7 +231,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
 
   it('publishes several additions and releases old runtime publications after every client acknowledgement', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'sequential')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'sequential', fixture.store)).result,
+        'su_session',
+      ),
     );
     await connect();
     let previous = info.manifestUrl;
@@ -257,7 +271,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
 
   it('rolls back a failed SQL insert and preserves item ownership before retrying the same operation', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'rollback')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'rollback', fixture.store)).result,
+        'su_session',
+      ),
     );
     owner.room.send('requestChat', {
       requestId: 1,
@@ -325,7 +342,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
 
   it('keeps simulation, entry and item commands ready while an old client is retained, then evicts it', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'nonblocking')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'nonblocking', fixture.store)).result,
+        'su_session',
+      ),
     );
     const slow = await connect(undefined, false);
     const old = slow.preparation.plans.at(-1)!;
@@ -368,7 +388,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
 
   it('does not recreate a successful local plan while layoutApplied is still in flight', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'local-ready')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'local-ready', fixture.store)).result,
+        'su_session',
+      ),
     );
     const observer = await connect(undefined, false);
     owner.room.send('placeStatic', request());
@@ -394,7 +417,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
 
   it('supplies the current publication when authentication overlaps a layout commit', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'join-race')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'join-race', fixture.store)).result,
+        'su_session',
+      ),
     );
     const old = { ...info };
     const original = app.room.onAuth;
@@ -439,7 +465,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
 
   it('serves movement, inventory commands and new entry while publication preparation is pending', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'background')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'background', fixture.store)).result,
+        'su_session',
+      ),
     );
     const observer = await connect();
     const original = LayoutPreparation.prototype.prepare;
@@ -491,7 +520,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
   }, 20000);
   it('rechecks live geometry when a player arrives at the prepared placement', async () => {
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'occupied-during-build')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'occupied-during-build', fixture.store)).result,
+        'su_session',
+      ),
     );
     const observer = await connect();
     const original = LayoutPreparation.prototype.prepare;
@@ -542,8 +574,17 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live static placement', () =
     guest.room.send('placeStatic', request());
     await until(() => guest.results.length === 1);
     expect(guest.results[0]).toMatchObject({ code: 'AUTH_REQUIRED' });
+    const ordinary = await connect(
+      responseCookie((await loginAccount(app.url, 'ordinary-builder')).result, 'su_session'),
+    );
+    ordinary.room.send('placeStatic', request());
+    await until(() => ordinary.results.length === 1);
+    expect(ordinary.results[0]).toMatchObject({ ok: false, code: 'ADMIN_REQUIRED' });
     const owner = await connect(
-      responseCookie((await loginAccount(app.url, 'invalid')).result, 'su_session'),
+      responseCookie(
+        (await loginAdminAccount(app.url, 'invalid', fixture.store)).result,
+        'su_session',
+      ),
     );
     for (const override of [
       { worldEpoch: 'old' },

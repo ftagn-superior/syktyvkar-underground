@@ -70,7 +70,7 @@ export class GameHud {
       state === 'loading'
         ? 'Загружаем мир…'
         : state === 'connecting'
-          ? 'Входим на полигон…'
+          ? 'Входим в мир…'
           : reconnecting
             ? 'Восстанавливаем связь…'
             : reloadRequired

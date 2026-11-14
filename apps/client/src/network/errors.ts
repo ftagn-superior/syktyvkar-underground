@@ -17,7 +17,7 @@ export const messages: Record<string, string> = {
   LAYOUT_CHANGED: 'Раскладка изменилась. Выберите место и подтвердите заново.',
   CONTENT_LIMIT: 'Достигнут лимит статичных объектов.',
   OPERATION_CONFLICT: 'Идентификатор операции уже использован.',
-  WORLD_FULL: 'На полигоне уже 8 игроков. Попробуйте войти чуть позже.',
+  WORLD_FULL: 'В мире уже 8 игроков. Попробуйте войти чуть позже.',
   WORLD_NOT_READY: 'Сервер ещё готовит мир. Попробуйте снова через несколько секунд.',
   VERSION_MISMATCH: 'Версия мира изменилась. Перезагрузите страницу.',
   PREPARE_TIMEOUT: 'Подготовка заняла слишком много времени. Попробуйте войти снова.',
@@ -59,6 +59,6 @@ export function readableError(error: unknown): string {
   if (code) return messages[code];
   if (/room.*(?:full|locked)|maximum.*clients|seat.*full/i.test(text)) return messages.WORLD_FULL;
   if (/fetch|network|connect|ECONN|Failed|timeout|aborted/i.test(text))
-    return 'Не удалось связаться с сервером. Проверьте, что локальный сервер запущен, и повторите вход.';
-  return 'Не удалось подготовить полигон. Перезагрузите страницу или проверьте консоль сервера.';
+    return 'Не удалось связаться с сервером игры. Проверьте подключение к интернету и повторите вход.';
+  return 'Не удалось загрузить игровой мир. Перезагрузите страницу и попробуйте снова.';
 }

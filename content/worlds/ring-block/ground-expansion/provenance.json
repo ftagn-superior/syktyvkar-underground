@@ -1,0 +1,69 @@
+{
+  "formatVersion": 1,
+  "source": "OpenStreetMap via Overpass API",
+  "license": "ODbL 1.0, © OpenStreetMap contributors",
+  "osmTimestamp": "2026-11-14T09:08:50Z",
+  "snapshotSha256": "800430c8cd7ba4086da5aa9798359b28b65b871b3842f8665bbac0121a5d05fe",
+  "query": "[out:json][timeout:120];(way[highway](61.65564,50.78643,61.67210,50.85494);way[landuse](61.65564,50.78643,61.67210,50.85494);way[leisure](61.65564,50.78643,61.67210,50.85494);way[natural](61.65564,50.78643,61.67210,50.85494);way[amenity=parking](61.65564,50.78643,61.67210,50.85494);way[waterway](61.65564,50.78643,61.67210,50.85494);way[\"area:highway\"](61.65564,50.78643,61.67210,50.85494);relation[type=multipolygon][~\"^(landuse|leisure|natural|amenity|waterway)$\"~\".\"](61.65564,50.78643,61.67210,50.85494););out geom;",
+  "excludedRectangle": {
+    "min": [-269, -745],
+    "max": [331, 131]
+  },
+  "roadWidth": "max(width, lanes × 2.75) + 3 m; service 5 m, track 4 m, footway 1.8 m, steps 2 m, pedestrian 4 m",
+  "layers": {
+    "water": {
+      "features": 8,
+      "polygons": 12,
+      "vertices": 231,
+      "dropped": 0
+    },
+    "green": {
+      "features": 2533,
+      "polygons": 2852,
+      "vertices": 32257,
+      "dropped": 0
+    },
+    "park": {
+      "features": 607,
+      "polygons": 782,
+      "vertices": 11156,
+      "dropped": 0
+    },
+    "pitch": {
+      "features": 31,
+      "polygons": 46,
+      "vertices": 410,
+      "dropped": 0
+    },
+    "playground": {
+      "features": 93,
+      "polygons": 92,
+      "vertices": 948,
+      "dropped": 0
+    },
+    "footway": {
+      "features": 3469,
+      "polygons": 1337,
+      "vertices": 47941,
+      "dropped": 14
+    },
+    "parking": {
+      "features": 188,
+      "polygons": 221,
+      "vertices": 1841,
+      "dropped": 0
+    },
+    "service": {
+      "features": 1695,
+      "polygons": 1244,
+      "vertices": 36103,
+      "dropped": 0
+    },
+    "road": {
+      "features": 232,
+      "polygons": 341,
+      "vertices": 5300,
+      "dropped": 0
+    }
+  }
+}

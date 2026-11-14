@@ -1,1 +1,1 @@
-{"formatVersion":1,"outline":[[4.67,2.17],[1.27,-5.03],[-4.73,-2.23],[-1.23,5.07]],"height":3.9,"floors":1,"windows":false,"wallColor":"#d8d6c0","roofColor":"#625d5d","windowColor":"#29343c","merge":true}
+{"formatVersion":1,"outline":[[4.67,2.17],[1.27,-5.03],[-4.73,-2.23],[-1.23,5.07]],"height":3.9,"floors":1,"windows":false,"wallColor":"#cfcbc3","roofColor":"#625d5d","windowColor":"#29343c","merge":true,"wallMaterial":"brick","details":{"garageDoors":{"facing":["SW"],"width":2.6,"height":2.3,"every":3.4,"colors":["#8e3a32","#6e7479","#9a4a3a"]}}}

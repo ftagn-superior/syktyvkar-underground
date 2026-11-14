@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Фасады Street View</title>
+    <!-- Шаблон для tools/streetview-capture.ts: метка в <script id="data"> заменяется данными manifest.json. -->
+    <style>
+      :root {
+        --bg: #f4f3ef;
+        --panel: #ffffff;
+        --ink: #1d1f22;
+        --muted: #6b6f76;
+        --line: #dedbd3;
+        --target: #e5345a;
+        --same: #f08a24;
+        --other: #1b9fd6;
+        --map-bg: #ecebe6;
+        --map-building: #c9c6bd;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #141518;
+          --panel: #1d1f23;
+          --ink: #e8e6e1;
+          --muted: #9a9ea6;
+          --line: #2f3238;
+          --map-bg: #22252a;
+          --map-building: #3d4148;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.45 system-ui,
+          sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        padding: 12px 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        align-items: center;
+      }
+      header h1 {
+        font-size: 17px;
+        margin: 0;
+      }
+      header .stats {
+        color: var(--muted);
+      }
+      header input[type='search'] {
+        flex: 1 1 220px;
+        max-width: 360px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        font: inherit;
+      }
+      header label {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+      }
+      .legend {
+        display: flex;
+        gap: 14px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 12px;
+        height: 3px;
+        vertical-align: middle;
+        margin-right: 5px;
+      }
+      main {
+        padding: 8px 16px 48px;
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+      section.building {
+        margin-top: 28px;
+      }
+      section.building h2 {
+        font-size: 16px;
+        margin: 0 0 2px;
+      }
+      section.building h2 code {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 400;
+        margin-left: 8px;
+      }
+      .desc {
+        color: var(--muted);
+        margin: 0 0 4px;
+        max-width: 900px;
+      }
+      .missing {
+        color: var(--target);
+        margin: 0 0 8px;
+        font-size: 13px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+        gap: 14px;
+        margin-top: 10px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .shots {
+        display: flex;
+        gap: 2px;
+        background: #000;
+      }
+      .photo {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 0;
+        aspect-ratio: 1;
+      }
+      .photo img,
+      .photo svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .photo .err {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #f99;
+        padding: 12px;
+        text-align: center;
+      }
+      .meta {
+        display: flex;
+        gap: 12px;
+        padding: 10px 12px;
+        align-items: flex-start;
+      }
+      .meta svg.map {
+        flex: 0 0 120px;
+        width: 120px;
+        height: 120px;
+        border-radius: 6px;
+        background: var(--map-bg);
+      }
+      .meta .text {
+        min-width: 0;
+      }
+      .meta .facade {
+        font-weight: 600;
+        font-size: 15px;
+      }
+      .meta .facts {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .meta a {
+        color: var(--other);
+        font-size: 13px;
+      }
+      body.no-overlay .overlay {
+        display: none;
+      }
+      body.no-others .overlay .o-other {
+        display: none;
+      }
+      .overlay polygon {
+        vector-effect: non-scaling-stroke;
+      }
+      .overlay .o-target {
+        fill: color-mix(in srgb, var(--target) 16%, transparent);
+        stroke: var(--target);
+        stroke-width: 3;
+      }
+      .overlay .o-same {
+        fill: none;
+        stroke: var(--same);
+        stroke-width: 2;
+        stroke-dasharray: 6 4;
+      }
+      .overlay .o-other {
+        fill: none;
+        stroke: var(--other);
+        stroke-width: 1.5;
+      }
+      .overlay text {
+        font:
+          600 15px system-ui,
+          sans-serif;
+        paint-order: stroke;
+        stroke: rgba(0, 0, 0, 0.75);
+        stroke-width: 4px;
+      }
+      .overlay text.o-target {
+        fill: #fff;
+        stroke-width: 4px;
+      }
+      .overlay text.o-other {
+        fill: #bfe9ff;
+        font-size: 12px;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 40px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Фасады Street View</h1>
+      <span class="stats" id="stats"></span>
+      <input type="search" id="search" placeholder="Поиск по имени или osm-way-…" />
+      <label><input type="checkbox" id="overlay" checked /> Разметка</label>
+      <label><input type="checkbox" id="others" checked /> Соседние здания</label>
+      <span class="legend">
+        <span><i style="background: var(--target)"></i>фасад</span>
+        <span><i style="background: var(--same)"></i>то же здание</span>
+        <span><i style="background: var(--other)"></i>соседи</span>
+      </span>
+    </header>
+    <main id="list"></main>
+    <script id="data" type="application/json">
+      __DATA__
+    </script>
+    <script>
+      const DATA = JSON.parse(document.getElementById('data').textContent);
+      const SIDE_RU = {
+        N: 'север',
+        NE: 'северо-восток',
+        E: 'восток',
+        SE: 'юго-восток',
+        S: 'юг',
+        SW: 'юго-запад',
+        W: 'запад',
+        NW: 'северо-запад',
+      };
+      const SVG = 'http://www.w3.org/2000/svg';
+      const S = DATA.imageSize;
+      const names = new Map(DATA.world.map((b) => [b.id, b.name]));
+
+      function el(tag, attrs = {}, ...children) {
+        const node = tag.startsWith('svg:')
+          ? document.createElementNS(SVG, tag.slice(4))
+          : document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (k === 'text') node.textContent = v;
+          else node.setAttribute(k, v);
+        }
+        for (const c of children) if (c) node.append(c);
+        return node;
+      }
+
+      function overlaySvg(shot, manifest) {
+        const svg = el('svg:svg', { viewBox: `0 0 ${S} ${S}`, class: 'overlay' });
+        const order = { other: 0, same: 1, target: 2 };
+        const items = [...shot.overlays].sort((a, b) => order[a.kind] - order[b.kind]);
+        for (const o of items) {
+          if (o.points.length)
+            svg.append(
+              el('svg:polygon', {
+                points: o.points.map((p) => p.join(',')).join(' '),
+                class: `o-${o.kind}`,
+              }),
+            );
+        }
+        for (const o of items) {
+          if (!o.anchor) continue;
+          const label =
+            o.kind === 'target'
+              ? `${manifest.id.replace('osm-way-', '')} · фасад`
+              : (names.get(o.building) ?? o.building);
+          const x = Math.min(Math.max(o.anchor[0], 60), S - 60);
+          const y = Math.min(Math.max(o.anchor[1] - 8, 18), S - 8);
+          svg.append(
+            el('svg:text', { x, y, 'text-anchor': 'middle', class: `o-${o.kind}`, text: label }),
+          );
+        }
+        return svg;
+      }
+
+      function miniMap(manifest, view) {
+        const facade = manifest.facades.find((f) => f.key === view.facade);
+        const mid = facade.points.reduce(
+          (a, p) => ({ x: a.x + p.x / facade.points.length, z: a.z + p.z / facade.points.length }),
+          { x: 0, z: 0 },
+        );
+        const cx = (mid.x + view.pano.x) / 2;
+        const cz = (mid.z + view.pano.z) / 2;
+        const r = Math.max(35, view.distance * 0.75 + 25);
+        const svg = el('svg:svg', {
+          class: 'map',
+          viewBox: `${cx - r} ${cz - r} ${2 * r} ${2 * r}`,
+        });
+        const k = r / 60; // толщина линий не зависит от масштаба карты
+        for (const b of DATA.world) {
+          const isTarget = b.id === manifest.id;
+          svg.append(
+            el('svg:polygon', {
+              points: b.outline.map((p) => p.join(',')).join(' '),
+              fill: isTarget ? 'var(--ink)' : 'var(--map-building)',
+              'fill-opacity': isTarget ? 0.35 : 1,
+            }),
+          );
+        }
+        svg.append(
+          el('svg:polyline', {
+            points: facade.points.map((p) => `${p.x},${p.z}`).join(' '),
+            fill: 'none',
+            stroke: 'var(--target)',
+            'stroke-width': 2.5 * k,
+            'stroke-linecap': 'round',
+          }),
+        );
+        for (const shot of view.shots) {
+          const reach = view.distance * 1.25;
+          const ray = (a) => {
+            const t = ((shot.heading + a) * Math.PI) / 180;
+            return `${view.pano.x + Math.sin(t) * reach},${view.pano.z - Math.cos(t) * reach}`;
+          };
+          svg.append(
+            el('svg:polygon', {
+              points: `${view.pano.x},${view.pano.z} ${ray(-shot.fov / 2)} ${ray(shot.fov / 2)}`,
+              fill: 'var(--other)',
+              'fill-opacity': 0.18,
+              stroke: 'var(--other)',
+              'stroke-width': 0.6 * k,
+            }),
+          );
+        }
+        svg.append(
+          el('svg:circle', { cx: view.pano.x, cy: view.pano.z, r: 2.2 * k, fill: 'var(--other)' }),
+        );
+        // Север вверх: маленькая стрелка в углу.
+        svg.append(
+          el('svg:text', {
+            x: cx - r + 6 * k,
+            y: cz - r + 12 * k,
+            'font-size': 10 * k,
+            fill: 'var(--muted)',
+            text: 'С↑',
+          }),
+        );
+        return svg;
+      }
+
+      function card(manifest, view) {
+        const facade = manifest.facades.find((f) => f.key === view.facade);
+        const shots = el('div', { class: 'shots' });
+        for (const shot of view.shots) {
+          const photo = el('div', { class: 'photo' });
+          if (shot.error) photo.append(el('div', { class: 'err', text: shot.error }));
+          else
+            photo.append(
+              el('img', {
+                src: `${manifest.id}/${shot.file}`,
+                loading: 'lazy',
+                alt: `${manifest.name}, ${view.facade}`,
+              }),
+            );
+          photo.append(overlaySvg(shot, manifest));
+          shots.append(photo);
+        }
+        const s = view.shots[Math.floor(view.shots.length / 2)];
+        const link =
+          `https://www.google.com/maps/@?api=1&map_action=pano&pano=${encodeURIComponent(view.panoId)}` +
+          `&heading=${s.heading}&pitch=${s.pitch}&fov=${Math.min(100, s.fov)}`;
+        const text = el(
+          'div',
+          { class: 'text' },
+          el('div', {
+            class: 'facade',
+            text: `${view.facade} — ${SIDE_RU[facade.side]}${facade.part ? `, часть ${facade.part[0]} из ${facade.part[1]}` : ''}`,
+          }),
+          el('div', {
+            class: 'facts',
+            text: `стена ${facade.length} × ${facade.height} м · камера в ${view.distance} м, угол ${view.incidence}°`,
+          }),
+          el('div', {
+            class: 'facts',
+            text: `видно ${Math.round(view.visibility * 100)}% · съёмка ${view.date ?? '?'} · ${view.shots.map((x) => x.file).join(', ')}`,
+          }),
+          el('a', {
+            href: link,
+            target: '_blank',
+            rel: 'noopener',
+            text: 'Открыть панораму в Google Maps ↗',
+          }),
+        );
+        return el(
+          'div',
+          { class: 'card' },
+          shots,
+          el('div', { class: 'meta' }, miniMap(manifest, view), text),
+        );
+      }
+
+      function render() {
+        const q = document.getElementById('search').value.trim().toLowerCase();
+        const list = document.getElementById('list');
+        list.replaceChildren();
+        let shown = 0;
+        for (const m of DATA.manifests) {
+          if (q && !`${m.id} ${m.name} ${m.description}`.toLowerCase().includes(q)) continue;
+          shown++;
+          const section = el(
+            'section',
+            { class: 'building', id: m.id },
+            el(
+              'h2',
+              {},
+              document.createTextNode(m.name),
+              el('code', { text: `${m.id} · ${m.height} м` }),
+            ),
+            m.description ? el('p', { class: 'desc', text: m.description }) : null,
+            m.missing.length
+              ? el('p', {
+                  class: 'missing',
+                  text: `Нет панорамы для фасадов: ${m.missing.join(', ')}`,
+                })
+              : null,
+          );
+          const cards = el('div', { class: 'cards' });
+          for (const v of m.views) cards.append(card(m, v));
+          section.append(cards);
+          list.append(section);
+        }
+        if (!shown) list.append(el('p', { class: 'empty', text: 'Ничего не найдено.' }));
+      }
+
+      const views = DATA.manifests.reduce((n, m) => n + m.views.length, 0);
+      const missing = DATA.manifests.reduce((n, m) => n + m.missing.length, 0);
+      document.getElementById('stats').textContent =
+        `${DATA.manifests.length} зданий · ${views} ракурсов · ${missing} фасадов без панорамы`;
+      document.getElementById('search').addEventListener('input', render);
+      document
+        .getElementById('overlay')
+        .addEventListener('change', (e) =>
+          document.body.classList.toggle('no-overlay', !e.target.checked),
+        );
+      document
+        .getElementById('others')
+        .addEventListener('change', (e) =>
+          document.body.classList.toggle('no-others', !e.target.checked),
+        );
+      render();
+    </script>
+  </body>
+</html>

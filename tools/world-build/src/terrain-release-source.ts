@@ -56,6 +56,7 @@ export async function readTerrainReleaseSource(
     !keys(ground, [
       'spacing',
       'grid',
+      'extendToWorldBounds',
       'supports',
       'header',
       'statics',
@@ -63,6 +64,7 @@ export async function readTerrainReleaseSource(
       'placementModels',
     ]) ||
     (ground.spacing !== 2 && ground.spacing !== 4) ||
+    (ground.extendToWorldBounds !== undefined && ground.extendToWorldBounds !== true) ||
     !record(ground.grid) ||
     !keys(ground.grid, ['file', 'sha256']) ||
     !digest(ground.grid.sha256) ||

@@ -65,6 +65,22 @@ export interface BuildingParts {
  */
 export const GLOW_KIND = { window: 1, shop: 2, sign: 3, lamp: 4, office: 5, neon: 6 } as const;
 export type GlowKind = keyof typeof GLOW_KIND;
+/**
+ * Материалы стен для процедурного рисунка без текстур. Сборщик пишет их в TEXCOORD_1
+ * статичных GLB: `u` = класс × 1000 + координата вдоль фасада, `v` — по высоте. Координаты
+ * в метрах, у `panel` — в шагах окон и этажах, чтобы швы панелей шли между окнами.
+ */
+export const SURFACE_KIND = {
+  plaster: 1,
+  brick: 2,
+  wood: 3,
+  panel: 4,
+  tile: 5,
+  metal: 6,
+  block: 7,
+  siding: 8,
+} as const;
+export type SurfaceKind = keyof typeof SURFACE_KIND;
 /** Точечный источник ночного света: лужа света вокруг фонаря, без настоящей лампы Babylon. */
 export interface StaticLightSource {
   position: Vec3;

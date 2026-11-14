@@ -18,6 +18,7 @@ import { GameInputMode } from '../input/mode';
 import { TouchInput } from '../input/touch';
 import { GameSession, readableError, type ConnectionState } from '../network/session';
 import { WorldView } from '../rendering/world-view';
+import { parseWeatherOverride } from '../rendering/environment/weather-mix';
 import type { RenderQuality } from '../rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from '../ui/diagnostic-report';
 import { ReactionMenu } from '../ui/reactions';
@@ -115,6 +116,7 @@ export function startGame(): void {
   );
   // ?time=14.5 fixes the visible world hour for screenshots and visual tests.
   const fixedHour = Number.parseFloat(new URLSearchParams(location.search).get('time') ?? '');
+  const weatherOverride = parseWeatherOverride(new URLSearchParams(location.search).get('weather'));
   const lobbyPreview = new LobbyPreview(
     element<HTMLCanvasElement>('preview-canvas'),
     element<HTMLImageElement>('preview-fallback'),
@@ -911,6 +913,7 @@ export function startGame(): void {
       view.setAudio(audio);
       view.setDayClock(session.dayClock);
       view.setWeather(session.weather);
+      if (weatherOverride) view.setWeatherOverride(weatherOverride);
       if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
       view.setTouchMode(inputMode.value === 'touch');
       view.setGamepadMode(inputMode.value === 'gamepad');

@@ -36,4 +36,4 @@ export function withGlow(part: StaticMeshPart, kind: GlowKind, seed: number, dra
   markGlow(part, start, kind, seed);
 }
 
-export { glowOf } from '@su/terrain-build/mesh';
+export { glowOf, surfaceOf } from '@su/terrain-build/mesh';

@@ -46,6 +46,7 @@ import {
   MAX_PREDICTION_MS,
   PROTOCOL_VERSION,
   DEFAULT_WEATHER,
+  precipitationFromCode,
   type WorldWeather,
   RESPAWN_COOLDOWN_MS,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
@@ -1177,7 +1178,11 @@ export class GameSession {
       offsetMs: room.state.dayOffsetMs,
       frozenHour: room.state.dayFrozenHour,
     });
-    this.setWeather({ clouds: room.state.weatherClouds });
+    this.setWeather({
+      clouds: room.state.weatherClouds,
+      precipitation: precipitationFromCode(room.state.weatherPrecipitation),
+      fog: room.state.weatherFog,
+    });
     const self = room.state.players.get(room.sessionId);
     this.physics?.syncRemote(toLocalSimulationSnapshot(room.state), self?.entityId ?? '');
     const previousRevision = self && this.revisions.get(self.entityId);
@@ -1209,7 +1214,13 @@ export class GameSession {
     this.onDayClock?.(clock);
   }
   private setWeather(weather: WorldWeather): void {
-    if (weather.clouds === this.weather.clouds) return;
+    const current = this.weather;
+    if (
+      weather.clouds === current.clouds &&
+      weather.precipitation === current.precipitation &&
+      weather.fog === current.fog
+    )
+      return;
     this.weather = weather;
     this.onWeather?.(weather);
   }

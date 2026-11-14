@@ -5,7 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 import { readAuthoringRelease } from '../../apps/server/src/layout/release.js';
 import type { FoundationSupportRuleV2 } from '../../packages/terrain-build/src/private-data.js';
-import { validateTerrainPrivateData } from '../../packages/terrain-build/src/private-data.js';
+import {
+  validateTerrainPrivateData,
+  validateTerrainCoverage,
+} from '../../packages/terrain-build/src/private-data.js';
 import { readWorldModelCatalog } from '../../packages/world-release/src/model-catalog.js';
 import { hash } from '../../packages/world-release/src/index.js';
 
@@ -345,6 +348,77 @@ describe('explicit support rules in authored flat releases', () => {
         groundTerrain: { spacing: 4, seedY: { missing: 2 } },
       }),
     ).rejects.toThrow('Invalid explicit terrain seed height');
+  });
+
+  it('extends bare ground on its old lattice and clips a partial halo to exact world boundaries', async () => {
+    const source = JSON.parse(await readFile(sourcePath, 'utf8'));
+    const grid = {
+      formatVersion: 1 as const,
+      origin: { x: -12, z: -12 },
+      spacing: 4,
+      columns: 7,
+      rows: 7,
+      bottom: -3,
+      heights: Array.from({ length: 49 }, (_, i) => Math.max(0, Math.abs((i % 7) - 3) - 1)),
+    };
+    const header = {
+      bounds: { min: { x: -11, y: -5, z: -10 }, max: { x: 11, y: 14, z: 10 } },
+      spawnPoints: source.spawnPoints,
+      initialItems: [],
+    };
+    const output = join(directory, 'extended-ground');
+    await buildWorld(sourcePath, output, {
+      groundTerrain: { spacing: 4, grid, extendToWorldBounds: true, header },
+    });
+    const release = await readAuthoringRelease(output);
+    expect(release.terrain!.grid).toEqual(grid);
+    expect(release.definition.bounds).toEqual(header.bounds);
+    expect(release.seed.map((b) => b.entityId)).toEqual(['owner']);
+    expect(release.seed[0].position).toEqual({ x: 0, y: 0, z: 0 });
+    expect(release.manifest.cells).toHaveLength(9);
+    const tiles = release.definition.buildings.filter((b) => b.entityId !== 'owner');
+    expect(tiles).toHaveLength(9);
+    let projectedArea = 0;
+    for (const tile of tiles) {
+      const asset = release.definition.buildingAssets[tile.assetId];
+      expect(asset.bounds.min.x).toBeGreaterThanOrEqual(-11);
+      expect(asset.bounds.max.x).toBeLessThanOrEqual(11);
+      expect(asset.bounds.min.z).toBeGreaterThanOrEqual(-10);
+      expect(asset.bounds.max.z).toBeLessThanOrEqual(10);
+      for (const collider of asset.colliders) {
+        if (collider.kind !== 'mesh') throw new Error('Expected terrain mesh');
+        const v = collider.vertices;
+        for (let i = 0; i < collider.indices.length; i += 3) {
+          const [a, b, c] = collider.indices.slice(i, i + 3).map((id) => id * 3);
+          // Positive upward normal: exclude the bottom and vertical skirts.
+          const crossY =
+            (v[b + 2] - v[a + 2]) * (v[c] - v[a]) - (v[b] - v[a]) * (v[c + 2] - v[a + 2]);
+          if (crossY > 0) projectedArea += crossY / 2;
+        }
+      }
+    }
+    expect(projectedArea).toBeCloseTo(22 * 20, 6);
+    expect(() =>
+      validateTerrainCoverage({ ...grid, origin: { x: -8, z: -12 } }, header.bounds),
+    ).toThrow();
+    expect(() =>
+      validateTerrainCoverage({ ...grid, origin: { x: -16, z: -12 }, columns: 8 }, header.bounds),
+    ).toThrow();
+    await expect(
+      buildWorld(sourcePath, join(directory, 'unaligned-extension'), {
+        groundTerrain: {
+          spacing: 4,
+          grid: { ...grid, origin: { x: -11, z: -12 } },
+          extendToWorldBounds: true,
+          header,
+        },
+      }),
+    ).rejects.toThrow(/extend its lattice/);
+    await expect(
+      buildWorld(sourcePath, join(directory, 'implicit-extension'), {
+        groundTerrain: { spacing: 4, grid, header },
+      }),
+    ).rejects.toThrow(/must match the ground extent/);
   });
 
   it('rejects unavailable models and invalid support data before publication', async () => {

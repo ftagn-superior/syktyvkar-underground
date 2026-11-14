@@ -21,6 +21,7 @@ export interface TerrainTileBuildInput {
   boundary: Point2[];
   color: string;
   merge: boolean;
+  worldBounds?: { min: { x: number; z: number }; max: { x: number; z: number } };
 }
 export interface CompiledTerrainTile {
   /** Empty for an unsplit tile; append to both its asset and instance IDs. */
@@ -60,6 +61,7 @@ export function buildTerrainTiles(input: TerrainTileBuildInput): CompiledTerrain
       assetId = input.assetId + suffix;
     let generated = generateTerrainTile(assetId, grid, boundary, surfaces, context, {
       baseColor: input.color,
+      worldBounds: input.worldBounds,
     });
     if (input.merge) generated.parts = mergeParts(generated.parts);
     generated = indexTerrainAsset(generated);

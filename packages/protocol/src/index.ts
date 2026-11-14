@@ -3,6 +3,7 @@ import {
   PROTOCOL_VERSION,
   DEFAULT_DAY_CLOCK,
   DEFAULT_WEATHER,
+  precipitationCode,
   normalizeInput,
   NEUTRAL_INPUT,
   type MoveInput,
@@ -119,6 +120,9 @@ export class WorldState extends schema(
     dayFrozenHour: t.float32().default(DEFAULT_DAY_CLOCK.frozenHour),
     // Погода комнаты (`WorldWeather`), её меняет `/weather`.
     weatherClouds: t.boolean().default(DEFAULT_WEATHER.clouds),
+    // Номер в `PRECIPITATIONS`: 0 — без осадков, 1 — дождь, 2 — снег.
+    weatherPrecipitation: t.uint8().default(precipitationCode(DEFAULT_WEATHER.precipitation)),
+    weatherFog: t.boolean().default(DEFAULT_WEATHER.fog),
   },
   'World',
 ) {}

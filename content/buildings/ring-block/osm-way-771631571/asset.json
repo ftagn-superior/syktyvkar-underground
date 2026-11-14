@@ -6,9 +6,9 @@
     "file": "source.json"
   },
   "metadata": {
-    "name": "Одноэтажное здание с светло-бежевым фасадом",
-    "description": "Городское здание с светло-бежевым фасадом и плоской крышей.",
+    "name": "Металлический сарай",
+    "description": "Небольшой сарай из ржавого металла с тёмной рубероидной крышей.",
     "category": "buildings",
-    "tags": ["building", "floors-1"]
+    "tags": ["building", "floors-1", "hipped-roof"]
   }
 }

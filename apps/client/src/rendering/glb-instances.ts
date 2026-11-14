@@ -8,6 +8,7 @@ import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { ShadowDepthWrapper } from '@babylonjs/core/Materials/shadowDepthWrapper';
+import { shadowCasterRadius } from './shadow-range';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Node } from '@babylonjs/core/node';
 import type { AssetContainer } from '@babylonjs/core/assetContainer';
@@ -381,7 +382,7 @@ export class GlbInstances {
     }
   }
   update(center: Vector3 | undefined, visibleRadius: number) {
-    const radius = Math.min(80, visibleRadius);
+    const radius = Math.min(shadowCasterRadius(this.shadows), visibleRadius);
     const candidates =
       visibleRadius <= 0
         ? new Set<string>()

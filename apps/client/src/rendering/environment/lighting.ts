@@ -30,7 +30,7 @@ const SHADOW_MAP_SIZE = 2048;
  * проекция теней не меняется, поэтому неподвижный город можно не перерисовывать,
  * а края теней не дрожат при движении камеры.
  */
-const SHADOW_SNAP = (SHADOW_EXTENT / SHADOW_MAP_SIZE) * 128;
+const SHADOW_STEPS = [90, 180, 360, 720] as const;
 /**
  * Свет поворачивается шагами, а не непрерывно: каждый поворот меняет проекцию теней
  * и требует перерисовать карту неподвижного мира. Шаг в 0,1° на глаз незаметен.
@@ -202,6 +202,7 @@ export class WorldLighting {
   private readonly scratch = new Vector3();
   private readonly target = new Vector3();
   private readonly direction = new Vector3();
+  private viewWidth = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -298,7 +299,7 @@ export class WorldLighting {
     const direction = this.direction.set(x, y, z);
     if (Vector3.Dot(direction, this.sun.direction) < LIGHT_STEP_COS) {
       this.sun.direction.copyFrom(direction);
-      this.follow(this.target);
+      this.follow(this.target, this.viewWidth);
       this.staticShadow.invalidate();
     }
     return sky;
@@ -476,25 +477,47 @@ export class WorldLighting {
   }
 
   /**
-   * Follow the camera target without rotating the sun or expanding the shadow map.
+   * Follow the camera target; an overhead view expands the map in stable steps.
    * The sun moves in whole-texel steps along its own axes; the static map is redrawn
    * only when a step is crossed.
    */
-  follow(target: Vector3): void {
+  follow(target: Vector3, viewWidth = 0): void {
     this.restorePendingProjection();
+    this.viewWidth = viewWidth;
     this.target.copyFrom(target);
+    const required = Math.max(0, Number.isFinite(viewWidth) ? viewWidth : 0) * 1.15;
+    const desired = SHADOW_STEPS.find((step) => step >= required) ?? 720;
+    // Grow immediately; shrinking needs 15% headroom to prevent wheel jitter at a boundary.
+    if (
+      desired > this.sun.shadowFrustumSize ||
+      (desired < this.sun.shadowFrustumSize && required <= desired * 0.85)
+    ) {
+      this.sun.shadowFrustumSize = desired;
+      this.sun.shadowMaxZ = SUN_DISTANCE * 2 * (desired / SHADOW_EXTENT);
+      for (const shadow of [this.staticShadow, this.shadow]) {
+        // Depth range and texel size grow together: normalized depth bias stays constant.
+        shadow.bias = 0.0012;
+        shadow.normalBias = 0.08 * (desired / SHADOW_EXTENT);
+        shadow.resetProjection();
+      }
+      this.staticShadow.invalidate();
+    }
+    const extent = this.sun.shadowFrustumSize;
+    const shadowSnap = (extent / SHADOW_MAP_SIZE) * 128;
     const forward = this.forward.copyFrom(this.sun.direction).normalize();
     // Те же оси, что у видовой матрицы направленного света Babylon.
     Vector3.CrossToRef(Vector3.UpReadOnly, forward, this.right);
     this.right.normalize();
     Vector3.CrossToRef(forward, this.right, this.up);
     const snap = (axis: Vector3) =>
-      Math.round(Vector3.Dot(target, axis) / SHADOW_SNAP) * SHADOW_SNAP;
+      Math.round(Vector3.Dot(target, axis) / shadowSnap) * shadowSnap;
     const position = this.position
       .copyFrom(this.right)
       .scaleInPlace(snap(this.right))
       .addInPlace(this.scratch.copyFrom(this.up).scaleInPlace(snap(this.up)))
-      .addInPlace(this.scratch.copyFrom(forward).scaleInPlace(snap(forward) - SUN_DISTANCE));
+      .addInPlace(
+        this.scratch.copyFrom(forward).scaleInPlace(snap(forward) - SUN_DISTANCE * (extent / SHADOW_EXTENT)),
+      );
     if (position.equalsWithEpsilon(this.sun.position, 1e-6)) return;
     this.sun.position.copyFrom(position);
     this.staticShadow.invalidate();
@@ -508,6 +531,7 @@ export class WorldLighting {
       staticRefreshes: this.staticShadow.refreshes,
       staticDiscarded: this.discardedRefreshes,
       staticFallbacks: this.fallbackRefreshes,
+      extent: this.sun.shadowFrustumSize,
     };
   }
 

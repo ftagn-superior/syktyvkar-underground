@@ -27,6 +27,7 @@ import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
 import { GlbInstances } from './glb-instances';
 import { BuildingChunks } from './building-chunks';
+import { shadowCasterRadius } from './shadow-range';
 import { applyRadialFog, type RadialState } from './radial-fog';
 import {
   staticHitVisible,
@@ -595,10 +596,18 @@ export class BuildingViews {
       shadowCenter && visibleRadius > 0
         ? this.index.query({
             min: shadowCenter.subtract(
-              new Vector3(Math.min(80, visibleRadius), 0, Math.min(80, visibleRadius)),
+              new Vector3(
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+                0,
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+              ),
             ),
             max: shadowCenter.add(
-              new Vector3(Math.min(80, visibleRadius), 0, Math.min(80, visibleRadius)),
+              new Vector3(
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+                0,
+                Math.min(shadowCasterRadius(this.shadow), visibleRadius),
+              ),
             ),
           })
         : visibleRadius > 0

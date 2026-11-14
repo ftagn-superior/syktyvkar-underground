@@ -20,6 +20,7 @@ import { OcclusionFade } from './occlusion';
 import { SpatialIndex } from './spatial-index';
 import { treeIntersectsRay, treeRayDistance, treeTemplate } from './tree-geometry';
 import { TreeMaterial, TREE_ATTRIBUTES } from './tree-material';
+import { shadowCasterRadius } from './shadow-range';
 import {
   staticHitVisible,
   staticObjectSelection,
@@ -252,7 +253,7 @@ export class TreeViews {
       }))
         selected.add(id);
     }
-    const radius = Math.min(80, visibleRadius);
+    const radius = Math.min(320, shadowCasterRadius(this.shadows), visibleRadius);
     const candidates =
       visibleRadius <= 0
         ? new Set<string>()

@@ -10,7 +10,8 @@
  *   pnpm buildings:compare --building osm-way-1317554464
  *   pnpm buildings:compare --building osm-way-1317554464 --facade NW.1,NW.2 --size 640
  *
- * Флаги: --building <id[,id]>, --match <текст>, --all, --facade <ключи>, --size <px панели, 360>.
+ * Флаги: --building <id[,id]>, --match <текст>, --all, --facade <ключи>, --size <px панели, 360>,
+ * --best <n> — только n самых фронтальных и открытых кадров.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -52,6 +53,7 @@ interface View {
   pano: { x: number; z: number };
   distance: number;
   incidence: number;
+  visibility: number;
   shots: Shot[];
 }
 interface Manifest {
@@ -91,6 +93,7 @@ function parseArgs(argv: string[]) {
     match: [] as string[],
     all: false,
     facades: [] as string[],
+    best: 0,
     size: 360,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -104,6 +107,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--match') args.match.push(value().toLowerCase());
     else if (a === '--all') args.all = true;
     else if (a === '--facade') args.facades.push(...value().split(','));
+    else if (a === '--best') args.best = Math.max(1, Number(value()));
     else if (a === '--size') args.size = Math.max(160, Math.min(IMAGE_SIZE, Number(value())));
     else throw new Error(`Неизвестный флаг ${a}`);
   }
@@ -234,7 +238,18 @@ async function main() {
       }
 
       const pairs: Array<{ view: View; shot: Shot; photo: string; render: string }> = [];
-      for (const view of m.views) {
+      // --best N: самые фронтальные и открытые кадры, по одному на фасад.
+      const views = args.best
+        ? [...m.views]
+            .sort(
+              (a, b) =>
+                b.visibility * Math.cos((b.incidence * Math.PI) / 180) -
+                a.visibility * Math.cos((a.incidence * Math.PI) / 180),
+            )
+            .filter((v, i, all) => all.findIndex((o) => o.facade === v.facade) === i)
+            .slice(0, args.best)
+        : m.views;
+      for (const view of views) {
         if (args.facades.length && !args.facades.includes(view.facade)) continue;
         for (const shot of view.shots) {
           const file = join(dir, shot.file);

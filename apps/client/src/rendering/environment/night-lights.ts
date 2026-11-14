@@ -27,6 +27,8 @@ import { nightLevels, type GlowLevel, type NightLevels } from './night-schedule'
 
 /** Имя атрибута, в который переносится TEXCOORD_0 моделей со свечением. */
 export const GLOW_ATTRIBUTE = 'suGlow';
+/** Original mesh translation for merged buildings; keeps their night schedule unchanged. */
+export const GLOW_ORIGIN_ATTRIBUTE = 'suGlowOrigin';
 /** Фонарей в униформе; экономичный режим перебирает меньше. */
 const LAMP_SLOTS = 8;
 const ECONOMY_LAMP_SLOTS = 4;
@@ -99,7 +101,13 @@ class NightLightsPlugin extends MaterialPluginBase {
       material,
       'WorldNightLights',
       207,
-      { SU_NIGHT: false, SU_GLOW: false, SU_LAMP_SLOTS: 0, SU_LAMP_CONES: false },
+      {
+        SU_NIGHT: false,
+        SU_GLOW: false,
+        SU_GLOW_ORIGIN: false,
+        SU_LAMP_SLOTS: 0,
+        SU_LAMP_CONES: false,
+      },
       true,
       false,
     );
@@ -114,6 +122,7 @@ class NightLightsPlugin extends MaterialPluginBase {
     const target = defines as MaterialDefines & {
       SU_NIGHT: boolean;
       SU_GLOW: boolean;
+      SU_GLOW_ORIGIN: boolean;
       SU_LAMP_SLOTS: number;
       SU_LAMP_CONES: boolean;
     };
@@ -122,6 +131,7 @@ class NightLightsPlugin extends MaterialPluginBase {
       this.state.enabled &&
       this._material instanceof PBRMaterial &&
       mesh.isVerticesDataPresent(GLOW_ATTRIBUTE);
+    target.SU_GLOW_ORIGIN = target.SU_GLOW && mesh.isVerticesDataPresent(GLOW_ORIGIN_ATTRIBUTE);
     target.SU_LAMP_SLOTS = target.SU_NIGHT ? this.state.slots : 0;
     target.SU_LAMP_CONES = target.SU_NIGHT && this.state.cones;
   }
@@ -132,6 +142,12 @@ class NightLightsPlugin extends MaterialPluginBase {
       !attributes.includes(GLOW_ATTRIBUTE)
     )
       attributes.push(GLOW_ATTRIBUTE);
+    if (
+      this.state.enabled &&
+      mesh.isVerticesDataPresent(GLOW_ORIGIN_ATTRIBUTE) &&
+      !attributes.includes(GLOW_ORIGIN_ATTRIBUTE)
+    )
+      attributes.push(GLOW_ORIGIN_ATTRIBUTE);
   }
   override getUniforms() {
     return {
@@ -177,12 +193,20 @@ uniform vec4 suLampCone;`,
           #ifdef SU_GLOW
             attribute vec2 ${GLOW_ATTRIBUTE};
             varying vec3 vSuGlow;
+            #ifdef SU_GLOW_ORIGIN
+              attribute vec2 ${GLOW_ORIGIN_ATTRIBUTE};
+            #endif
           #endif
         `,
         // Число экземпляра из его положения: одинаковые дома и фонари не мигают в такт.
         CUSTOM_VERTEX_MAIN_END: `
           #ifdef SU_GLOW
-            float suInstance = fract(sin(dot(floor(finalWorld[3].xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
+            #ifdef SU_GLOW_ORIGIN
+              vec2 suOrigin = ${GLOW_ORIGIN_ATTRIBUTE};
+            #else
+              vec2 suOrigin = finalWorld[3].xz;
+            #endif
+            float suInstance = fract(sin(dot(floor(suOrigin * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
             vSuGlow = vec3(${GLOW_ATTRIBUTE}.x, ${GLOW_ATTRIBUTE}.y, suInstance);
           #endif
         `,

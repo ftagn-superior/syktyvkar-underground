@@ -906,7 +906,7 @@ export function startGame(): void {
     try {
       if (!Engine.isSupported()) {
         session.markPreparationFailed(
-          'Для полигона нужен браузер с WebGL2. Включите аппаратное ускорение и откройте страницу в браузере с WebGL2.',
+          'Для игры нужен браузер с WebGL2. Включите аппаратное ускорение и откройте страницу в браузере с WebGL2.',
         );
         return;
       }

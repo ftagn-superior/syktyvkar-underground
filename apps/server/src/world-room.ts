@@ -997,29 +997,24 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     });
   }
 
+  private adminAccess(session?: Session): 'AUTH_REQUIRED' | 'ADMIN_REQUIRED' | undefined {
+    if (
+      !session?.auth ||
+      session.auth.expiresAt <= Date.now() ||
+      this.accounts?.wasRevoked(session.auth.authSessionId)
+    )
+      return 'AUTH_REQUIRED';
+    if (!session.auth.isAdmin) return 'ADMIN_REQUIRED';
+  }
+
   private async chatCommand(client: Client, action: ClientAction, command: ChatCommand) {
     const { session, requestId, code } = action;
     const fail = (code: ActionResult['code'], message: string) =>
       this.finishAction(client, session, { requestId, ok: false, code, message });
     if (code) return fail(code, 'Команда сейчас недоступна. Проверьте состояние мира.');
+    const access = this.adminAccess(session);
+    if (access) return fail(access, giveFailureMessage(access));
     if (command.kind === 'invalid') return fail(command.code, command.message);
-    if (
-      !session.auth ||
-      session.auth.expiresAt <= Date.now() ||
-      this.accounts?.wasRevoked(session.auth.authSessionId)
-    )
-      return fail(
-        'AUTH_REQUIRED',
-        command.kind === 'time'
-          ? 'Чтобы управлять временем, войдите через Telegram.'
-          : command.kind === 'weather'
-            ? 'Чтобы управлять погодой, войдите через Telegram.'
-            : command.kind === 'staticPlacement'
-              ? 'Чтобы размещать объекты, войдите через Telegram.'
-              : command.kind === 'staticRemoval'
-                ? 'Чтобы удалять объекты, войдите через Telegram.'
-                : giveFailureMessage('AUTH_REQUIRED'),
-      );
     if (command.kind === 'time')
       return this.finishAction(client, session, {
         requestId,
@@ -1058,15 +1053,12 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.itemRequests++;
     try {
       const result = await this.items.give(
-        session.auth.accountId,
+        session.auth!.accountId,
         `chat-${this.state.worldEpoch}-${client.sessionId}-${requestId}`,
         command.typeId,
         () => {
-          if (
-            session.auth!.expiresAt <= Date.now() ||
-            this.accounts?.wasRevoked(session.auth!.authSessionId)
-          )
-            return 'AUTH_REQUIRED';
+          const access = this.adminAccess(session);
+          if (access) return access;
           if (
             this.sessions.get(client.sessionId) !== session ||
             session.plan ||
@@ -1180,6 +1172,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.accounts?.wasRevoked(session.auth.authSessionId)
       )
         throw new ServerError(401, 'AUTH_REQUIRED');
+      session.auth.isAdmin = restored.isAdmin;
     }
     if (
       this.stopping ||
@@ -1383,14 +1376,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       client.send(resultMessage, { operationId, ok: false, code });
     if (!operation.request) return fail('INVALID_INPUT');
     const session = this.sessions.get(client.sessionId);
-    const authorize = (): StaticPlacementError | undefined => {
-      if (
-        !session?.auth ||
-        session.auth.expiresAt <= Date.now() ||
-        this.accounts?.wasRevoked(session.auth.authSessionId)
-      )
-        return 'AUTH_REQUIRED';
-    };
+    const authorize = (): StaticPlacementError | undefined => this.adminAccess(session);
     const auth = authorize();
     if (auth) return fail(auth);
     if (!this.staticPlacement) return fail('COMMAND_DISABLED');

@@ -18,7 +18,12 @@ import type { WorldState } from '../../packages/protocol/src/index.js';
 import { StaticLayoutStore } from '../../apps/server/src/layout/store.js';
 import { AuthoritativeWorld } from '../../packages/simulation/src/server.js';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAccount,
+  loginAdminAccount,
+  responseCookie,
+} from '../helpers/account-fixture.js';
 import { prepareSdk } from '../helpers/prepare.js';
 import {
   buildStaticRemovalWorld,
@@ -56,7 +61,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live whole-object static rem
     await refresh();
   }
   async function login(subject: string) {
-    return responseCookie((await loginAccount(app.url, subject)).result, 'su_session');
+    return responseCookie(
+      (await loginAdminAccount(app.url, subject, fixture.store)).result,
+      'su_session',
+    );
   }
   async function connect(cookie?: string) {
     await refresh();
@@ -124,7 +132,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live whole-object static rem
     await fixture?.close();
   });
 
-  it('opens privately for accounts and rejects guest commands and direct writes', async () => {
+  it('opens privately for administrators and rejects guest and non-admin commands and direct writes', async () => {
     const player = await connect(await login('remover'));
     const guest = await connect();
     player.room.send('requestChat', {
@@ -149,6 +157,18 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('live whole-object static rem
     await until(() => guest.actions.length === 1 && guest.removals.length === 1);
     expect(guest.actions[0]).toMatchObject({ ok: false, code: 'AUTH_REQUIRED' });
     expect(guest.removals[0]).toMatchObject({ ok: false, code: 'AUTH_REQUIRED' });
+    const ordinary = await connect(
+      responseCookie((await loginAccount(app.url, 'ordinary-remover')).result, 'su_session'),
+    );
+    ordinary.room.send('requestChat', {
+      requestId: 1,
+      worldEpoch: info.worldEpoch,
+      text: '/vilievna',
+    });
+    ordinary.room.send('removeStatic', request());
+    await until(() => ordinary.actions.length === 1 && ordinary.removals.length === 1);
+    expect(ordinary.actions[0]).toMatchObject({ ok: false, code: 'ADMIN_REQUIRED' });
+    expect(ordinary.removals[0]).toMatchObject({ ok: false, code: 'ADMIN_REQUIRED' });
     expect((await publishedIds()).has(REMOVAL_SEED_OBJECTS.house.entityId)).toBe(true);
   });
 

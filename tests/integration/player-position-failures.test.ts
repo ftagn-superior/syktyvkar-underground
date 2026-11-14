@@ -7,7 +7,12 @@ import { ItemStore } from '../../apps/server/src/items/store.js';
 import { PlayerPositionRuntime } from '../../apps/server/src/players/position-runtime.js';
 import { PlayerPositionStore } from '../../apps/server/src/players/position-store.js';
 import { createGameServer } from '../helpers/game-server.js';
-import { createAccountFixture, loginAccount, responseCookie } from '../helpers/account-fixture.js';
+import {
+  createAccountFixture,
+  loginAccount,
+  responseCookie,
+  setAccountAdmin,
+} from '../helpers/account-fixture.js';
 import { prepareSdk } from '../helpers/prepare.js';
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -43,9 +48,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       if (!serverClosed) await app?.close();
       await fixture?.close();
     });
-    async function join(subject: string) {
+    async function join(subject: string, admin = false) {
       const { result } = await loginAccount(app.url, subject);
       const cookie = responseCookie(result, 'su_session');
+      if (admin) await setAccountAdmin(fixture.store, cookie);
       const sdk = new Client(app.url, { headers: { Cookie: cookie } });
       const room = await sdk.joinById<WorldState>(info.roomId, { ...info, accountMode: 'account' });
       room.reconnection.enabled = false;
@@ -113,7 +119,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)(
       const positionSave = vi
         .spyOn(PlayerPositionStore.prototype, 'save')
         .mockRejectedValue(new Error('test position storage outage'));
-      const owner = await join('position-outage-item-success');
+      const owner = await join('position-outage-item-success', true);
       try {
         await until(() => app.room.diagnostics().playerPositions.writeErrors > 0);
         expect(app.room.state.paused).toBe(false);

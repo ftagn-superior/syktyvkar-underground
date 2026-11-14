@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
-import { createAccountFixture } from './helpers/account-fixture.js';
+import { createAccountFixture, setAccountAdmin } from './helpers/account-fixture.js';
 import { buildStaticPlacementWorld } from './helpers/static-placement-world.js';
 import { launchTestBrowser } from './helpers/browser.js';
 import { rotateCamera } from './helpers/camera.js';
@@ -237,6 +237,10 @@ try {
   await owner.goto(app.url);
   await owner.locator('#telegram-login').click();
   await owner.locator('#profile-form').waitFor({ state: 'visible' });
+  const adminCookie = (await owner.context().cookies()).find(
+    (cookie) => cookie.name === 'su_session',
+  )!;
+  await setAccountAdmin(fixture.store, `${adminCookie.name}=${adminCookie.value}`);
   for (const page of [owner, observer]) {
     await page.bringToFront();
     await page.goto(app.url + '/?diagnostics=1');

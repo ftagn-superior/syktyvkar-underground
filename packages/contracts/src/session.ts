@@ -33,6 +33,7 @@ export interface WorldInfo {
 }
 export type ErrorCode =
   | 'AUTH_REQUIRED'
+  | 'ADMIN_REQUIRED'
   | 'WORLD_FULL'
   | 'WORLD_NOT_READY'
   | 'VERSION_MISMATCH'

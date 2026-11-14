@@ -41,6 +41,7 @@
     "test:restart:browser": "node --import tsx tests/browser-restart.ts",
     "test:polish:browser": "node --import tsx tests/browser-polish.ts",
     "test:render:browser": "node --import tsx tests/browser-render-profile.ts",
+    "test:render:optimizations": "node --import tsx tests/browser-render-optimizations.ts",
     "test:loading:browser": "node --import tsx tests/browser-loading-profile.ts",
     "test:trees:browser": "node --import tsx tests/browser-tree-instancing.ts",
     "test:static-glb:browser": "node --import tsx tests/browser-static-glb-instancing.ts",

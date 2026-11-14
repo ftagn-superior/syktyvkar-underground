@@ -512,14 +512,15 @@ export class WorldLighting {
     Vector3.CrossToRef(Vector3.UpReadOnly, forward, this.right);
     this.right.normalize();
     Vector3.CrossToRef(forward, this.right, this.up);
-    const snap = (axis: Vector3) =>
-      Math.round(Vector3.Dot(target, axis) / shadowSnap) * shadowSnap;
+    const snap = (axis: Vector3) => Math.round(Vector3.Dot(target, axis) / shadowSnap) * shadowSnap;
     const position = this.position
       .copyFrom(this.right)
       .scaleInPlace(snap(this.right))
       .addInPlace(this.scratch.copyFrom(this.up).scaleInPlace(snap(this.up)))
       .addInPlace(
-        this.scratch.copyFrom(forward).scaleInPlace(snap(forward) - SUN_DISTANCE * (extent / SHADOW_EXTENT)),
+        this.scratch
+          .copyFrom(forward)
+          .scaleInPlace(snap(forward) - SUN_DISTANCE * (extent / SHADOW_EXTENT)),
       );
     if (position.equalsWithEpsilon(this.sun.position, 1e-6)) return;
     this.sun.position.copyFrom(position);

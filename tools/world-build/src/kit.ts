@@ -38,6 +38,8 @@ export type KitShape =
         length: number;
         axis: 'x' | 'y' | 'z';
         sides?: number;
+        /** Поворот всего цилиндра вокруг вертикали через `center`, градусы. */
+        yaw?: number;
       };
     }
   /** Вертикальный усечённый конус: холм, куст, постамент. */
@@ -75,7 +77,11 @@ export interface KitRecipe {
    * Источники ночного света в локальных осях модели: клиент рисует под ними пятно света.
    * `position` — [x, y, z] светящегося плафона, `radius` — дальность в метрах.
    */
-  lights?: { position: Triple; radius: number; color: string }[];
+  /**
+   * Ночные источники света. `kind: "neon"` — без светящейся дымки под источником и с горением
+   * от сумерек до утра: для подсветки, поставленной выше земли (памятник «Трудовая слава»).
+   */
+  lights?: { position: Triple; radius: number; color: string; kind?: 'lamp' | 'neon' }[];
 }
 
 const finite = (values: unknown, count: number) =>
@@ -98,12 +104,16 @@ function addCylinder(
   const sides = checkSides(shape.sides ?? 12);
   const [cx, cy, cz] = shape.center;
   // Локальный круг в плоскости (a, b); ось цилиндра — третья координата.
-  const place = (a: number, b: number, c: number): number[] =>
-    shape.axis === 'y'
-      ? [cx + a, cy + c, cz + b]
-      : shape.axis === 'x'
-        ? [cx + c, cy + a, cz + b]
-        : [cx + a, cy + b, cz + c];
+  const local = (a: number, b: number, c: number): number[] =>
+    shape.axis === 'y' ? [a, c, b] : shape.axis === 'x' ? [c, a, b] : [a, b, c];
+  const [ux, uz] = axisOf(shape.yaw);
+  const place = (a: number, b: number, c: number): number[] => {
+    const [x, y, z] = local(a, b, c);
+    // Без yaw координаты те же, что и раньше: прежние модели не меняются.
+    return shape.yaw
+      ? [cx + x * ux - z * uz, cy + y, cz + x * uz + z * ux]
+      : [cx + x, cy + y, cz + z];
+  };
   const ring = (c: number) =>
     Array.from({ length: sides }, (_, k) => {
       const angle = (k / sides) * Math.PI * 2;
@@ -241,7 +251,8 @@ export function generateKit(
           !finite(c.center, 3) ||
           !(c.radius > 0) ||
           !(c.length > 0) ||
-          !['x', 'y', 'z'].includes(c.axis)
+          !['x', 'y', 'z'].includes(c.axis) ||
+          (c.yaw !== undefined && !Number.isFinite(c.yaw))
         )
           throw new Error(`Invalid kit cylinder in ${spec.id}`);
         addCylinder(part, c);
@@ -325,11 +336,17 @@ export function generateKit(
     if (
       !finite(light.position, 3) ||
       !(light.radius > 0 && light.radius <= 40) ||
-      !/^#[a-f0-9]{6}$/i.test(light.color)
+      !/^#[a-f0-9]{6}$/i.test(light.color) ||
+      (light.kind !== undefined && light.kind !== 'lamp' && light.kind !== 'neon')
     )
       throw new Error(`Invalid kit light in ${assetId}`);
     const [x, y, z] = light.position;
-    return { position: { x, y, z }, radius: light.radius, color: light.color };
+    return {
+      position: { x, y, z },
+      radius: light.radius,
+      color: light.color,
+      ...(light.kind ? { kind: light.kind } : {}),
+    };
   });
   return {
     parts: recipe.merge ? mergeParts(parts) : parts,

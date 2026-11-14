@@ -147,7 +147,7 @@ type WorldModelCatalog = {
 
 ## Политика игрового размещения
 
-Необязательное `placementPolicy` в `content/worlds/<worldId>/world.json` указывает на локальный JSON `{ "formatVersion": 1, "assetIds": [...] }`. У `ring-block` это `placement.json` с 22 явными ID; без политики новые размещения отключены. Политика не дублирует метаданные и геометрию. Сборщик отклоняет дубли, неизвестные ID, ground/фиксированный слой, неоднозначную runtime-связь и модели без одного box-коллайдера или поддержанного GLB/`parts.tree`.
+Необязательное `placementPolicy` в `content/worlds/<worldId>/world.json` указывает на локальный JSON `{ "formatVersion": 1, "assetIds": [...] }`. У `ring-block` это `placement.json` с 24 явными ID; без политики новые размещения отключены. Политика не дублирует метаданные и геометрию. Сборщик отклоняет дубли, неизвестные ID, ground/фиксированный слой, неоднозначную runtime-связь и модели без одного box-коллайдера или поддержанного GLB/`parts.tree`.
 
 Сборка пишет `dist/model-catalogs/<worldId>/placement-policy.json` с привязкой к выпуску; `index.json` отмечает включённую политику полем `placementPolicy: true`. Отсутствующий или повреждённый явно включённый артефакт останавливает запуск. Для временных `buildWorld(source, output)` каталог лежит в `<output>/model-catalog/`; сервер получает эту папку явно через `modelCatalogDirectory`, без поиска соседних выпусков.
 

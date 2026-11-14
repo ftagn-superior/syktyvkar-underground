@@ -18,6 +18,8 @@
     "bush-small-high": "objects/bush-small-high/asset.json",
     "bush-small-low": "objects/bush-small-low/asset.json",
     "fence-long": "objects/fence-long/asset.json",
+    "fence-road-long": "objects/fence-road-long/asset.json",
+    "fence-road-short": "objects/fence-road-short/asset.json",
     "fence-short": "objects/fence-short/asset.json",
     "kuratov-monument": "manual/kuratov-monument/asset.json",
     "lamp-five-globe": "objects/lamp-five-globe/asset.json",

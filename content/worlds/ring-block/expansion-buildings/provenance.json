@@ -1,0 +1,46 @@
+{
+  "formatVersion": 1,
+  "source": "OpenStreetMap via Overpass API",
+  "license": "ODbL 1.0, © OpenStreetMap contributors",
+  "osmTimestamp": "2026-11-14T10:56:36Z",
+  "snapshotSha256": "c049743ae19d1e9bfe7681715434bfe86bd9f131a54accd6f713cffaf142cc58",
+  "query": "[out:json][timeout:120];(way[building](61.65564,50.78643,61.67210,50.85494);relation[building][type=multipolygon](61.65564,50.78643,61.67210,50.85494););out geom;",
+  "excludedRectangle": {
+    "min": [
+      -269,
+      -745
+    ],
+    "max": [
+      331,
+      131
+    ]
+  },
+  "height": "building:levels × 3 m; иначе height / 3; иначе по типу building",
+  "buildings": 1829,
+  "withLevels": 1540,
+  "levels": {
+    "1": 677,
+    "2": 662,
+    "3": 104,
+    "4": 65,
+    "5": 196,
+    "6": 22,
+    "7": 6,
+    "8": 5,
+    "9": 59,
+    "10": 15,
+    "11": 2,
+    "12": 6,
+    "13": 2,
+    "14": 5,
+    "17": 1,
+    "18": 2
+  },
+  "skipped": {
+    "oldArea": 182,
+    "edge": 250,
+    "type": 12,
+    "small": 2,
+    "invalid": 0
+  }
+}

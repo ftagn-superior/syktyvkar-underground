@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-way-92104533",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: жилой дом, 5 эт.",
+    "description": "Временная коробка по контуру OSM way/92104533 без окон и деталей (этап B расширения). 5 эт. × 3 м по building:levels и цоколь 2.33 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-5"
+    ]
+  }
+}

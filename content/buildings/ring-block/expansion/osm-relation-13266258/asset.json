@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-relation-13266258",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: здание, 1 эт.",
+    "description": "Временная коробка по контуру OSM relation/13266258 без окон и деталей (этап B расширения). 1 эт. × 3 м по building:levels и цоколь 9.08 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-1"
+    ]
+  }
+}

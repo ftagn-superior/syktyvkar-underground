@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-way-707088387",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: частный дом, 2 эт.",
+    "description": "Временная коробка по контуру OSM way/707088387 без окон и деталей (этап B расширения). 2 эт. × 3 м по building:levels и цоколь 1.06 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-2"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-way-92104483",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: общественное здание, 3 эт.",
+    "description": "Временная коробка по контуру OSM way/92104483 без окон и деталей (этап B расширения). 3 эт. × 3 м по building:levels и цоколь 4.05 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-3"
+    ]
+  }
+}

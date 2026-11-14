@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-way-694831506",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: жилой дом, 12 эт.",
+    "description": "Временная коробка по контуру OSM way/694831506 без окон и деталей (этап B расширения). 12 эт. × 3 м по building:levels и цоколь 3.76 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-12"
+    ]
+  }
+}

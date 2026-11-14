@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-way-112200535",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: служебное здание, 2 эт.",
+    "description": "Временная коробка по контуру OSM way/112200535 без окон и деталей (этап B расширения). 2 эт. × 3 м по типу здания и цоколь 3.45 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-2"
+    ]
+  }
+}

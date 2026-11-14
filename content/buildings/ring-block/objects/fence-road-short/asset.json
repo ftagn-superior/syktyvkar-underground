@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "assetId": "fence-road-short",
+  "renderMode": "thin-instance",
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Секция дорожного ограждения, короткая",
+    "description": "Низкая (0.95 м) светло-серая решётка вдоль газона у бордюра: стойки, две перекладины и частые вертикальные прутья. Секция 1 м.",
+    "category": "barriers",
+    "tags": ["fence", "short", "metal", "modular", "road"]
+  }
+}

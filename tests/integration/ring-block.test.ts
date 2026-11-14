@@ -929,14 +929,15 @@ describe('мир ring-block', () => {
       ]),
     );
     expect(byAssetCount(definition, 'sorokin-monument')).toBe(1);
-    // Кольцо: островки на въездах лежат отдельным слоем земли поверх асфальта.
+    // Кольцо: островки на въездах — разметка на асфальте (контур и штриховка), светлых площадок нет;
+    // вдоль бордюра — газон и низкая дорожная ограда.
     const ground = JSON.parse(
       await readFile('content/buildings/ring-block/ring-block-ground/source.json', 'utf8'),
     ) as { layers: { id: string; elevation: number; polygons: unknown[] }[] };
     const groundLayer = (id: string) => ground.layers.find((l) => l.id === id)!;
-    expect(groundLayer('islands').polygons).toHaveLength(4);
-    expect(groundLayer('islands').elevation).toBeGreaterThan(groundLayer('road').elevation);
-    expect(groundLayer('islands').elevation).toBeLessThan(groundLayer('markings').elevation);
+    expect(groundLayer('islands').polygons).toHaveLength(0);
+    expect(groundLayer('markings').elevation).toBeGreaterThan(groundLayer('road').elevation);
+    expect(byAssetCount(definition, 'fence-road-long')).toBeGreaterThan(80);
     // Памятник из manual/ стоит в центре кольца и имеет собственные столкновения.
     const monument = definition.buildings.find((b) => b.entityId === 'monument-trudovaya-slava');
     expect(monument).toMatchObject({ assetId: 'trudovaya-slava' });

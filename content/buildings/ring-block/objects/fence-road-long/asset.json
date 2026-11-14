@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "assetId": "fence-road-long",
+  "renderMode": "thin-instance",
+  "source": {
+    "kind": "kit",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Секция дорожного ограждения, длинная",
+    "description": "Низкая (0.95 м) светло-серая решётка вдоль газона у бордюра: стойки, две перекладины и частые вертикальные прутья. Секция 4 м.",
+    "category": "barriers",
+    "tags": ["fence", "long", "metal", "modular", "road"]
+  }
+}

@@ -174,8 +174,20 @@ function inspectKit(assetId: string, recipe: KitRecipe) {
 
 /** Inventory comes from the actual generators; it never infers a support from a model name. */
 export async function inspectRingSupportModels() {
-  const bytes = await readFile(catalogFile);
-  const catalog: { assets: Record<string, string> } = JSON.parse(bytes.toString());
+  const raw = await readFile(catalogFile);
+  const full: { assets: Record<string, string> } = JSON.parse(raw.toString());
+  // Коробки расширения (expansion/, этап B) стоят без фундаментов и в авторинг опор
+  // рельефа не входят; хеш берётся от каталога без них — прежние байты не меняются.
+  const catalog = {
+    ...full,
+    assets: Object.fromEntries(
+      Object.entries(full.assets).filter(([, path]) => !path.startsWith('expansion/')),
+    ),
+  };
+  const bytes =
+    Object.keys(catalog.assets).length === Object.keys(full.assets).length
+      ? raw
+      : Buffer.from(JSON.stringify(catalog, null, 2) + '\n');
   const models = [];
   for (const [assetId, relative] of Object.entries(catalog.assets).sort(([a], [b]) =>
     a.localeCompare(b),

@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "assetId": "osm-way-708023994",
+  "source": {
+    "kind": "footprint",
+    "file": "source.json"
+  },
+  "metadata": {
+    "name": "Болванка: гараж или сарай, 1 эт.",
+    "description": "Временная коробка по контуру OSM way/708023994 без окон и деталей (этап B расширения). 1 эт. × 3 м по building:levels и цоколь 0.81 м до рельефа.",
+    "category": "buildings",
+    "tags": [
+      "building",
+      "placeholder",
+      "floors-1"
+    ]
+  }
+}

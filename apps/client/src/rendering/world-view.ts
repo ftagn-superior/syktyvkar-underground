@@ -239,7 +239,10 @@ export class WorldView {
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
       this.inputFrameHook?.(now, delta);
+      const previousAngle = this.cameraOrbit.angle;
       this.camera.alpha = this.cameraOrbit.advance(delta);
+      if (this.firstPerson)
+        this.yaw = normalizeYaw(this.yaw - (this.cameraOrbit.angle - previousAngle));
       this.frameHook?.(now, delta);
       this.camera.setTarget(
         Vector3.Lerp(this.camera.target, this.target, 1 - Math.exp(-Math.min(delta, 0.1) * 5)),
@@ -403,7 +406,7 @@ export class WorldView {
     for (const view of this.entities.values()) view.avatar?.resetMotion();
   }
   setCameraRotation(direction: -1 | 0 | 1): void {
-    if (!this.firstPerson) this.cameraOrbit.setDirection(direction);
+    this.cameraOrbit.setDirection(direction);
   }
   rotateCameraBy(radians: number): void {
     if (!this.firstPerson) this.cameraOrbit.rotateBy(radians);

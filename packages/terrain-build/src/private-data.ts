@@ -290,11 +290,16 @@ export function validateTerrainPrivateData(value: unknown): TerrainPrivateData {
 }
 
 export function validateTerrainCoverage(grid: TerrainGrid, bounds: Bounds) {
+  // A minimal sample halo permits exact world boundaries between existing nodes.
+  // Publication clips to bounds; a shifted or excessively oversized grid is invalid.
+  const margins = [
+    bounds.min.x - grid.origin.x,
+    bounds.min.z - grid.origin.z,
+    grid.origin.x + (grid.columns - 1) * grid.spacing - bounds.max.x,
+    grid.origin.z + (grid.rows - 1) * grid.spacing - bounds.max.z,
+  ];
   if (
-    grid.origin.x !== bounds.min.x ||
-    grid.origin.z !== bounds.min.z ||
-    grid.origin.x + (grid.columns - 1) * grid.spacing !== bounds.max.x ||
-    grid.origin.z + (grid.rows - 1) * grid.spacing !== bounds.max.z ||
+    margins.some((margin) => !Number.isFinite(margin) || margin < 0 || margin >= grid.spacing) ||
     grid.bottom < bounds.min.y ||
     grid.heights.some((h) => h >= bounds.max.y)
   )

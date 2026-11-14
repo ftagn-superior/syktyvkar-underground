@@ -74,6 +74,26 @@ function horizontalAreas(positions: number[], indices: number[], normals?: numbe
 }
 
 describe('terrain resources inside unchanged publication cells', () => {
+  it('retains visible outer skirts when the world edge cuts through the sample halo', () => {
+    const boundary = rectangle(64, 64, 126, 126);
+    const worldBounds = { min: { x: 1, z: 1 }, max: { x: 127, z: 127 } };
+    const result = generateTerrainTile('halo', grid, boundary, [], undefined, { worldBounds });
+    const part = result.parts[0];
+    for (const axis of [0, 2])
+      for (const coordinate of [1, 127]) {
+        let skirtTriangles = 0;
+        for (let i = 0; i < part.indices.length; i += 3) {
+          const ids = part.indices.slice(i, i + 3);
+          if (
+            ids.every((id) => part.positions[id * 3 + axis] === coordinate) &&
+            ids.some((id) => part.positions[id * 3 + 1] === grid.bottom)
+          )
+            skirtTriangles++;
+        }
+        expect(skirtTriangles).toBeGreaterThan(0);
+      }
+  });
+
   it('splits a naturally oversized cell and preserves saved colors, areas, collision and seams', async () => {
     const surfaces: TerrainSurface[] = Array.from({ length: 20 }, (_, index) => ({
       id: `layer-${index}`,

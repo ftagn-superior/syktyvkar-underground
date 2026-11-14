@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "worldBoundsXZ": { "west": -1500, "east": 2000, "north": -850, "south": 850 },
+  "originWgs84": { "lon": 50.815951774241576, "lat": 61.66386729706631 },
+  "metresPerDegree": { "lon": 52837.29, "lat": 110573.15 },
+  "heightReferenceEllipsoidMetres": 124,
+  "preservedGrid": "terrain-candidate/full-grid-ready.json",
+  "preservedGridSha256": "d6e9ceb11508a43d542f5a3f6517c86d176b8af924ba4c218ce277483e7f864f",
+  "transitionMetres": 200,
+  "sourceMarginMetres": 300,
+  "sources": {
+    "ground": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.3857.3855_v1.2.tif",
+    "geoid": "https://cdn.proj.org/us_nga_egm08_25.tif"
+  }
+}

@@ -349,7 +349,10 @@ export function generateTerrainTile(
   boundary: Point2[],
   surfaces: TerrainSurface[],
   context?: TerrainBuildContext,
-  options: { baseColor?: string } = {},
+  options: {
+    baseColor?: string;
+    worldBounds?: { min: { x: number; z: number }; max: { x: number; z: number } };
+  } = {},
 ): GeneratedTerrainAsset {
   const prepared = context ?? prepareTerrainBuildContext(g, surfaces);
   if (prepared.sourceGrid !== g || prepared.sourceSurfaces !== surfaces)
@@ -377,8 +380,18 @@ export function generateTerrainTile(
   // must not cast a thin shadow onto the continuous visible surface.
   const internalEdges: { axis: 0 | 2; value: number }[] = [];
   for (const [axis, start, end, values] of [
-    [0, g.origin.x, g.origin.x + (g.columns - 1) * g.spacing, boundary.map((p) => p[0])],
-    [2, g.origin.z, g.origin.z + (g.rows - 1) * g.spacing, boundary.map((p) => p[1])],
+    [
+      0,
+      options.worldBounds?.min.x ?? g.origin.x,
+      options.worldBounds?.max.x ?? g.origin.x + (g.columns - 1) * g.spacing,
+      boundary.map((p) => p[0]),
+    ],
+    [
+      2,
+      options.worldBounds?.min.z ?? g.origin.z,
+      options.worldBounds?.max.z ?? g.origin.z + (g.rows - 1) * g.spacing,
+      boundary.map((p) => p[1]),
+    ],
   ] as const)
     for (const value of [Math.min(...values), Math.max(...values)])
       if (value > start + 1e-8 && value < end - 1e-8) internalEdges.push({ axis, value });

@@ -1,6 +1,6 @@
 # Ring terrain: подготовка ядра
 
-13 ноября 2026 года. Этап 1 [плана](../docs/plans/ring-terrain-integration.md) реализован. Результаты этапа 0 сохранены коммитом `fb9bfdd`. Машиночитаемые результаты: [ring-terrain-stage1-evidence.json](ring-terrain-stage1-evidence.json).
+13 ноября 2026 года. Этап 1 [плана](../docs/archive/plans/ring-terrain-integration.md) реализован. Результаты этапа 0 сохранены коммитом `fb9bfdd`. Машиночитаемые результаты: [ring-terrain-stage1-evidence.json](ring-terrain-stage1-evidence.json).
 
 ## Изменения
 

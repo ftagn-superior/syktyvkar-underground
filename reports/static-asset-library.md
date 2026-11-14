@@ -166,7 +166,7 @@ GLB после независимого review прошли адресно, вк
 схемами в отдельном PostgreSQL на порту 55432. Рабочая БД использовалась только
 для авторизованных backup, dry-run, применения и последующей проверки.
 Команды применения, проверки готовности и восстановления приведены в
-[operations.md](operations.md#компактная-библиотека-статических-объектов).
+[operations.md](../docs/operations.md#компактная-библиотека-статических-объектов).
 
 Артефакты: `reports/static-library-v1.json`,
 `reports/static-library-v1-performance.json`, `content/migrations/ring-block/static-library-v1.json`,

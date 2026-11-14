@@ -134,7 +134,7 @@ describe('static GLB thin instances', () => {
         glbInstances: 4,
         glbBatches: 4,
         glbTemplates: 2,
-        glbInstanceBufferBytes: 640,
+        glbInstanceBufferBytes: 2560,
       });
       expect(f.scene.transformNodes).toHaveLength(0);
       const near = batches(f.scene).filter((mesh) => mesh.thinInstanceCount === 3);
@@ -158,7 +158,9 @@ describe('static GLB thin instances', () => {
       for (const id of ['a', 'c', 'other-chunk']) f.views.remove(id);
       f.update();
       expect(f.views.aggregateDiagnostics()).toMatchObject({ instances: 0, glbBatches: 0 });
-      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(0);
+      expect(f.shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled())).toHaveLength(
+        0,
+      );
       releaseB();
       expect(f.scene.meshes).toHaveLength(0);
       expect(f.scene.geometries).toHaveLength(0);
@@ -181,7 +183,10 @@ describe('static GLB thin instances', () => {
       f.update();
       const state = () =>
         Array.from(
-          batches(f.scene)[0].getVertexBuffer('suInstanceState')!.getData() as Float32Array,
+          (batches(f.scene)[0].getVertexBuffer('suInstanceState')!.getData() as Float32Array).slice(
+            0,
+            batches(f.scene)[0].thinInstanceCount * 4,
+          ),
         ).filter((_, i) => i % 4 === 0);
       expect(state()).toEqual([100, 200]);
       f.views.remove('old');
@@ -189,16 +194,105 @@ describe('static GLB thin instances', () => {
       expect(state()).toEqual([200]);
       f.add('distant', 110);
       f.update(new Vector3(0, 2, 10), 1000);
-      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(2);
+      expect(f.shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled())).toHaveLength(
+        2,
+      );
       f.update(new Vector3(110, 2, 10), 1000);
-      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(2);
+      expect(f.shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled())).toHaveLength(
+        2,
+      );
       f.update(undefined, 0);
-      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(0);
+      expect(f.shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled())).toHaveLength(
+        0,
+      );
       for (const id of ['new', 'distant']) f.views.remove(id);
       release();
       expect(f.views.aggregateDiagnostics()).toMatchObject({ instances: 0, glbBatches: 0 });
     } finally {
       clock.mockRestore();
+      f.dispose();
+    }
+  });
+
+  it('uploads newly added matrices within capacity and preserves GPU buffers through compaction', async () => {
+    const f = fixture();
+    try {
+      const release = await f.views.prepareAssets(f.manifest, [assetId], f.read);
+      f.add('first', 5);
+      f.update();
+      const mesh = batches(f.scene).find((mesh) => mesh.isEnabled())!;
+      const matrixBuffer = mesh.getVertexBuffer('world0')!.getBuffer();
+      expect(mesh.thinInstanceGetWorldMatrices()).toHaveLength(1);
+      const allocate = vi.spyOn(mesh, 'thinInstanceSetBuffer');
+      const upload = vi.spyOn(f.engine, 'updateDynamicVertexBuffer');
+      f.add('second', 20);
+      f.update();
+      expect(allocate).not.toHaveBeenCalled();
+      expect(mesh.getVertexBuffer('world0')!.getBuffer()).toBe(matrixBuffer);
+      const matrixUpload = upload.mock.calls.find(([buffer]) => buffer === matrixBuffer)!;
+      expect(matrixUpload[3]).toBe(2 * 16 * 4);
+      expect((matrixUpload[1] as Float32Array)[16 + 12]).toBe(20);
+      expect(
+        mesh.thinInstanceGetWorldMatrices().map((matrix) => matrix.getTranslation().x),
+      ).toEqual([5, 20]);
+      f.views.remove('first');
+      f.update();
+      expect(
+        mesh.thinInstanceGetWorldMatrices().map((matrix) => matrix.getTranslation().x),
+      ).toEqual([20]);
+      expect(mesh.getVertexBuffer('world0')!.getBuffer()).toBe(matrixBuffer);
+      for (let i = 0; i < 8; i++) f.add(`prop-${i}`, 30 + i);
+      f.update();
+      expect(mesh.thinInstanceCount).toBe(9);
+      expect(mesh.getVertexBuffer('world0')!.getBuffer()).not.toBe(matrixBuffer);
+      expect(mesh.getVertexBuffer('suInstanceState')!.isUpdatable()).toBe(true);
+      for (let i = 0; i < 8; i++) f.views.remove(`prop-${i}`);
+      f.views.remove('second');
+      release();
+      expect(f.scene.meshes).toHaveLength(0);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('bounds idle batches by template and releases every retained mesh with its asset', async () => {
+    const f = fixture();
+    try {
+      const release = await f.views.prepareAssets(f.manifest, [assetId], f.read);
+      for (let i = 0; i < 30; i++) f.add(`prop-${i}`, i * 125 + 10);
+      f.update();
+      for (let i = 0; i < 30; i++) f.views.remove(`prop-${i}`);
+      f.update();
+      expect(f.views.aggregateDiagnostics()).toMatchObject({
+        glbInstances: 0,
+        glbBatches: 0,
+        glbPooledBatches: 48,
+      });
+      expect(f.views.aggregateDiagnostics().glbPoolBytes).toBeLessThanOrEqual(8 * 1024 * 1024);
+      const idle = batches(f.scene);
+      expect(idle.every((mesh) => !mesh.isEnabled() && mesh.thinInstanceCount === 0)).toBe(true);
+      const buffers = new Set(idle.map((mesh) => mesh.getVertexBuffer('world0')!.getBuffer()));
+      f.add('returning', 6000);
+      f.update();
+      const active = batches(f.scene).filter((mesh) => mesh.isEnabled());
+      expect(active).toHaveLength(2);
+      expect(active.every((mesh) => idle.includes(mesh))).toBe(true);
+      expect(active.every((mesh) => buffers.has(mesh.getVertexBuffer('world0')!.getBuffer()))).toBe(
+        true,
+      );
+      expect(
+        active.every((mesh) => mesh.thinInstanceGetWorldMatrices()[0].getTranslation().x === 6000),
+      ).toBe(true);
+      f.views.remove('returning');
+      release();
+      expect(f.scene.meshes).toHaveLength(0);
+      expect(f.scene.geometries).toHaveLength(0);
+      expect(f.shadow.getShadowMap()!.renderList).toHaveLength(0);
+      expect(f.views.aggregateDiagnostics()).toMatchObject({
+        glbPooledBatches: 0,
+        glbPoolBytes: 0,
+      });
+    } finally {
       f.dispose();
     }
   });

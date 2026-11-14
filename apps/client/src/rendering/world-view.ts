@@ -265,6 +265,8 @@ export class WorldView {
         // On foot the cloud shadows remain, while the overhead layer is hidden.
         zoom: this.firstPerson ? 0 : this.zoom,
         visible: this.radial,
+        camera: this.firstPerson ? this.eyeCamera : this.camera,
+        firstPerson: this.firstPerson,
       });
       active.getViewMatrix(true);
       active.getProjectionMatrix(true);
@@ -336,6 +338,10 @@ export class WorldView {
   /** Погода комнаты, которой управляет `/weather`. */
   setWeather(weather: WorldWeather): void {
     this.environment.setWeather(weather);
+  }
+  /** Локальная погода для снимков (`?weather=`), важнее погоды комнаты. */
+  setWeatherOverride(weather?: WorldWeather): void {
+    this.environment.setWeatherOverride(weather);
   }
   get cameraAngle(): number {
     return this.firstPerson ? orbitFromYaw(this.yaw) : this.cameraOrbit.angle;

@@ -6,9 +6,9 @@
     "file": "source.json"
   },
   "metadata": {
-    "name": "Четырёхэтажное здание с терракотовым фасадом",
-    "description": "Городское здание с терракотовым фасадом и вальмовой крышей.",
+    "name": "Четырёхэтажное кирпичное здание",
+    "description": "Четырёхэтажный жилой дом из жёлто-серого кирпича с белыми рамами окон, балконами и низкой скатной крышей.",
     "category": "buildings",
-    "tags": ["building", "floors-4", "hipped-roof"]
+    "tags": ["building", "floors-4", "hipped-roof", "balconies"]
   }
 }

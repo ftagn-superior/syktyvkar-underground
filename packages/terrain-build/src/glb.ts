@@ -1,7 +1,7 @@
 import { validateBuildingParts, type Bounds, type BuildingParts } from '@su/contracts';
 
 import type { StaticMeshPart } from './mesh.js';
-import { glowOf } from './mesh.js';
+import { glowOf, surfaceOf } from './mesh.js';
 export type { StaticMeshPart } from './mesh.js';
 
 const invariant = (condition: unknown, message: string): void => {
@@ -92,7 +92,16 @@ export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
               ? (invariant(part.colors.length === part.positions.length, 'vertex colors'),
                 { COLOR_0: accessor(part.colors, 'VEC3') })
               : {}),
-            ...(part.glow ? { TEXCOORD_0: accessor(glowOf(part)!, 'VEC2') } : {}),
+            // glTF требует TEXCOORD_0 перед TEXCOORD_1: без свечения он нулевой (класс 0).
+            ...(part.glow || part.surface
+              ? {
+                  TEXCOORD_0: accessor(
+                    glowOf(part) ?? Array<number>((part.positions.length / 3) * 2).fill(0),
+                    'VEC2',
+                  ),
+                }
+              : {}),
+            ...(part.surface ? { TEXCOORD_1: accessor(surfaceOf(part)!, 'VEC2') } : {}),
           },
           indices: accessor(part.indices, 'SCALAR', true),
           material,

@@ -5,9 +5,9 @@ import { PROFILE_COLORS } from './accounts.js';
 import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 
-// The combined release includes saved-position preparation and terrain support policies.
-// Previously published v16/v17/v18 clients must reload before consuming these contracts.
-export const PROTOCOL_VERSION = 19;
+// The combined release includes saved-position preparation and terrain support policies (v19)
+// and replicated rain, snow and fog weather (v20). Older clients must reload.
+export const PROTOCOL_VERSION = 20;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;

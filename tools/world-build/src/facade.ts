@@ -3,6 +3,7 @@ import { addFace, meshPart } from './house.js';
 import { GLOW_KIND, type StaticLightSource } from '@su/contracts';
 import { glowRandom, markGlow, withGlow } from './glow.js';
 import type { Point2 } from './triangulate.js';
+import { quadWithHoles, type WindowHole } from './windows.js';
 
 /**
  * Детали фасадов для зданий по контуру: витрины, балконы, цоколь, парапет,
@@ -22,6 +23,11 @@ export interface FacadeDetails {
     wallColor?: string;
     signColor?: string;
     awningColor?: string;
+    /**
+     * Вынос торговой пристройки от стены, м: первый этаж выступает коробкой со своими
+     * стенами, крышей и столкновением, витрины и вывеска — на её лицевой стороне.
+     */
+    depth?: number;
   };
   /** Колонны балконов или лоджий: `at` — доли длины фасада, либо шаг `every` в метрах. */
   balconies?: {
@@ -75,6 +81,17 @@ export interface FacadeDetails {
     top: number;
     color: string;
   }[];
+  /**
+   * Ворота гаражей, складов и подстанций на фасадах `facing`: полотна шириной `width`
+   * и высотой `height` с шагом `every` по всей длине фасада; цвета `colors` чередуются.
+   */
+  garageDoors?: {
+    facing: Facing[];
+    width?: number;
+    height?: number;
+    every?: number;
+    colors: string[];
+  };
   /** Входной тамбур с навесом, вывеской и ступенями; `at` — доля ширины фасада слева. */
   porch?: {
     facing: Facing;
@@ -539,6 +556,16 @@ export interface FacadeResult {
   boxes: { center: number[]; size: number[]; u: Point2 }[];
 }
 
+/** Рёбра с витринами первого этажа: на них нет окон первого этажа. */
+export function shopfrontEdges(edges: Edge[], details: FacadeDetails | undefined): Set<number> {
+  const shop = details?.shopfront;
+  return new Set(
+    shop
+      ? edges.filter((edge) => edge.length >= 2.5 && faces(edge, shop.facing)).map((e) => e.index)
+      : [],
+  );
+}
+
 /** Самый длинный фасад, обращённый в заданную сторону. */
 function widestFacing(edges: Edge[], facing: Facing, label: string): Edge {
   const candidates = edges.filter((edge) => faces(edge, [facing]));
@@ -552,8 +579,15 @@ export function buildFacade(
   floors: number,
   details: FacadeDetails | undefined,
   elevation = 0,
-  /** Ночное свечение: случайные числа окон и класс остеклённых лоджий. */
-  glow: { random: () => number; windows?: 'window' | 'office' } = { random: () => 0.5 },
+  /**
+   * Ночное свечение: случайные числа окон и класс остеклённых лоджий. `holes` — проёмы
+   * окон ребра: цоколь и роспись не закрывают их.
+   */
+  glow: {
+    random: () => number;
+    windows?: 'window' | 'office';
+    holes?: (edge: number) => readonly WindowHole[];
+  } = { random: () => 0.5 },
 ): FacadeResult {
   if (!details) return { parts: [], skipWindow: () => false, parapet: 0, boxes: [], lights: [] };
   const edges = edgesOf(ring);
@@ -561,17 +595,25 @@ export function buildFacade(
   const boxes: FacadeResult['boxes'] = [];
   const lights: StaticLightSource[] = [];
   const storey = (height - elevation) / floors;
-  const shopEdges = new Set<number>();
+  const shopEdges = shopfrontEdges(edges, details);
+  const holesOf = glow.holes ?? (() => []);
   const shop = details.shopfront;
   if (shop) {
     const band = meshPart('shopfront', 'wall', shop.wallColor ?? '#8a8f93');
     const glass = meshPart('shop-glass', 'detail', shop.glassColor);
     const sign = meshPart('shop-sign', 'detail', shop.signColor ?? shop.glassColor);
     const awning = meshPart('awning', 'detail', shop.awningColor ?? '#b33a32');
+    const depth = shop.depth ?? 0;
+    if (!(depth >= 0 && depth <= 12)) throw new Error('Invalid shopfront depth');
     for (const edge of edges) {
-      if (edge.length < 2.5 || !faces(edge, shop.facing)) continue;
-      shopEdges.add(edge.index);
-      if (shop.wallColor) facadeQuad(band, edge, 0, edge.length, 0, shop.height, 0.02);
+      if (!shopEdges.has(edge.index)) continue;
+      if (depth > 0) {
+        // Пристройка: коробка от стены до лицевой стороны и её коллайдер.
+        const center = along(edge, edge.length / 2, elevation + shop.height / 2, depth / 2);
+        const size = [edge.length, shop.height, depth];
+        addOrientedBox(band, center, size, edge.d);
+        boxes.push({ center, size, u: edge.d });
+      } else if (shop.wallColor) facadeQuad(band, edge, 0, edge.length, 0, shop.height, 0.02);
       const panes = Math.max(1, Math.round(edge.length / 3.2));
       const step = edge.length / panes;
       // Витрины одного фасада принадлежат одному магазину и включаются вместе.
@@ -585,7 +627,7 @@ export function buildFacade(
             (k + 1) * step - 0.18,
             0.35,
             shop.height - 0.75,
-            0.04,
+            depth + 0.04,
           ),
         );
       if (shop.signColor)
@@ -597,13 +639,13 @@ export function buildFacade(
             edge.length - 0.1,
             shop.height - 0.65,
             shop.height - 0.1,
-            0.06,
+            depth + 0.06,
           ),
         );
       if (shop.awningColor) {
         const y = shop.height - 0.75;
-        const near = (s: number) => along(edge, s, y, 0.07);
-        const far = (s: number) => along(edge, s, y - 0.35, 1.1);
+        const near = (s: number) => along(edge, s, y, depth + 0.07);
+        const far = (s: number) => along(edge, s, y - 0.35, depth + 1.1);
         addFace(awning, [near(edge.length), near(0), far(0), far(edge.length)]);
         addFace(awning, [near(0), near(edge.length), far(edge.length), far(0)]);
       }
@@ -614,7 +656,16 @@ export function buildFacade(
     const plinth = meshPart('plinth', 'detail', details.plinth.color);
     for (const edge of edges)
       if (!shopEdges.has(edge.index))
-        facadeQuad(plinth, edge, 0, edge.length, 0, details.plinth.height, 0.015);
+        quadWithHoles(
+          plinth,
+          edge,
+          0,
+          edge.length,
+          0,
+          details.plinth.height,
+          0.015,
+          holesOf(edge.index),
+        );
     if (plinth.indices.length) parts.push(plinth);
   }
   details.balconies?.forEach((group, index) => {
@@ -724,7 +775,7 @@ export function buildFacade(
     const part = meshPart(`paint-${index}`, 'detail', layer.color);
     for (const edge of edges)
       if (faces(edge, layer.facing))
-        facadeQuad(
+        quadWithHoles(
           part,
           edge,
           edge.length * (1 - layer.to),
@@ -732,9 +783,42 @@ export function buildFacade(
           layer.bottom,
           Math.min(layer.top, height + parapet),
           out,
+          holesOf(edge.index),
         );
     if (part.indices.length) parts.push(part);
   });
+  if (details.garageDoors) {
+    const spec = details.garageDoors;
+    const width = spec.width ?? 2.6,
+      every = spec.every ?? width + 0.7;
+    const doorHeight = Math.min(spec.height ?? 2.4, height - elevation - 0.3);
+    if (
+      !Array.isArray(spec.colors) ||
+      !spec.colors.length ||
+      spec.colors.some((c) => !/^#[0-9a-f]{6}$/i.test(c)) ||
+      !(width > 0.5 && every >= width && doorHeight > 0.5)
+    )
+      throw new Error('Invalid garage doors');
+    const doors = spec.colors.map((color, k) => meshPart(`garage-doors-${k}`, 'detail', color));
+    let next = 0;
+    for (const edge of edges) {
+      if (edge.length < width + 0.4 || !faces(edge, spec.facing)) continue;
+      const count = Math.max(1, Math.floor((edge.length - 0.4) / every));
+      for (let k = 0; k < count; k++) {
+        const center = (edge.length / count) * (k + 0.5);
+        facadeQuad(
+          doors[next++ % doors.length],
+          edge,
+          center - width / 2,
+          center + width / 2,
+          elevation,
+          elevation + doorHeight,
+          0.03,
+        );
+      }
+    }
+    for (const part of doors) if (part.indices.length) parts.push(part);
+  }
   if (details.porch) {
     const spec = details.porch;
     const edge = widestFacing(edges, spec.facing, 'porch');

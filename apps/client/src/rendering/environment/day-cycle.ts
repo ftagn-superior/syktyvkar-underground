@@ -19,10 +19,14 @@ export type Sky = {
   skyIntensity: number;
   /** 0..1: how sharply the direct light is felt; drives cloud shadows. */
   directLight: number;
+  /** 0..1: доля солнца (а не луны) в прямом свете. */
+  sunlight: number;
   /** Colour of cloud tops under this sky. */
   cloudColor: Rgb;
   /** Цвет пустоты вокруг города и радиального тумана на его краю. */
   backdrop: Rgb;
+  /** Цвет погодного тумана и пасмурного неба в этот час (см. `weather-sky.ts`). */
+  fog: Rgb;
   /** Цветокоррекция часа: тон теней и светов, насыщенность, виньетка. */
   grade: Grade;
 };
@@ -79,6 +83,7 @@ const DAY = {
   ground: rgb('#888563'),
   cloud: rgb('#f4f1ea'),
   backdrop: rgb('#1a2c40'),
+  fog: rgb('#9ea9b3'),
 };
 const HORIZON = {
   light: rgb('#ffa866'),
@@ -86,6 +91,7 @@ const HORIZON = {
   ground: rgb('#5f5660'),
   cloud: rgb('#f2b48c'),
   backdrop: rgb('#2a1f33'),
+  fog: rgb('#6f6670'),
 };
 const NIGHT = {
   light: rgb('#a9c0ff'),
@@ -93,6 +99,7 @@ const NIGHT = {
   ground: rgb('#212737'),
   cloud: rgb('#59648a'),
   backdrop: rgb('#080c16'),
+  fog: rgb('#1b2130'),
 };
 /**
  * Днём картинка нейтральна (эталон арт-направления). В сумерки света тёплые, а тени
@@ -143,8 +150,10 @@ export function skyAt(hour: number): Sky {
     groundColor: blend('ground'),
     skyIntensity: lerp(NIGHT_FILL, lerp(0.42, 0.45, toDay), fromNight),
     directLight: sunlight + 0.5 * moonlight,
+    sunlight,
     cloudColor: blend('cloud'),
     backdrop: blend('backdrop'),
+    fog: blend('fog'),
     grade: mixGrade(mixGrade(GRADE.night, GRADE.horizon, fromNight), GRADE.day, toDay),
   };
 }

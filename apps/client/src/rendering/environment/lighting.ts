@@ -15,6 +15,8 @@ import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { REFERENCE_HOUR, skyAt, type Sky } from './day-cycle';
 import { darkness } from './night-schedule';
+import { CLEAR_AMOUNTS, type WeatherAmounts } from './weather-mix';
+import { weatherSky } from './weather-sky';
 import { GLOW_MASK_SUPPORTED, glowMaskPatches } from './glow-mask';
 
 /** Сторона квадрата теней в метрах и удаление солнца от цели камеры. */
@@ -205,12 +207,13 @@ export class WorldLighting {
   }
 
   /**
-   * Lights the world for a game hour (0..24) and returns the sky it produced.
+   * Lights the world for a game hour (0..24) under the current weather and returns the sky
+   * it produced.
    * Colours and strengths follow the hour exactly. The direction of the direct light
    * advances in small steps, each of which redraws the cached static shadows once.
    */
-  setTimeOfDay(hour: number): Sky {
-    const sky = skyAt(hour);
+  setTimeOfDay(hour: number, weather: WeatherAmounts = CLEAR_AMOUNTS): Sky {
+    const sky = weatherSky(skyAt(hour), weather);
     this.fill.intensity = sky.skyIntensity;
     this.fill.diffuse.set(...sky.skyColor);
     this.fill.groundColor.set(...sky.groundColor);

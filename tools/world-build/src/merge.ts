@@ -1,6 +1,6 @@
 import type { StaticMeshPart } from './glb.js';
 import { meshPart } from './house.js';
-import { glowOf } from './glow.js';
+import { glowOf, surfaceOf } from './glow.js';
 
 /** sRGB-цвет #RRGGBB → линейный RGB, как требует glTF. */
 export const linear = (hex: string) =>
@@ -11,11 +11,15 @@ export const linear = (hex: string) =>
 /**
  * Сливает части с одинаковым режимом прозрачности; цвет каждой части переходит в вершины.
  * Ночное свечение тоже переносится в вершины; несветящиеся части получают класс 0.
+ * Материал стены (TEXCOORD_1) переносится так же: части без него получают (0, 0).
  */
 export function mergeParts(parts: StaticMeshPart[]): StaticMeshPart[] {
   const merged = new Map<string | null, StaticMeshPart>();
   const glowing = new Set<string | null>(
     parts.filter((part) => part.glow).map((part) => part.occlusionGroup),
+  );
+  const surfaced = new Set<string | null>(
+    parts.filter((part) => part.surface).map((part) => part.occlusionGroup),
   );
   for (const part of parts) {
     let target = merged.get(part.occlusionGroup);
@@ -28,6 +32,7 @@ export function mergeParts(parts: StaticMeshPart[]): StaticMeshPart[] {
       target.occlusionGroup = part.occlusionGroup;
       target.colors = [];
       if (glowing.has(part.occlusionGroup)) target.glow = [];
+      if (surfaced.has(part.occlusionGroup)) target.surface = [];
       merged.set(part.occlusionGroup, target);
     }
     const offset = target.positions.length / 3;
@@ -45,6 +50,11 @@ export function mergeParts(parts: StaticMeshPart[]): StaticMeshPart[] {
       const glow = glowOf(part);
       if (glow) for (const value of glow) target.glow.push(value);
       else for (let i = 0; i < part.positions.length / 3; i++) target.glow.push(0, 0);
+    }
+    if (target.surface) {
+      const surface = surfaceOf(part);
+      if (surface) for (const value of surface) target.surface.push(value);
+      else for (let i = 0; i < part.positions.length / 3; i++) target.surface.push(0, 0);
     }
     for (const index of part.indices) target.indices.push(index + offset);
   }

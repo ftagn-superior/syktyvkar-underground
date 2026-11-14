@@ -30618,8 +30618,8 @@
     "extendToWorldBounds": true
   },
   "expected": {
-    "assetReleaseVersion": "e04569cf5c015171adb8a73f63b8ef813715cd540f3fc7763509bdef9b6aac55",
+    "assetReleaseVersion": "9830ca13faa8f5f5a836fa310a43bdebf4c8f2ea6a49c08160f79b2b85ca0911",
     "seedVersion": "6062355fc8cba03dc87c61d27d43b25dc6bbd9ed88954d787541e8cd1458a6e9",
-    "mapVersion": "64483ad78c406ac67e824f659968ef44b2f66c0c6d19a36fbe3df3c36ccf1755"
+    "mapVersion": "8de64ae9f76663caef3f39bf7482771ff9a995a24c96501bf5e701b85db99ed9"
   }
 }

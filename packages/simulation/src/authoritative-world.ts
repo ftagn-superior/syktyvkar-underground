@@ -35,6 +35,9 @@ export class AuthoritativeWorld {
   getDefaultPlayerSpawnPosition(): Vec3 {
     return this.world.spawnPosition(this.world.definition.spawnPoints[0]);
   }
+  getPlayerSpawnPosition(point: Vec3): Vec3 {
+    return this.world.spawnPosition(point);
+  }
   /** Saved positions already describe the body center and must not be raised again. */
   addPlayerAtPosition(entityId: string, center: Vec3) {
     if (this.world.characters.has(entityId)) return this.world.state(entityId);
@@ -89,8 +92,12 @@ export class AuthoritativeWorld {
   queryItemSupports(typeId: string, pose: ItemPose, sweep: ItemSupportSweep) {
     return this.world.queryItemSupports(typeId, pose, sweep);
   }
-  checkStaticPlacement(instance: BuildingInstance, asset: BuildingPhysicsAsset) {
-    return this.world.checkStaticPlacement(instance, asset);
+  checkStaticPlacement(
+    instance: BuildingInstance,
+    asset: BuildingPhysicsAsset,
+    ignoredStaticIds?: ReadonlySet<string>,
+  ) {
+    return this.world.checkStaticPlacement(instance, asset, ignoredStaticIds);
   }
   addStatic(instance: BuildingInstance, definition: WorldDefinition) {
     this.world.addStatic(instance, definition.buildingAssets[instance.assetId]);
@@ -100,8 +107,8 @@ export class AuthoritativeWorld {
     this.world.removeStatic(entityId);
     Object.assign(this.world.definition, definition);
   }
-  prepareStaticReplacement(definition: WorldDefinition) {
-    return this.world.prepareStaticReplacement(definition);
+  prepareStaticReplacement(definition: WorldDefinition, changedIds?: ReadonlySet<string>) {
+    return this.world.prepareStaticReplacement(definition, changedIds);
   }
   /** Probe only the new statics, without requiring support for an airborne player. */
   overlapsPlayer(position: Vec3) {
@@ -150,5 +157,5 @@ export async function createAuthoritativeWorld(
   definition: WorldDefinition,
   wasmBinary?: WasmBinary,
 ): Promise<AuthoritativeWorld> {
-  return new AuthoritativeWorld(await createPhysicsWorld(definition, wasmBinary, false));
+  return new AuthoritativeWorld(await createPhysicsWorld({ ...definition }, wasmBinary, false));
 }

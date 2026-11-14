@@ -104,6 +104,8 @@ export class WorldState extends schema(
   {
     worldEpoch: t.string().default(''),
     serverTick: t.uint32().default(0),
+    layoutRevision: t.uint32().default(1),
+    layoutAppliedTick: t.uint32().default(0),
     protocolVersion: t.uint16().default(PROTOCOL_VERSION),
     mapVersion: t.string().default(''),
     simulationConfigHash: t.string().default(''),

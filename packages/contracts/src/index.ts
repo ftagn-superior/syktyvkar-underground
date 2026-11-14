@@ -49,4 +49,6 @@ export {
   type ReadVerifiedBytes,
   simulationProjection,
   worldManifestIdentity,
+  worldPublicationBaseIdentity,
+  changedWorldPublicationCells,
 } from './world-bundle.js';

@@ -109,6 +109,7 @@ export class BuildingViews {
   private minimumVisibleSize = 0;
   /** Число владельцев экземпляров со своими фонарями: источник света один на экземпляр. */
   private readonly lit = new Map<string, number>();
+  private readonly lifecycle = { modelImports: 0, instancesCreated: 0, instancesRemoved: 0 };
 
   constructor(
     private readonly scene: Scene,
@@ -272,13 +273,17 @@ export class BuildingViews {
     if (!asset.container && asset.parts.tree) {
       if (this.glbs.has(definition.entityId))
         throw new Error(`Conflicting building/version: ${definition.entityId}`);
+      const existed = this.trees.has(definition.entityId);
       this.trees.add(definition, asset.descriptor, asset.parts.tree, signature);
+      if (!existed) this.lifecycle.instancesCreated++;
       return;
     }
     if (this.trees.has(definition.entityId))
       throw new Error(`Conflicting building/version: ${definition.entityId}`);
     if (asset.parts.renderMode === 'thin-instance') {
+      const existed = this.glbs.has(definition.entityId);
       this.glbs.add(definition, version, signature);
+      if (!existed) this.lifecycle.instancesCreated++;
       return;
     }
     if (this.glbs.has(definition.entityId))
@@ -287,6 +292,7 @@ export class BuildingViews {
     if (view.size < this.minimumVisibleSize) view.root.setEnabled(false);
     this.instances.push(view);
     this.references.set(definition.entityId, { count: 1, signature, view });
+    this.lifecycle.instancesCreated++;
     this.index.add(definition.entityId, { min: plain(view.minimum), max: plain(view.maximum) });
     this.shadowed.add(definition.entityId);
     this.chunks.add({
@@ -310,15 +316,18 @@ export class BuildingViews {
     }
     if (this.glbs.has(id)) {
       this.glbs.remove(id);
+      if (!this.glbs.has(id)) this.lifecycle.instancesRemoved++;
       return;
     }
     if (this.trees.has(id)) {
       this.trees.remove(id);
+      if (!this.trees.has(id)) this.lifecycle.instancesRemoved++;
       return;
     }
     const entry = this.references.get(id);
     if (!entry || --entry.count > 0) return;
     this.references.delete(id);
+    this.lifecycle.instancesRemoved++;
     this.index.remove(id);
     this.fading.delete(id);
     this.shadowed.delete(id);
@@ -445,6 +454,7 @@ export class BuildingViews {
     }
     if (!descriptor.modelFile) throw new Error('GLB asset is missing its model');
     const model = await readBytes(descriptor.modelFile);
+    this.lifecycle.modelImports++;
     const container = await loadBuildingContainer(model, this.scene, `${descriptor.assetId}.glb`);
     // Ночное свечение едет в TEXCOORD_0; переносим его в свой атрибут до клонирования.
     if (parts.glow)
@@ -694,6 +704,7 @@ export class BuildingViews {
     for (const definition of [...this.instances.map((view) => view.definition), ...trees])
       counts.set(definition.assetId, (counts.get(definition.assetId) ?? 0) + 1);
     return {
+      lifecycle: { ...this.lifecycle },
       assets: [...this.assets.values()].map(({ descriptor, container }) => ({
         assetId: descriptor.assetId,
         version: descriptor.version,
@@ -725,6 +736,9 @@ export class BuildingViews {
     this.disposed = true;
     for (const id of this.lit.keys()) this.nightLights?.removeSources(id);
     this.lit.clear();
+    this.lifecycle.instancesRemoved +=
+      this.trees.aggregateDiagnostics().treeInstances +
+      this.glbs.aggregateDiagnostics().glbInstances;
     this.trees.dispose();
     this.glbs.dispose();
     this.chunks.dispose();

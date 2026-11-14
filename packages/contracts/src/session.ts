@@ -4,10 +4,11 @@ import type { StaticRemovalEffect } from './static-removal.js';
 import { PROFILE_COLORS } from './accounts.js';
 import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
+import type { WorldPublicationInfo } from './static-placement.js';
 
-// The combined release includes saved-position preparation and terrain support policies (v19)
-// and replicated rain, snow and fog weather (v20). Older clients must reload.
-export const PROTOCOL_VERSION = 20;
+// Combines selective live terrain publication with replicated rain, snow and fog.
+// Previously published v20 clients from either branch must reload.
+export const PROTOCOL_VERSION = 21;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -98,6 +99,20 @@ export function parseAreaFailed(value: unknown): AreaFailed | undefined {
 export interface AreaResult extends AreaReady {
   ok: boolean;
   code?: ErrorCode;
+}
+/** Committed publication; changed cells are a hint, never a substitute for manifest verification. */
+export interface LayoutChanged {
+  operationId: string;
+  previousLayoutRevision: number;
+  previousMapVersion: string;
+  publication: WorldPublicationInfo;
+  changedCellIds: string[];
+}
+/** Sent after migration and cancellation of all consumers of the previous publication. */
+export interface LayoutApplied {
+  worldEpoch: string;
+  layoutRevision: number;
+  mapVersion: string;
 }
 export interface RespawnRequest {
   requestId: number;

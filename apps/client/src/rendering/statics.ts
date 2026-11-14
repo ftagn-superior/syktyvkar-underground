@@ -13,6 +13,7 @@ export class StaticViews {
     string,
     { mesh: Mesh; signature: string; references: number; color: string; casts: boolean }
   >();
+  private readonly lifecycle = { instancesCreated: 0, instancesRemoved: 0 };
   private readonly materials = new Map<string, { value: StandardMaterial; users: number }>();
   constructor(
     private readonly scene: Scene,
@@ -63,11 +64,13 @@ export class StaticViews {
       color: entity.color,
       casts,
     });
+    this.lifecycle.instancesCreated++;
   }
   remove(id: string) {
     const entry = this.instances.get(id);
     if (!entry || --entry.references > 0) return;
     this.instances.delete(id);
+    this.lifecycle.instancesRemoved++;
     this.shadow.removeShadowCaster(entry.mesh);
     entry.mesh.dispose();
     const material = this.materials.get(entry.color)!;
@@ -93,6 +96,9 @@ export class StaticViews {
       if (visible) this.shadow.addShadowCaster(mesh);
       else this.shadow.removeShadowCaster(mesh);
     }
+  }
+  diagnostics() {
+    return { instances: this.instances.size, ...this.lifecycle };
   }
   dispose() {
     for (const [id, entry] of this.instances) {

@@ -1,9 +1,8 @@
 import { resolve } from 'node:path';
-import { access, rm } from 'node:fs/promises';
+import { access, rename, rm, mkdir } from 'node:fs/promises';
 import {
   MAX_EDITABLE_STATIC_INSTANCES,
   LEGACY_PLACEMENT_CATALOG_VERSION,
-  canonicalJson,
   placedStaticInstance,
   type StaticObjectInstance,
   type BuildingPhysicsAsset,
@@ -17,20 +16,20 @@ import {
   type StaticRemovalEffect,
   type WorldPublicationInfo,
 } from '@su/contracts';
-import { writeWorldPublication, WorldPublicationContentLimitError } from '@su/world-release';
 import { createAuthoritativeWorld, type AuthoritativeWorld } from '@su/simulation/server';
 import type { ItemRuntime } from '../items/runtime.js';
-import { worldCompatibility } from '../items/store.js';
-import { createLayoutPublication, terrainSupportId } from './release.js';
-import { selectSupportRule } from '@su/terrain-build/supports';
 import { StaticLayoutStore } from './store.js';
 import type { prepareLayoutWorld } from './prepare.js';
+import { applyPreparedLayoutDelta } from './release.js';
+import { expectedStaticChange, staticChangeIds } from './static-change.js';
+import { resolveStaticPlacement, StaticPlacementRejected } from './placement-pose.js';
+import { LayoutPreparation, LayoutPreparationError } from './preparation.js';
+import type { PreparedLayout } from './preparation-types.js';
 import {
   hasPlacementGround,
   hasTerrainPlacementGround,
   type ServerPlacementCatalog,
 } from './placement-catalog.js';
-import { resolveStaticPlacement, StaticPlacementRejected } from './placement-pose.js';
 
 type Prepared = Awaited<ReturnType<typeof prepareLayoutWorld>>;
 type Publication = Pick<
@@ -46,68 +45,12 @@ function changeIdentity(change: StaticChange) {
       : { kind: change.kind, entityId: change.request.entityId },
   );
 }
-/** Only this owner and its declared derived geometry may differ in a live operation. */
-function expectedStaticChange(
-  publications: LayoutPublications,
-  candidate: Awaited<ReturnType<typeof createLayoutPublication>>,
-  owner: StaticObjectInstance,
-) {
-  const before = publications.current;
-  const derived = new Set<string>();
-  const terrain = publications.prepared.release.terrain;
-  const rule =
-    terrain?.formatVersion === 2 ? selectSupportRule(terrain.supports, owner) : undefined;
-  if (rule) {
-    derived.add(terrainSupportId(candidate.world.worldId, owner.entityId, 'foundation'));
-    for (const approach of rule.approaches ?? [])
-      derived.add(
-        terrainSupportId(candidate.world.worldId, owner.entityId, `approach:${approach.id}`),
-      );
-  }
-  const allowed = new Set([owner.entityId, ...derived]);
-  const protectedWorld = ({
-    buildings,
-    buildingAssets: _assets,
-    ...header
-  }: typeof candidate.world) => ({
-    ...header,
-    buildings: buildings
-      .filter((b) => !allowed.has(b.entityId))
-      .sort((a, b) => a.entityId.localeCompare(b.entityId)),
-  });
-  if (
-    canonicalJson(protectedWorld(before.definition)) !==
-    canonicalJson(protectedWorld(candidate.world))
-  )
-    return false;
-  const next = candidate.publication.manifest;
-  if (
-    canonicalJson(before.manifest.grid) !== canonicalJson(next.grid) ||
-    before.manifest.worldFile !== next.worldFile
-  )
-    return false;
-  for (const id of new Set([...Object.keys(before.manifest.assets), ...Object.keys(next.assets)])) {
-    if (derived.has(id)) continue;
-    const prior = before.manifest.assets[id],
-      after = next.assets[id];
-    if (
-      !prior ||
-      !after ||
-      canonicalJson(prior) !== canonicalJson(after) ||
-      canonicalJson(before.definition.buildingAssets[id]) !==
-        canonicalJson(candidate.world.buildingAssets[id])
-    )
-      return false;
-    for (const file of [prior.modelFile, prior.collisionFile, prior.partsFile])
-      if (file && before.manifest.files[file] !== next.files[file]) return false;
-  }
-  return before.manifest.files[before.manifest.worldFile] === next.files[next.worldFile];
-}
 /** Current and previous immutable publications share one pointer across HTTP and the room. */
 export class LayoutPublications {
   current: Publication;
   previous?: Publication;
   private owned = new Set<string>();
+  private redundantStaging = new Map<Publication, string>();
   constructor(readonly prepared: Prepared) {
     this.current = prepared;
   }
@@ -135,34 +78,51 @@ export class LayoutPublications {
       if (file === 'manifest.json' || Object.hasOwn(p.manifest.files, file)) return { p, file };
     }
   }
-  async write(
-    candidate: Awaited<ReturnType<typeof createLayoutPublication>>,
+  async adopt(
+    result: PreparedLayout,
     snapshot: Publication['snapshot'],
-  ) {
+    definition: Publication['definition'],
+  ): Promise<Publication> {
     const directory = resolve(
       this.prepared.release.directory,
       'layouts',
       snapshot.assetReleaseVersion,
-      candidate.hash,
+      result.layoutHash,
     );
     const exists = await access(directory).then(
       () => true,
       () => false,
     );
-    try {
-      await writeWorldPublication(candidate.publication, directory);
-    } catch (error) {
-      if (!exists) await rm(directory, { recursive: true, force: true });
-      throw error;
+    if (!exists) {
+      await mkdir(resolve(directory, '..'), { recursive: true });
+      await rename(result.stagingDirectory, directory);
+      this.owned.add(directory);
     }
-    if (!exists) this.owned.add(directory);
-    return {
-      definition: candidate.world,
-      manifest: candidate.publication.manifest,
+    const publication = {
+      definition,
+      manifest: result.manifest,
       directory,
       snapshot,
-      layoutHash: candidate.hash,
+      layoutHash: result.layoutHash,
     };
+    // A duplicate immutable directory is already ready. Reclaim its redundant copy
+    // after the clients have applied the publication, outside the save/ready path.
+    if (exists) this.redundantStaging.set(publication, result.stagingDirectory);
+    return publication;
+  }
+  private async discardStaging(p: Publication) {
+    const directory = this.redundantStaging.get(p);
+    if (directory) {
+      await rm(directory, { recursive: true, force: true });
+      this.redundantStaging.delete(p);
+    }
+  }
+  async discard(p: Publication) {
+    await this.discardStaging(p);
+    if (p !== this.current && p !== this.previous && this.owned.has(p.directory)) {
+      await rm(p.directory, { recursive: true, force: true });
+      this.owned.delete(p.directory);
+    }
   }
   activate(p: Publication) {
     this.previous = this.current;
@@ -170,6 +130,8 @@ export class LayoutPublications {
   }
   async cleanup() {
     this.previous = undefined;
+    for (const publication of [...this.redundantStaging.keys()])
+      await this.discardStaging(publication);
     for (const directory of [...this.owned])
       if (directory !== this.current.directory) {
         await rm(directory, { recursive: true, force: true });
@@ -177,7 +139,13 @@ export class LayoutPublications {
       }
   }
   async close() {
-    for (const directory of [...this.owned]) await rm(directory, { recursive: true, force: true });
+    for (const publication of [...this.redundantStaging.keys()])
+      await this.discardStaging(publication);
+    // Current and previous pointers were confirmed by SQL. Shutdown only discards
+    // unactivated runtime candidates; committed immutable files survive restart.
+    const confirmed = new Set([this.current.directory, this.previous?.directory]);
+    for (const directory of [...this.owned])
+      if (!confirmed.has(directory)) await rm(directory, { recursive: true, force: true });
     this.owned.clear();
     this.previous = undefined;
   }
@@ -188,6 +156,17 @@ export class LiveStaticPlacement {
   metrics?: {
     operationId: string;
     preparationMs: number;
+    writerWaitMs: number;
+    workerBuildMs: number;
+    workerWriteMs: number;
+    workerReturnMs: number;
+    adoptMs: number;
+    cleanupMs?: number;
+    validationMs: number;
+    flushMs: number;
+    commitMs: number;
+    applyMs: number;
+    previousPublicationMs?: number;
     fileCount: number;
     bytes: number;
     pauseStarted: number;
@@ -200,16 +179,25 @@ export class LiveStaticPlacement {
     promise: Promise<RemoveStaticResult>;
   };
   private layouts: StaticLayoutStore;
+  private preparation: LayoutPreparation;
+  private closing = false;
+  private preparationSettled?: Promise<void>;
+  private transitionOperationId?: string;
+  private transitionStartedAt = 0;
   constructor(
     readonly publications: LayoutPublications,
     private items: ItemRuntime,
     private world: AuthoritativeWorld,
     private epoch: string,
-    private changed: () => void,
+    private changed: (operationId: string) => void,
     private neutral: () => void,
     readonly catalog?: ServerPlacementCatalog,
   ) {
     this.layouts = new StaticLayoutStore(items.store.ownership, publications.prepared.release);
+    this.preparation = new LayoutPreparation(
+      publications.prepared.release.directory,
+      publications.prepared.release.metadata.assetReleaseVersion,
+    );
   }
   effect(): StaticPlacementEffect | undefined {
     if (
@@ -283,272 +271,68 @@ export class LiveStaticPlacement {
       const auth = authorize();
       return auth ? Promise.resolve(fail(auth)) : this.inFlight.promise;
     }
-    const alreadyBusy = this.busy;
-    this.busy = true;
+    const ownsSlot = !this.busy;
+    if (ownsSlot) this.busy = true;
     let candidate: Publication | undefined;
+    let applied = false;
+    let probe: AuthoritativeWorld | undefined;
     let acceptedInstance: StaticObjectInstance | undefined;
     let physicsChange: ReturnType<AuthoritativeWorld['prepareStaticReplacement']> | undefined;
-    let applied = false;
-    let reserved = false;
-    const promise = this.items.placeStatic(async (flush) => {
+    let changedIds = new Set<string>();
+    let compatibilityHash: string;
+    let committed = false;
+    const replay = () =>
+      operation.kind === 'place'
+        ? this.layouts.replayGame(accountId, operation.request)
+        : this.layouts.replayRemoval(accountId, operation.request);
+    const prerequisites = (reserved = false): StaticRemovalError | undefined => {
       const auth = authorize();
-      if (auth && !reserved) return fail(auth);
-      const prior =
-        operation.kind === 'place'
-          ? await this.layouts.replayGame(accountId, operation.request)
-          : await this.layouts.replayRemoval(accountId, operation.request);
-      if (prior) {
-        if (!prior.ok) return prior;
-        if (this.fatal) return fail('STORAGE_UNAVAILABLE');
-        // A later removal does not invalidate the historical acknowledgement of creation.
-        const current = this.publications.current.snapshot.instances.find(
-          (i) => i.entityId === prior.entityId,
-        );
-        if (current && (operation.kind === 'place' || !current.enabled))
-          return auth ? fail(auth) : prior;
-        // A lost COMMIT acknowledgement must finish the same prepared publication under pause.
-        if (!candidate) {
-          this.fatal = true;
-          this.items.setLayoutPaused(true);
-          return fail('STORAGE_UNAVAILABLE');
-        }
-        const result = activate(prior.layoutRevision);
-        return auth ? fail(auth) : result;
-      }
-      // A replay without a durable row proves the previous transaction did not
-      // commit. Its staged bodies must leave the scene before collision queries
-      // for the retry, otherwise the new object would collide with its own stage.
-      physicsChange?.dispose();
-      physicsChange = undefined;
-      candidate = undefined;
-      if (auth) {
-        if (reserved) this.items.setLayoutPaused(false);
-        return fail(auth);
-      }
-      if (
-        alreadyBusy ||
-        ((this.items.layoutPaused || this.items.unavailable) && !reserved) ||
-        this.items.closing ||
-        this.fatal
-      )
-        return fail('WORLD_NOT_READY');
+      if (auth) return auth;
+      if (this.closing || this.items.closing || this.fatal || (this.items.unavailable && !reserved))
+        return 'WORLD_NOT_READY';
       const ready = validateNew();
-      if (ready) return fail(ready);
-      if (operation.kind === 'place') {
-        // The zero version is reserved for legacy reconciliation, never a new write.
-        if (operation.request.placementCatalogVersion === LEGACY_PLACEMENT_CATALOG_VERSION)
-          return fail('CATALOG_CHANGED');
-        if (!this.effect()) return fail('COMMAND_DISABLED');
-      }
+      if (ready) return ready;
+      if (
+        operation.kind === 'place' &&
+        operation.request.placementCatalogVersion === LEGACY_PLACEMENT_CATALOG_VERSION
+      )
+        return 'CATALOG_CHANGED';
+      if (operation.kind === 'place' && !this.effect()) return 'COMMAND_DISABLED';
       const info = this.publications.info(this.epoch);
-      if (request.worldEpoch !== this.epoch) return fail('STALE_WORLD');
-      if (request.assetReleaseVersion !== info.assetReleaseVersion) return fail('VERSION_MISMATCH');
+      if (request.worldEpoch !== this.epoch) return 'STALE_WORLD';
+      if (request.assetReleaseVersion !== info.assetReleaseVersion) return 'VERSION_MISMATCH';
       if (operation.kind === 'place') {
         if (
           operation.request.placementCatalogVersion !==
           this.catalog!.reference.placementCatalogVersion
         )
-          return fail('CATALOG_CHANGED');
+          return 'CATALOG_CHANGED';
       } else {
         const error = this.removalError(operation.request.entityId);
-        if (error) return fail(error);
+        if (error) return error;
       }
-      if (request.expectedLayoutRevision !== info.layoutRevision) return fail('LAYOUT_CHANGED');
+      if (request.expectedLayoutRevision !== info.layoutRevision) return 'LAYOUT_CHANGED';
       if (operation.kind === 'place' && !this.catalog!.assetIds.has(operation.request.assetId))
-        return fail('ASSET_NOT_ALLOWED');
-      if (await this.layouts.gameRateLimited(accountId)) return fail('RATE_LIMITED');
-      reserved = true;
-      const pauseStarted = performance.now();
-      this.items.setLayoutPaused(true);
-      this.neutral();
-      await flush();
-      const before = await this.layouts.readCandidate();
-      if (before.snapshot.revision !== request.expectedLayoutRevision) {
-        this.items.setLayoutPaused(false);
-        return fail('LAYOUT_CHANGED');
-      }
-      const current = this.publications.current.definition;
-      if (
-        operation.kind === 'place' &&
-        before.snapshot.instances.length >= MAX_EDITABLE_STATIC_INSTANCES
-      ) {
-        this.items.setLayoutPaused(false);
-        return fail('CONTENT_LIMIT');
-      }
-      if (operation.kind === 'place') {
-        try {
-          acceptedInstance = resolveStaticPlacement(
-            this.publications.prepared.release,
-            operation.request,
-          );
-        } catch (error) {
-          this.items.setLayoutPaused(false);
-          return fail(error instanceof StaticPlacementRejected ? error.code : 'INVALID_INPUT');
-        }
-      }
-      const snapshot = {
-        ...before.snapshot,
-        revision: before.snapshot.revision + 1,
-        instances: (operation.kind === 'place'
-          ? [...before.snapshot.instances, acceptedInstance!]
-          : before.snapshot.instances.map((i) =>
-              i.entityId === operation.request.entityId
-                ? { ...i, enabled: false, instanceRevision: i.instanceRevision + 1 }
-                : i,
-            )
-        ).sort((a, b) => a.entityId.localeCompare(b.entityId)),
-      };
-      // Preparation errors are definite, before any placement commit.
-      try {
-        const preparationStarted = performance.now();
-        const publication = await createLayoutPublication(
-          this.publications.prepared.release,
-          snapshot,
-        );
-        const owner =
-          acceptedInstance ??
-          before.snapshot.instances.find(
-            (instance) =>
-              operation.kind === 'remove' && instance.entityId === operation.request.entityId,
-          )!;
-        if (!expectedStaticChange(this.publications, publication, owner)) {
-          this.items.setLayoutPaused(false);
-          return fail('COMMAND_DISABLED');
-        }
-        if (operation.kind === 'place') {
-          const groundIds = new Set(
-            this.publications.prepared.release.terrain?.formatVersion === 2
-              ? (this.publications.prepared.release.terrain.placementGroundIds ?? [])
-              : [],
-          );
-          const obstacles = groundIds.size
-            ? await createAuthoritativeWorld({
-                ...current,
-                buildings: current.buildings.filter(
-                  (building) => !groundIds.has(building.entityId),
-                ),
-                initialItems: [],
-              })
-            : undefined;
-          try {
-            const checker = obstacles ?? this.world;
-            const instance = acceptedInstance!;
-            const error = checker.checkStaticPlacement(
-              instance,
-              current.buildingAssets[instance.assetId],
-            );
-            if (error) {
-              this.items.setLayoutPaused(false);
-              return fail(error);
-            }
-            // Derived solids can extend below/outside the owner. Conservatively test
-            // their occupied bounds against existing objects, excluding approved terrain.
-            const previousIds = new Set(current.buildings.map((building) => building.entityId));
-            for (const derived of publication.world.buildings) {
-              if (previousIds.has(derived.entityId) || derived.entityId === instance.entityId)
-                continue;
-              const asset = publication.world.buildingAssets[derived.assetId];
-              const { min, max } = asset.bounds;
-              const box: BuildingPhysicsAsset = {
-                ...asset,
-                colliders: [
-                  {
-                    id: 'placement-bound',
-                    kind: 'box',
-                    position: {
-                      x: (min.x + max.x) / 2,
-                      y: (min.y + max.y) / 2,
-                      z: (min.z + max.z) / 2,
-                    },
-                    size: { x: max.x - min.x, y: max.y - min.y, z: max.z - min.z },
-                    rotation: { x: 0, y: 0, z: 0, w: 1 },
-                    friction: 0.6,
-                    restitution: 0,
-                  },
-                ],
-              };
-              const error = checker.checkStaticPlacement(derived, box);
-              if (error) {
-                this.items.setLayoutPaused(false);
-                return fail(error);
-              }
-            }
-          } finally {
-            obstacles?.dispose();
-          }
-        }
-        // Spawn checks require real ground support. Probe the complete candidate statics,
-        // without dynamics that can legitimately occupy an existing spawn or saved pose.
-        const probe = await createAuthoritativeWorld({ ...publication.world, initialItems: [] });
-        try {
-          if (
-            publication.world.spawnPoints.some((p) => !probe.findSpawn(undefined, [p])) ||
-            this.world.getSnapshot().items.some((i) => probe.checkSavedItem(i)) ||
-            this.world.getSnapshot().players.some((player) => probe.overlapsPlayer(player.position))
-          ) {
-            this.items.setLayoutPaused(false);
-            return fail('BLOCKED');
-          }
-        } finally {
-          probe.dispose();
-        }
-        candidate = await this.publications.write(publication, snapshot);
-        physicsChange = this.world.prepareStaticReplacement(candidate.definition);
-        this.metrics = {
-          operationId: request.operationId,
-          preparationMs: performance.now() - preparationStarted,
-          fileCount: publication.publication.payloads.size + 1,
-          bytes: [...publication.publication.payloads.values()].reduce(
-            (n, b) => n + b.byteLength,
-            Buffer.byteLength(JSON.stringify(publication.publication.manifest, null, 2) + '\n'),
-          ),
-          pauseStarted,
-          clients: {},
-        };
-      } catch (error) {
-        this.items.setLayoutPaused(false);
-        return fail(
-          error instanceof WorldPublicationContentLimitError
-            ? 'CONTENT_LIMIT'
-            : 'STORAGE_UNAVAILABLE',
-        );
-      }
-      const writeAuth = authorize();
-      if (writeAuth) {
-        this.items.setLayoutPaused(false);
-        return fail(writeAuth);
-      }
-      const revision =
-        operation.kind === 'place'
-          ? await this.layouts.createGame(
-              accountId,
-              operation.request,
-              candidate.layoutHash,
-              worldCompatibility(candidate.definition),
-              acceptedInstance!,
-            )
-          : await this.layouts.removeGame(
-              accountId,
-              operation.request,
-              candidate.layoutHash,
-              worldCompatibility(candidate.definition),
-            );
-      if (revision === undefined) {
-        this.items.setLayoutPaused(false);
-        return fail('LAYOUT_CHANGED');
-      }
-      return activate(revision);
-    });
+        return 'ASSET_NOT_ALLOWED';
+    };
     const activate = (revision: number): RemoveStaticResult => {
       try {
+        const started = performance.now();
         if (!applied) {
           physicsChange!.commit();
           applied = true;
         }
         this.items.store.definition = candidate!.definition;
+        // The candidate is not exposed until SQL has confirmed this exact revision.
         candidate!.snapshot.revision = revision;
         this.publications.activate(candidate!);
-        this.changed();
+        committed = true;
+        this.transitionOperationId = request.operationId;
+        this.transitionStartedAt = performance.now();
+        if (this.metrics) this.metrics.applyMs = performance.now() - started;
+        this.changed(request.operationId);
+        this.items.setLayoutPaused(false);
+        if (this.metrics) this.metrics.pauseMs = performance.now() - this.metrics.pauseStarted;
         return {
           operationId: request.operationId,
           ok: true,
@@ -564,14 +348,310 @@ export class LiveStaticPlacement {
         return fail('STORAGE_UNAVAILABLE');
       }
     };
-    if (!alreadyBusy) this.inFlight = { accountId, operation, promise };
-    return promise.finally(() => {
+    const run = async (): Promise<RemoveStaticResult> => {
+      // All ownership-session access is short and serialized. Building is outside the writer.
+      const initial = await this.items.placeStatic(async () => {
+        const auth = authorize();
+        if (auth) return fail(auth);
+        const prior = await replay();
+        if (prior) {
+          if (!prior.ok) return prior;
+          const current = this.publications.current.snapshot.instances.find(
+            (i) => i.entityId === prior.entityId,
+          );
+          if (this.fatal || !current || (operation.kind === 'remove' && current.enabled)) {
+            this.fatal = true;
+            this.items.setLayoutPaused(true);
+            return fail('STORAGE_UNAVAILABLE');
+          }
+          return prior;
+        }
+        if (!ownsSlot || this.items.layoutPaused) return fail('WORLD_NOT_READY');
+        const error = prerequisites();
+        if (error) return fail(error);
+        if (await this.layouts.gameRateLimited(accountId)) return fail('RATE_LIMITED');
+        return undefined;
+      });
+      if (initial) return initial;
+      if (this.closing || this.items.closing) return fail('WORLD_NOT_READY');
+      const current = this.publications.current;
+      const before = current.snapshot;
+      if (operation.kind === 'place' && before.instances.length >= MAX_EDITABLE_STATIC_INSTANCES)
+        return fail('CONTENT_LIMIT');
+      try {
+        if (operation.kind === 'place')
+          acceptedInstance = resolveStaticPlacement(
+            this.publications.prepared.release,
+            operation.request,
+          );
+      } catch (error) {
+        return fail(error instanceof StaticPlacementRejected ? error.code : 'INVALID_INPUT');
+      }
+      const owner =
+        acceptedInstance ??
+        before.instances.find(
+          (i) => operation.kind === 'remove' && i.entityId === operation.request.entityId,
+        )!;
+      changedIds = staticChangeIds(this.publications.prepared.release, owner);
+      const snapshot = {
+        ...before,
+        revision: before.revision + 1,
+        instances: (operation.kind === 'place'
+          ? [...before.instances, acceptedInstance!]
+          : before.instances.map((i) =>
+              i.entityId === operation.request.entityId
+                ? { ...i, enabled: false, instanceRevision: i.instanceRevision + 1 }
+                : i,
+            )
+        ).sort((a, b) => a.entityId.localeCompare(b.entityId)),
+      };
+      const preparationStarted = performance.now();
+      let preparedResult: PreparedLayout | undefined;
+      let preparationFinished!: () => void;
+      this.preparationSettled = new Promise<void>((resolve) => {
+        preparationFinished = resolve;
+      });
+      try {
+        const publication = await this.preparation.prepare(
+          snapshot,
+          request.operationId,
+          this.epoch,
+          {
+            beforeSnapshot: before,
+            beforeManifest: current.manifest,
+            owner,
+          },
+        );
+        preparedResult = publication;
+        if (!publication.geometryDelta) throw new Error('Missing prepared static geometry');
+        const definition = applyPreparedLayoutDelta(
+          this.publications.prepared.release,
+          snapshot,
+          current.definition,
+          publication.geometryDelta,
+        );
+        if (
+          !expectedStaticChange(
+            this.publications.prepared.release,
+            current,
+            { world: definition, publication: { manifest: publication.manifest } },
+            owner,
+          )
+        ) {
+          await rm(publication.stagingDirectory, { recursive: true, force: true });
+          return fail('COMMAND_DISABLED');
+        }
+        if (operation.kind === 'place') {
+          probe = await createAuthoritativeWorld({
+            ...definition,
+            entities: [],
+            buildings: publication.geometryDelta.buildings,
+            initialItems: [],
+          });
+        }
+        if (this.closing || this.items.closing || this.publications.current !== current) {
+          await rm(publication.stagingDirectory, { recursive: true, force: true });
+          return fail('WORLD_NOT_READY');
+        }
+        const adoptionStarted = performance.now();
+        candidate = await this.publications.adopt(publication, snapshot, definition);
+        const adoptMs = performance.now() - adoptionStarted;
+        compatibilityHash = publication.compatibilityHash;
+        this.metrics = {
+          operationId: request.operationId,
+          preparationMs: performance.now() - preparationStarted,
+          workerBuildMs: publication.buildMs,
+          workerWriteMs: publication.writeMs,
+          workerReturnMs: publication.workerReturnMs,
+          adoptMs,
+          writerWaitMs: 0,
+          validationMs: 0,
+          flushMs: 0,
+          commitMs: 0,
+          applyMs: 0,
+          fileCount: publication.fileCount,
+          bytes: publication.bytes,
+          pauseStarted: 0,
+          clients: {},
+        };
+      } catch (error) {
+        if (preparedResult)
+          await rm(preparedResult.stagingDirectory, { recursive: true, force: true });
+        return fail(error instanceof LayoutPreparationError ? error.code : 'STORAGE_UNAVAILABLE');
+      } finally {
+        preparationFinished();
+      }
+      const queuedAt = performance.now();
+      let began = false;
+      return this.items.placeStatic(async (flush) => {
+        if (!began) {
+          began = true;
+          this.metrics!.writerWaitMs = performance.now() - queuedAt;
+          this.metrics!.pauseStarted = performance.now();
+          this.items.setLayoutPaused(true);
+          this.neutral();
+        }
+        // On uncertain COMMIT the writer retries this same closure under the safe pause.
+        const prior = await replay();
+        if (prior) {
+          if (!prior.ok) {
+            this.items.setLayoutPaused(false);
+            return prior;
+          }
+          const result = activate(prior.layoutRevision);
+          const auth = authorize();
+          return auth ? fail(auth) : result;
+        }
+        physicsChange?.dispose();
+        physicsChange = undefined;
+        const error = prerequisites(true);
+        if (error) {
+          this.items.setLayoutPaused(false);
+          return fail(error);
+        }
+        const validationStarted = performance.now();
+        if (operation.kind === 'place') {
+          const groundIds = new Set(
+            this.publications.prepared.release.terrain?.formatVersion === 2
+              ? (this.publications.prepared.release.terrain.placementGroundIds ?? [])
+              : [],
+          );
+          const error = this.world.checkStaticPlacement(
+            acceptedInstance!,
+            current.definition.buildingAssets[acceptedInstance!.assetId],
+            groundIds,
+          );
+          if (error) {
+            this.items.setLayoutPaused(false);
+            return fail(error);
+          }
+          for (const derived of candidate!.definition.buildings) {
+            if (
+              !changedIds.has(derived.entityId) ||
+              derived.entityId === acceptedInstance!.entityId
+            )
+              continue;
+            const asset = candidate!.definition.buildingAssets[derived.assetId];
+            const { min, max } = asset.bounds;
+            const box: BuildingPhysicsAsset = {
+              ...asset,
+              colliders: [
+                {
+                  id: 'placement-bound',
+                  kind: 'box',
+                  position: {
+                    x: (min.x + max.x) / 2,
+                    y: (min.y + max.y) / 2,
+                    z: (min.z + max.z) / 2,
+                  },
+                  size: { x: max.x - min.x, y: max.y - min.y, z: max.z - min.z },
+                  rotation: { x: 0, y: 0, z: 0, w: 1 },
+                  friction: 0.6,
+                  restitution: 0,
+                },
+              ],
+            };
+            const blocked = this.world.checkStaticPlacement(derived, box, groundIds);
+            if (blocked) {
+              this.items.setLayoutPaused(false);
+              return fail(blocked);
+            }
+          }
+          const snapshot = this.world.getSnapshot();
+          if (
+            current.definition.spawnPoints.some((p) =>
+              probe!.overlapsPlayer(this.world.getPlayerSpawnPosition(p)),
+            ) ||
+            snapshot.items.some((i) => probe!.checkSavedItem(i)) ||
+            snapshot.players.some((p) => probe!.overlapsPlayer(p.position))
+          ) {
+            this.items.setLayoutPaused(false);
+            return fail('BLOCKED');
+          }
+        }
+        this.metrics!.validationMs = performance.now() - validationStarted;
+        const flushStarted = performance.now();
+        await flush();
+        this.metrics!.flushMs = performance.now() - flushStarted;
+        const writeAuth = authorize();
+        if (writeAuth || this.closing || this.items.closing) {
+          this.items.setLayoutPaused(false);
+          return fail(writeAuth ?? 'WORLD_NOT_READY');
+        }
+        physicsChange = this.world.prepareStaticReplacement(candidate!.definition, changedIds);
+        const commitStarted = performance.now();
+        const revision =
+          operation.kind === 'place'
+            ? await this.layouts.createGame(
+                accountId,
+                operation.request,
+                candidate!.layoutHash,
+                compatibilityHash,
+                acceptedInstance!,
+              )
+            : await this.layouts.removeGame(
+                accountId,
+                operation.request,
+                candidate!.layoutHash,
+                compatibilityHash,
+              );
+        this.metrics!.commitMs = performance.now() - commitStarted;
+        if (revision === undefined) {
+          this.items.setLayoutPaused(false);
+          return fail('LAYOUT_CHANGED');
+        }
+        return activate(revision);
+      });
+    };
+    const promise = run().finally(async () => {
       physicsChange?.dispose();
-      if (!alreadyBusy) {
+      probe?.dispose();
+      if (candidate && !committed && !this.fatal)
+        await this.publications
+          .discard(candidate)
+          .catch((error) => console.error('Unused layout cleanup failed', error));
+      if (
+        ownsSlot &&
+        this.metrics?.operationId === request.operationId &&
+        this.metrics.pauseStarted &&
+        this.metrics.pauseMs === undefined &&
+        !this.items.layoutPaused
+      )
+        this.metrics.pauseMs = performance.now() - this.metrics.pauseStarted;
+      if (ownsSlot && !committed) {
         this.busy = false;
         this.inFlight = undefined;
       }
     });
+    if (ownsSlot) this.inFlight = { accountId, operation, promise };
+    return promise;
+  }
+
+  async finishTransition(): Promise<void> {
+    const operationId = this.transitionOperationId;
+    if (!operationId) return;
+    if (this.metrics?.operationId === operationId)
+      this.metrics.previousPublicationMs = performance.now() - this.transitionStartedAt;
+    const cleanupStarted = performance.now();
+    try {
+      await this.publications.cleanup();
+    } finally {
+      if (this.metrics?.operationId === operationId)
+        this.metrics.cleanupMs = performance.now() - cleanupStarted;
+      // Cleanup stops serving the previous publication before touching disk. A failed
+      // unlink can be retried by the next cleanup/close without locking the editor.
+      if (this.transitionOperationId === operationId) {
+        this.transitionOperationId = undefined;
+        this.busy = false;
+        this.inFlight = undefined;
+      }
+    }
+  }
+
+  async close(): Promise<void> {
+    this.closing = true;
+    await this.preparation.close();
+    await this.preparationSettled;
   }
 
   private removalError(entityId: string): StaticRemovalError | undefined {

@@ -3,7 +3,6 @@ import {
   staticPlacementRotation,
   type ItemPose,
   type PlacementCatalog,
-  type PlaceStaticResult,
   type StaticPlacementEffect,
 } from '@su/contracts';
 import type { GameSession } from '../network/session';
@@ -34,10 +33,6 @@ export class StaticPlacement {
   private focused = true;
   private freshPointer = false;
   private freshConfirmKey = false;
-  private errorMessage = '';
-  private terminalError = false;
-  private recovering = false;
-  private retryRecovery?: () => void;
 
   constructor(
     private session: GameSession,
@@ -133,8 +128,7 @@ export class StaticPlacement {
     this.retryModel.addEventListener(
       'click',
       () => {
-        if (this.retryRecovery) this.retryRecovery();
-        else if (this.assetId) void this.startGhost(this.assetId);
+        if (this.assetId) void this.startGhost(this.assetId);
       },
       options,
     );
@@ -183,9 +177,6 @@ export class StaticPlacement {
       },
       options,
     );
-    session.onStaticPlacementResult = (result) => {
-      void this.result(result);
-    };
   }
   get active() {
     return !!this.effect;
@@ -197,7 +188,6 @@ export class StaticPlacement {
     return {
       active: this.active,
       hasCatalog: !!this.catalog,
-      recovering: this.recovering,
       hasGhost: !!this.ghost,
       assetId: this.assetId,
       pose: this.pose ? structuredClone(this.pose) : undefined,
@@ -212,6 +202,7 @@ export class StaticPlacement {
     if (
       !this.available() ||
       this.session.staticPlacementPending ||
+      this.session.staticRemovalPending ||
       this.session.state !== 'playing'
     )
       return;
@@ -257,7 +248,8 @@ export class StaticPlacement {
     }
   }
   private browse() {
-    if (!this.catalog || this.session.staticPlacementPending || this.recovering) return;
+    if (!this.catalog || this.session.staticPlacementPending || this.session.staticRemovalPending)
+      return;
     this.generation++;
     this.releaseGhost();
     this.panel.hidden = true;
@@ -282,7 +274,7 @@ export class StaticPlacement {
       !this.catalog ||
       this.session.staticPlacementPending ||
       this.session.worldPaused ||
-      this.recovering
+      this.session.staticRemovalPending
     )
       return;
     this.releaseGhost();
@@ -290,9 +282,6 @@ export class StaticPlacement {
     this.canvas.focus({ preventScroll: true });
     this.assetId = assetId;
     this.yawStep = 0;
-    this.errorMessage = '';
-    this.terminalError = false;
-    this.retryRecovery = undefined;
     this.retryModel.textContent = 'Повторить загрузку';
     this.panel.hidden = false;
     this.confirm.disabled = true;
@@ -336,8 +325,6 @@ export class StaticPlacement {
     this.catalog = undefined;
     this.effect = undefined;
     this.assetId = undefined;
-    this.recovering = false;
-    this.retryRecovery = undefined;
     this.panel.hidden = true;
     this.confirm.disabled = true;
     if (active) this.mode(false);
@@ -348,7 +335,6 @@ export class StaticPlacement {
       this.browsing ||
       this.session.staticPlacementPending ||
       !this.focused ||
-      this.recovering ||
       !this.catalog
     )
       return;
@@ -362,7 +348,8 @@ export class StaticPlacement {
       !this.available() ||
       !this.assetId ||
       !this.catalog ||
-      this.recovering
+      this.session.staticPlacementPending ||
+      this.session.staticRemovalPending
     )
       return;
     if (
@@ -373,95 +360,10 @@ export class StaticPlacement {
         this.catalog.placementCatalogVersion,
       )
     ) {
-      this.errorMessage = '';
-      this.confirm.disabled = this.cancelButton.disabled = this.otherModel.disabled = true;
-      this.status.textContent = 'Сохраняем размещение…';
-    }
-  }
-  private async result(result: PlaceStaticResult) {
-    if (result.ok) {
+      // Release the local preview; GameSession owns the persisted request.
       this.close();
-      return;
+      this.canvas.focus({ preventScroll: true });
     }
-    if (!this.active) return;
-    if (result.code === 'AUTH_REQUIRED') {
-      this.close();
-      return;
-    }
-    this.errorMessage =
-      result.message ??
-      (
-        {
-          OUT_OF_BOUNDS: 'Объект выходит за границы мира.',
-          BLOCKED: 'Это место занято.',
-          RATE_LIMITED: 'Слишком часто. Подождите перед новой попыткой.',
-          CONTENT_LIMIT: 'Достигнут лимит объектов.',
-          OPERATION_CONFLICT: 'Ошибка операции. Откройте инструмент снова.',
-        } as Record<string, string>
-      )[result.code] ??
-      'Не удалось разместить объект.';
-    if (
-      ['CATALOG_CHANGED', 'ASSET_NOT_ALLOWED', 'STALE_WORLD', 'VERSION_MISMATCH'].includes(
-        result.code,
-      )
-    ) {
-      const generation = ++this.generation;
-      this.releaseGhost();
-      this.recovering = true;
-      this.confirm.disabled = this.otherModel.disabled = true;
-      this.cancelButton.disabled = false;
-      this.status.textContent = 'Обновляем каталог…';
-      await this.session.refreshPublication().catch(() => {});
-      if (!this.active || generation !== this.generation) return;
-      this.recovering = false;
-      if (this.session.info.placementCatalog) {
-        this.effect!.catalog = this.session.info.placementCatalog;
-        await this.loadCatalog();
-      } else {
-        this.panel.hidden = true;
-        this.catalogPanel.loading(() => {
-          void this.loadCatalog();
-        });
-        this.catalogPanel.error('Каталог размещения недоступен для этого мира.');
-        this.mode(true);
-      }
-    } else if (result.code === 'LAYOUT_CHANGED') {
-      await this.recoverLayout();
-    }
-    // Retryable storage/world errors remain pending in GameSession with the exact request.
-    if (result.code === 'OPERATION_CONFLICT' || result.code === 'CONTENT_LIMIT') {
-      this.terminalError = true;
-      this.ghost?.show();
-      this.pose = undefined;
-    }
-  }
-  private async recoverLayout() {
-    const generation = ++this.generation;
-    this.recovering = true;
-    this.confirm.disabled = this.otherModel.disabled = true;
-    this.cancelButton.disabled = false;
-    this.retryModel.hidden = true;
-    this.freshPointer = this.freshConfirmKey = false;
-    this.status.textContent = 'Обновляем расстановку…';
-    try {
-      await this.session.refreshPublication();
-    } catch {
-      if (!this.active || generation !== this.generation) return;
-      this.errorMessage = 'Не удалось обновить расстановку. Повторите обновление.';
-      this.status.textContent = this.errorMessage;
-      this.retryModel.textContent = 'Повторить обновление';
-      this.retryModel.hidden = false;
-      this.retryRecovery = () => {
-        void this.recoverLayout();
-      };
-      this.retryModel.focus();
-      return;
-    }
-    if (!this.active || generation !== this.generation) return;
-    this.recovering = false;
-    this.retryRecovery = undefined;
-    this.freshPointer = this.freshConfirmKey = false;
-    this.errorMessage = 'Расстановка обновлена. Подтвердите место заново.';
   }
   private setStatus(message: string) {
     if (this.status.textContent !== message) this.status.textContent = message;
@@ -478,10 +380,6 @@ export class StaticPlacement {
       );
       return;
     }
-    if (this.recovering) {
-      this.confirm.disabled = this.otherModel.disabled = true;
-      return;
-    }
     const pending = this.session.staticPlacementPending;
     this.cancelButton.disabled = this.otherModel.disabled = pending;
     if (pending || this.session.state !== 'playing') {
@@ -491,11 +389,6 @@ export class StaticPlacement {
     }
     const view = this.view();
     if (!view || !this.ghost || !this.catalog || !this.assetId) return;
-    if (this.terminalError) {
-      this.confirm.disabled = true;
-      this.setStatus(this.errorMessage);
-      return;
-    }
     this.pose = undefined;
     if (this.focused && !document.hidden) {
       const rotation = staticPlacementRotation(this.yawStep);
@@ -526,12 +419,11 @@ export class StaticPlacement {
     this.ghost.show(this.pose);
     this.confirm.disabled = !this.pose || this.session.worldPaused;
     this.setStatus(
-      this.errorMessage ||
-        (this.pose
-          ? this.catalog.groundY === null
-            ? 'Высоту и опору уточнит сервер при размещении'
-            : 'Проверка места — при размещении'
-          : 'Укажите свободный участок загруженной земли в границах мира'),
+      this.pose
+        ? this.catalog.groundY === null
+          ? 'Высоту и опору уточнит сервер при размещении'
+          : 'Проверка места — при размещении'
+        : 'Укажите свободный участок загруженной земли в границах мира',
     );
   }
   dispose() {

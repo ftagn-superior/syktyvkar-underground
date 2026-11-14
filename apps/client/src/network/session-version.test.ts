@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
 
-// Model already-open v16–v19 bundles. The terrain/saved-position (v19) and weather (v20)
-// releases must stop legacy tabs before they load a catalog or reserve a room.
+// Model already-open v16–v20 bundles, including both incompatible v20 releases.
+// Combined live terrain/weather protocol v21 stops legacy tabs before resource loads or reservation.
 const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({
   ...(await original<typeof import('@su/contracts')>()),
@@ -22,8 +22,8 @@ import { GameSession } from './session';
 
 const current: WorldInfo = {
   roomId: 'new-room',
-  worldEpoch: 'terrain-saved-position-19',
-  protocolVersion: 20,
+  worldEpoch: 'terrain-live-weather-21',
+  protocolVersion: 21,
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
   layoutHash: 'b'.repeat(64),
@@ -39,7 +39,7 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(20);
+  expect(actual.PROTOCOL_VERSION).toBe(21);
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -60,33 +60,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe.each([16, 17, 18, 19])('legacy v%i tab discovering protocol v20', (version) => {
-  beforeEach(() => {
-    legacy.protocol = version;
-  });
-  it('requires reload before initial manifest/catalog download or room reservation', async () => {
-    await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
-    expect(instance.reloadRequired).toBe(true);
-    expect(fetchWorld).toHaveBeenCalledTimes(1);
-    expect(fetchWorld.mock.calls[0][0]).toBe('/api/world');
-    expect(reserve).not.toHaveBeenCalled();
-  });
-  it('requires reload on discovery refresh even when map geometry is unchanged', async () => {
-    instance.info = { ...current, protocolVersion: version };
-    instance.state = 'ready';
-    await expect(instance.refreshPublication()).rejects.toThrow('VERSION_MISMATCH');
-    expect(instance.reloadRequired).toBe(true);
-    expect(fetchWorld).toHaveBeenCalledTimes(1);
-    expect(reserve).not.toHaveBeenCalled();
-  });
-  it('stops recovery after the new server epoch and tells the legacy player to reload', async () => {
-    instance.info = { ...current, protocolVersion: version, worldEpoch: `old-${version}` };
-    instance.state = 'reconnecting';
-    (instance as unknown as { beginRecoveryCheck(): void }).beginRecoveryCheck();
-    await vi.waitFor(() => expect(instance.state).toBe('ready'));
-    expect(instance.reloadRequired).toBe(true);
-    expect(onState).toHaveBeenLastCalledWith('ready', undefined);
-    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Перезагрузите страницу'));
-    expect(reserve).not.toHaveBeenCalled();
-  });
-});
+describe.each([16, 17, 18, 19, 20])(
+  'legacy v%i tab discovering combined live weather protocol v21',
+  (version) => {
+    beforeEach(() => {
+      legacy.protocol = version;
+    });
+    it('requires reload before initial manifest/catalog download or room reservation', async () => {
+      await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
+      expect(instance.reloadRequired).toBe(true);
+      expect(fetchWorld).toHaveBeenCalledTimes(1);
+      expect(fetchWorld.mock.calls[0][0]).toBe('/api/world');
+      expect(reserve).not.toHaveBeenCalled();
+    });
+    it('requires reload on discovery refresh even when map geometry is unchanged', async () => {
+      instance.info = { ...current, protocolVersion: version };
+      instance.state = 'ready';
+      await expect(instance.refreshPublication()).rejects.toThrow('VERSION_MISMATCH');
+      expect(instance.reloadRequired).toBe(true);
+      expect(fetchWorld).toHaveBeenCalledTimes(1);
+      expect(reserve).not.toHaveBeenCalled();
+    });
+    it('stops recovery after the new server epoch and tells the legacy player to reload', async () => {
+      instance.info = { ...current, protocolVersion: version, worldEpoch: `old-${version}` };
+      instance.state = 'reconnecting';
+      (instance as unknown as { beginRecoveryCheck(): void }).beginRecoveryCheck();
+      await vi.waitFor(() => expect(instance.state).toBe('ready'));
+      expect(instance.reloadRequired).toBe(true);
+      expect(onState).toHaveBeenLastCalledWith('ready', undefined);
+      expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Перезагрузите страницу'));
+      expect(reserve).not.toHaveBeenCalled();
+    });
+  },
+);

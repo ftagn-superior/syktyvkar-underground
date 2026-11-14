@@ -136,6 +136,11 @@ describe('static GLB thin instances', () => {
         glbTemplates: 2,
         glbInstanceBufferBytes: 2560,
       });
+      expect(f.views.diagnostics().lifecycle).toEqual({
+        modelImports: 1,
+        instancesCreated: 4,
+        instancesRemoved: 0,
+      });
       expect(f.scene.transformNodes).toHaveLength(0);
       const near = batches(f.scene).filter((mesh) => mesh.thinInstanceCount === 3);
       const far = batches(f.scene).filter((mesh) => mesh.thinInstanceCount === 1);
@@ -149,6 +154,7 @@ describe('static GLB thin instances', () => {
       releaseA();
       f.update();
       expect(f.views.aggregateDiagnostics().instances).toBe(4);
+      expect(f.views.diagnostics().lifecycle.instancesRemoved).toBe(0);
       f.views.remove('middle');
       f.update();
       expect(
@@ -158,6 +164,11 @@ describe('static GLB thin instances', () => {
       for (const id of ['a', 'c', 'other-chunk']) f.views.remove(id);
       f.update();
       expect(f.views.aggregateDiagnostics()).toMatchObject({ instances: 0, glbBatches: 0 });
+      expect(f.views.diagnostics().lifecycle).toEqual({
+        modelImports: 1,
+        instancesCreated: 4,
+        instancesRemoved: 4,
+      });
       expect(f.shadow.getShadowMap()!.renderList!.filter((mesh) => mesh.isEnabled())).toHaveLength(
         0,
       );

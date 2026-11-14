@@ -17,6 +17,7 @@ import { renderQualitySettings, type RenderQuality } from '../render-quality';
 import { WorldLighting } from './lighting';
 import { WorldClouds } from './clouds';
 import { WorldNightLights } from './night-lights';
+import { registerWallSurface, setWallSurfaceEconomy } from './wall-surface';
 import { WeatherMix, type WeatherAmounts } from './weather-mix';
 import { WorldWeatherSurface } from './weather-surface';
 import { PrecipitationLayer, type PrecipitationFrame } from './precipitation';
@@ -71,6 +72,7 @@ export class WorldEnvironment {
     // when those materials are created.
     this.clouds = new WorldClouds(scene, camera);
     this.nightLights = new WorldNightLights(scene);
+    registerWallSurface(scene);
     this.surface = new WorldWeatherSurface(scene);
     this.precipitation = {
       rain: new PrecipitationLayer(scene, 'rain'),
@@ -123,6 +125,7 @@ export class WorldEnvironment {
     this.qualityClouds = renderQualitySettings(quality).clouds;
     this.clouds.setEnabled(this.qualityClouds && (this.weatherOverride ?? this.weather).clouds);
     this.nightLights.setEconomy(quality === 'economy');
+    setWallSurfaceEconomy(this.camera.getScene(), quality === 'economy');
     for (const layer of Object.values(this.precipitation)) layer.setEconomy(quality === 'economy');
   }
   update(frame: EnvironmentFrame, epochMs = Date.now()): void {

@@ -147,7 +147,7 @@ describe('городские модели', () => {
       roofColor: '#999999',
       windowColor: '#333333',
     });
-    expect(parts.map((p) => p.partId)).toEqual(['walls', 'roof', 'windows']);
+    expect(parts.map((p) => p.partId)).toEqual(['walls', 'roof', 'windows', 'window-reveals']);
     expect(parts.every((p) => p.occlusionGroup === 'shell')).toBe(true);
     validateBuildingPhysicsAsset(physics);
     const [body] = physics.colliders;
@@ -510,9 +510,11 @@ describe('входы в здания', () => {
     expect(merged.parts.map((p) => p.partId)).toEqual(['fading']);
     const [part] = merged.parts;
     expect(part.positions.length).toBe(plain.parts.reduce((s, p) => s + p.positions.length, 0));
-    // Белые стены и чёрные окна: в вершинах есть оба цвета.
-    const reds = new Set(part.colors!.filter((_, i) => i % 3 === 0));
-    expect([...reds].sort()).toEqual([0, 1]);
+    // Белые стены и чёрные окна: в вершинах есть оба цвета. Откосы проёмов затенены,
+    // поэтому между ними встречаются и промежуточные значения.
+    const reds = part.colors!.filter((_, i) => i % 3 === 0);
+    expect(Math.min(...reds)).toBe(0);
+    expect(Math.max(...reds)).toBe(1);
   });
 });
 
@@ -999,5 +1001,6 @@ describe('мир ring-block', () => {
     const original = JSON.parse(await readFile(join(release, 'manifest.json'), 'utf8'));
     expect(renamed.simulationConfigHash).toBe(original.simulationConfigHash);
     expect(renamed.mapVersion).not.toBe(original.mapVersion);
-  });
+    // Полная сборка мира; с проёмами окон геометрия городских зданий выросла в 4 раза.
+  }, 60_000);
 });

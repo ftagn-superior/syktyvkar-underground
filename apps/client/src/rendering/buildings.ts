@@ -35,6 +35,7 @@ import {
   type StaticObjectSelection,
 } from './static-selection';
 import { adoptGlowAttribute, type WorldNightLights } from './environment/night-lights';
+import { adoptSurfaceAttribute } from './environment/wall-surface';
 
 type Asset = {
   descriptor: BuildingAssetManifest;
@@ -430,6 +431,8 @@ export class BuildingViews {
     // Ночное свечение едет в TEXCOORD_0; переносим его в свой атрибут до клонирования.
     if (parts.glow)
       for (const mesh of container.meshes) if (mesh instanceof Mesh) adoptGlowAttribute(mesh);
+    // Материал стен едет в TEXCOORD_1; так же переносим его до клонирования.
+    for (const mesh of container.meshes) if (mesh instanceof Mesh) adoptSurfaceAttribute(mesh);
     if (this.disposed) {
       container.dispose();
       throw new Error('Building preparation was cancelled');

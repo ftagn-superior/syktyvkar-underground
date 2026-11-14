@@ -475,10 +475,10 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('database static placement', 
     const p = await prepared();
     const old = new ItemStore(fixture.pool, p.definition, p.items.epoch, p.items.ownership);
     await old.initialize();
-    await fixture.pool
-      .query(`DROP TABLE player_positions;
+    await fixture.pool.query(`DROP TABLE player_positions;
       DROP TABLE world_static_operations,world_static_instances,world_layouts;
       DROP FUNCTION world_static_before_change(),world_static_after_change(),world_layout_before_change(),su_finite(double precision);
+      ALTER TABLE accounts DROP COLUMN is_admin;
       DELETE FROM su_schema_migrations WHERE version>=4`);
     const before = (await fixture.pool.query('SELECT * FROM persistent_worlds')).rows;
     await expect(migrateDatabase(fixture.pool)).rejects.toThrow('Stop all persistent world owners');
@@ -492,7 +492,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('database static placement', 
     expect(
       (await fixture.pool.query('SELECT max(version) AS version FROM su_schema_migrations')).rows[0]
         .version,
-    ).toBe(7);
+    ).toBe(8);
   });
   it('publishes a catalog model without a seed instance and permits a new SQL placement after registration', async () => {
     const p = await initialize();

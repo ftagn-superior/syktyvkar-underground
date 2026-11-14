@@ -89,6 +89,7 @@ describe.skipIf(!databaseUrl)(
         ),
       );
       expect(new Set(identities.map((r) => r.account.accountId)).size).toBe(1);
+      expect(identities.every((result) => result.account.isAdmin === false)).toBe(true);
       expect(
         (
           await fixture.pool.query(
@@ -99,6 +100,85 @@ describe.skipIf(!databaseUrl)(
       expect((await fixture.pool.query('SELECT current_schema() AS name')).rows[0].name).toBe(
         fixture.schema,
       );
+    });
+
+    it('upgrades existing accounts to non-admins without changing their data or sessions', async () => {
+      const token = randomBytes(32).toString('base64url');
+      const { account } = await fixture.store.login(
+        { issuer: 'admin-migration-test', subject: 'legacy' },
+        token,
+      );
+      const accounts = (await fixture.pool.query('SELECT id,created_at FROM accounts ORDER BY id'))
+        .rows;
+      const profiles = (
+        await fixture.pool.query('SELECT * FROM player_profiles ORDER BY account_id')
+      ).rows;
+      const sessions = (await fixture.pool.query('SELECT * FROM auth_sessions ORDER BY id')).rows;
+      // Reproduce schema v7, then apply the actual additive upgrade.
+      await fixture.pool.query('ALTER TABLE accounts DROP COLUMN is_admin');
+      await fixture.pool.query('DELETE FROM su_schema_migrations WHERE version=8');
+      await migrateDatabase(fixture.pool);
+      await migrateDatabase(fixture.pool);
+      expect((await fixture.pool.query('SELECT * FROM accounts ORDER BY id')).rows).toEqual(
+        accounts.map((row) => ({ ...row, is_admin: false })),
+      );
+      expect(
+        (await fixture.pool.query('SELECT * FROM player_profiles ORDER BY account_id')).rows,
+      ).toEqual(profiles);
+      expect((await fixture.pool.query('SELECT * FROM auth_sessions ORDER BY id')).rows).toEqual(
+        sessions,
+      );
+      expect(await fixture.store.authenticate(token)).toEqual(account);
+      await expect(
+        fixture.pool.query('UPDATE accounts SET is_admin=NULL WHERE id=$1', [account.accountId]),
+      ).rejects.toMatchObject({ code: '23502' });
+    });
+
+    it('reads admin changes from the account on login, authentication and session restoration', async () => {
+      const identity = { issuer: 'admin-store-test', subject: 'admin' };
+      const token = randomBytes(32).toString('base64url');
+      const { account } = await fixture.store.login(identity, token);
+      expect(account.isAdmin).toBe(false);
+      await fixture.pool.query('UPDATE accounts SET is_admin=true WHERE id=$1', [
+        account.accountId,
+      ]);
+      await migrateDatabase(fixture.pool);
+      expect((await fixture.store.authenticate(token))?.isAdmin).toBe(true);
+      expect((await fixture.store.sessionById(account.authSessionId))?.isAdmin).toBe(true);
+      expect(
+        (await fixture.store.login(identity, randomBytes(32).toString('base64url'))).account
+          .isAdmin,
+      ).toBe(true);
+      await fixture.pool.query('UPDATE accounts SET is_admin=false WHERE id=$1', [
+        account.accountId,
+      ]);
+      expect((await fixture.store.authenticate(token))?.isAdmin).toBe(false);
+      expect((await fixture.store.sessionById(account.authSessionId))?.isAdmin).toBe(false);
+      expect(
+        (await fixture.store.login(identity, randomBytes(32).toString('base64url'))).account
+          .isAdmin,
+      ).toBe(false);
+    });
+
+    it('keeps the admin flag server-owned when updating a profile', async () => {
+      const { cookie, state } = await login('admin-profile-test');
+      const update = await fetch(app.url + '/api/me/profile', {
+        method: 'PATCH',
+        headers: {
+          Cookie: cookie,
+          Origin: app.url,
+          'X-CSRF-Token': state.csrfToken!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...state.account!.profile,
+          displayName: 'Обычный игрок',
+          is_admin: true,
+          isAdmin: true,
+        }),
+      });
+      expect(update.status).toBe(200);
+      expect((await fixture.store.authenticate(cookie.split('=')[1]))?.isAdmin).toBe(false);
     });
 
     it('upgrades existing profiles with a default skin without changing names, colors or versions', async () => {

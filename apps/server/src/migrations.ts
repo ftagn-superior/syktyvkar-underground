@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import { staticLayoutSchema, gameStaticLayoutSchema } from './layout/schema.js';
 
-export const DATABASE_SCHEMA_VERSION = 7;
+export const DATABASE_SCHEMA_VERSION = 8;
 
 /** Kept in the server bundle so source and built migration commands use identical SQL. */
 const migrations = [
@@ -151,6 +151,10 @@ const migrations = [
       updated_at timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY (account_id, world_id)
     );`,
+  },
+  {
+    version: 8,
+    sql: `ALTER TABLE accounts ADD COLUMN is_admin boolean NOT NULL DEFAULT false;`,
   },
 ];
 

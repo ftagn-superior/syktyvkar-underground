@@ -1,0 +1,64 @@
+{
+  "approvedProposal": "output/terrain-proposal-20261114",
+  "approvedGridSha256": "8b7a4df4cf97595d1f400dceb5cf6f7e00c9dad145e49ac9358a1a3414dd857c",
+  "sourceSnapshotSha256": "8a503c472aa3dccd4fb9028b453b425623f405b87490ae0005bbaee5ea61e844",
+  "sourceRevision": 8934,
+  "algorithm": "approved-20m-surface/1",
+  "processing": {
+    "datumAlignment": "median(current - GEDTM - geoid +124) in legacy rectangle, then one source over whole map",
+    "alignmentMetres": -5.188005566520534,
+    "gaussianSigmaMetres": 100,
+    "backgroundReliefFraction": 0.12,
+    "riverReliefFraction": 0.8,
+    "riverWeightXMetres": [
+      100,
+      600
+    ],
+    "riverSoftThresholdY": -2,
+    "riverSoftnessMetres": 2,
+    "bathHillCentreXZ": [
+      -50,
+      -650
+    ],
+    "bathHillScaleXZ": [
+      500,
+      320
+    ],
+    "bathMaskExponent": 4,
+    "bathReliefFraction": 0.8,
+    "bathReferenceY": 1,
+    "dimitrovaCorridorMetres": 180,
+    "dimitrovaMaskExponent": 4,
+    "dimitrovaReferenceXZ": [
+      155,
+      390
+    ],
+    "dimitrovaReliefFraction": 0.8,
+    "coarseSpacingMetres": 20,
+    "compatibilitySpacingMetres": 4,
+    "interpolation": "same a-c triangle diagonal as TerrainGrid; all maps use saved delivered grid",
+    "heightQuantizationMetres": 0.00001
+  },
+  "sources": {
+    "ground": {
+      "file": "output/ring-terrain-expansion/ground-crop.tif",
+      "sha256": "8f7140cde87d0398ac132e79ad0aaf4b1a4235fe9f052ae1aa9b7e938b9861d7",
+      "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.3857.3855_v1.2.tif"
+    },
+    "geoid": {
+      "file": "output/ring-terrain-expansion/geoid-crop.tif",
+      "sha256": "a3217bde55cbdb3e4d81a3944e07a33d4e07706014751aaad2ba331a971e2610",
+      "url": "https://cdn.proj.org/us_nga_egm08_25.tif"
+    }
+  },
+  "attribution": [
+    "GEDTM30 v1.2 / OpenGeoHub, CC BY 4.0",
+    "EGM2008 / NGA / PROJ",
+    "Street context: © OpenStreetMap contributors, ODbL 1.0"
+  ],
+  "sourceTerrainGrid": {
+    "file": "terrain-expansion/grid.json",
+    "sha256": "0e83797a4dca426a1a80fc7820fcf884b6bb14daea5441f9c5b76ee8a2b591a8"
+  },
+  "report": "reports/ring-terrain-smoothing.md"
+}

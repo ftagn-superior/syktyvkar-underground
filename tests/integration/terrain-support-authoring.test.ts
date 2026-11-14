@@ -205,86 +205,111 @@ describe('explicit support rules in authored flat releases', () => {
     expect(release.seed[0].position.y).toBe(0);
   });
 
-  it('reproduces a canonical terrain release from committed-style inputs and fails closed on changed pins', async () => {
-    const originalSource = await readFile(sourcePath, 'utf8');
-    const first = join(directory, 'canonical-reference');
-    await buildWorld(sourcePath, first, {
-      physicsPacks: true,
-      groundTerrain: {
-        spacing: 4,
-        supports: [rule],
-        seedY: { owner: rule.clearance },
-        placementModels: [
-          { assetId: 'test-house', policy: { kind: 'foundation', maximumVisibleHeight: 3 } },
-        ],
-      },
-    });
-    const release = await readAuthoringRelease(first);
-    const gridBytes = Buffer.from(JSON.stringify(release.terrain!.grid));
-    await writeFile(join(directory, 'canonical-grid.json'), gridBytes);
-    const descriptor = {
-      formatVersion: 1,
-      worldId: release.definition.worldId,
-      physicsPacks: true,
-      groundTerrain: {
-        spacing: 4,
-        grid: { file: 'canonical-grid.json', sha256: hash(gridBytes) },
-        supports: [rule],
-        header: {
-          bounds: release.definition.bounds,
-          spawnPoints: release.definition.spawnPoints,
-          initialItems: release.definition.initialItems,
-          landmarks: release.definition.landmarks,
+  it.each([4, 20] as const)(
+    'reproduces a canonical %i metre terrain release and fails closed on changed pins',
+    async (spacing) => {
+      const originalSource = await readFile(sourcePath, 'utf8');
+      const first = join(directory, 'canonical-reference');
+      await buildWorld(sourcePath, first, {
+        physicsPacks: true,
+        groundTerrain: {
+          spacing,
+          ...(spacing === 20
+            ? {
+                grid: {
+                  formatVersion: 1 as const,
+                  origin: { x: -5, z: -7 },
+                  spacing,
+                  columns: 2,
+                  rows: 2,
+                  bottom: -1,
+                  heights: [0, 0, 0, 0],
+                },
+              }
+            : {}),
+          supports: [rule],
+          seedY: { owner: rule.clearance },
+          placementModels: [
+            { assetId: 'test-house', policy: { kind: 'foundation', maximumVisibleHeight: 3 } },
+          ],
         },
-        statics: release.definition.entities,
-        seedY: Object.fromEntries(release.seed.map((owner) => [owner.entityId, owner.position.y])),
-        placementModels: [
-          { assetId: 'test-house', policy: { kind: 'foundation', maximumVisibleHeight: 3 } },
-        ],
-      },
-      expected: {
-        assetReleaseVersion: release.metadata.assetReleaseVersion,
-        seedVersion: release.metadata.seedVersion,
-        mapVersion: release.manifest.mapVersion,
-      },
-    };
-    const descriptorPath = join(directory, 'terrain-release.json');
-    await writeFile(descriptorPath, JSON.stringify(descriptor));
-    await writeFile(
-      sourcePath,
-      JSON.stringify({ ...JSON.parse(originalSource), terrainRelease: 'terrain-release.json' }),
-    );
-    try {
-      const output = join(directory, 'canonical-default');
-      expect(await buildWorld(sourcePath, output)).toEqual(release.manifest);
-      expect((await readAuthoringRelease(output)).metadata).toEqual(release.metadata);
-      await expect(
-        buildWorld(sourcePath, join(directory, 'conflicting-generator'), {
-          groundTerrain: { spacing: 4 },
-        }),
-      ).rejects.toThrow(/cannot compete/);
-      const historical = await buildWorld(sourcePath, join(directory, 'historical-flat'), {
-        terrainRelease: false,
       });
-      expect(historical.mapVersion).not.toBe(release.manifest.mapVersion);
-      await writeFile(
-        join(directory, 'canonical-grid.json'),
-        Buffer.concat([gridBytes, Buffer.from('\n')]),
-      );
-      await expect(buildWorld(sourcePath, join(directory, 'changed-grid'))).rejects.toThrow(
-        /grid hash mismatch/,
-      );
+      const release = await readAuthoringRelease(first);
+      expect(release.terrain!.grid.spacing).toBe(spacing);
+      if (spacing === 20) {
+        expect(release.terrain!.grid.origin).toEqual({ x: -5, z: -7 });
+        expect(release.terrain!.grid.heights).toHaveLength(4);
+      }
+      const gridBytes = Buffer.from(JSON.stringify(release.terrain!.grid));
       await writeFile(join(directory, 'canonical-grid.json'), gridBytes);
-      descriptor.expected.assetReleaseVersion = '0'.repeat(64);
+      const descriptor = {
+        formatVersion: 1,
+        worldId: release.definition.worldId,
+        physicsPacks: true,
+        groundTerrain: {
+          spacing,
+          grid: { file: 'canonical-grid.json', sha256: hash(gridBytes) },
+          supports: [rule],
+          header: {
+            bounds: release.definition.bounds,
+            spawnPoints: release.definition.spawnPoints,
+            initialItems: release.definition.initialItems,
+            landmarks: release.definition.landmarks,
+          },
+          statics: release.definition.entities,
+          seedY: Object.fromEntries(
+            release.seed.map((owner) => [owner.entityId, owner.position.y]),
+          ),
+          placementModels: [
+            { assetId: 'test-house', policy: { kind: 'foundation', maximumVisibleHeight: 3 } },
+          ],
+        },
+        expected: {
+          assetReleaseVersion: release.metadata.assetReleaseVersion,
+          seedVersion: release.metadata.seedVersion,
+          mapVersion: release.manifest.mapVersion,
+        },
+      };
+      const descriptorPath = join(directory, 'terrain-release.json');
       await writeFile(descriptorPath, JSON.stringify(descriptor));
-      await expect(buildWorld(sourcePath, join(directory, 'changed-release'))).rejects.toThrow(
-        /assetReleaseVersion changed/,
+      await writeFile(
+        sourcePath,
+        JSON.stringify({ ...JSON.parse(originalSource), terrainRelease: 'terrain-release.json' }),
       );
-      await expect(readFile(join(directory, 'changed-release', 'manifest.json'))).rejects.toThrow();
-    } finally {
-      await writeFile(sourcePath, originalSource);
-    }
-  });
+      try {
+        const output = join(directory, 'canonical-default');
+        expect(await buildWorld(sourcePath, output)).toEqual(release.manifest);
+        expect((await readAuthoringRelease(output)).metadata).toEqual(release.metadata);
+        await expect(
+          buildWorld(sourcePath, join(directory, 'conflicting-generator'), {
+            groundTerrain: { spacing: 4 },
+          }),
+        ).rejects.toThrow(/cannot compete/);
+        const historical = await buildWorld(sourcePath, join(directory, 'historical-flat'), {
+          terrainRelease: false,
+        });
+        expect(historical.mapVersion).not.toBe(release.manifest.mapVersion);
+        await writeFile(
+          join(directory, 'canonical-grid.json'),
+          Buffer.concat([gridBytes, Buffer.from('\n')]),
+        );
+        await expect(buildWorld(sourcePath, join(directory, 'changed-grid'))).rejects.toThrow(
+          /grid hash mismatch/,
+        );
+        await writeFile(join(directory, 'canonical-grid.json'), gridBytes);
+        descriptor.expected.assetReleaseVersion = '0'.repeat(64);
+        await writeFile(descriptorPath, JSON.stringify(descriptor));
+        await expect(buildWorld(sourcePath, join(directory, 'changed-release'))).rejects.toThrow(
+          /assetReleaseVersion changed/,
+        );
+        await expect(
+          readFile(join(directory, 'changed-release', 'manifest.json')),
+        ).rejects.toThrow();
+      } finally {
+        await writeFile(sourcePath, originalSource);
+      }
+    },
+  );
 
   it('authors explicit nonflat geometry, seed poses, spawns and boundaries without editing source files', async () => {
     const sourceBefore = await readFile(sourcePath);

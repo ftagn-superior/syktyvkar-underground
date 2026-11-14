@@ -49,7 +49,7 @@ import {
   type FoundationSupportRuleV2,
   type TerrainPlacementModel,
 } from '@su/terrain-build/private-data';
-import { createGroundTerrain } from './ground-terrain.js';
+import { createGroundTerrain, type GroundTerrainSpacing } from './ground-terrain.js';
 import { buildTerrainTiles } from './terrain-tiles.js';
 import { generateHouse, type HouseRecipe } from './house.js';
 import { generateStreamingCells } from './streaming-lab.js';
@@ -183,9 +183,9 @@ export interface BuildWorldOptions {
   terrainVariant?: 'hill' | 'flat';
   /** Explicit output-only candidate. Rules are private inputs, never prebuilt foundations. */
   groundTerrain?: {
-    spacing: 2 | 4;
+    spacing: GroundTerrainSpacing;
     grid?: TerrainGrid;
-    /** Add bare ground around the source recipe, retaining its original sample lattice. */
+    /** Add bare ground around the source recipe. A 20 m design grid has its own explicit lattice. */
     extendToWorldBounds?: true;
     supports?: FoundationSupportRuleV2[];
     placementModels?: TerrainPlacementModel[];
@@ -366,8 +366,13 @@ export async function buildWorld(
     };
     if (options.groundTerrain) {
       if (privateTerrain) throw new Error('Ground terrain requires exactly one source ground');
-      const converted = createGroundTerrain(recipe, instance, options.groundTerrain.spacing);
-      if (options.groundTerrain.grid) {
+      const converted = createGroundTerrain(
+        recipe,
+        instance,
+        options.groundTerrain.spacing,
+        options.groundTerrain.spacing === 20 ? options.groundTerrain.grid : undefined,
+      );
+      if (options.groundTerrain.grid && options.groundTerrain.spacing !== 20) {
         const explicit = validateTerrainGrid(options.groundTerrain.grid);
         const original = converted.grid;
         const extended = options.groundTerrain.extendToWorldBounds === true;

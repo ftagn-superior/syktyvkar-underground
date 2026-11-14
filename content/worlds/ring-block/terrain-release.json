@@ -22229,8 +22229,8 @@
     ]
   },
   "expected": {
-    "assetReleaseVersion": "19e76c1057b7dbf14ff6b505f98c7b56b72255aa26945abd7df09956c656296c",
+    "assetReleaseVersion": "60dc6d76363c910d5fd0d959435cbeb07cf56d0628d26522cc8c8ba91f0085c2",
     "seedVersion": "6062355fc8cba03dc87c61d27d43b25dc6bbd9ed88954d787541e8cd1458a6e9",
-    "mapVersion": "e569b6a429c9f57102ad96a29e5cc1d4d5010c1e5dd38d757e5b1d56c144adb0"
+    "mapVersion": "67ef7392ae7d54afc0a39ed466b54811653ac614f6d623e22ff37bf273a4d706"
   }
 }

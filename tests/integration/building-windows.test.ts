@@ -169,6 +169,26 @@ describe('окна зданий по контуру', () => {
     ).toThrow(/garage/);
   });
 
+  it('торговая пристройка выступает от стены и получает столкновение', () => {
+    const shop = {
+      facing: ['S' as const],
+      height: 3.4,
+      glassColor: '#223344',
+      signColor: '#cc2222',
+    };
+    const flush = generateFootprint('test-shop', { ...box, details: { shopfront: shop } });
+    const annex = generateFootprint('test-shop', {
+      ...box,
+      details: { shopfront: { ...shop, depth: 3 } },
+    });
+    const maxZ = (parts: typeof flush.parts, id: string) =>
+      Math.max(...parts.find((p) => p.partId === id)!.positions.filter((_, i) => i % 3 === 2));
+    // Южная стена z = 4: витрины на стене или на лицевой стороне пристройки в 3 м.
+    expect(maxZ(flush.parts, 'shop-glass')).toBeCloseTo(4.04);
+    expect(maxZ(annex.parts, 'shop-glass')).toBeCloseTo(7.04);
+    expect(annex.physics.colliders.length).toBe(flush.physics.colliders.length + 1);
+  });
+
   it('панели размечаются в шагах окон и этажах', () => {
     const { parts } = generateFootprint('test-panel', { ...box, wallMaterial: 'panel' });
     const walls = parts.find((p) => p.partId === 'walls')!;

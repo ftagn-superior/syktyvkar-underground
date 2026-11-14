@@ -23,6 +23,11 @@ export interface FacadeDetails {
     wallColor?: string;
     signColor?: string;
     awningColor?: string;
+    /**
+     * Вынос торговой пристройки от стены, м: первый этаж выступает коробкой со своими
+     * стенами, крышей и столкновением, витрины и вывеска — на её лицевой стороне.
+     */
+    depth?: number;
   };
   /** Колонны балконов или лоджий: `at` — доли длины фасада, либо шаг `every` в метрах. */
   balconies?: {
@@ -598,9 +603,17 @@ export function buildFacade(
     const glass = meshPart('shop-glass', 'detail', shop.glassColor);
     const sign = meshPart('shop-sign', 'detail', shop.signColor ?? shop.glassColor);
     const awning = meshPart('awning', 'detail', shop.awningColor ?? '#b33a32');
+    const depth = shop.depth ?? 0;
+    if (!(depth >= 0 && depth <= 12)) throw new Error('Invalid shopfront depth');
     for (const edge of edges) {
       if (!shopEdges.has(edge.index)) continue;
-      if (shop.wallColor) facadeQuad(band, edge, 0, edge.length, 0, shop.height, 0.02);
+      if (depth > 0) {
+        // Пристройка: коробка от стены до лицевой стороны и её коллайдер.
+        const center = along(edge, edge.length / 2, elevation + shop.height / 2, depth / 2);
+        const size = [edge.length, shop.height, depth];
+        addOrientedBox(band, center, size, edge.d);
+        boxes.push({ center, size, u: edge.d });
+      } else if (shop.wallColor) facadeQuad(band, edge, 0, edge.length, 0, shop.height, 0.02);
       const panes = Math.max(1, Math.round(edge.length / 3.2));
       const step = edge.length / panes;
       // Витрины одного фасада принадлежат одному магазину и включаются вместе.
@@ -614,7 +627,7 @@ export function buildFacade(
             (k + 1) * step - 0.18,
             0.35,
             shop.height - 0.75,
-            0.04,
+            depth + 0.04,
           ),
         );
       if (shop.signColor)
@@ -626,13 +639,13 @@ export function buildFacade(
             edge.length - 0.1,
             shop.height - 0.65,
             shop.height - 0.1,
-            0.06,
+            depth + 0.06,
           ),
         );
       if (shop.awningColor) {
         const y = shop.height - 0.75;
-        const near = (s: number) => along(edge, s, y, 0.07);
-        const far = (s: number) => along(edge, s, y - 0.35, 1.1);
+        const near = (s: number) => along(edge, s, y, depth + 0.07);
+        const far = (s: number) => along(edge, s, y - 0.35, depth + 1.1);
         addFace(awning, [near(edge.length), near(0), far(0), far(edge.length)]);
         addFace(awning, [near(0), near(edge.length), far(edge.length), far(0)]);
       }

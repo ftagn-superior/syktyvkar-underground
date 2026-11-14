@@ -14,6 +14,12 @@ export interface StaticMeshPart {
   colors?: number[];
   /** Per-vertex night glow: GLOW_KIND and deterministic threshold, encoded as TEXCOORD_0. */
   glow?: number[];
+  /**
+   * Материал стены для процедурного рисунка (кирпич, доска, панели…), TEXCOORD_1:
+   * `u` = SURFACE_KIND × 1000 + координата вдоль фасада, `v` — координата по высоте.
+   * Единицы координат задаёт вид материала; см. `wallSurface` в tools/world-build/src/city.ts.
+   */
+  surface?: number[];
 }
 
 /** Unmarked trailing vertices do not glow; shared by compilation and mesh merging. */
@@ -24,6 +30,16 @@ export function glowOf(part: StaticMeshPart): number[] | undefined {
   return part.glow.length === count * 2
     ? part.glow
     : part.glow.concat(Array<number>(count * 2 - part.glow.length).fill(0));
+}
+
+/** Вершины без материала стены получают (0, 0): рисунка нет. */
+export function surfaceOf(part: StaticMeshPart): number[] | undefined {
+  if (!part.surface) return undefined;
+  const count = part.positions.length / 3;
+  if (part.surface.length > count * 2) throw new Error(`Surface data exceeds ${part.partId}`);
+  return part.surface.length === count * 2
+    ? part.surface
+    : part.surface.concat(Array<number>(count * 2 - part.surface.length).fill(0));
 }
 
 export function meshPart(

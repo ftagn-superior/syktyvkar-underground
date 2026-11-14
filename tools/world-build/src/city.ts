@@ -8,7 +8,26 @@ import type {
 import type { StaticMeshPart } from './glb.js';
 import { addBox, addFace, meshPart } from './house.js';
 import { triangulate, type Point2 } from './triangulate.js';
-import { addOrientedBox, buildFacade, type FacadeDetails } from './facade.js';
+import {
+  addOrientedBox,
+  buildFacade,
+  edgesOf,
+  shopfrontEdges,
+  type FacadeDetails,
+} from './facade.js';
+import {
+  addFrame,
+  addReveals,
+  DEFAULT_RECESS,
+  markSurface,
+  onEdge,
+  quadWithHoles,
+  validateLayout,
+  windowHoles,
+  windowPitch,
+  type WindowLayout,
+} from './windows.js';
+import { SURFACE_KIND, type SurfaceKind } from '@su/contracts';
 import { mergeParts } from './merge.js';
 import { bakeLocalAo } from './ambient-occlusion.js';
 import { glowRandom, markGlow } from './glow.js';
@@ -70,6 +89,10 @@ export interface FootprintRecipe {
   windowColor: string;
   /** Необязательные детали фасада и крыши; см. facade.ts. */
   details?: FacadeDetails;
+  /** Раскладка, размер, глубина проёма и переплёт окон; см. windows.ts. */
+  windowLayout?: WindowLayout;
+  /** Материал стен: процедурный рисунок шейдера клиента (кирпич, доска, панели…). */
+  wallMaterial?: SurfaceKind;
   /** Высота низа стен, например у перехода над аркой. Этажи считаются от неё. */
   elevation?: number;
   /**
@@ -138,6 +161,8 @@ export type FootprintSection = Partial<Omit<FootprintRecipe, 'formatVersion' | '
 };
 
 /** Здание по контуру: призма или несколько корпусов и замкнутые коллайдеры той же формы. */
+const NO_AO = /(^|-)(windows|window-frames|window-reveals)$/;
+
 export function generateFootprint(
   assetId: string,
   recipe: FootprintRecipe,
@@ -145,7 +170,8 @@ export function generateFootprint(
   const built = recipe.sections?.length
     ? generateSections(assetId, recipe)
     : generatePrism(assetId, recipe);
-  bakeLocalAo(built.parts);
+  // Стёкла, переплёты и откосы окон не запекаются: их сотни, откосы затенены заранее.
+  bakeLocalAo(built.parts.filter((part) => !NO_AO.test(part.partId)));
   // Слияние частей с цветами вершин: один меш на группу прозрачности вместо десятка.
   return {
     parts: recipe.merge ? mergeParts(built.parts) : built.parts,
@@ -227,22 +253,53 @@ function generatePrism(
     throw new Error('Invalid footprint windowGlow');
   // Порядок окон в контуре стабилен, поэтому случайные числа повторяются от сборки к сборке.
   const random = glowRandom(`${assetId}:${JSON.stringify(recipe.outline)}`);
+  const layout = recipe.windowLayout;
+  validateLayout(layout);
+  if (recipe.wallMaterial !== undefined && !(recipe.wallMaterial in SURFACE_KIND))
+    throw new Error(`Unknown footprint wallMaterial ${recipe.wallMaterial}`);
+  const recess = layout?.recess ?? DEFAULT_RECESS;
+  const storey = (h - e) / recipe.floors;
+  // triangulate возвращает контур с положительной площадью в осях (x, z);
+  // для такого обхода внешняя нормаль ребра p → q равна up × (q − p).
+  const edges = edgesOf(ring);
+  const shopEdges = shopfrontEdges(edges, recipe.details);
+  const holes = edges.map((edge) =>
+    recipe.windows
+      ? windowHoles(
+          edge.length,
+          e,
+          storey,
+          recipe.floors,
+          layout,
+          (floor) => floor === 0 && shopEdges.has(edge.index),
+        )
+      : [],
+  );
   const facade = buildFacade(ring, h, recipe.floors, recipe.details, e, {
     random,
     windows: windowGlow === 'none' ? undefined : windowGlow,
+    holes: recess > 0 ? (edge) => holes[edge] : undefined,
   });
+  const reveals = meshPart('window-reveals', 'wall', recipe.wallColor);
+  const frames = layout?.frameColor
+    ? meshPart('window-frames', 'detail', layout.frameColor)
+    : undefined;
   const top = h + facade.parapet;
-  // triangulate возвращает контур с положительной площадью в осях (x, z);
-  // для такого обхода внешняя нормаль ребра p → q равна up × (q − p).
   for (let i = 0; i < n; i++) {
     const [px, pz] = ring[i],
       [qx, qz] = ring[(i + 1) % n];
-    addFace(walls, [
-      [px, e, pz],
-      [px, top, pz],
-      [qx, top, qz],
-      [qx, e, qz],
-    ]);
+    const edge = edges[i];
+    const wallStart = walls.positions.length / 3;
+    const revealStart = reveals.positions.length / 3;
+    if (recess > 0 && holes[i].length)
+      quadWithHoles(walls, edge, 0, edge.length, e, top, 0, holes[i]);
+    else
+      addFace(walls, [
+        [px, e, pz],
+        [px, top, pz],
+        [qx, top, qz],
+        [qx, e, qz],
+      ]);
     // Внутренняя сторона парапета видна сверху, когда камера смотрит через крышу.
     if (top > h)
       addFace(walls, [
@@ -251,34 +308,29 @@ function generatePrism(
         [px, top, pz],
         [px, h, pz],
       ]);
-    const length = Math.hypot(qx - px, qz - pz);
-    if (!recipe.windows || length < 3) continue;
-    const dx = (qx - px) / length,
-      dz = (qz - pz) / length;
-    const ox = dz * 0.03,
-      oz = -dx * 0.03;
-    const storey = (h - e) / recipe.floors;
-    const count = Math.floor((length - 1) / 2.8);
-    const width = Math.min(1.3, storey * 0.5),
-      height = Math.min(1.4, storey * 0.48);
-    for (let floor = 0; floor < recipe.floors; floor++) {
-      if (facade.skipWindow(i, floor)) continue;
-      const bottom = e + floor * storey + storey * 0.32;
-      for (let k = 0; k < count; k++) {
-        const center = (length / count) * (k + 0.5);
-        const s0 = center - width / 2,
-          s1 = center + width / 2;
-        const at = (s: number, y: number) => [px + dx * s + ox, y, pz + dz * s + oz];
-        const start = windows.positions.length / 3;
-        addFace(windows, [
-          at(s0, bottom),
-          at(s0, bottom + height),
-          at(s1, bottom + height),
-          at(s1, bottom),
-        ]);
-        const seed = random();
-        if (windowGlow !== 'none') markGlow(windows, start, windowGlow, seed);
-      }
+    // Стекло в глубине проёма; без проёма — на 3 см перед стеной, как раньше.
+    const glassOut = recess > 0 ? -recess : 0.03;
+    for (const hole of holes[i]) {
+      if (recess > 0) addReveals(reveals, edge, hole, recess);
+      const start = windows.positions.length / 3;
+      addFace(windows, [
+        onEdge(edge, hole.s0, hole.y0, glassOut),
+        onEdge(edge, hole.s0, hole.y1, glassOut),
+        onEdge(edge, hole.s1, hole.y1, glassOut),
+        onEdge(edge, hole.s1, hole.y0, glassOut),
+      ]);
+      const seed = random();
+      if (windowGlow !== 'none') markGlow(windows, start, windowGlow, seed);
+      if (frames) addFrame(frames, edge, hole, glassOut + 0.015);
+    }
+    if (recipe.wallMaterial) {
+      const scale =
+        recipe.wallMaterial === 'panel'
+          ? { u: windowPitch(edge.length, layout), v: storey }
+          : undefined;
+      markSurface(walls, wallStart, recipe.wallMaterial, edge, e, scale);
+      if (reveals.positions.length / 3 > revealStart)
+        markSurface(reveals, revealStart, recipe.wallMaterial, edge, e, scale);
     }
   }
   const vertices: number[] = [];
@@ -314,6 +366,8 @@ function generatePrism(
     walls,
     roof,
     ...(windows.indices.length ? [windows] : []),
+    ...(reveals.indices.length ? [reveals] : []),
+    ...(frames?.indices.length ? [frames] : []),
     ...facade.parts,
     ...(recipe.doors?.length ? addDoors(ring, e, recipe.doors) : []),
   ];

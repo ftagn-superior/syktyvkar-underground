@@ -310,7 +310,11 @@ try {
   }
   await sender.locator('#animation-preview-reduced').check();
   await sender.locator('#animation-preview-note').filter({ hasText: 'Сидячий вариант' }).waitFor();
-  await sender.screenshot({ path: `${output}/authoring-preview-wheelchair.png` });
+  await sender.locator('#animation-preview-canvas').scrollIntoViewIfNeeded();
+  await sender.screenshot({
+    path: `${output}/authoring-preview-wheelchair.png`,
+    animations: 'disabled',
+  });
   assert.equal(
     replicated().animationSequence,
     sequence,
@@ -360,7 +364,10 @@ try {
     assert.equal(layout.overflowY, 'auto');
     assert.equal(layout.horizontalOverflow, false);
     assert.ok(layout.scrollHeight > layout.clientHeight);
-    await sender.screenshot({ path: `${output}/menu-${size.width}-top.png` });
+    await sender.screenshot({
+      path: `${output}/menu-${size.width}-top.png`,
+      animations: 'disabled',
+    });
     await sender.locator('.animation-choice:first-child').hover();
     await sender.mouse.wheel(0, layout.scrollHeight);
     await sender.waitForFunction(() => {
@@ -375,7 +382,10 @@ try {
         hit?.closest('.animation-choice') === panel.querySelector('.animation-choice:last-child')
       );
     });
-    await sender.screenshot({ path: `${output}/menu-${size.width}-bottom.png` });
+    await sender.screenshot({
+      path: `${output}/menu-${size.width}-bottom.png`,
+      animations: 'disabled',
+    });
     for (const selector of ['#animations-toggle', '#reactions-toggle', '#help-toggle']) {
       assert.ok(
         await sender.locator(selector).evaluate((node) => {

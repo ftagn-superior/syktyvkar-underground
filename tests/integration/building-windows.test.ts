@@ -148,6 +148,27 @@ describe('окна зданий по контуру', () => {
     ).toThrow(/override/);
   });
 
+  it('ворота гаражей идут с шагом по фасаду и чередуют цвета', () => {
+    const { parts } = generateFootprint('test-garages', {
+      ...box,
+      height: 3,
+      floors: 1,
+      windows: false,
+      details: {
+        garageDoors: { facing: ['S'], width: 2.6, every: 3.4, colors: ['#7a4a33', '#6f757a'] },
+      },
+    });
+    const doors = parts.filter((p) => p.partId.startsWith('garage-doors'));
+    // Южный фасад 12 м: floor((12 − 0,4) / 3,4) = 3 ворот, цвета по очереди: 2 + 1.
+    expect(doors.map((p) => p.positions.length / 12)).toEqual([2, 1]);
+    expect(() =>
+      generateFootprint('test-bad', {
+        ...box,
+        details: { garageDoors: { facing: ['S'], colors: [] } },
+      }),
+    ).toThrow(/garage/);
+  });
+
   it('панели размечаются в шагах окон и этажах', () => {
     const { parts } = generateFootprint('test-panel', { ...box, wallMaterial: 'panel' });
     const walls = parts.find((p) => p.partId === 'walls')!;

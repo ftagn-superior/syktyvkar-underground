@@ -76,6 +76,17 @@ export interface FacadeDetails {
     top: number;
     color: string;
   }[];
+  /**
+   * Ворота гаражей, складов и подстанций на фасадах `facing`: полотна шириной `width`
+   * и высотой `height` с шагом `every` по всей длине фасада; цвета `colors` чередуются.
+   */
+  garageDoors?: {
+    facing: Facing[];
+    width?: number;
+    height?: number;
+    every?: number;
+    colors: string[];
+  };
   /** Входной тамбур с навесом, вывеской и ступенями; `at` — доля ширины фасада слева. */
   porch?: {
     facing: Facing;
@@ -763,6 +774,38 @@ export function buildFacade(
         );
     if (part.indices.length) parts.push(part);
   });
+  if (details.garageDoors) {
+    const spec = details.garageDoors;
+    const width = spec.width ?? 2.6,
+      every = spec.every ?? width + 0.7;
+    const doorHeight = Math.min(spec.height ?? 2.4, height - elevation - 0.3);
+    if (
+      !Array.isArray(spec.colors) ||
+      !spec.colors.length ||
+      spec.colors.some((c) => !/^#[0-9a-f]{6}$/i.test(c)) ||
+      !(width > 0.5 && every >= width && doorHeight > 0.5)
+    )
+      throw new Error('Invalid garage doors');
+    const doors = spec.colors.map((color, k) => meshPart(`garage-doors-${k}`, 'detail', color));
+    let next = 0;
+    for (const edge of edges) {
+      if (edge.length < width + 0.4 || !faces(edge, spec.facing)) continue;
+      const count = Math.max(1, Math.floor((edge.length - 0.4) / every));
+      for (let k = 0; k < count; k++) {
+        const center = (edge.length / count) * (k + 0.5);
+        facadeQuad(
+          doors[next++ % doors.length],
+          edge,
+          center - width / 2,
+          center + width / 2,
+          elevation,
+          elevation + doorHeight,
+          0.03,
+        );
+      }
+    }
+    for (const part of doors) if (part.indices.length) parts.push(part);
+  }
   if (details.porch) {
     const spec = details.porch;
     const edge = widestFacing(edges, spec.facing, 'porch');

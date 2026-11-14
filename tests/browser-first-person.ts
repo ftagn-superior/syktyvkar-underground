@@ -249,6 +249,69 @@ try {
   );
   record('remote body facing crosses the -pi/pi seam without a spurious turn');
 
+  for (const [key, direction] of [
+    ['q', 1],
+    ['e', -1],
+  ] as const) {
+    const start = await rendering(first);
+    const position = (await snapshot(first)).authoritative.position;
+    await first.keyboard.down(key);
+    await first.waitForTimeout(400);
+    await first.keyboard.up(key);
+    await first.waitForTimeout(300);
+    looked = await rendering(first);
+    assert.ok(
+      angleDelta(looked.camera.yaw, start.camera.yaw) * direction > 0.2,
+      `${key} turns the character ${direction > 0 ? 'left' : 'right'}`,
+    );
+    assert.equal(looked.camera.pitch, start.camera.pitch);
+    const stopped = looked.camera.yaw;
+    await first.waitForTimeout(200);
+    assert.ok(Math.abs(angleDelta((await rendering(first)).camera.yaw, stopped)) < 0.001);
+    const after = (await snapshot(first)).authoritative;
+    assert.ok(Math.hypot(after.position.x - position.x, after.position.z - position.z) < 0.05);
+    await second.waitForFunction(
+      ({ id, yaw }) => {
+        const entity = (window as any).__SU_DEBUG__
+          .report()
+          .rendering.dynamicEntities.find((entry: any) => entry.entityId === id);
+        if (!entity) return false;
+        const bodyYaw = Math.atan2(
+          2 * entity.rotation.w * entity.rotation.y,
+          1 - 2 * entity.rotation.y ** 2,
+        );
+        return Math.abs(Math.atan2(Math.sin(bodyYaw - yaw), Math.cos(bodyYaw - yaw))) < 0.02;
+      },
+      { id: ownId, yaw: stopped },
+    );
+  }
+  record(
+    'Q/E turn left/right while stationary, preserve pitch, settle on release and replicate facing',
+  );
+
+  await first.keyboard.down('q');
+  await first.keyboard.down('e');
+  await first.waitForTimeout(300);
+  const opposed = (await rendering(first)).camera.yaw;
+  await first.waitForTimeout(250);
+  assert.ok(Math.abs(angleDelta((await rendering(first)).camera.yaw, opposed)) < 0.001);
+  await first.keyboard.up('q');
+  await first.keyboard.down('w');
+  await first.waitForTimeout(300);
+  const turning = await controls(first);
+  looked = await rendering(first);
+  assert.ok(angleDelta(looked.camera.yaw, opposed) < -0.15);
+  assert.ok(
+    Math.abs(angleDelta(Math.atan2(turning.input.moveX, turning.input.moveZ), looked.camera.yaw)) <
+      0.05,
+    'forward movement follows the keyboard turn',
+  );
+  await first.keyboard.up('w');
+  await first.keyboard.up('e');
+  await first.waitForTimeout(300);
+  looked = await rendering(first);
+  record('Q+E cancel each other; releasing Q resumes E and movement follows the new facing');
+
   for (const key of ['s', 'a', 'd', 'ArrowUp', 'ArrowDown']) {
     await first.keyboard.down(key);
     await first.waitForTimeout(300);
@@ -297,7 +360,15 @@ try {
   assert.equal(await first.locator('#inventory-panel').isVisible(), false);
   await first.keyboard.press('Escape');
   await first.waitForTimeout(1100);
+  const freeCursorYaw = (await rendering(first)).camera.yaw;
+  for (const key of ['q', 'e']) {
+    await first.keyboard.down(key);
+    await first.waitForTimeout(150);
+    await first.keyboard.up(key);
+  }
+  assert.ok(Math.abs(angleDelta((await rendering(first)).camera.yaw, freeCursorYaw)) < 0.001);
   record('help and all social/item shortcuts respect first-person action limits');
+  record('Q/E cannot turn the character while the cursor is free');
 
   const resourceCounts: unknown[] = [];
   for (const quality of ['economy', 'standard', 'economy', 'standard'] as const) {
@@ -379,10 +450,14 @@ try {
   await first.mouse.wheel(0, -5000);
   await enter(first);
   await first.keyboard.down('w');
+  await first.keyboard.down('q');
   await first.keyboard.press('Escape');
   await locked(first, false);
+  const interruptedYaw = (await rendering(first)).camera.yaw;
   await neutral(first);
+  assert.ok(Math.abs(angleDelta((await rendering(first)).camera.yaw, interruptedYaw)) < 0.001);
   await first.keyboard.up('w');
+  await first.keyboard.up('q');
   await first.waitForTimeout(1100);
   await first.locator('#world').click({ position: { x: 400, y: 300 } });
   await locked(first, true);

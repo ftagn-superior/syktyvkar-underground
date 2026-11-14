@@ -249,19 +249,21 @@ export function startGame(): void {
       !!room?.state.players.get(room.sessionId)
     );
   }
+  function canControlFirstPerson(): boolean {
+    return (
+      !!firstPerson?.locked &&
+      firstPersonEligible() &&
+      !help?.isOpen &&
+      element('chat-console').hidden
+    );
+  }
   function readMovement(): MoveInput {
     if (inputMode.value === 'gamepad')
       return canGamepadWalk() ? gamepad!.read(view?.cameraAngle ?? 0) : { ...NEUTRAL_INPUT };
     if (inputMode.value === 'touch') return touch!.read(view?.cameraAngle ?? 0);
     if (firstPerson?.requesting) return { ...NEUTRAL_INPUT };
     if (firstPerson?.selected) {
-      if (
-        !firstPerson.locked ||
-        !firstPersonEligible() ||
-        help?.isOpen ||
-        !element('chat-console').hidden
-      )
-        return { ...NEUTRAL_INPUT };
+      if (!canControlFirstPerson()) return { ...NEUTRAL_INPUT };
       return firstPersonMovement(keyboard.read(view?.cameraAngle), view!.facingYaw);
     }
     return keyboard.read(view?.cameraAngle);
@@ -625,6 +627,11 @@ export function startGame(): void {
   const accountPreparation = accounts.load();
   function setCameraRotation(direction: -1 | 0 | 1): void {
     if (!loaded || graphicsLost) return;
+    if (
+      direction !== 0 &&
+      (firstPerson?.requesting || (firstPerson?.selected && !canControlFirstPerson()))
+    )
+      return;
     view?.setCameraRotation(direction);
   }
   reactions = new ReactionMenu(

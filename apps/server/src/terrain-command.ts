@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { canonicalJson } from '@su/contracts';
+import { canonicalJson, validateWorldLayoutPatch, type WorldLayoutPatch } from '@su/contracts';
 import { hash } from '@su/world-release';
 import { loadEnvironment, readDatabaseUrl } from './config.js';
 import { createDatabasePool } from './database.js';
@@ -43,10 +43,10 @@ async function canonicalPath(path: string): Promise<string> {
 }
 async function validateReportPath(options: Map<string, string>) {
   const report = await canonicalPath(options.get('--report')!);
-  for (const key of ['--rules', '--plan']) {
+  for (const key of ['--rules', '--plan', '--layout-patch']) {
     const input = options.get(key);
     if (input && report === (await canonicalPath(input)))
-      throw new Error('Report output must differ from rules and accepted plan');
+      throw new Error('Report output must differ from rules, layout patch and accepted plan');
   }
   for (const key of ['--source', '--target']) {
     const directory = await canonicalPath(options.get(key)!);
@@ -65,7 +65,7 @@ async function run() {
     const key = args[i],
       value = args[++i];
     if (
-      !['--source', '--target', '--rules', '--report', '--plan'].includes(key) ||
+      !['--source', '--target', '--rules', '--report', '--plan', '--layout-patch'].includes(key) ||
       options.has(key)
     )
       throw new Error(`Unexpected terrain argument: ${key}`);
@@ -82,6 +82,10 @@ async function run() {
   const accepted = options.has('--plan')
     ? ((await readJson(options.get('--plan')!)) as TerrainMigrationPlan)
     : undefined;
+  const layoutPatch = options.has('--layout-patch')
+    ? await readJson(options.get('--layout-patch')!)
+    : undefined;
+  if (layoutPatch !== undefined) validateWorldLayoutPatch(layoutPatch);
   loadEnvironment();
   const worldId = process.env.SU_WORLD ?? 'ring-block';
   if (!/^[a-z0-9-]{1,64}$/.test(worldId)) throw new Error('Invalid SU_WORLD');
@@ -99,14 +103,18 @@ async function run() {
   let applied: Awaited<ReturnType<typeof applyTerrainMigration>> | undefined;
   try {
     await checkDatabaseSchema(pool);
+    const algorithmVersion =
+      layoutPatch === undefined ? 'terrain-poses/1' : 'terrain-poses/1+layout-patch/1';
     const migration = {
       sourceDirectory: options.get('--source')!,
       targetDirectory: options.get('--target')!,
       ownership,
-      algorithmVersion: 'terrain-poses/1',
-      rulesHash: hash(canonicalJson(rules)),
+      algorithmVersion,
+      rulesHash: hash(
+        canonicalJson(layoutPatch === undefined ? rules : { algorithmVersion, rules, layoutPatch }),
+      ),
       prepare: (context: Parameters<typeof prepareTerrainPoses>[0]) =>
-        prepareTerrainPoses(context, rules),
+        prepareTerrainPoses(context, rules, layoutPatch as WorldLayoutPatch | undefined),
     };
     if (command === 'plan') {
       const plan = await planTerrainMigration(migration);

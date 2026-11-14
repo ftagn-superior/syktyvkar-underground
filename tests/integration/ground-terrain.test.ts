@@ -1,8 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { canonicalJson, type BuildingInstance } from '../../packages/contracts/src/index.js';
-import { prepareTerrainBuildContext } from '../../packages/terrain-build/src/terrain.js';
+import {
+  canonicalJson,
+  sampleTerrain,
+  type BuildingInstance,
+  type TerrainGrid,
+} from '../../packages/contracts/src/index.js';
+import {
+  generateTerrainTile,
+  prepareTerrainBuildContext,
+  rectangle,
+} from '../../packages/terrain-build/src/terrain.js';
 import { generateGround, type GroundRecipe } from '../../tools/world-build/src/city.js';
 import { createGroundTerrain } from '../../tools/world-build/src/ground-terrain.js';
 
@@ -71,16 +80,81 @@ const fingerprint = (triangles: readonly (readonly (readonly number[])[])[]) => 
 };
 
 describe('existing city ground to terrain conversion', () => {
+  it('keeps narrow roads, holes and markings on an independent coarse lattice without resampling', () => {
+    const grid: TerrainGrid = {
+      formatVersion: 1,
+      origin: { x: -5, z: -7 },
+      spacing: 20,
+      columns: 2,
+      rows: 2,
+      bottom: -1,
+      heights: [0, 0.2, 0.3, 0.5],
+    };
+    const recipe = small();
+    const converted = createGroundTerrain(recipe, placement, 20, grid);
+    expect(converted.grid).toEqual(grid);
+    expect(converted.grid).not.toBe(grid);
+    expect(converted.surfaces).toEqual(createGroundTerrain(recipe, placement, 4).surfaces);
+    const tile = generateTerrainTile(
+      'coarse-road',
+      converted.grid,
+      rectangle(0, 0, 8, 8),
+      converted.surfaces,
+    );
+    for (const [index, expectedArea] of [32, 2].entries()) {
+      const surface = converted.surfaces[index];
+      const part = tile.parts.find((p) => p.partId === surface.id)!;
+      expect(part.color).toBe(surface.color);
+      let area = 0;
+      for (let i = 0; i < part.indices.length; i += 3) {
+        const [a, b, c] = part.indices
+          .slice(i, i + 3)
+          .map((id) => part.positions.slice(id * 3, id * 3 + 3));
+        area += Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[0] - a[0])) / 2;
+      }
+      expect(area).toBeCloseTo(expectedArea, 8);
+      for (let i = 0; i < part.positions.length; i += 3) {
+        const [x, y, z] = part.positions.slice(i, i + 3);
+        expect(y).toBeCloseTo(sampleTerrain(grid, x, z)!.height + surface.offset, 10);
+      }
+    }
+    expect(() => createGroundTerrain(recipe, placement, 20)).toThrow(/explicit 20 metre/);
+    expect(() => createGroundTerrain(recipe, placement, 20, { ...grid, spacing: 4 })).toThrow(
+      /cover the ground extent/,
+    );
+    expect(() =>
+      createGroundTerrain(recipe, placement, 20, { ...grid, origin: { x: -3, z: -7 } }),
+    ).toThrow(/cover the ground extent/);
+    expect(() => createGroundTerrain({ ...recipe, color: 'invalid' }, placement, 20, grid)).toThrow(
+      /Invalid ground terrain recipe/,
+    );
+  });
+
   it.each([
-    { spacing: 2 as const, columns: 301, rows: 439 },
-    { spacing: 4 as const, columns: 151, rows: 220 },
+    { spacing: 4 as const, columns: 877, rows: 427 },
+    { spacing: 20 as const, columns: 177, rows: 87 },
   ])(
     'preserves the complete city authoring with $spacing metre samples',
     ({ spacing, columns, rows }) => {
       const before = canonicalJson(source);
-      const converted = createGroundTerrain(source, placement, spacing);
+      const converted = createGroundTerrain(
+        source,
+        placement,
+        spacing,
+        spacing === 20
+          ? {
+              formatVersion: 1,
+              origin: { x: -1501, z: -853 },
+              spacing,
+              columns,
+              rows,
+              bottom: -1,
+              heights: Array(columns * rows).fill(0),
+            }
+          : undefined,
+      );
       expect(converted.grid).toMatchObject({
-        origin: { x: -269, z: -745 },
+        origin: { x: -1501, z: -853 },
         spacing,
         columns,
         rows,
@@ -90,12 +164,12 @@ describe('existing city ground to terrain conversion', () => {
       expect(new Set(converted.grid.heights)).toEqual(new Set([0]));
       expect(converted.color).toBe('#d9cbb1');
       expect(converted.conversionDiagnostics).toMatchObject({
-        sourcePolygonCount: 2761,
-        sourceHoleCount: 9,
-        sourceVertexCount: 20436,
-        surfaceCount: 2780,
+        sourcePolygonCount: 9934,
+        sourceHoleCount: 282,
+        sourceVertexCount: 165265,
+        surfaceCount: 9953,
       });
-      expect(converted.surfaces.flatMap((s) => s.holes ?? [])).toHaveLength(9);
+      expect(converted.surfaces.flatMap((s) => s.holes ?? [])).toHaveLength(282);
       expect(converted.conversionDiagnostics.cleanedRings).toHaveLength(5);
       expect(converted.conversionDiagnostics.topologyNotes).toHaveLength(5);
       expect(new Set(converted.surfaces.map((s) => s.id)).size).toBe(converted.surfaces.length);
@@ -124,7 +198,7 @@ describe('existing city ground to terrain conversion', () => {
       if (spacing === 4)
         expect(
           prepareTerrainBuildContext(converted.grid, converted.surfaces).surfaces,
-        ).toHaveLength(2780);
+        ).toHaveLength(9953);
     },
   );
 
@@ -144,7 +218,12 @@ describe('existing city ground to terrain conversion', () => {
     const legacy = generateGround('legacy-ground', {
       ...source,
       merge: false,
-      layers: [{ ...source.layers[0], polygons: [source.layers[0].polygons[290]] }],
+      layers: [
+        {
+          ...source.layers.find((layer) => layer.id === 'green')!,
+          polygons: [source.layers.find((layer) => layer.id === 'green')!.polygons[290]],
+        },
+      ],
     }).parts.find((p) => p.partId === 'green')!;
     const originalTriangles: number[][][] = [];
     for (let i = 0; i < legacy.indices.length; i += 3)
@@ -162,7 +241,7 @@ describe('existing city ground to terrain conversion', () => {
       'b99fbffd2266235524fa60779967805b7466a0c55b46316deeb9d639cfae20dc',
     );
     const changed = structuredClone(source);
-    changed.layers[0].polygons[290][0][0] = [-216.69, -691];
+    changed.layers.find((layer) => layer.id === 'green')!.polygons[290][0][0] = [-216.69, -691];
     expect(() => createGroundTerrain(changed, placement, 4)).toThrow(/green\.polygons\[290\]/);
   });
 

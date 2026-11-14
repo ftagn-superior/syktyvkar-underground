@@ -63,7 +63,7 @@ export async function readTerrainReleaseSource(
       'seedY',
       'placementModels',
     ]) ||
-    (ground.spacing !== 2 && ground.spacing !== 4) ||
+    (ground.spacing !== 2 && ground.spacing !== 4 && ground.spacing !== 20) ||
     (ground.extendToWorldBounds !== undefined && ground.extendToWorldBounds !== true) ||
     !record(ground.grid) ||
     !keys(ground.grid, ['file', 'sha256']) ||

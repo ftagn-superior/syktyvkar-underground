@@ -214,6 +214,55 @@ node dist/server/terrain-command.mjs apply \
 не нужны приватный экспорт БД, `data/` или прежние артефакты `output/`. После переноса
 повторные `build` и `make run` сохраняют тот же авторский terrain-выпуск.
 
+### Перенос рельефа по проверенному файловому патчу
+
+Разработчик без доступа к БД использует неизменённый экспорт размещений и его
+отредактированную копию. Копия сохраняет заголовок, ID и ревизии; для terrain-переноса
+разрешены только изменения `position.y`. Патч создаётся штатной командой, полностью
+без БД и `.env`:
+
+```sh
+pnpm world:layout:patch --base data/map-layout.json \
+  --edited output/terrain-switch/map-edited.json \
+  --file output/terrain-switch/map.patch.json
+```
+
+Новый рельеф меняет выпуск ресурсов, поэтому такой патч нельзя применять обычным
+`map-apply` и нельзя вручную подменять в нём версии. Оператор передаёт его как
+проверяемое условие штатного terrain-переноса, вместе с двумя проверенными выпусками
+и правилами размещения:
+
+```sh
+node dist/server/terrain-command.mjs plan \
+  --source output/terrain-switch/old-world \
+  --target output/terrain-switch/new-world \
+  --rules output/terrain-switch/terrain-pose-rules.json \
+  --layout-patch output/terrain-switch/map.patch.json \
+  --report output/terrain-switch/plan.json
+
+node dist/server/terrain-command.mjs apply \
+  --source output/terrain-switch/old-world \
+  --target output/terrain-switch/new-world \
+  --rules output/terrain-switch/terrain-pose-rules.json \
+  --layout-patch output/terrain-switch/map.patch.json \
+  --plan output/terrain-switch/plan.json \
+  --report output/terrain-switch/applied.json
+```
+
+Эти две команды выполняет оператор на остановленном мире с резервной копией:
+они обращаются к БД. Экспорт содержит только редактируемые статические объекты;
+динамические предметы, инвентари и сохранённые игроки в него не входят. Их штатные
+проверки и перенос остаются частью `terrain plan/apply`. Offline-проверка патча
+не подтверждает совместимость этих сохранений и не означает применение в игре.
+
+`--layout-patch` привязан к точному исходному выпуску, seed, общей ревизии и ревизиям
+объектов. Он должен в точности совпасть с результатом расчёта по terrain-правилам:
+добавление/удаление объектов, изменение XZ, поворотов, моделей и других полей,
+пропущенные или отличающиеся высоты отклоняются. Патч не заменяет проверки опор
+и не задаёт исключений из них. Его содержимое входит в идентичность плана, поэтому
+для `apply` и повторного `apply` нужны те же правила и тот же патч. Изменение мира
+после экспорта требует нового экспорта и пересчёта, а не ручного обновления ревизий.
+
 Изменение descriptor, сетки или геометрии моделей, влияющее на принятые версии,
 останавливает сборку до записи нового выпуска. Подготовьте отдельного кандидата,
 проверьте его и правила переноса, затем явно обновите descriptor и его ожидаемые

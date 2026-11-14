@@ -1,4 +1,9 @@
-import { canonicalJson, validateTerrainGrid, type BuildingInstance } from '@su/contracts';
+import {
+  canonicalJson,
+  validateTerrainGrid,
+  type BuildingInstance,
+  type TerrainGrid,
+} from '@su/contracts';
 import { hash } from '@su/world-release';
 import { cleanRing, signedArea, triangulate, type Point2 } from '@su/terrain-build/triangulate';
 import type { TerrainSurface } from '@su/terrain-build/terrain';
@@ -93,9 +98,11 @@ function triangleFingerprint(triangles: Point2[][]) {
   );
 }
 
+export type GroundTerrainSpacing = 2 | 4 | 20;
+
 export interface GroundTerrainConversionDiagnostics {
   formatVersion: 1;
-  spacing: 2 | 4;
+  spacing: GroundTerrainSpacing;
   offsetScale: number;
   sourcePolygonCount: number;
   sourceHoleCount: number;
@@ -136,10 +143,14 @@ export interface GroundTerrainConversionDiagnostics {
 export function createGroundTerrain(
   recipe: GroundRecipe,
   placement: BuildingInstance,
-  spacing: 2 | 4,
+  spacing: GroundTerrainSpacing,
+  /** The coarse design lattice is independent of the legacy ground recipe extent. */
+  coarseGrid?: TerrainGrid,
 ) {
-  if (spacing !== 2 && spacing !== 4)
-    throw new Error('Ground terrain spacing must be 2 or 4 metres');
+  if (spacing !== 2 && spacing !== 4 && spacing !== 20)
+    throw new Error('Ground terrain spacing must be 2, 4 or 20 metres');
+  if (spacing === 20 && !coarseGrid)
+    throw new Error('Coarse ground terrain requires an explicit 20 metre height grid');
   const pointValid = (p: unknown): p is Point2 =>
     Array.isArray(p) &&
     p.length === 2 &&
@@ -149,6 +160,8 @@ export function createGroundTerrain(
     recipe.formatVersion !== 1 ||
     !pointValid(recipe.min) ||
     !pointValid(recipe.max) ||
+    recipe.min[0] >= recipe.max[0] ||
+    recipe.min[1] >= recipe.max[1] ||
     typeof recipe.color !== 'string' ||
     !colorPattern.test(recipe.color) ||
     !Number.isFinite(recipe.depth) ||
@@ -171,22 +184,37 @@ export function createGroundTerrain(
   const columns = (recipe.max[0] - recipe.min[0]) / spacing + 1;
   const rows = (recipe.max[1] - recipe.min[1]) / spacing + 1;
   if (
-    !Number.isInteger(columns) ||
-    !Number.isInteger(rows) ||
-    columns < 2 ||
-    rows < 2 ||
-    columns * rows > 1_000_000
+    spacing !== 20 &&
+    (!Number.isInteger(columns) ||
+      !Number.isInteger(rows) ||
+      columns < 2 ||
+      rows < 2 ||
+      columns * rows > 1_000_000)
   )
     throw new Error('Ground extent must align with terrain spacing');
-  const grid = validateTerrainGrid({
-    formatVersion: 1,
-    origin: { x: recipe.min[0] + position.x, z: recipe.min[1] + position.z },
-    spacing,
-    columns,
-    rows,
-    bottom: position.y - recipe.depth,
-    heights: Array(columns * rows).fill(position.y),
-  });
+  const grid = validateTerrainGrid(
+    spacing === 20
+      ? structuredClone(coarseGrid)
+      : {
+          formatVersion: 1,
+          origin: { x: recipe.min[0] + position.x, z: recipe.min[1] + position.z },
+          spacing,
+          columns,
+          rows,
+          bottom: position.y - recipe.depth,
+          heights: Array(columns * rows).fill(position.y),
+        },
+  );
+  if (
+    grid.spacing !== spacing ||
+    grid.origin.x > recipe.min[0] + position.x ||
+    grid.origin.z > recipe.min[1] + position.z ||
+    grid.origin.x + (grid.columns - 1) * grid.spacing < recipe.max[0] + position.x ||
+    grid.origin.z + (grid.rows - 1) * grid.spacing < recipe.max[1] + position.z
+  )
+    throw new Error(
+      'Explicit coarse terrain grid must cover the ground extent at the selected spacing',
+    );
   const surfaces: TerrainSurface[] = [];
   const diagnostics: GroundTerrainConversionDiagnostics = {
     formatVersion: 1,

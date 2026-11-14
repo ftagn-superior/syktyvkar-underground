@@ -1,12 +1,17 @@
 import {
+  applyWorldLayoutPatch,
   buildingBounds,
   canonicalJson,
   sampleTerrain,
   terrainPlaneHeight,
   validateTerrainGrid,
+  validateWorldLayoutSnapshot,
   type TerrainGrid,
   type Vec3,
+  type WorldLayoutPatch,
+  type WorldLayoutSnapshot,
 } from '@su/contracts';
+import { hash } from '@su/world-release';
 import { rectangle, terrainPatch, patchRange, type Point2 } from '@su/terrain-build';
 import { planSupportPlacement, selectSupportRule } from '@su/terrain-build/supports';
 import { createLayoutPublication } from './release.js';
@@ -37,6 +42,8 @@ export interface TerrainPoseRules {
   sourceFlatGroundY?: number;
   sourceGroundIds: string[];
   targetGroundIds: string[];
+  /** Reviewed disabled legacy rows to seat on the target instead of retaining an obsolete offset. */
+  disabledReseats?: { entityId: string; assetId: string; reason: string }[];
   models: { assetId: string; policy: TerrainObjectPolicy }[];
   overrides?: { entityId: string; assetId: string; policy: TerrainObjectPolicy }[];
   itemPoseDecisions?: TerrainItemPoseDecision[];
@@ -140,9 +147,9 @@ function localPoint(
   const q = owner.rotation;
   if (Math.abs(q.x) + Math.abs(q.z) > 1e-8)
     throw new Error('Terrain placement requires a vertical owner');
-  const yaw = 2 * Math.atan2(q.y, q.w),
-    c = Math.cos(yaw),
-    s = Math.sin(yaw);
+  // Use the same algebraic basis as support geometry, including on Linux/macOS.
+  const c = 1 - 2 * q.y * q.y,
+    s = 2 * q.y * q.w;
   return { x: owner.position.x + p.x * c + p.z * s, z: owner.position.z - p.x * s + p.z * c };
 }
 
@@ -194,12 +201,17 @@ function checkGridReference(
 ) {
   validateTerrainGrid(grid);
   const b = (label === 'source' ? context.sourceWorld : context.targetRelease.definition).bounds;
-  if (
-    grid.origin.x !== b.min.x ||
-    grid.origin.z !== b.min.z ||
-    grid.origin.x + (grid.columns - 1) * grid.spacing !== b.max.x ||
-    grid.origin.z + (grid.rows - 1) * grid.spacing !== b.max.z
-  )
+  // A world may crop the outer grid cells: ring-block keeps the original 4 m
+  // lattice phase when its canvas expands. Require coverage and at most the
+  // necessary neighboring sample on every edge, not identical grid/world bounds.
+  // A whole redundant cell would hide a mismatched coordinate reference.
+  const halo = [
+    b.min.x - grid.origin.x,
+    b.min.z - grid.origin.z,
+    grid.origin.x + (grid.columns - 1) * grid.spacing - b.max.x,
+    grid.origin.z + (grid.rows - 1) * grid.spacing - b.max.z,
+  ];
+  if (halo.some((distance) => distance < -EPS || distance >= grid.spacing))
     throw new Error(`${label} terrain grid reference differs from its world bounds`);
 }
 
@@ -225,16 +237,38 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
     if (overrides.has(key)) throw new Error('Duplicate terrain instance policy');
     overrides.set(key, m.policy);
   }
+  if (rules.disabledReseats !== undefined && !Array.isArray(rules.disabledReseats))
+    throw new Error('Invalid disabled terrain reseats');
+  const disabledReseats = new Map<
+    string,
+    NonNullable<TerrainPoseRules['disabledReseats']>[number]
+  >();
+  for (const decision of rules.disabledReseats ?? []) {
+    const owner = context.sourceSnapshot.instances.find((i) => i.entityId === decision?.entityId);
+    if (
+      !decision ||
+      !owner ||
+      owner.enabled ||
+      owner.assetId !== decision.assetId ||
+      disabledReseats.has(decision.entityId) ||
+      typeof decision.reason !== 'string' ||
+      !decision.reason.trim() ||
+      decision.reason.length > 1000
+    )
+      throw new Error('Invalid, duplicate or non-disabled terrain reseat');
+    disabledReseats.set(decision.entityId, decision);
+  }
   const targetSnapshot = structuredClone(context.sourceSnapshot);
   targetSnapshot.assetReleaseVersion = context.targetRelease.metadata.assetReleaseVersion;
   const audit: unknown[] = [],
     issues: TerrainMigrationIssue[] = [];
   for (const owner of targetSnapshot.instances) {
     const beforeY = owner.position.y;
+    const reseat = disabledReseats.get(owner.entityId);
     const policy =
       overrides.get(JSON.stringify([owner.entityId, owner.assetId])) ?? models.get(owner.assetId);
     try {
-      if (!owner.enabled) {
+      if (!owner.enabled && !reseat) {
         audit.push({
           entityId: owner.entityId,
           assetId: owner.assetId,
@@ -245,6 +279,8 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
         continue;
       }
       if (!policy) throw new Error('Model has no explicit terrain policy');
+      if (reseat && policy.kind !== 'foundation' && policy.kind !== 'ground-anchor')
+        throw new Error('Disabled terrain reseat requires a foundation or ground anchor');
       const targetRule = selectSupportRule(terrain.supports, owner);
       if (policy.kind !== 'foundation' && targetRule)
         throw new Error(
@@ -274,12 +310,13 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
         }
         const old = planSupportPlacement(previous, sourceRule ?? rule, owner);
         const sourceBase = sourceRule ? old.minimumY : old.terrainMax - rule.jointY;
-        if (beforeY < sourceBase - 1e-8)
+        if (beforeY < sourceBase - 1e-8 && !reseat)
           throw new Error(
             'Source owner is below its declared support; preserving its offset would invalidate the target foundation',
           );
         const next = planSupportPlacement(terrain.grid, rule, owner);
-        const offset = beforeY - sourceBase;
+        const beforeOffset = beforeY - sourceBase;
+        const offset = reseat ? 0 : beforeOffset;
         const y = next.minimumY + offset;
         if (y + rule.jointY - next.terrainMin > policy.maximumVisibleHeight + 1e-8)
           throw new Error(
@@ -294,6 +331,7 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
           afterY: y,
           sourceBase,
           preservedOffset: offset,
+          ...(reseat ? { disabledReseat: { beforeOffset, reason: reseat.reason } } : {}),
           ...next,
         });
       } else if (policy.kind === 'ground-anchor') {
@@ -334,7 +372,10 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
           throw new Error('Terrain relief exceeds the explicitly allowed planting/contact depth');
         const sourceHeight = contactDatum === 'minimum' ? sourceRange.min : old.height;
         const targetHeight = contactDatum === 'minimum' ? range.min : next.height;
-        owner.position.y = beforeY + targetHeight - sourceHeight;
+        const beforeOffset = beforeY + policy.anchor.y - sourceHeight;
+        owner.position.y = reseat
+          ? targetHeight - policy.anchor.y
+          : beforeY + targetHeight - sourceHeight;
         audit.push({
           entityId: owner.entityId,
           assetId: owner.assetId,
@@ -345,7 +386,8 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
           contactDatum,
           sourceHeight,
           targetHeight,
-          preservedOffset: beforeY + policy.anchor.y - sourceHeight,
+          preservedOffset: reseat ? 0 : beforeOffset,
+          ...(reseat ? { disabledReseat: { beforeOffset, reason: reseat.reason } } : {}),
           sourceRelief: sourceRange.max - sourceRange.min,
           relief: range.max - range.min,
         });
@@ -417,19 +459,80 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
   return { targetSnapshot, audit, issues };
 }
 
+/** Review pins the ordinary planner result; the patch cannot override support checks. */
+function reviewedPatchSnapshot(source: WorldLayoutSnapshot, patch: WorldLayoutPatch) {
+  const applied = applyWorldLayoutPatch(source, patch);
+  const before = new Map(source.instances.map((instance) => [instance.entityId, instance]));
+  for (const operation of patch.operations) {
+    if (operation.op !== 'update')
+      throw new Error('Terrain layout patch only permits height updates, not add/delete');
+    const previous = before.get(operation.instance.entityId)!;
+    const { instanceRevision: _revision, ...placement } = previous;
+    if (
+      !same(
+        {
+          ...operation.instance,
+          position: { ...operation.instance.position, y: placement.position.y },
+        },
+        placement,
+      )
+    )
+      throw new Error(`Terrain layout patch changes more than Y: ${previous.entityId}`);
+  }
+  // prepareHeights owns all revision increments, including the release cutover.
+  return {
+    ...applied,
+    revision: source.revision,
+    instances: applied.instances.map((instance) => ({
+      ...instance,
+      instanceRevision: before.get(instance.entityId)!.instanceRevision,
+    })),
+  };
+}
+
 export async function prepareTerrainPoses(
   context: TerrainMigrationContext,
   rules: TerrainPoseRules,
+  layoutPatch?: WorldLayoutPatch,
 ): Promise<TerrainMigrationPreparation> {
+  const expected = layoutPatch && reviewedPatchSnapshot(context.sourceSnapshot, layoutPatch);
+  const patchAudit = layoutPatch
+    ? {
+        layoutPatch: {
+          sha256: hash(canonicalJson(layoutPatch)),
+          baseRevision: layoutPatch.baseRevision,
+          updates: layoutPatch.operations.length,
+        },
+      }
+    : {};
   const { targetSnapshot, audit, issues } = planStaticTerrainPoses(context, rules);
   if (issues.length)
     return {
       targetSnapshot,
       targetItems: structuredClone(context.sourceItems),
       targetPlayers: structuredClone(context.sourcePlayers),
-      audit: { statics: audit, items: [], players: [] },
+      audit: { statics: audit, items: [], players: [], ...patchAudit },
       issues,
     };
+  if (expected) {
+    validateWorldLayoutSnapshot(targetSnapshot);
+    const sort = (snapshot: WorldLayoutSnapshot) => ({
+      ...snapshot,
+      instances: [...snapshot.instances].sort((a, b) =>
+        a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0,
+      ),
+    });
+    if (
+      !same(
+        sort({
+          ...expected,
+          assetReleaseVersion: context.targetRelease.metadata.assetReleaseVersion,
+        }),
+        sort(targetSnapshot),
+      )
+    )
+      throw new Error('Terrain layout patch differs from the computed terrain poses');
+  }
   try {
     const target = await createLayoutPublication(context.targetRelease, targetSnapshot);
     const items = await planTerrainItemPoses({
@@ -455,7 +558,7 @@ export async function prepareTerrainPoses(
       targetSnapshot,
       targetItems: items.targetItems,
       targetPlayers: players.targetPlayers,
-      audit: { statics: audit, items: items.audit, players: players.audit },
+      audit: { statics: audit, items: items.audit, players: players.audit, ...patchAudit },
       issues: [...items.issues, ...players.issues],
     };
   } catch (error) {
@@ -463,7 +566,7 @@ export async function prepareTerrainPoses(
       targetSnapshot,
       targetItems: structuredClone(context.sourceItems),
       targetPlayers: structuredClone(context.sourcePlayers),
-      audit: { statics: audit, items: [], players: [] },
+      audit: { statics: audit, items: [], players: [], ...patchAudit },
       issues: [
         {
           kind: 'target-geometry',

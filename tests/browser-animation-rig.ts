@@ -428,6 +428,7 @@ try {
       checks.push('performer reconnect restores an ordinary upright pose without replay');
     }
     if (!activitiesOnly) {
+      await sender.bringToFront();
       await hudClick(sender, '#animations-toggle');
       await sender.locator('#animation-preview summary').click();
       const sequence = player().animationSequence;
@@ -476,8 +477,9 @@ try {
       checks.push(
         `real menu preview covers ${previewDefinitions.length} authored clips on ${skins.length} skins, explains seated/unavailable/static alternatives and sends no action`,
       );
-      if (!group || group === 'last') {
+      if (!previewOnly && (!group || group === 'last')) {
         const galleryPage = await browser.newPage({ viewport: { width: 1600, height: 2400 } });
+        await galleryPage.bringToFront();
         galleryPage.on('pageerror', (error) => errors.push(error.message));
         await galleryPage.goto(galleryURL);
         await galleryPage.waitForFunction(() => (window as any).rigGalleryReady);

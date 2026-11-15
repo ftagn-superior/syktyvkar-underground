@@ -25,6 +25,7 @@ export interface WorkerPreparedLayout {
   layoutHash: string;
   compatibilityHash: string;
   geometryDelta?: StaticLayoutGeometryDelta;
+  changedCellIds: string[];
   stagingDirectory: string;
   buildMs: number;
   writeMs: number;

@@ -74,6 +74,7 @@ function fixture() {
     pickStaticObject: vi.fn(() => objects.get('house')),
     getStaticObject: vi.fn((id: string) => objects.get(id)),
     highlightStaticObject: vi.fn(),
+    setStaticPicking: vi.fn(),
   };
   const session = {
     state: 'playing',
@@ -137,6 +138,7 @@ describe('static removal confirmation', () => {
   it('selects a complete instance, requires a separate deliberate confirmation and sends once while pending', () => {
     const f = fixture();
     f.tool.open(effect);
+    expect(f.view.setStaticPicking).toHaveBeenLastCalledWith(true);
     f.clickCanvas();
     expect(f.tool.diagnostics().selected).toBe('house');
     expect(f.view.pickStaticObject).toHaveBeenCalledWith(new Set(['ground']));
@@ -153,6 +155,7 @@ describe('static removal confirmation', () => {
     expect(f.tool.active).toBe(false);
     expect(f.panel.hidden).toBe(true);
     expect(f.mode).toHaveBeenLastCalledWith(false);
+    expect(f.view.setStaticPicking).toHaveBeenLastCalledWith(false);
     expect(f.view.highlightStaticObject).toHaveBeenLastCalledWith();
     expect(f.canvas.focus).toHaveBeenLastCalledWith({ preventScroll: true });
     expect(f.session.staticRemovalPending).toBe(true);

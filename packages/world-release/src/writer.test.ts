@@ -14,7 +14,7 @@ function fixture(): WorldPublication {
   return {
     payloads,
     manifest: {
-      formatVersion: 5,
+      formatVersion: 6,
       worldId: 'writer-test',
       mapVersion: 'a'.repeat(64),
       simulationConfigHash: 'b'.repeat(64),

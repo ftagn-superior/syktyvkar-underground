@@ -20,6 +20,7 @@ export interface StaticMeshPart {
    * Единицы координат задаёт вид материала; см. `wallSurface` в tools/world-build/src/city.ts.
    */
   surface?: number[];
+  glowOrigin?: number[];
 }
 
 /** Unmarked trailing vertices do not glow; shared by compilation and mesh merging. */

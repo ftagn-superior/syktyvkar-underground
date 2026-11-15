@@ -1,4 +1,4 @@
-import { decodeGraphicsPack, type WorldManifest } from '@su/contracts';
+import { decodeGraphicsPack, type GraphicsLevel, type WorldManifest } from '@su/contracts';
 
 const aborted = () => new DOMException('Resource request cancelled', 'AbortError');
 type Consumer = {
@@ -129,12 +129,13 @@ export class VerifiedResources {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.ownsCache = !options.cache;
     this.cache = options.cache ?? new VerifiedByteCache(options.cacheBytes);
-    this.packPaths = new Set(
-      (manifest.cells ?? []).flatMap((cell) => [
+    this.packPaths = new Set([
+      ...(manifest.graphics?.groups.flatMap((g) => g.far.packs ?? []) ?? []),
+      ...(manifest.cells ?? []).flatMap((cell) => [
         ...(cell.graphicsPacks ?? []),
         ...(cell.physicsPacks ?? []),
       ]),
-    );
+    ]);
   }
   read(path: string, signal?: AbortSignal, priority = 0): Promise<Uint8Array> {
     if (this.disposed || signal?.aborted) return Promise.reject(aborted());
@@ -187,6 +188,23 @@ export class VerifiedResources {
   /** Original collision files remain the fallback for older manifests and LRU eviction. */
   async prefetchPhysics(cellId: string, signal?: AbortSignal, priority = 0): Promise<void> {
     return this.prefetchPack(cellId, 'physics', signal, priority);
+  }
+  async prefetchGroup(groupId: string, level: GraphicsLevel, signal?: AbortSignal): Promise<void> {
+    const group = this.manifest.graphics?.groups.find((g) => g.groupId === groupId);
+    if (!group) throw new Error(`Unknown graphics group: ${groupId}`);
+    // Near dependencies are filtered by actual owner-cell member IDs by CellStreamer.
+    // Cell packs can contain neighbours and must never be used by a far request.
+    if (level === 'near') return;
+    const allowed = new Set(group.far.resources.flatMap((r) => [r.modelFile, r.partsFile]));
+    for (const pack of group.far.packs ?? []) {
+      const entries = decodeGraphicsPack(await this.read(pack, signal));
+      for (const [path, bytes] of entries) {
+        if (!allowed.has(path) || (await this.digest(bytes)) !== this.manifest.files[path])
+          throw new Error('Invalid far pack entry');
+      }
+      signal?.throwIfAborted();
+      for (const [path, bytes] of entries) this.cacheVerified(path, bytes.slice());
+    }
   }
   private async prefetchPack(
     cellId: string,

@@ -1,3 +1,4 @@
+import { simplifyTerrainPart, visualTemplate, type VisualTemplate } from '@su/visual-build';
 import { WORLD_RESOURCE_LIMITS, type TerrainGrid } from '@su/contracts';
 import {
   generateTerrainTile,
@@ -27,6 +28,7 @@ export interface CompiledTerrainTile {
   /** Empty for an unsplit tile; append to both its asset and instance IDs. */
   suffix: string;
   asset: CompiledWorldAsset;
+  visual: VisualTemplate;
 }
 
 function rectangleBounds(boundary: Point2[]) {
@@ -63,6 +65,13 @@ export function buildTerrainTiles(input: TerrainTileBuildInput): CompiledTerrain
       baseColor: input.color,
       worldBounds: input.worldBounds,
     });
+    const visual = visualTemplate(
+      'ground',
+      generated.parts
+        .filter((p) => !/mark|stripe|curb/i.test(p.partId))
+        .map((p) => simplifyTerrainPart(p))
+        .filter((p) => p.indices.length),
+    );
     if (input.merge) generated.parts = mergeParts(generated.parts);
     generated = indexTerrainAsset(generated);
     const model = encodeStaticGlb(generated.parts),
@@ -76,7 +85,11 @@ export function buildTerrainTiles(input: TerrainTileBuildInput): CompiledTerrain
       );
     if (!oversized) {
       try {
-        result.push({ suffix, asset: compileStaticAsset(assetId, model, generated.physics) });
+        result.push({
+          suffix,
+          visual,
+          asset: compileStaticAsset(assetId, model, generated.physics),
+        });
         return;
       } catch (error) {
         // The compiler measures final metadata after applying Float32 visual bounds.

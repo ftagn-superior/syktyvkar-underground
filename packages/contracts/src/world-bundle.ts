@@ -1,3 +1,4 @@
+import { validateWorldGraphics, validateGraphicsCoverage } from './graphics-groups.js';
 import {
   WORLD_FORMAT_VERSION,
   type BuildingInstance,
@@ -429,6 +430,7 @@ export function validateWorldManifest(value: unknown): WorldManifest {
       );
     }
   }
+  validateWorldGraphics(value as WorldManifest);
   return value as WorldManifest;
 }
 /** Hash this canonical value to identify an immutable release, including every dependency. */
@@ -456,6 +458,12 @@ export function worldPublicationBaseIdentity(manifest: WorldManifest) {
     grid: manifest.grid,
     worldFile: manifest.worldFile,
     worldHash: manifest.files[manifest.worldFile],
+    graphics: manifest.graphics
+      ? {
+          sourceVersion: manifest.graphics.sourceVersion,
+          policyVersion: manifest.graphics.policyVersion,
+        }
+      : undefined,
     assets: Object.fromEntries(
       Object.keys(manifest.assets)
         .filter((id) => !Object.hasOwn(manifest.generatedSupports ?? {}, id))
@@ -775,5 +783,6 @@ export async function loadWorldBundle(
       `incomplete cell coverage: ${entityId}`,
     );
   }
+  if (manifest.graphics) validateGraphicsCoverage(world, manifest.grid, manifest.graphics.groups);
   return world;
 }

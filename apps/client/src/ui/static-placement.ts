@@ -417,7 +417,8 @@ export class StaticPlacement {
       }
     }
     this.ghost.show(this.pose);
-    this.confirm.disabled = !this.pose || this.session.worldPaused;
+    this.confirm.disabled =
+      !this.pose || this.session.worldPaused || view.graphicsAtPointerReady?.() === false;
     this.setStatus(
       this.pose
         ? this.catalog.groundY === null

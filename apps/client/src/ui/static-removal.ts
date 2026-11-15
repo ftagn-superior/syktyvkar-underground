@@ -121,6 +121,7 @@ export class StaticRemoval {
       this.freshPointer = this.freshKey = false;
       this.hovered = this.selected = undefined;
       this.view()?.highlightStaticObject();
+      this.view()?.setStaticPicking?.(false);
       if (this.active) this.render();
     };
     window.addEventListener('blur', blur, options);
@@ -128,6 +129,7 @@ export class StaticRemoval {
       'focus',
       () => {
         this.focused = true;
+        if (this.active) this.view()?.setStaticPicking?.(true);
       },
       options,
     );
@@ -168,6 +170,7 @@ export class StaticRemoval {
     this.freshPointer = this.freshKey = false;
     this.focused = !document.hidden;
     this.panel.hidden = false;
+    this.view()?.setStaticPicking?.(true);
     this.mode(true);
     this.render();
     this.canvas.focus({ preventScroll: true });
@@ -180,6 +183,7 @@ export class StaticRemoval {
     this.panel.hidden = true;
     this.confirm.disabled = true;
     this.view()?.highlightStaticObject();
+    this.view()?.setStaticPicking?.(false);
     if (wasActive) this.mode(false);
   }
   private canSelect() {
@@ -239,13 +243,17 @@ export class StaticRemoval {
       return;
     }
     if (this.canSelect()) {
+      this.view()?.setStaticPicking?.(true);
       if (this.selected && !this.view()?.getStaticObject(this.selected)) this.selected = undefined;
       const now = performance.now();
       if (!this.selected && now >= this.hoverAt) {
         this.hoverAt = now + 50;
         this.hovered = this.view()?.pickStaticObject(this.protectedIds)?.entityId;
       }
-    } else this.hovered = undefined;
+    } else {
+      this.hovered = undefined;
+      this.view()?.setStaticPicking?.(false);
+    }
     this.render();
   }
   dispose() {

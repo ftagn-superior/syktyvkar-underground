@@ -107,7 +107,8 @@
     "test:lod:migration": "node --import tsx tests/city-lod-upgrade.ts",
     "animations:add": "node --import tsx tools/animations.ts add",
     "animations:sync": "node --import tsx tools/animations.ts sync",
-    "animations:check": "node --import tsx tools/animations.ts check"
+    "animations:check": "node --import tsx tools/animations.ts check",
+    "test:animation-rig:browser": "node --import tsx tests/browser-animation-rig.ts"
   },
   "devDependencies": {
     "@babylonjs/core": "9.35.0",

@@ -127,7 +127,7 @@ try {
     for (const [clipIndex, definition] of ANIMATIONS.entries()) {
       await idle(sender);
       if (definition.id === 'wave') {
-        await hudClick(sender, '#chat-toggle');
+        await openChat(sender);
         await sender.locator('#chat-input').fill('Привет из меню анимаций!');
         await sender.locator('#chat-input').press('Enter');
         await chatSent(sender);
@@ -182,7 +182,7 @@ try {
         await sender.keyboard.up('s');
       }
       if (definition.id === 'dance') {
-        await hudClick(sender, '#chat-toggle');
+        await openChat(sender);
         await sender.locator('#chat-input').fill('wasd qer');
         await sender.keyboard.press('Escape');
         await active(sender, id, definition.id);
@@ -268,14 +268,14 @@ try {
   await openChat(sender);
   await sender.locator('#chat-input').fill('/help');
   await sender.locator('#chat-input').press('Enter');
-  await sender.locator('#commands-panel').waitFor({ state: 'visible' });
-  assert.ok((await sender.locator('#commands-panel .command-list button').count()) > 0);
+  await sender.getByText('Нет доступных команд.', { exact: true }).first().waitFor();
+  assert.equal(await sender.locator('#commands-panel').isVisible(), false);
   await sender.screenshot({ path: `${output}/command-help.png`, animations: 'disabled' });
   await hudClick(sender, '#animations-toggle');
   await sender.locator('#animations-panel').waitFor({ state: 'visible' });
   assert.equal(await sender.locator('#commands-panel').isVisible(), false);
   checks.push(
-    'server /help opens its command panel; opening animations closes it and keeps catalog input usable',
+    'guest /help keeps administrative commands unavailable; opening animations keeps catalog input usable',
   );
   await sender.locator('#animations-panel [data-filter="Танцы"]').click();
   await sender.locator('#animation-search').fill('ТАНЦЫ robot');

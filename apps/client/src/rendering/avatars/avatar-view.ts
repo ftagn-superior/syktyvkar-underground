@@ -12,7 +12,11 @@ import {
   type SimulationConfig,
 } from '@su/contracts';
 import type { DisplayPlayer } from '../../presentation/display-state';
-import { CharacterAnimator, type FootstepMarkers } from './character-animator';
+import {
+  CharacterAnimator,
+  type FootstepMarkers,
+  type AnimationLibrary,
+} from './character-animator';
 import { AvatarRig } from './avatar-rig';
 import { SKIN_BUILDERS } from './skins';
 
@@ -35,8 +39,9 @@ export class AvatarView {
     private readonly shadow: ShadowGenerator,
     private readonly config: SimulationConfig['character'],
     skinId: AvatarSkinId = DEFAULT_AVATAR_SKIN,
+    animations?: AnimationLibrary,
   ) {
-    this.animator = new CharacterAnimator(config.speed, config.sprintSpeed);
+    this.animator = new CharacterAnimator(config.speed, config.sprintSpeed, animations);
     this.skinId = resolveAvatarSkinId(skinId);
     this.rig = this.buildRig();
   }
@@ -103,12 +108,19 @@ export class AvatarView {
       this.animator.update(player, delta, own, reducedMotion),
       this.config.height,
       this.animator.travel,
+      this.animator.supportWeight,
+      this.animator.articulated,
     );
     return this.rig.seated ? NO_STEPS : this.animator.footsteps;
   }
 
   diagnostics() {
-    return { entityId: this.root.name, skinId: this.skinId, ...this.animator.diagnostics() };
+    return {
+      entityId: this.root.name,
+      skinId: this.skinId,
+      ...this.animator.diagnostics(),
+      rig: this.rig.diagnostics(),
+    };
   }
 
   dispose(): void {

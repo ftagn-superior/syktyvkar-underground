@@ -1,6 +1,9 @@
 import {
   ANIMATIONS,
   AVATAR_SKINS,
+  findAnimation,
+  animationSkinSupport,
+  isGroundAnimation,
   type AnimationId,
   type AvatarSkinId,
   type AnimationDefinition,
@@ -71,6 +74,7 @@ export class AnimationMenu {
       'change',
       () => {
         this.preview?.setAnimation(this.previewClip.value as AnimationId);
+        this.previewNote();
       },
       options,
     );
@@ -84,7 +88,10 @@ export class AnimationMenu {
     );
     this.previewReduced.addEventListener(
       'change',
-      () => this.preview?.setReducedMotion(this.previewReduced.checked),
+      () => {
+        this.preview?.setReducedMotion(this.previewReduced.checked);
+        this.previewNote();
+      },
       options,
     );
     panel.querySelector('[data-catalog-count]')!.textContent = String(ANIMATIONS.length);
@@ -112,6 +119,7 @@ export class AnimationMenu {
         () => {
           this.previewClip.value = animation.id;
           this.preview?.setAnimation(animation.id);
+          this.previewNote();
         },
         options,
       );
@@ -241,22 +249,47 @@ export class AnimationMenu {
                 ? 'Дождитесь опоры'
                 : 'Выберите анимацию');
     if (this.status.textContent !== message) this.status.textContent = message;
-    for (const { button, hint, fullBody } of this.choices) {
+    for (const { button, hint, fullBody, definition } of this.choices) {
       if (button.hidden) continue;
-      const reason = !state.grounded
-        ? 'Дождитесь опоры'
-        : fullBody && state.moving
-          ? 'Остановитесь, чтобы начать'
-          : '';
+      const reason =
+        animationSkinSupport(definition, state.skinId) === 'unavailable'
+          ? definition.rig === 'humanoid-v2'
+            ? (definition.seatedMessage ?? 'Недоступно этому скину')
+            : 'Недоступно этому скину'
+          : !state.grounded
+            ? 'Дождитесь опоры'
+            : fullBody && state.moving
+              ? 'Остановитесь, чтобы начать'
+              : '';
       if (hint.textContent !== reason) hint.textContent = reason;
       button.disabled = !state.available || state.pending || state.busy || state.paused || !!reason;
     }
   }
   private previewNote(): void {
-    this.panel.querySelector('#animation-preview-note')!.textContent =
-      this.previewSkin.value === 'bear-wheelchair'
-        ? 'Сидячий вариант: ноги и высота посадки неподвижны, наклоны корпуса уменьшены.'
-        : 'В покое клип повторяется; в мире первое движение запускает завершение через 5 секунд.';
+    const definition = findAnimation(this.previewClip.value);
+    const unavailable =
+      !!definition && animationSkinSupport(definition, this.previewSkin.value) === 'unavailable';
+    this.panel.querySelector<HTMLCanvasElement>('#animation-preview-canvas')!.hidden = unavailable;
+    const notes: string[] = [];
+    if (this.previewSkin.value === 'bear-wheelchair')
+      notes.push(
+        definition?.rig === 'humanoid-v2' && definition.seatedMessage
+          ? definition.seatedMessage
+          : 'Сидячий вариант: ноги и высота посадки неподвижны, наклоны корпуса уменьшены.',
+      );
+    if (
+      definition?.rig === 'humanoid-v2' &&
+      this.previewReduced.checked &&
+      definition.reducedMotionLabel
+    )
+      notes.push(definition.reducedMotionLabel);
+    if (!unavailable)
+      notes.push(
+        isGroundAnimation(definition)
+          ? 'Нужно свободное ровное место. Движение или потеря опоры отменяют позу; физическое тело остаётся вертикальным.'
+          : 'В покое клип повторяется; в мире первое движение запускает завершение через 5 секунд.',
+      );
+    this.panel.querySelector('#animation-preview-note')!.textContent = notes.join(' ');
   }
   private syncPreview(): void {
     if (this.panel.hidden || !this.previewDetails.open) {

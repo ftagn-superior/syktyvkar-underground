@@ -118,7 +118,7 @@ try {
   }
   await mkdir(output, { recursive: true });
   await command(observer);
-  await observer.locator('#notice').filter({ hasText: 'Telegram' }).waitFor();
+  await observer.locator('#notice').filter({ hasText: 'Неизвестная команда.' }).waitFor();
   assert.equal(await observer.locator('#static-removal').isVisible(), false);
   await observer.keyboard.press('Escape');
   checks.push('guest command requires authentication');

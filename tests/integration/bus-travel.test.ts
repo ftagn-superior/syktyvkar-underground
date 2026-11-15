@@ -45,6 +45,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('bus travel in ring-block', (
   async function join(): Promise<{ room: Room<WorldState>; results: ActionResult[] }> {
     const room = await sdk.joinById<WorldState>(info.roomId, {
       protocolVersion: info.protocolVersion,
+      catalogVersions: info.catalogVersions,
       mapVersion: info.mapVersion,
       simulationConfigHash: info.simulationConfigHash,
     });
@@ -85,6 +86,22 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('bus travel in ring-block', (
   });
   afterAll(async () => {
     await app?.close();
+  });
+
+  it('serves bus discovery and map alongside the versioned reaction catalog', async () => {
+    const buses = await fetch(`${app.url}/api/bus-network`);
+    expect(buses.status).toBe(200);
+    expect(await buses.json()).toEqual(network);
+    const map = await fetch(`${app.url}/api/bus-map`);
+    expect(map.status).toBe(200);
+    expect(map.headers.get('content-type')).toContain('application/json');
+    await map.arrayBuffer();
+    const sticker = await fetch(
+      `${app.url}/reactions/hello.svg?v=${info.catalogVersions.reactions}`,
+    );
+    expect(sticker.status).toBe(200);
+    expect(sticker.headers.get('content-type')).toContain('image/svg+xml');
+    expect(await sticker.text()).toContain('viewBox="0 0 64 64"');
   });
 
   it('carries a player from the stop to the street beside the destination stop', async () => {

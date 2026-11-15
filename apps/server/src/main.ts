@@ -2,6 +2,7 @@ import { createGameServer } from './index.js';
 import { loadEnvironment, readAccountConfig, readDatabaseUrl } from './config.js';
 import { AccountStore } from './accounts/store.js';
 import { createDatabasePool } from './database.js';
+import { ReactionReleaseError } from './reactions/release.js';
 
 loadEnvironment();
 const config = readAccountConfig();
@@ -21,8 +22,9 @@ try {
     worldDirectory: `dist/worlds/${world}`,
     ...(config && pool ? { accounts: { config, store: new AccountStore(pool) } } : {}),
   });
-} catch {
+} catch (error) {
   await pool?.end();
+  if (error instanceof ReactionReleaseError) console.error(error.message);
   console.error('Server startup failed. Check configuration, database migrations and world build.');
   process.exit(1);
 }

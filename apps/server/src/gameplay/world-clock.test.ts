@@ -15,21 +15,21 @@ function fixture() {
 describe('room day clock commands', () => {
   it('shares one change cooldown and lets players read time without consuming it', () => {
     const { state, clock } = fixture();
-    expect(clock.command(undefined, now)).toMatchObject({ ok: true, retryAfterMs: 0 });
-    expect(clock.command({ kind: 'set', hour: 18.5 }, now)).toEqual({
+    expect(clock.command([], now)).toMatchObject({ ok: true, retryAfterMs: 0 });
+    expect(clock.command([{ kind: 'set', hour: 18.5 }], now)).toEqual({
       ok: true,
       retryAfterMs: 1000,
       message: 'Время идёт: 18:30.',
     });
     const changed = { ...state };
-    expect(clock.command({ kind: 'stop' }, now + 500)).toMatchObject({
+    expect(clock.command([{ kind: 'stop' }], now + 500)).toMatchObject({
       ok: false,
       code: 'RATE_LIMITED',
       retryAfterMs: 500,
     });
     expect(state).toEqual(changed);
-    expect(clock.command(undefined, now + 500)).toMatchObject({ ok: true, retryAfterMs: 0 });
-    expect(clock.command({ kind: 'stop' }, now + 1000)).toEqual({
+    expect(clock.command([], now + 500)).toMatchObject({ ok: true, retryAfterMs: 0 });
+    expect(clock.command([{ kind: 'stop' }], now + 1000)).toEqual({
       ok: true,
       retryAfterMs: 1000,
       message: 'Время остановлено: 18:31.',
@@ -38,23 +38,34 @@ describe('room day clock commands', () => {
 
   it('keeps set on a frozen clock frozen, resumes from it, and resets the replicated state', () => {
     const { state, clock } = fixture();
-    clock.command({ kind: 'stop' }, now);
-    expect(clock.command({ kind: 'set', hour: 7 }, now + 1000)).toMatchObject({
+    clock.command([{ kind: 'stop' }], now);
+    expect(clock.command([{ kind: 'set', hour: 7 }], now + 1000)).toMatchObject({
       message: 'Время остановлено: 07:00.',
     });
     expect(state.dayFrozenHour).toBe(7);
-    expect(clock.command({ kind: 'start' }, now + 2000)).toMatchObject({
+    expect(clock.command([{ kind: 'start' }], now + 2000)).toMatchObject({
       message: 'Время идёт: 07:00.',
     });
     expect(state.dayFrozenHour).toBe(-1);
     expect(
       dayClockHour({ offsetMs: state.dayOffsetMs, frozenHour: state.dayFrozenHour }, now + 62_000),
     ).toBeCloseTo(8, 3);
-    expect(clock.command({ kind: 'reset' }, now + 3000)).toMatchObject({
+    expect(clock.command([{ kind: 'reset' }], now + 3000)).toMatchObject({
       ok: true,
       message: expect.stringContaining('Часы идут по общему времени:'),
     });
     expect(state).toEqual({ dayOffsetMs: 0, dayFrozenHour: -1 });
+  });
+
+  it('applies combined changes together under one cooldown', () => {
+    const { state, clock } = fixture();
+    expect(clock.command([{ kind: 'stop' }, { kind: 'set', hour: 22 }], now)).toEqual({
+      ok: true,
+      retryAfterMs: 1000,
+      message: 'Время остановлено: 22:00.',
+    });
+    expect(state.dayFrozenHour).toBe(22);
+    expect(clock.command([{ kind: 'start' }], now + 500)).toMatchObject({ code: 'RATE_LIMITED' });
   });
 
   it('replays a completed command through the shared ledger without changing the clock again', () => {
@@ -64,7 +75,7 @@ describe('room day clock commands', () => {
       const admission = actions.begin({ requestId, worldEpoch: 'world' });
       if (admission.kind === 'result') return admission.result;
       if (admission.kind !== 'new') throw new Error('Unexpected action admission');
-      const result = { requestId, ...clock.command(change, at) };
+      const result = { requestId, ...clock.command([change], at) };
       actions.remember(result);
       return result;
     };
@@ -78,10 +89,10 @@ describe('room day clock commands', () => {
 
   it('keeps room clocks independent and restores the default in a new room', () => {
     const first = fixture();
-    first.clock.command({ kind: 'stop' }, now);
+    first.clock.command([{ kind: 'stop' }], now);
     const second = fixture();
     expect(second.state).toEqual({ dayOffsetMs: 0, dayFrozenHour: -1 });
-    expect(second.clock.command({ kind: 'set', hour: 6 }, now).ok).toBe(true);
+    expect(second.clock.command([{ kind: 'set', hour: 6 }], now).ok).toBe(true);
     expect(first.state.dayFrozenHour).toBeGreaterThanOrEqual(0);
     expect(second.state.dayFrozenHour).toBe(-1);
   });

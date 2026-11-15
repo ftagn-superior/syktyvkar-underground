@@ -18,8 +18,10 @@ import {
   type WireMoveInput,
 } from '@su/protocol';
 import type { PredictionWorld } from '@su/simulation/prediction';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/reaction-release';
 import {
   MAX_INPUT_QUEUE,
+  matchingCatalogVersions,
   canonicalJson,
   worldPublicationBaseIdentity,
   changedWorldPublicationCells,
@@ -52,6 +54,8 @@ import {
   type BusTravelRequest,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
+  parseCommandHelpEffect,
+  type CommandHelpEffect,
   DEFAULT_DAY_CLOCK,
   type DayClock,
   TICK_RATE,
@@ -162,6 +166,7 @@ export class GameSession {
   onStaticRemovalOpen?: (effect: StaticRemovalEffect) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
+  private ownSpeed?: { room: object; percent: number };
   private readonly itemOperation = new PersistentOperation<ItemCommand>(
     'su:item-operation',
     parseItemCommand,
@@ -171,6 +176,8 @@ export class GameSession {
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  /** Ответ на `/help`: список доступных команд, уже отфильтрованный сервером. */
+  onCommandHelp?: (help: CommandHelpEffect) => void;
   /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
   onBusTravelResult?: (result: ActionResult) => void;
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
@@ -285,6 +292,12 @@ export class GameSession {
     this.reloadRequired = true;
     throw new Error('VERSION_MISMATCH');
   }
+  private compatibleVersion(info: WorldInfo): boolean {
+    return (
+      info.protocolVersion === PROTOCOL_VERSION &&
+      matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions)
+    );
+  }
   async load(): Promise<void> {
     const generation = ++this.generation;
     this.cancelPhysicsPreparation();
@@ -292,7 +305,7 @@ export class GameSession {
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
-      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      if (!this.compatibleVersion(info)) this.versionMismatch();
       const publication = await loadWorldPublication(info, this.verifiedBytes);
       if (generation !== this.generation) {
         publication.resources.dispose();
@@ -546,7 +559,7 @@ export class GameSession {
     const generation = this.generation;
     const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
     if (generation !== this.generation) return;
-    if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+    if (!this.compatibleVersion(info)) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
     else this.info = info;
   }
@@ -744,7 +757,7 @@ export class GameSession {
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
-      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      if (!this.compatibleVersion(info)) this.versionMismatch();
       if (info.mapVersion !== this.info.mapVersion) {
         await this.changePublication(info);
         generation = this.generation;
@@ -766,6 +779,7 @@ export class GameSession {
             info.roomId,
             {
               protocolVersion: PROTOCOL_VERSION,
+              catalogVersions: CLIENT_CATALOG_VERSIONS,
               mapVersion: info.mapVersion,
               simulationConfigHash: info.simulationConfigHash,
               accountMode: this.accountId ? 'account' : 'guest',
@@ -944,6 +958,8 @@ export class GameSession {
             this.pendingChatCommand ? 0 : ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
           )
         ) {
+          const help = result.ok ? parseCommandHelpEffect(result.effect) : undefined;
+          if (help) this.onCommandHelp?.(help);
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(
@@ -1085,10 +1101,8 @@ export class GameSession {
       if (!retried && error instanceof Error && error.message.includes('VERSION_MISMATCH')) {
         try {
           const latest = (await (await getResponse('/api/world')).json()) as WorldInfo;
-          if (
-            latest.protocolVersion === PROTOCOL_VERSION &&
-            latest.mapVersion !== this.info.mapVersion
-          ) {
+          if (!this.compatibleVersion(latest)) this.reloadRequired = true;
+          if (this.compatibleVersion(latest) && latest.mapVersion !== this.info.mapVersion) {
             await this.changePublication(latest);
             this.setState('ready');
             await this.join(restore, true);
@@ -1128,7 +1142,7 @@ export class GameSession {
           const info = (await response.json()) as WorldInfo;
           if (controller.signal.aborted || this.generation !== generation) return;
           if (typeof info.worldEpoch === 'string' && info.worldEpoch !== previous.worldEpoch) {
-            this.reloadRequired = info.protocolVersion !== PROTOCOL_VERSION;
+            this.reloadRequired = !this.compatibleVersion(info);
             // Keep the old map identity until preview refresh / join replaces its context.
             // A layout change across restart does not require a new application bundle.
             if (this.reloadRequired || info.mapVersion === previous.mapVersion) this.info = info;
@@ -1185,6 +1199,13 @@ export class GameSession {
     const observed =
       animationSelf && this.animationBuffer.sample(animationSelf.entityId, room.clock.serverNow());
     if (observed) this.animationRequest.observe(observed.animation);
+    // Скорость меняет `/speed`, в том числе чужая: первое значение в комнате не объявляется.
+    if (animationSelf) {
+      const percent = animationSelf.speedPercent;
+      if (this.ownSpeed?.room === room && this.ownSpeed.percent !== percent)
+        this.onNotice(`Ваша скорость: ×${percent / 100}.`);
+      this.ownSpeed = { room, percent };
+    }
     if (this.persistencePaused !== room.state.paused) {
       this.persistencePaused = room.state.paused;
       this.simulation?.reset();

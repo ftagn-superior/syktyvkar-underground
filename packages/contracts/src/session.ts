@@ -1,14 +1,16 @@
 import type { PlacementCatalogReference } from './placement-catalog.js';
+import type { ContentCatalogVersions } from './content-catalogs.js';
 import type { StaticPlacementEffect } from './static-placement.js';
 import type { StaticRemovalEffect } from './static-removal.js';
+import type { CommandHelpEffect } from './commands.js';
 import { PROFILE_COLORS } from './accounts.js';
 import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// Adds bus travel (`requestBusTravel`) on top of the v22 city near/far LOD and HLOD streaming.
-// Previously published v22 clients must reload.
-export const PROTOCOL_VERSION = 23;
+// v25 adds flag-based chat commands (`/help` sends a `commandHelp` effect) and `/speed`
+// (`PlayerSchema.speedPercent`) on top of v24 bus travel, LOD/HLOD and catalog versions.
+export const PROTOCOL_VERSION = 25;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -18,6 +20,7 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
+  catalogVersions: ContentCatalogVersions;
   placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;
   layoutRevision: number;
@@ -58,7 +61,7 @@ export interface ActionResult {
   message?: string;
   /** Remaining server-enforced delay before the same kind of action can be accepted. */
   retryAfterMs?: number;
-  effect?: StaticPlacementEffect | StaticRemovalEffect;
+  effect?: StaticPlacementEffect | StaticRemovalEffect | CommandHelpEffect;
 }
 export interface PrepareArea {
   prepareId: string;

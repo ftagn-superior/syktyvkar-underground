@@ -8,6 +8,9 @@ import {
   NEUTRAL_INPUT,
   type MoveInput,
   DEFAULT_AVATAR_SKIN,
+  PLAYER_SPEED_PERCENT,
+  speedPercentFromScale,
+  speedScaleFromPercent,
   type EntityState,
   type ItemState,
   type PlayerState,
@@ -97,6 +100,8 @@ export class PlayerSchema extends EntitySchema.extend(
     chatSequence: t.uint32().default(0),
     // Zero with nonempty text means the author has not moved yet.
     chatExpiresAtTick: t.uint32().default(0),
+    // Множитель `/speed` в процентах; 100 — обычная скорость.
+    speedPercent: t.uint16().default(PLAYER_SPEED_PERCENT.normal),
   },
   'Player',
 ) {}
@@ -148,7 +153,12 @@ export function applyEntityState(target: EntitySchema, source: EntityState): voi
   target.avx = source.angularVelocity.x;
   target.avy = source.angularVelocity.y;
   target.avz = source.angularVelocity.z;
-  if (source.kind === 'player') target.grounded = (source as PlayerState).grounded;
+  if (source.kind === 'player') {
+    target.grounded = (source as PlayerState).grounded;
+    (target as PlayerSchema).speedPercent = speedPercentFromScale(
+      (source as PlayerState).speedScale,
+    );
+  }
 }
 export function toEntityState(source: EntitySchema): EntityState {
   return {
@@ -162,7 +172,13 @@ export function toEntityState(source: EntitySchema): EntityState {
   };
 }
 export function toPlayerState(source: PlayerSchema): PlayerState {
-  return { ...toEntityState(source), kind: 'player', grounded: source.grounded };
+  const speedScale = speedScaleFromPercent(source.speedPercent);
+  return {
+    ...toEntityState(source),
+    kind: 'player',
+    grounded: source.grounded,
+    ...(speedScale === undefined ? {} : { speedScale }),
+  };
 }
 export function toLocalSimulationSnapshot(source: WorldState): LocalSimulationSnapshot {
   return {

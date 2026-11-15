@@ -5,6 +5,7 @@ type PanelName =
   | 'removal'
   | 'reactions'
   | 'animations'
+  | 'commands'
   | 'chat'
   | 'inventory'
   | 'bus'

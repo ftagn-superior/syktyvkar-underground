@@ -70,8 +70,8 @@ describe('static creation contract', () => {
     );
   });
   it('opens only the argument-free private command', () => {
-    expect(parseChatCommand('/motherlode')).toEqual({ kind: 'staticPlacement' });
-    expect(parseChatCommand('/motherlode bench')).toMatchObject({
+    expect(parseChatCommand('/motherlode', 'admin')).toEqual({ kind: 'staticPlacement' });
+    expect(parseChatCommand('/motherlode bench', 'admin')).toMatchObject({
       kind: 'invalid',
       code: 'INVALID_INPUT',
     });

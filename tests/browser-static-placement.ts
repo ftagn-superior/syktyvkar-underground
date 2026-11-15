@@ -259,7 +259,7 @@ try {
     await playing(page);
   }
   await command(observer, '/motherlode');
-  await observer.locator('#notice').filter({ hasText: 'Telegram' }).waitFor();
+  await observer.locator('#notice').filter({ hasText: 'Неизвестная команда.' }).waitFor();
   await observer.keyboard.press('Escape');
   await command(owner, 'Обычная реплика перед командой');
   await chatSent(owner);

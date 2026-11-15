@@ -40,6 +40,7 @@ import {
   RESPAWN_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
+  speedPercentFromScale,
   worldNeighborhood,
   type PrepareArea,
   type LayoutChanged,
@@ -1006,6 +1007,54 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     });
   }
 
+  /**
+   * `@имя` в командах: игроки в мире, чьё имя совпадает без учёта регистра, иначе начинается с
+   * запроса. Несколько совпадений — ошибка с подсказкой, а не случайный выбор.
+   */
+  private findPlayers(query: string): Session[] {
+    const key = (name: string) => name.normalize('NFC').toLocaleLowerCase('ru');
+    const wanted = key(query);
+    const present = [...this.sessions].filter(([sessionId]) => this.state.players.has(sessionId));
+    const exact = present.filter(([, session]) => key(session.name) === wanted);
+    const matches = exact.length
+      ? exact
+      : present.filter(([, session]) => key(session.name).startsWith(wanted));
+    return matches.map(([, session]) => session);
+  }
+
+  private speedCommand(
+    client: Client,
+    session: Session,
+    requestId: number,
+    command: Extract<ChatCommand, { kind: 'speed' }>,
+  ) {
+    const fail = (code: ActionResult['code'], message: string) =>
+      this.finishAction(client, session, { requestId, ok: false, code, message });
+    let target = session;
+    if (command.target !== undefined) {
+      const found = this.findPlayers(command.target);
+      if (!found.length) return fail('INVALID_INPUT', `Игрок @${command.target} не найден.`);
+      if (found.length > 1)
+        return fail(
+          'INVALID_INPUT',
+          `Под @${command.target} подходят: ${found.map((other) => other.name).join(', ')}. Уточните имя.`,
+        );
+      target = found[0];
+    }
+    const state = this.world.getPlayerState(target.entityId);
+    if (!state) return fail('WORLD_NOT_READY', 'Игрок ещё не вошёл в мир.');
+    // Реплицируется в следующем такте вместе с остальным состоянием игрока.
+    if (command.percent !== undefined)
+      this.world.setPlayerSpeedScale(target.entityId, command.percent / 100);
+    const percent = command.percent ?? speedPercentFromScale(state.speedScale);
+    this.finishAction(client, session, {
+      requestId,
+      ok: true,
+      retryAfterMs: 0,
+      message: `${target === session ? 'Ваша скорость' : `Скорость ${target.name}`}: ×${percent / 100}.`,
+    });
+  }
+
   private adminAccess(session?: Session): 'AUTH_REQUIRED' | 'ADMIN_REQUIRED' | undefined {
     if (
       !session?.auth ||
@@ -1045,6 +1094,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         requestId,
         ...this.weather.command(command.actions, Date.now()),
       });
+    if (command.kind === 'speed') return this.speedCommand(client, session, requestId, command);
     if (command.kind === 'giveList') {
       const types = Object.keys(this.items.store.definition.itemCatalog.types).sort();
       return this.finishAction(client, session, {

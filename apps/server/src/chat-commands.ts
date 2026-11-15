@@ -1,5 +1,6 @@
 import {
   ITEM_GIVE_COOLDOWN_MS,
+  PLAYER_SPEED_PERCENT,
   type CommandHelpEffect,
   type DayClockAction,
   type ItemError,
@@ -29,6 +30,11 @@ export type ChatCommand =
   | { kind: 'staticPlacement' }
   | { kind: 'staticRemoval' }
   | { kind: 'help'; focus?: string }
+  /**
+   * `target` — имя игрока без `@`, по умолчанию отправитель. Без `percent` только сообщает
+   * скорость; 100 — обычная.
+   */
+  | { kind: 'speed'; target?: string; percent?: number }
   | {
       kind: 'invalid';
       code: 'INVALID_INPUT' | 'UNKNOWN_COMMAND';
@@ -54,6 +60,20 @@ const hour = {
 };
 
 const WEATHER_PARTS: readonly WeatherPart[] = ['clouds', 'rain', 'snow', 'fog'];
+
+const SPEED_RANGE = `от ${PLAYER_SPEED_PERCENT.min / 100} до ${PLAYER_SPEED_PERCENT.max / 100}`;
+/** `2`, `1.5`, `1,5`, `x2` или `×2` → целые проценты. */
+const speedMultiplier = {
+  name: 'МНОЖИТЕЛЬ',
+  parse(raw: string) {
+    const match = /^[x×]?(\d{1,3}(?:[.,]\d{1,2})?)$/i.exec(raw);
+    if (!match) return;
+    const percent = Math.round(Number(match[1].replace(',', '.')) * 100);
+    if (percent < PLAYER_SPEED_PERCENT.min || percent > PLAYER_SPEED_PERCENT.max)
+      throw new CommandLineError(`Множитель скорости — ${SPEED_RANGE}.`);
+    return percent;
+  },
+};
 
 /** Порядок задаёт и порядок в `/help`. */
 const COMMANDS: readonly ChatCommandDefinition[] = [
@@ -122,6 +142,40 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
         if (flags.has(part))
           actions.push({ kind: 'set', part, enabled: flags.get(part) as boolean });
       return { kind: 'weather', actions };
+    },
+  },
+  {
+    name: 'speed',
+    category: 'Игроки',
+    access: 'admin',
+    summary: 'Скорость ходьбы и бега игрока. Без флагов сообщает текущую.',
+    args: [
+      {
+        name: '@игрок',
+        optional: true,
+        help: 'По умолчанию вы. Имя с пробелами — в кавычках: @"Гость 2"',
+      },
+    ],
+    flags: {
+      set: { short: 's', value: speedMultiplier, help: `Множитель ${SPEED_RANGE}` },
+      reset: { help: 'Обычная скорость' },
+    },
+    conflicts: [['set', 'reset']],
+    examples: ['/speed', '/speed --set 2', '/speed @"Гость 2" --set 0.5', '/speed @Гость --reset'],
+    build({ args, flags }) {
+      const [target] = args;
+      if (target !== undefined && (!target.startsWith('@') || target.length < 2))
+        return 'Игрока указывают через @: @Имя.';
+      const percent = flags.has('set')
+        ? (flags.get('set') as number)
+        : flags.get('reset')
+          ? PLAYER_SPEED_PERCENT.normal
+          : undefined;
+      return {
+        kind: 'speed',
+        ...(target ? { target: target.slice(1) } : {}),
+        ...(percent === undefined ? {} : { percent }),
+      };
     },
   },
   {

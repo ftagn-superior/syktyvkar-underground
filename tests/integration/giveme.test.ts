@@ -331,6 +331,27 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     });
   });
 
+  it('lets an administrator change their own speed and another player’s by @name', async () => {
+    const guest = await join();
+    const owner = await join(await login('speed-admin'));
+    const guestName = app.room.state.players.get(guest.room.sessionId)!.name;
+    owner.send(`/speed @"${guestName}" --set 2`, 1);
+    await until(() => owner.results.length === 1);
+    expect(owner.results[0]).toMatchObject({ ok: true, message: `Скорость ${guestName}: ×2.` });
+    await until(() => guest.room.state.players.get(guest.room.sessionId)?.speedPercent === 200);
+    owner.send('/speed', 2);
+    await until(() => owner.results.length === 2);
+    expect(owner.results[1]).toMatchObject({ ok: true, message: 'Ваша скорость: ×1.' });
+    owner.send('/speed @nobody-here --set 2', 3);
+    await until(() => owner.results.length === 3);
+    expect(owner.results[2]).toMatchObject({ ok: false, code: 'INVALID_INPUT' });
+    owner.send(`/speed @"${guestName}" --reset`, 4);
+    await until(() => guest.room.state.players.get(guest.room.sessionId)?.speedPercent === 100);
+    guest.send('/speed --set 3', 1);
+    await until(() => guest.results.length === 1);
+    expect(guest.results[0]).toMatchObject({ code: 'UNKNOWN_COMMAND' });
+  });
+
   it('lets an administrator set, stop and reset the shared day clock, privately', async () => {
     const guest = await join();
     const owner = await join(await login('timekeeper'));

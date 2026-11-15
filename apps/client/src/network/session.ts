@@ -163,6 +163,7 @@ export class GameSession {
   onStaticRemovalOpen?: (effect: StaticRemovalEffect) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
+  private ownSpeed?: { room: object; percent: number };
   private readonly itemOperation = new PersistentOperation<ItemCommand>(
     'su:item-operation',
     parseItemCommand,
@@ -1174,6 +1175,13 @@ export class GameSession {
     const observed =
       animationSelf && this.animationBuffer.sample(animationSelf.entityId, room.clock.serverNow());
     if (observed) this.animationRequest.observe(observed.animation);
+    // Скорость меняет `/speed`, в том числе чужая: первое значение в комнате не объявляется.
+    if (animationSelf) {
+      const percent = animationSelf.speedPercent;
+      if (this.ownSpeed?.room === room && this.ownSpeed.percent !== percent)
+        this.onNotice(`Ваша скорость: ×${percent / 100}.`);
+      this.ownSpeed = { room, percent };
+    }
     if (this.persistencePaused !== room.state.paused) {
       this.persistencePaused = room.state.paused;
       this.simulation?.reset();

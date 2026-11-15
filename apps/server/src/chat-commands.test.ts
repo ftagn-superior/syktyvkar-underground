@@ -130,6 +130,42 @@ describe('chat commands', () => {
       expect(admin(text)).toMatchObject({ kind: 'invalid' });
   });
 
+  it('parses /speed targets and multipliers as integer percent', () => {
+    expect(admin('/speed')).toEqual({ kind: 'speed' });
+    expect(admin('/speed --set 2')).toEqual({ kind: 'speed', percent: 200 });
+    expect(admin('/speed -s 0,5')).toEqual({ kind: 'speed', percent: 50 });
+    expect(admin('/speed --set x1.25')).toEqual({ kind: 'speed', percent: 125 });
+    expect(admin('/speed @"Гость 2" --set=4')).toEqual({
+      kind: 'speed',
+      target: 'Гость 2',
+      percent: 400,
+    });
+    expect(admin('/speed "@Гость 2" --reset')).toEqual({
+      kind: 'speed',
+      target: 'Гость 2',
+      percent: 100,
+    });
+    expect(admin('/speed @Маша')).toEqual({ kind: 'speed', target: 'Маша' });
+    for (const [text, message] of [
+      ['/speed --set 5', 'от 0.1 до 4'],
+      ['/speed --set 0.05', 'от 0.1 до 4'],
+      ['/speed --set fast', 'Неверное значение'],
+      ['/speed --set 2 --reset', 'нельзя указывать вместе'],
+      ['/speed Маша', 'через @'],
+      ['/speed @', 'через @'],
+      ['/speed @a @b', 'Лишний аргумент'],
+    ] as const)
+      expect(admin(text)).toMatchObject({
+        kind: 'invalid',
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining(message),
+      });
+    expect(parseChatCommand('/speed --set 2', 'player')).toMatchObject({
+      code: 'UNKNOWN_COMMAND',
+      forbidden: true,
+    });
+  });
+
   it('keeps old names as aliases of /give, /place and /remove', () => {
     for (const name of ['give', 'giveme'])
       expect(admin(`/${name} wooden-crate`)).toEqual({ kind: 'give', typeId: 'wooden-crate' });
@@ -178,6 +214,7 @@ describe('chat commands', () => {
     expect(help.commands.map((command) => command.name)).toEqual([
       'time',
       'weather',
+      'speed',
       'give',
       'place',
       'remove',

@@ -7,3 +7,5 @@ content/worlds/ring-block/ring-trace.json
 # Автобусная сеть и подложка карты: генерируются `pnpm world:bus:network`, одна строка JSON
 content/worlds/ring-block/bus-network/network.json
 content/worlds/ring-block/bus-network/map.json
+# Generated terrain bytes are pinned by SHA-256 in terrain-release.json.
+content/worlds/ring-block/terrain-expressive/grid.*.json

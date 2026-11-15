@@ -405,6 +405,30 @@ describe('saved static terrain pose planning', () => {
     expect(withoutY(result.targetSnapshot.instances[0])).toEqual(withoutY(owner));
   });
 
+  it.each(['anchor', 'minimum'] as const)(
+    'keeps exact saved heights on unchanged %s contact terrain',
+    (contactDatum) => {
+      const { context, rules, owner } = fixture();
+      const sourceHeight = 0.7091776932331709;
+      context.sourceRelease.terrain = terrain(sourceHeight);
+      context.sourceRelease.terrain.supports = [];
+      context.targetRelease.terrain = terrain(sourceHeight);
+      context.targetRelease.terrain.supports = [];
+      owner.position.y = 0.7091776932331708;
+      rules.models[0].policy = {
+        kind: 'ground-anchor',
+        anchor: { x: 0, y: -0.2, z: 0 },
+        contactRadius: 0.2,
+        maximumTerrainReliefMetres: 0,
+        contactDatum,
+      };
+      const result = planStaticTerrainPoses(context, rules);
+      expect(result.issues).toEqual([]);
+      // An unchanged contact must not introduce a one-ULP Y update and DB revision.
+      expect(result.targetSnapshot.instances[0]).toEqual(owner);
+    },
+  );
+
   it('accepts an exact-flat anchor limit and rejects a contact patch crossing the grid boundary', () => {
     const { context, rules, owner } = fixture();
     context.targetRelease.terrain!.supports = [];

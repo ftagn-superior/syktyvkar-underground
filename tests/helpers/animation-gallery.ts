@@ -61,7 +61,7 @@ const avatars: { avatar: AvatarView; player: DisplayPlayer }[] = [];
 skins.forEach((skinId, row) => {
   selection.forEach(({ id: animationId }, col) => {
     const root = new TransformNode(skinId + animationId, scene);
-    root.position.set((1 - col) * 3, ((skins.length - 1) / 2 - row) * 2.7, 0);
+    root.position.set((col - 1) * 3, ((skins.length - 1) / 2 - row) * 2.7, 0);
     root.rotation.y = Number(params.get('angle') ?? 0);
     const avatar = new AvatarView(
       root,

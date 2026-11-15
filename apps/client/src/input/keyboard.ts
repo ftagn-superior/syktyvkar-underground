@@ -42,7 +42,7 @@ export class KeyboardInput {
     window.addEventListener(
       'keydown',
       (event) => {
-        if (!this.enabled || event.repeat || this.modal()) return;
+        if (event.defaultPrevented || !this.enabled || event.repeat || this.modal()) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         if (isTextInput(event.target)) return;
         if (this.placementMode) {

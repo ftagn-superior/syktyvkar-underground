@@ -162,8 +162,8 @@ export class GameSession {
   private snapshotWait?: { revision: number; resolve: () => void };
   private readonly verifiedBytes = new VerifiedByteCache();
   private readonly layoutTransitions: { revision: number; ms: number; full: boolean }[] = [];
-  onStaticPlacementOpen?: (effect: StaticPlacementEffect) => void;
-  onStaticRemovalOpen?: (effect: StaticRemovalEffect) => void;
+  onStaticPlacementOpen?: (effect: StaticPlacementEffect, requestId: number) => void;
+  onStaticRemovalOpen?: (effect: StaticRemovalEffect, requestId: number) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
   private ownSpeed?: { room: object; percent: number };
@@ -176,8 +176,10 @@ export class GameSession {
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  /** Invalidate UI return intents even if a pause begins and ends between render frames. */
+  onControlInterruption?: () => void;
   /** Ответ на `/help`: список доступных команд, уже отфильтрованный сервером. */
-  onCommandHelp?: (help: CommandHelpEffect) => void;
+  onCommandHelp?: (help: CommandHelpEffect, requestId: number) => void;
   /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
   onBusTravelResult?: (result: ActionResult) => void;
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
@@ -286,6 +288,7 @@ export class GameSession {
       this.chatRequest.cancel();
     }
     this.state = state;
+    if (state !== 'playing') this.onControlInterruption?.();
     this.onState(state, message);
   }
   private versionMismatch(): never {
@@ -938,6 +941,7 @@ export class GameSession {
       room.onMessage<ActionResult>('actionResult', (result) => {
         if (this.room !== room) return;
         if (
+          this.chatRequest.matches(result.requestId) &&
           result.ok &&
           (result.effect?.kind === 'staticPlacement' || result.effect?.kind === 'staticRemoval') &&
           !this.openedStaticActions.has(result.requestId)
@@ -945,8 +949,9 @@ export class GameSession {
           this.openedStaticActions.add(result.requestId);
           if (this.openedStaticActions.size > 32)
             this.openedStaticActions.delete(this.openedStaticActions.values().next().value!);
-          if (result.effect.kind === 'staticPlacement') this.onStaticPlacementOpen?.(result.effect);
-          else this.onStaticRemovalOpen?.(result.effect);
+          if (result.effect.kind === 'staticPlacement')
+            this.onStaticPlacementOpen?.(result.effect, result.requestId);
+          else this.onStaticRemovalOpen?.(result.effect, result.requestId);
         }
         if (this.animationRequest.result(result)) {
           this.onActionFeedback?.(result.ok ? 'click' : 'error');
@@ -959,7 +964,7 @@ export class GameSession {
           )
         ) {
           const help = result.ok ? parseCommandHelpEffect(result.effect) : undefined;
-          if (help) this.onCommandHelp?.(help);
+          if (help) this.onCommandHelp?.(help, result.requestId);
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(
@@ -1208,6 +1213,7 @@ export class GameSession {
     }
     if (this.persistencePaused !== room.state.paused) {
       this.persistencePaused = room.state.paused;
+      if (this.persistencePaused) this.onControlInterruption?.();
       this.simulation?.reset();
       if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
         this.onNotice(messages.STORAGE_UNAVAILABLE);
@@ -1548,6 +1554,7 @@ export class GameSession {
       now - this.lastPatchAt > MAX_PREDICTION_MS;
     if (stalled && !this.stalled && this.state === 'playing') {
       this.stalled = true;
+      this.onControlInterruption?.();
       this.pausePrediction();
       this.waitingResync = true;
       this.resyncTick = undefined;
@@ -1810,6 +1817,7 @@ export class GameSession {
     if (this.inputEnabled === enabled) return;
     if (!enabled) this.neutral();
     this.inputEnabled = enabled;
+    if (!enabled) this.onControlInterruption?.();
     this.motionRevision++;
     this.simulation?.reset();
     this.discardNextInputFrame = true;
@@ -1954,7 +1962,8 @@ export class GameSession {
     };
   }
 
-  sendChat(value: string): boolean {
+  /** The local request receipt does not wait for server delivery. */
+  sendChat(value: string): number | undefined {
     const status = this.chatStatus();
     const text = normalizeChatText(value);
     const command = text?.startsWith('/');
@@ -1965,7 +1974,7 @@ export class GameSession {
       !text ||
       document.hidden
     )
-      return false;
+      return undefined;
     this.actionId++;
     this.pendingChatCommand = !!command;
     this.chatRequest.begin(this.actionId, 5000, () => {
@@ -1977,7 +1986,7 @@ export class GameSession {
       worldEpoch: this.info.worldEpoch,
       text,
     } satisfies ChatRequest);
-    return true;
+    return this.actionId;
   }
 
   respawn(): void {

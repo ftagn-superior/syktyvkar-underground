@@ -7,6 +7,21 @@ export interface ChatConsoleStatus {
   pending: boolean;
   remainingMs: number;
 }
+
+export type ChatCloseReason =
+  | 'send'
+  | 'escape'
+  | 'button'
+  | 'world'
+  | 'replace'
+  | 'unavailable'
+  | 'dispose';
+
+type ChatLifecycle = {
+  beforeOpen: () => void;
+  closed: (reason: ChatCloseReason) => void;
+  canFocus: () => boolean;
+};
 /** Счётчик символов появляется только у предела длины. */
 const COUNTER_FROM = CHAT_MAX_LENGTH - 40;
 
@@ -33,7 +48,7 @@ export class ChatConsole {
     private readonly canvas: HTMLCanvasElement,
     /** Returns whether the message actually left for the server. */
     private readonly send: (text: string) => boolean,
-    private readonly onOpenChange: (open: boolean) => void,
+    private readonly lifecycle: ChatLifecycle,
     private readonly settings: ChatSettings,
   ) {
     const options = { signal: this.controller.signal };
@@ -42,7 +57,11 @@ export class ChatConsole {
     renderHint();
     const unsubscribe = settings.onChange(renderHint);
     this.controller.signal.addEventListener('abort', unsubscribe);
-    toggle.addEventListener('click', () => (this.isOpen ? this.close() : this.open()), options);
+    toggle.addEventListener(
+      'click',
+      () => (this.isOpen ? this.close('button') : this.open()),
+      options,
+    );
     input.addEventListener('input', () => this.render(), options);
     input.addEventListener('compositionstart', () => (this.composing = true), options);
     input.addEventListener('compositionend', () => (this.composing = false), options);
@@ -55,8 +74,7 @@ export class ChatConsole {
           return;
         }
         if (event.code === 'Escape') {
-          event.preventDefault();
-          this.close();
+          this.handleEscape(event);
         } else if (
           (event.code === 'Enter' || event.code === 'NumpadEnter') &&
           !event.ctrlKey &&
@@ -79,21 +97,11 @@ export class ChatConsole {
       },
       options,
     );
-    window.addEventListener(
-      'keydown',
-      (event) => {
-        if (this.isOpen && event.code === 'Escape' && !event.isComposing && !this.composing) {
-          event.preventDefault();
-          this.close();
-        }
-      },
-      options,
-    );
     // Only a click on the world collapses the field; other HUD controls leave it as it is.
     window.addEventListener(
       'pointerdown',
       (event) => {
-        if (this.isOpen && event.target === this.canvas) this.close(false);
+        if (this.isOpen && event.target === this.canvas) this.close('world');
       },
       options,
     );
@@ -101,7 +109,7 @@ export class ChatConsole {
   private trySend(shift: boolean): void {
     if (this.composing || this.submit.disabled) return;
     if (this.send(this.input.value) && closesAfterSend(this.settings.closeMode, shift))
-      this.close();
+      this.close('send');
   }
   get isOpen(): boolean {
     return !this.form.hidden;
@@ -113,7 +121,7 @@ export class ChatConsole {
       this.focusInput();
       return;
     }
-    this.onOpenChange(true);
+    this.lifecycle.beforeOpen();
     this.form.hidden = false;
     this.row.dataset.open = 'true';
     this.toggle.setAttribute('aria-expanded', 'true');
@@ -131,7 +139,14 @@ export class ChatConsole {
     this.render();
     this.focusInput();
   }
-  close(restoreFocus = true): void {
+  /** The application routes Escape before other panels and gameplay handlers. */
+  handleEscape(event: KeyboardEvent): void {
+    event.stopImmediatePropagation();
+    if (event.isComposing || this.composing || event.repeat) return;
+    event.preventDefault();
+    this.close('escape');
+  }
+  close(reason: ChatCloseReason): void {
     const wasOpen = this.isOpen;
     this.form.hidden = true;
     this.row.dataset.open = 'false';
@@ -139,22 +154,24 @@ export class ChatConsole {
     this.toggle.setAttribute('aria-expanded', 'false');
     this.toggle.setAttribute('aria-label', 'Чат');
     this.render();
-    if (wasOpen) {
-      this.onOpenChange(false);
-      if (restoreFocus) this.canvas.focus({ preventScroll: true });
-    }
+    if (wasOpen) this.lifecycle.closed(reason);
   }
   /** Server answer for the last message: a delivered message clears the field. */
   complete(ok: boolean): void {
     if (ok) this.input.value = '';
     this.render();
     const active = document.activeElement;
-    if (this.isOpen && (active === this.input || active === document.body)) this.focusInput();
+    if (
+      this.isOpen &&
+      this.lifecycle.canFocus() &&
+      (active === this.input || active === document.body)
+    )
+      this.focusInput();
   }
   update(state: ChatConsoleStatus): void {
     this.state = state;
     this.toggle.hidden = !state.available;
-    if (!state.available && !state.keepOpen) this.close(false);
+    if (!state.available && !state.keepOpen) this.close('unavailable');
     this.render();
   }
   private focusInput(): void {
@@ -189,6 +206,7 @@ export class ChatConsole {
     if (this.status.textContent !== message) this.status.textContent = message;
   }
   dispose(): void {
+    this.close('dispose');
     this.controller.abort();
   }
 }

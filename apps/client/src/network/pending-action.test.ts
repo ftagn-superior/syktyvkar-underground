@@ -10,6 +10,8 @@ describe('transient action lifecycle', () => {
     const timeout = vi.fn();
     action.begin(1, 5000, timeout);
     action.begin(2, 5000, timeout);
+    expect(action.matches(1)).toBe(false);
+    expect(action.matches(2)).toBe(true);
     expect(action.settle({ requestId: 1, ok: true }, 3000, 100)).toBe(false);
     expect(action.pending).toBe(true);
     expect(action.settle({ requestId: 2, ok: true, retryAfterMs: 1200 }, 3000, 100)).toBe(true);
@@ -25,11 +27,13 @@ describe('transient action lifecycle', () => {
     action.begin(1, 5000, timeout);
     vi.advanceTimersByTime(5000);
     expect(action.pending).toBe(false);
+    expect(action.matches(1)).toBe(false);
     expect(timeout).toHaveBeenCalledTimes(1);
     action.begin(2, 5000, timeout);
     action.settle({ requestId: 2, ok: false, code: 'RATE_LIMITED' }, 3000, 100);
     action.begin(3, 5000, timeout);
     action.cancel();
+    expect(action.matches(3)).toBe(false);
     vi.advanceTimersByTime(5000);
     expect(timeout).toHaveBeenCalledTimes(1);
     expect(action.remainingMs(1100)).toBe(2000);

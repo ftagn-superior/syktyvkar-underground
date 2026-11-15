@@ -69,7 +69,11 @@ try {
     page.setDefaultTimeout(15000);
     page.on('pageerror', (error) => errors.push(error.message));
     await page.bringToFront();
-    await page.goto(`${index ? relay.url : app.url}/?diagnostics=1`);
+    await page.goto(`${index ? relay.url : app.url}/?diagnostics=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 45000,
+    });
+    await page.locator('#join:not([disabled])').waitFor({ timeout: 60000 });
     await page
       .locator(`input[name="avatar-skin"][value="${index ? 'standard' : 'minifigure'}"]`)
       .check();

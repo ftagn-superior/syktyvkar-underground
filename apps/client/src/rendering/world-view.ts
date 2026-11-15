@@ -148,6 +148,9 @@ export class WorldView {
   private readonly graphicsIds = new WeakMap<Bounds, string>();
   private graphicsProjectionFrame?: {
     at: number;
+    camera: Camera;
+    viewVersion: number;
+    projectionVersion: number;
     matrix: Matrix;
     view: Matrix;
     planes: ReturnType<typeof Frustum.GetPlanes>;
@@ -471,18 +474,33 @@ export class WorldView {
     this.preparation = this.buildings.prepare(manifest, readBytes);
     return this.preparation;
   }
-  projectGraphicsGroup(bounds: Bounds, groupId = this.graphicsIds.get(bounds)): GraphicsProjection {
+  private graphicsFrame() {
     const camera = this.activeCamera;
+    const view = camera.getViewMatrix(),
+      projection = camera.getProjectionMatrix(),
+      width = this.canvas.clientWidth,
+      height = this.canvas.clientHeight;
     let frame = this.graphicsProjectionFrame;
-    if (!frame || frame.at !== this.lastFrame) {
-      const matrix = camera.getTransformationMatrix();
+    if (
+      !frame ||
+      frame.at !== this.lastFrame ||
+      frame.camera !== camera ||
+      frame.viewVersion !== view.updateFlag ||
+      frame.projectionVersion !== projection.updateFlag ||
+      frame.width !== width ||
+      frame.height !== height
+    ) {
+      const matrix = camera.getTransformationMatrix().clone();
       frame = this.graphicsProjectionFrame = {
         at: this.lastFrame,
+        camera,
+        viewVersion: view.updateFlag,
+        projectionVersion: projection.updateFlag,
         matrix,
-        view: camera.getViewMatrix(),
+        view: view.clone(),
         planes: Frustum.GetPlanes(matrix),
-        width: this.canvas.clientWidth,
-        height: this.canvas.clientHeight,
+        width,
+        height,
       };
       if (this.ownPosition) {
         const from = this.firstPerson
@@ -495,6 +513,24 @@ export class WorldView {
         );
       }
     }
+    return frame;
+  }
+  /** Camera coverage with a world-space X/Z guard, including the complete object volume. */
+  isGraphicsVisible(bounds: Bounds, margin = 0): boolean {
+    const { planes } = this.graphicsFrame();
+    for (const { normal, d } of planes) {
+      // The vertex furthest into a plane proves separation if even it is outside.
+      // Keeping Y unchanged prevents the ground guard from loading overhead geometry.
+      const x = normal.x >= 0 ? bounds.max.x + margin : bounds.min.x - margin,
+        y = normal.y >= 0 ? bounds.max.y : bounds.min.y,
+        z = normal.z >= 0 ? bounds.max.z + margin : bounds.min.z - margin;
+      if (normal.x * x + normal.y * y + normal.z * z + d < 0) return false;
+    }
+    return true;
+  }
+  projectGraphicsGroup(bounds: Bounds, groupId = this.graphicsIds.get(bounds)): GraphicsProjection {
+    const camera = this.activeCamera,
+      frame = this.graphicsFrame();
     let box = this.graphicsBoxes.get(bounds);
     if (!box) {
       box = new BoundingInfo(vector(bounds.min), vector(bounds.max));
@@ -929,8 +965,6 @@ export class WorldView {
     return {
       center: { x: center.x, y: center.y, z: center.z },
       drawRadius,
-      preloadRadius: drawRadius + 125,
-      retainRadius: drawRadius + 300,
     };
   }
   setStreamingRadius(radius: number) {
@@ -952,6 +986,7 @@ export class WorldView {
       this.firstPerson ? 0 : (2 * halfHeight) / Math.max(1, this.canvas.clientHeight),
     );
     this.graphicalFrame = undefined;
+    this.graphicsProjectionFrame = undefined;
   }
   private readonly wheel = (event: WheelEvent) => {
     event.preventDefault();

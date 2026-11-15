@@ -187,6 +187,12 @@ export async function createGameServer(options: GameServerOptions = {}) {
           catalogVersions,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
+          dayStartPhaseMs: room.state.dayStartPhaseMs,
+          serverElapsedMs: room.clock.elapsedTime,
+          dayClock: {
+            offsetMs: room.state.dayOffsetMs,
+            frozenHour: room.state.dayFrozenHour,
+          },
           ...(placementCatalog ? { placementCatalog: placementCatalog.reference } : {}),
         };
         res.json(info);

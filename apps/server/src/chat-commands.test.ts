@@ -57,8 +57,17 @@ describe('chat commands', () => {
     expect(admin('Привет!')).toBeUndefined();
   });
 
-  it('parses /time flags, combined in a stable order', () => {
+  it('parses /time flags and positional shorthand in 24-hour format', () => {
     expect(admin('/time')).toEqual({ kind: 'time', actions: [] });
+    expect(admin('/time 17')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 17 }] });
+    expect(admin('/time 5')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 5 }] });
+    expect(admin('/time 00:00')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 0 }] });
+    expect(admin('/time 12:00')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 12 }] });
+    expect(admin('/time 23:00')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 23 }] });
+    expect(admin('/time 22 --stop')).toEqual({
+      kind: 'time',
+      actions: [{ kind: 'stop' }, { kind: 'set', hour: 22 }],
+    });
     expect(admin('/time --set 7')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 7 }] });
     expect(admin('/time -s 18:30')).toEqual({
       kind: 'time',
@@ -80,10 +89,13 @@ describe('chat commands', () => {
       expect(admin(`/time --${kind}`)).toEqual({ kind: 'time', actions: [{ kind }] });
   });
 
-  it('rejects malformed /time input, including the old positional forms', () => {
+  it('rejects malformed /time input and conflicting positional hours', () => {
     for (const text of [
-      '/time 7',
       '/time stop',
+      '/time 24',
+      '/time 17 --set 18',
+      '/time 17 --reset',
+      '/time 17 18',
       '/time --set 24',
       '/time --set 12:60',
       '/time --set 12:5',
@@ -221,7 +233,7 @@ describe('chat commands', () => {
       'help',
     ]);
     expect(help.focus).toBe('time');
-    expect(help.commands[0].usage).toBe('time [--set ЧЧ[:ММ]] [--stop] [--start] [--reset]');
+    expect(help.commands[0].usage).toBe('time [<ЧЧ[:ММ]>] [--set ЧЧ[:ММ]] [--stop] [--start] [--reset]');
     expect(parseCommandHelpEffect(JSON.parse(JSON.stringify(help)))).toEqual(help);
     expect(parseCommandHelpEffect({ ...help, focus: 'missing' })).toBeUndefined();
   });

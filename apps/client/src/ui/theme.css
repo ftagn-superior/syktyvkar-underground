@@ -20,6 +20,7 @@
   --p-veil: color-mix(in srgb, var(--p) 84%, transparent);
   --p-tag: color-mix(in srgb, var(--p) 72%, transparent);
   --spring: cubic-bezier(0.3, 1.55, 0.5, 1);
+  --theme-ease: 0.65s ease;
   --font-display: 'Rubik', 'Golos Text', system-ui, sans-serif;
   --font-body: 'Golos Text', 'Segoe UI', system-ui, sans-serif;
   /* Базовый кегль HUD: около 15px на 1440px, не меньше 11px на узких экранах. */
@@ -31,6 +32,9 @@
   font-weight: 600;
   color: var(--ink);
   background: var(--p);
+  transition:
+    color var(--theme-ease),
+    background-color var(--theme-ease);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -69,6 +73,11 @@
   border: 2px solid var(--ln);
   border-radius: 0.9em;
   box-shadow: 0 0.24em 0 var(--hard);
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
 }
 .ui-orn {
   height: 10px;
@@ -96,7 +105,10 @@
   transition:
     transform 0.28s var(--spring),
     border-radius 0.4s var(--spring),
-    box-shadow 0.1s;
+    box-shadow 0.1s,
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease);
 }
 .ui-btn:hover:not(:disabled) {
   transform: translateY(-0.08em);
@@ -169,6 +181,10 @@
   background: var(--p2);
   border: 2px solid var(--ln);
   border-radius: 0.7em;
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease);
 }
 .ui-input::placeholder {
   color: var(--mut);
@@ -194,7 +210,12 @@ button.ui-chip {
   margin: 0;
   font: inherit;
   cursor: pointer;
-  transition: border-radius 0.4s var(--spring);
+  transition:
+    border-radius 0.4s var(--spring),
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
 }
 button.ui-chip[aria-expanded='true'] {
   background: var(--ink);
@@ -236,6 +257,11 @@ button.ui-chip[aria-expanded='true'] {
   border: 2px solid var(--ln);
   border-radius: 0.5em;
   box-shadow: 0 0.12em 0 var(--hard);
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
 }
 
 /* ---------- всплывающее окно ---------- */

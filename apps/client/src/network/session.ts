@@ -57,6 +57,7 @@ import {
   parseCommandHelpEffect,
   type CommandHelpEffect,
   DEFAULT_DAY_CLOCK,
+  dayClockHour,
   type DayClock,
   TICK_RATE,
   findReaction,
@@ -182,11 +183,14 @@ export class GameSession {
   onCommandHelp?: (help: CommandHelpEffect, requestId: number) => void;
   /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
   onBusTravelResult?: (result: ActionResult) => void;
-  /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
+  /** Игровые часы комнаты; вне комнаты синхронизируются по `/api/world` без локального `Date.now()`. */
   dayClock: DayClock = DEFAULT_DAY_CLOCK;
   onDayClock?: (clock: DayClock) => void;
   weather: WorldWeather = DEFAULT_WEATHER;
-  onWeather?: (weather: WorldWeather) => void;
+  onWeather?: (weather: WorldWeather, snap: boolean) => void;
+  private hasAuthoritativeWorldState = false;
+  private weatherSnapPending = true;
+  private worldInfoAnchor?: { startPhaseMs: number; elapsedMs: number; loadedAtPerfMs: number };
   onSpawn?: () => void;
   onActionFeedback?: (cue: 'click' | 'error') => void;
   private readonly worldSounds = new WorldSoundEvents();
@@ -321,7 +325,7 @@ export class GameSession {
       this.manifestUrl = publication.url;
       this.definition = publication.definition;
       this.resources = publication.resources;
-      this.info = info;
+      this.applyWorldInfo(info);
       this.physics?.dispose();
       this.physics = undefined;
     } catch (error) {
@@ -394,6 +398,9 @@ export class GameSession {
       this.definition = publication.definition;
       this.resources = publication.resources;
       this.info = { ...this.info, ...info };
+      if ('dayStartPhaseMs' in info || 'serverElapsedMs' in info) {
+        this.applyWorldInfo(this.info);
+      }
       if (playing) await this.preparePhysics(generation);
       if (generation !== this.generation) return;
       this.ensureStreamer();
@@ -564,7 +571,7 @@ export class GameSession {
     if (generation !== this.generation) return;
     if (!this.compatibleVersion(info)) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
-    else this.info = info;
+    else this.applyWorldInfo(info);
   }
   readStaticAsset(path: string, signal?: AbortSignal) {
     return this.resources!.read(path, signal);
@@ -766,7 +773,7 @@ export class GameSession {
         generation = this.generation;
         this.setState(restore ? 'reconnecting' : 'connecting');
       }
-      this.info = info;
+      this.applyWorldInfo(info);
       // Advisory preflight improves feedback; the server still reserves atomically.
       if (!restore && !info.available) throw new Error('WORLD_FULL');
       await this.preparePhysics(generation);
@@ -796,6 +803,8 @@ export class GameSession {
         return;
       }
       this.room = room;
+      this.hasAuthoritativeWorldState = false;
+      this.weatherSnapPending = true;
       this.preparationConfirmed = false;
       this.terminalNotice = undefined;
       this.ensureStreamer();
@@ -826,6 +835,7 @@ export class GameSession {
         this.waitingResync = false;
         this.lastAck = 0;
         this.lastAckAt = performance.now();
+        this.weatherSnapPending = true;
         this.pausePrediction();
         this.clearEntityTracking();
         this.setState('connecting');
@@ -1218,15 +1228,21 @@ export class GameSession {
       if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
         this.onNotice(messages.STORAGE_UNAVAILABLE);
     }
+    const snapWeather = this.weatherSnapPending;
+    this.hasAuthoritativeWorldState = true;
+    this.weatherSnapPending = false;
     this.setDayClock({
       offsetMs: room.state.dayOffsetMs,
       frozenHour: room.state.dayFrozenHour,
     });
-    this.setWeather({
-      clouds: room.state.weatherClouds,
-      precipitation: precipitationFromCode(room.state.weatherPrecipitation),
-      fog: room.state.weatherFog,
-    });
+    this.setWeather(
+      {
+        clouds: room.state.weatherClouds,
+        precipitation: precipitationFromCode(room.state.weatherPrecipitation),
+        fog: room.state.weatherFog,
+      },
+      snapWeather,
+    );
     const self = room.state.players.get(room.sessionId);
     this.physics?.syncRemote(toLocalSimulationSnapshot(room.state), self?.entityId ?? '');
     const previousRevision = self && this.revisions.get(self.entityId);
@@ -1251,22 +1267,62 @@ export class GameSession {
     for (const player of room.state.players?.values() ?? []) this.attach(player);
     for (const item of room.state.items.values()) this.attach(item);
   }
+  /** Единый источник времени игровых суток для неба и HUD; не зависит от `Date.now()` клиента. */
+  worldTimeMs(perfNow = performance.now()): number {
+    const roomClock = this.room?.clock;
+    if (this.room && roomClock) {
+      const hasSample =
+        typeof roomClock.lastServerTime === 'function' ? roomClock.lastServerTime() > 0 : true;
+      if (hasSample) {
+        const startPhaseMs =
+          this.room.state?.dayStartPhaseMs ?? this.worldInfoAnchor?.startPhaseMs ?? 0;
+        const elapsedMs =
+          typeof roomClock.renderNow === 'function'
+            ? roomClock.renderNow()
+            : roomClock.serverNow();
+        return startPhaseMs + elapsedMs;
+      }
+    }
+    if (this.worldInfoAnchor) {
+      return (
+        this.worldInfoAnchor.startPhaseMs +
+        this.worldInfoAnchor.elapsedMs +
+        Math.max(0, perfNow - this.worldInfoAnchor.loadedAtPerfMs)
+      );
+    }
+    return Math.max(0, perfNow);
+  }
+  currentHour(perfNow = performance.now()): number {
+    return dayClockHour(this.dayClock, this.worldTimeMs(perfNow));
+  }
+  private applyWorldInfo(info: WorldInfo): void {
+    this.info = info;
+    this.worldInfoAnchor = {
+      startPhaseMs: info.dayStartPhaseMs ?? 0,
+      elapsedMs: info.serverElapsedMs ?? 0,
+      loadedAtPerfMs: performance.now(),
+    };
+    if (!this.hasAuthoritativeWorldState && info.dayClock) {
+      this.setDayClock(info.dayClock);
+    }
+  }
   private setDayClock(clock: DayClock): void {
     if (clock.offsetMs === this.dayClock.offsetMs && clock.frozenHour === this.dayClock.frozenHour)
       return;
     this.dayClock = clock;
     this.onDayClock?.(clock);
   }
-  private setWeather(weather: WorldWeather): void {
+  private setWeather(weather: WorldWeather, snap = false): void {
     const current = this.weather;
     if (
+      !snap &&
       weather.clouds === current.clouds &&
       weather.precipitation === current.precipitation &&
       weather.fog === current.fog
     )
       return;
     this.weather = weather;
-    this.onWeather?.(weather);
+    this.onWeather?.(weather, snap);
   }
   private clearEntityTracking(): void {
     for (const entity of this.trackedEntities.values()) this.predictor?.detach(entity);
@@ -2058,8 +2114,12 @@ export class GameSession {
     this.snapshotWait?.resolve();
     this.snapshotWait = undefined;
     this.persistencePaused = false;
-    this.setDayClock(DEFAULT_DAY_CLOCK);
-    this.setWeather(DEFAULT_WEATHER);
+    this.hasAuthoritativeWorldState = false;
+    this.weatherSnapPending = true;
+    if (!preserveRecovery) {
+      this.setDayClock(this.info?.dayClock ?? DEFAULT_DAY_CLOCK);
+      this.setWeather(DEFAULT_WEATHER, true);
+    }
     this.onInventoryChange?.();
     this.respawnRequest.reset();
     this.busRequest.reset();

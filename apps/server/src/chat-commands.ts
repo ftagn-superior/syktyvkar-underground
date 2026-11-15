@@ -82,6 +82,7 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
     category: 'Мир',
     access: 'admin',
     summary: 'Игровое время. Без флагов сообщает текущий час.',
+    args: [{ name: 'ЧЧ[:ММ]', optional: true, help: 'Краткая форма --set' }],
     flags: {
       set: { short: 's', value: hour, help: 'Установить час' },
       stop: { help: 'Остановить часы' },
@@ -96,16 +97,24 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
     ],
     examples: [
       '/time',
+      '/time 17',
       '/time --set 18:30',
       '/time --set 22 --stop',
       '/time --start',
       '/time --reset',
     ],
-    build({ flags }) {
+    build({ args, flags }) {
+      let setHour = flags.get('set') as number | undefined;
+      if (args.length > 0) {
+        if (flags.has('set')) return 'Час уже задан через --set.';
+        if (flags.get('reset')) return 'Позиционный час нельзя сочетать с --reset.';
+        setHour = hour.parse(args[0]);
+        if (setHour === undefined) return `Неверное время «${args[0]}».`;
+      }
       const actions: DayClockAction[] = [];
       // Сначала остановка: тогда `--set` закрепляет ровно указанный час.
       if (flags.get('stop')) actions.push({ kind: 'stop' });
-      if (flags.has('set')) actions.push({ kind: 'set', hour: flags.get('set') as number });
+      if (setHour !== undefined) actions.push({ kind: 'set', hour: setHour });
       if (flags.get('start')) actions.push({ kind: 'start' });
       if (flags.get('reset')) actions.push({ kind: 'reset' });
       return { kind: 'time', actions };

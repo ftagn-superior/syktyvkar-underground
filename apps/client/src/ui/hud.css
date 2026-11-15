@@ -477,6 +477,7 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   font-size: 0.85em;
   font-weight: 500;
   color: var(--mut);
+  transition: color var(--theme-ease);
 }
 .place-pill .place-status[data-state='ready'] {
   color: var(--taiga);
@@ -529,6 +530,10 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   background: var(--p-veil);
   color: var(--ink);
   overflow-wrap: anywhere;
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    opacity 0.2s ease;
 }
 .chat-line:nth-last-child(4) {
   opacity: 0.55;
@@ -550,6 +555,10 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   display: flex;
   align-items: center;
   gap: 0.45em;
+  transition:
+    background-color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
 }
 .chat-row[data-open='true'] {
   padding: 0.45em;
@@ -1062,6 +1071,9 @@ body[data-scene='lobby'] .su-prompts {
   pointer-events: none;
   transform: translate(-50%, -100%);
   will-change: transform;
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease);
 }
 .player-label {
   padding-left: 6px;

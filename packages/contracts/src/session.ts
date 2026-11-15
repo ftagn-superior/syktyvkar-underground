@@ -1,5 +1,6 @@
 import type { PlacementCatalogReference } from './placement-catalog.js';
 import type { ContentCatalogVersions } from './content-catalogs.js';
+import type { DayClock } from './day-clock.js';
 import type { StaticPlacementEffect } from './static-placement.js';
 import type { StaticRemovalEffect } from './static-removal.js';
 import type { CommandHelpEffect } from './commands.js';
@@ -8,9 +9,8 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// v25 adds flag-based chat commands (`/help` sends a `commandHelp` effect) and `/speed`
-// (`PlayerSchema.speedPercent`) on top of v24 bus travel, LOD/HLOD and catalog versions.
-export const PROTOCOL_VERSION = 25;
+// v26 replicates the room clock start phase (`WorldState.dayStartPhaseMs`) on top of v25.
+export const PROTOCOL_VERSION = 26;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -33,6 +33,12 @@ export interface WorldInfo {
   manifestUrl: string;
   maxPlayers: number;
   available: boolean;
+  /** Фаза игровых суток в момент создания комнаты (0..DAY_LENGTH_MS). */
+  dayStartPhaseMs?: number;
+  /** Время жизни комнаты (`clock.elapsedTime`) на момент ответа `/api/world`, мс. */
+  serverElapsedMs?: number;
+  /** Текущие игровые часы комнаты на момент ответа `/api/world`. */
+  dayClock?: DayClock;
 }
 export type ErrorCode =
   | 'AUTH_REQUIRED'

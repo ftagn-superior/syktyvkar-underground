@@ -16,7 +16,6 @@ import { FirstPersonInput } from '../input/first-person';
 import { ChatReturnContext } from '../input/chat-return';
 import {
   validateBusNetwork,
-  dayClockHour,
   MAX_PLAYERS,
   NEUTRAL_INPUT,
   type BusNetwork,
@@ -869,7 +868,7 @@ export function startGame(): void {
     chatSettings,
   );
   session.onDayClock = (clock) => view?.setDayClock(clock);
-  session.onWeather = (weather) => view?.setWeather(weather);
+  session.onWeather = (weather, snap) => view?.setWeather(weather, snap);
   session.onChatResult = (result) => {
     chatReturn.acceptCommand(result.requestId, session.room);
     chat?.complete(result.ok);
@@ -1046,9 +1045,7 @@ export function startGame(): void {
     );
   }
   function renderWorldHud(): void {
-    const hour =
-      view?.hour ??
-      (Number.isFinite(fixedHour) ? fixedHour : dayClockHour(session.dayClock, Date.now()));
+    const hour = Number.isFinite(fixedHour) ? fixedHour : session.currentHour();
     const room = session.room;
     worldHud.update(hour, session.occupancy, room?.state?.players ?? [], room?.sessionId);
   }
@@ -1133,8 +1130,9 @@ export function startGame(): void {
       if (disposed) return;
       view = new WorldView(canvas, element('labels'), session.definition, quality);
       view.setAudio(audio);
+      view.setWorldTimeSource(() => session.worldTimeMs());
       view.setDayClock(session.dayClock);
-      view.setWeather(session.weather);
+      view.setWeather(session.weather, true);
       if (weatherOverride) view.setWeatherOverride(weatherOverride);
       if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
       view.setTouchMode(inputMode.value === 'touch');

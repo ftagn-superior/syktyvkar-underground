@@ -87,12 +87,17 @@ try {
   const contexts = await Promise.all(
     [0, 1].map(() => browser!.newContext({ viewport: { width: 1280, height: 720 } })),
   );
-  for (const context of contexts)
-    await context.addInitScript(() => {
+  for (const [index, context] of contexts.entries())
+    await context.addInitScript((skewed) => {
       localStorage.setItem('su:render-quality:v1', 'economy');
       localStorage.setItem('su:help-tip:v1', '1');
       localStorage.setItem('su:chat-close:v1', 'never');
-    });
+      if (skewed) {
+        // Skew the observer's wall clock by +3 hours (180 game hours = 12h flip mod 24).
+        const originalNow = Date.now.bind(Date);
+        Date.now = () => originalNow() + 3 * 60 * 60 * 1000;
+      }
+    }, index === 1);
   const [owner, observer] = await Promise.all(contexts.map((context) => context.newPage()));
   const pages = [owner, observer];
   for (const page of pages) {
@@ -133,11 +138,26 @@ try {
 
   await timeCommand(owner, '--stop');
   assert.ok(app.room.state.dayFrozenHour >= 0);
+  await timeCommand(owner, '17');
+  for (const page of pages) {
+    await clock(page, '17:00', true);
+    await theme(page, 'day');
+  }
+  await timeCommand(owner, '23:00');
+  for (const page of pages) {
+    await clock(page, '23:00', false);
+    await theme(page, 'night');
+  }
   await timeCommand(owner, '--set 13:15');
   for (const page of pages) {
     await clock(page, '13:15', true);
     await theme(page, 'day');
   }
+  await owner.waitForFunction(
+    () =>
+      getComputedStyle(document.querySelector('#clock-chip')!).backgroundColor ===
+      'rgb(243, 234, 216)',
+  );
   const dayBackground = await owner
     .locator('#clock-chip')
     .evaluate((node) => getComputedStyle(node).backgroundColor);
@@ -145,12 +165,26 @@ try {
   await theme(owner, 'night');
   await theme(observer, 'day');
   await clock(owner, '13:15', true);
+  await owner.waitForFunction(
+    (previous) => getComputedStyle(document.querySelector('#clock-chip')!).backgroundColor !== previous,
+    dayBackground,
+  );
+  await owner.waitForFunction(
+    () =>
+      getComputedStyle(document.querySelector('#clock-chip')!).backgroundColor ===
+      'rgb(24, 33, 63)',
+  );
   const nightBackground = await owner
     .locator('#clock-chip')
     .evaluate((node) => getComputedStyle(node).backgroundColor);
   assert.notEqual(dayBackground, nightBackground, 'theme selection changes rendered panel colors');
   await chooseTheme(owner, 'auto');
   await theme(owner, 'day');
+  await owner.waitForFunction(
+    () =>
+      getComputedStyle(document.querySelector('#clock-chip')!).backgroundColor ===
+      'rgb(243, 234, 216)',
+  );
   await owner.screenshot({ path: `${output}/day.png` });
   await timeCommand(owner, '--set 01:30');
   for (const page of pages) {
@@ -159,7 +193,7 @@ try {
   }
   await owner.screenshot({ path: `${output}/night.png` });
   checks.push(
-    '/time stop/set synchronizes the clock and automatic day/night theme; manual theme changes only the local interface',
+    '/time stop/set and positional shorthand synchronize the clock across skewed browser Date.now() and drive smooth day/night theme transitions; manual theme changes only the local interface',
   );
 
   await chooseTheme(owner, 'day');

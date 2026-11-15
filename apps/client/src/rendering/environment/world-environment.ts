@@ -61,6 +61,7 @@ export class WorldEnvironment {
   private weatherSettled = false;
   private qualityClouds = true;
   private lastEpochMs?: number;
+  private worldTimeSource: () => number = () => performance.now();
 
   constructor(
     scene: Scene,
@@ -87,11 +88,15 @@ export class WorldEnvironment {
     return this.lighting.staticShadow;
   }
   get hour(): number {
-    return this.currentHour ?? this.fixedHour ?? dayClockHour(this.clock, Date.now());
+    return this.currentHour ?? this.fixedHour ?? dayClockHour(this.clock, this.worldTimeSource());
   }
   /** Текущая сила каждой части погоды; для диагностики и тестов. */
   get weatherAmounts(): Readonly<WeatherAmounts> {
     return this.weatherMix.current;
+  }
+  setWorldTimeSource(source: () => number): void {
+    this.worldTimeSource = source;
+    this.currentHour = undefined;
   }
   setDayClock(clock: DayClock): void {
     this.clock = clock;
@@ -103,19 +108,20 @@ export class WorldEnvironment {
     this.currentHour = undefined;
   }
   /** Погода комнаты, которой управляет `/weather`. */
-  setWeather(weather: WorldWeather): void {
+  setWeather(weather: WorldWeather, snap?: boolean): void {
     this.weather = weather;
-    this.applyWeather();
+    this.applyWeather(snap);
   }
   /** Локальная погода для снимков (`?weather=`); `undefined` возвращает погоду комнаты. */
   setWeatherOverride(weather?: WorldWeather): void {
     this.weatherOverride = weather;
     this.weatherSettled = false;
-    this.applyWeather();
+    this.applyWeather(true);
   }
-  private applyWeather(): void {
+  private applyWeather(snap?: boolean): void {
     const weather = this.weatherOverride ?? this.weather;
-    this.weatherMix.set(weather, !this.weatherSettled);
+    const immediate = this.weatherOverride !== undefined ? true : (snap ?? !this.weatherSettled);
+    this.weatherMix.set(weather, immediate);
     this.weatherSettled = true;
     // Облака видны, только если их разрешают и качество графики, и погода.
     this.clouds.setEnabled(this.qualityClouds && weather.clouds);
@@ -128,8 +134,9 @@ export class WorldEnvironment {
     setWallSurfaceEconomy(this.camera.getScene(), quality === 'economy');
     for (const layer of Object.values(this.precipitation)) layer.setEconomy(quality === 'economy');
   }
-  update(frame: EnvironmentFrame, epochMs = Date.now()): void {
-    const elapsed = this.lastEpochMs === undefined ? 0 : (epochMs - this.lastEpochMs) / 1000;
+  update(frame: EnvironmentFrame, epochMs = this.worldTimeSource(), deltaSeconds?: number): void {
+    const elapsed =
+      deltaSeconds ?? (this.lastEpochMs === undefined ? 0 : (epochMs - this.lastEpochMs) / 1000);
     this.lastEpochMs = epochMs;
     this.weatherMix.step(elapsed);
     const weather = this.weatherMix.current;

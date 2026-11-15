@@ -19,6 +19,7 @@ import { rigDefinitions, rigClips } from './fixtures/animation-rig';
 import { restingPose } from '../apps/client/src/rendering/avatars/locomotion';
 
 assert.ok(process.env.SU_TEST_DATABASE_URL, 'Use a dedicated SU_TEST_DATABASE_URL');
+const lifecycleOnly = process.argv.includes('--lifecycle-only');
 const fixture = await prepareAnimationRigFixture();
 process.chdir(fixture.root);
 const { createGameServer } = await import(
@@ -40,6 +41,8 @@ const galleryHTML = `<!doctype html><html><head><meta charset="utf-8"></head><bo
 const gallery = await createServer({
   root: fixture.root,
   configFile: false,
+  cacheDir: join(fixture.root, '.vite-rig-cache'),
+  optimizeDeps: { noDiscovery: true },
   logLevel: 'error',
   server: { host: '127.0.0.1', port: 0 },
   plugins: [
@@ -79,7 +82,8 @@ async function idle(page: Page) {
 }
 async function choose(page: Page, id: string) {
   await idle(page);
-  await hudClick(page, '#animations-toggle');
+  if (!(await page.locator('#animations-panel').isVisible()))
+    await hudClick(page, '#animations-toggle');
   await page.locator(`[data-animation-id="${id}"]:not([disabled])`).click();
 }
 async function active(page: Page, entity: string, id: string) {
@@ -120,7 +124,14 @@ try {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
-    await page.locator('#join:not([disabled])').waitFor({ timeout: 60000 });
+    await page
+      .locator('#join:not([disabled])')
+      .waitFor({ timeout: 60000 })
+      .catch(async (error) => {
+        console.error('Fixture join unavailable:', await page.locator('body').innerText());
+        await page.screenshot({ path: join(fixture.output, `join-failure-${index}.png`) });
+        throw error;
+      });
     await page
       .locator(`input[name="avatar-skin"][value="${index ? 'standard' : 'minifigure'}"]`)
       .check();
@@ -134,7 +145,7 @@ try {
   const player = () =>
     [...app.room.state.players.values()].find((p: any) => p.entityId === id) as any;
   const initial = (await snap(sender)).authoritative;
-  for (const skin of AVATAR_SKINS) {
+  for (const skin of lifecycleOnly ? [] : AVATAR_SKINS) {
     player().skinId = skin.id;
     for (const page of pages)
       await page.waitForFunction(
@@ -212,9 +223,10 @@ try {
     }
     console.log(`Verified network poses: ${skin.id}`);
   }
-  checks.push(
-    'all 29 supported clip/skin pairs render their declared joints and contact on own client and independent 100ms/jitter observer, with both motion settings; wheelchair rejects the other three choices',
-  );
+  if (!lifecycleOnly)
+    checks.push(
+      'all 29 supported clip/skin pairs render their declared joints and contact on own client and independent 100ms/jitter observer, with both motion settings; wheelchair rejects the other three choices',
+    );
   const propIds = ['smoke-cigarette', 'drink-beer', 'use-laptop'].filter((id) =>
     ANIMATIONS.some((a) => a.id === id),
   );
@@ -382,6 +394,9 @@ try {
     date: new Date().toISOString(),
     browser: browser.version(),
     result: 'passed',
+    scope: lifecycleOnly
+      ? 'lifecycle only; network matrix skipped'
+      : 'full network and skin matrix',
     checks,
     matrix,
     relay: relay.metrics(),
@@ -391,7 +406,10 @@ try {
       'ground support is conservative and static; upright collision capsule, no slope IK or cloth physics',
     ],
   };
-  await writeFile(join(fixture.output, 'browser.json'), JSON.stringify(report, null, 2) + '\n');
+  await writeFile(
+    join(fixture.output, lifecycleOnly ? 'lifecycle.json' : 'browser.json'),
+    JSON.stringify(report, null, 2) + '\n',
+  );
   console.log(
     JSON.stringify(
       {
@@ -411,6 +429,7 @@ try {
       'INTERACTIVE_REVIEW_READY: press Enter to close local servers and remove the source fixture.',
     );
     await new Promise<void>((resolve) => process.stdin.once('data', () => resolve()));
+    process.stdin.pause();
   }
 } finally {
   await browser.close();

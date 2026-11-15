@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -133,6 +134,31 @@ describe('humanoid-v2 contract and actual geometry', () => {
                   expect(rig.leftKnee.rotation.x).toBe(0);
                 }
               }
+          }
+          if (skin.id !== 'bear-wheelchair') {
+            const minimum = (nodes: TransformNode[]) => {
+              let y = Infinity;
+              for (const mesh of scene.meshes.filter((mesh) =>
+                nodes.some((node) => mesh.isDescendantOf(node)),
+              )) {
+                const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+                const m = mesh.computeWorldMatrix(true).m;
+                for (let i = 0; i < positions.length; i += 3)
+                  y = Math.min(
+                    y,
+                    positions[i] * m[1] + positions[i + 1] * m[5] + positions[i + 2] * m[9] + m[13],
+                  );
+              }
+              return y;
+            };
+            const wheel = restingPose();
+            rigClips['rig-cartwheel'].sample(wheel, 3000, false);
+            rig.applyPose(wheel, height, 0, 1, true);
+            expect(minimum([rig.leftElbow, rig.rightElbow])).toBeCloseTo(0, 5);
+            expect(minimum([rig.head])).toBeGreaterThan(height * 0.004);
+            rigClips['rig-cartwheel'].sample(wheel, 0, false);
+            rig.applyPose(wheel, height, 0, 1, true);
+            expect(minimum([rig.leftKnee, rig.rightKnee])).toBeCloseTo(0, 5);
           }
           rig.applyPose(restingPose(), height);
           expect(rig.posture.position.asArray()).toEqual([0, 0, 0]);

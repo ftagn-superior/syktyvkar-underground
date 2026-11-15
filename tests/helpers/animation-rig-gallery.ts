@@ -39,6 +39,8 @@ new HemisphericLight('fill', new Vector3(0, 1, 1), scene).intensity = 0.9;
 const sun = new DirectionalLight('sun', new Vector3(-0.7, -1.5, -1), scene);
 sun.intensity = 1.2;
 const shadow = new ShadowGenerator(1024, sun);
+shadow.bias = 0.01;
+shadow.normalBias = 0.04;
 const floorMaterial = new StandardMaterial('support', scene);
 floorMaterial.diffuseColor = Color3.FromHexString('#364652');
 floorMaterial.specularColor = Color3.Black();
@@ -49,7 +51,7 @@ AVATAR_SKINS.forEach((skin, row) => {
     const root = new TransformNode(`${skin.id}/${definition.id}`, scene);
     const y = (3.5 - row) * 3.25;
     root.position.set((col - 1.5) * 4.4, y + 0.9, 0);
-    root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), 0.35);
+    root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), col === 1 ? Math.PI / 2 : 0.35);
     const floor = MeshBuilder.CreateGround('support', { width: 3.6, height: 3.6 }, scene);
     floor.position.set(root.position.x, y, 0);
     floor.material = floorMaterial;
@@ -72,7 +74,12 @@ AVATAR_SKINS.forEach((skin, row) => {
       connected: true,
       grounded: true,
       position: { x: root.position.x, y: root.position.y, z: root.position.z },
-      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      rotation: {
+        x: root.rotationQuaternion.x,
+        y: root.rotationQuaternion.y,
+        z: root.rotationQuaternion.z,
+        w: root.rotationQuaternion.w,
+      },
       velocity: { x: 0, y: 0, z: 0 },
       angularVelocity: { x: 0, y: 0, z: 0 },
       color: '#65d6bc',

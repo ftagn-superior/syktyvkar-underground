@@ -49,6 +49,8 @@ const gallery = `<!doctype html><html><head><meta charset="utf-8"></head><body s
 const server = await createServer({
   root: fileURLToPath(new URL('..', import.meta.url)),
   configFile: false,
+  cacheDir: `${output}/vite-cache`,
+  optimizeDeps: { noDiscovery: true },
   logLevel: 'error',
   server: { host: '127.0.0.1', port: 0 },
   plugins: [
@@ -90,11 +92,13 @@ try {
         (window as any).avatarProfileAnimation = animation;
       }, animation);
       await page.waitForTimeout(500);
+      await page.waitForFunction(() => (window as any).avatarProfile.scene.isReady());
       // Raw browser JavaScript avoids tsx function-name helpers inside evaluate.
       const timing = await page.evaluate<{
         median: number;
         p95: number;
         samples: number;
+        durationMs: number;
         rendering: Record<string, unknown>;
       }>(`new Promise(resolve => {
       const start = performance.now();
@@ -103,9 +107,9 @@ try {
       function frame(now) {
         samples.push(now-previous);
         previous = now;
-        if (now-start > 3000) {
+        if ((now-start > 3000 && samples.length >= 10) || now-start > 15000) {
           samples.sort((a,b) => a-b);
-          resolve({median:samples[Math.floor(samples.length*.5)],p95:samples[Math.floor(samples.length*.95)],samples:samples.length,rendering:window.avatarProfile.renderingDiagnostics()});
+          resolve({median:samples[Math.floor(samples.length*.5)],p95:samples[Math.floor(samples.length*.95)],samples:samples.length,durationMs:now-start,rendering:window.avatarProfile.renderingDiagnostics()});
         } else requestAnimationFrame(frame);
       }
       requestAnimationFrame(frame);

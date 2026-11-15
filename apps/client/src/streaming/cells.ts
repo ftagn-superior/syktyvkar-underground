@@ -1,6 +1,11 @@
 import { abortablePreparation } from './preparation';
 import { GroupGraphics, type FarGroupView } from './groups';
-import type { GraphicsProjection } from './graphics-plan';
+import {
+  GRAPHICS_STREAMING_POLICY,
+  inGraphicsArea,
+  type GraphicsProjection,
+  type GraphicsVisibility,
+} from './graphics-plan';
 import {
   canonicalJson,
   worldPublicationBaseIdentity,
@@ -31,7 +36,7 @@ export interface CellPhysics {
   retainStatic(item: StaticItem, version: string, asset?: BuildingPhysicsAsset): void;
   releaseStatic(id: string): void;
 }
-export interface CellGraphics {
+export interface CellGraphics extends GraphicsVisibility {
   recordGraphicsResidency?(): void;
   setGraphicsManifest?(
     manifest: WorldManifest,
@@ -90,7 +95,7 @@ export const STREAMING_LIMITS = {
   preparations: 4,
   frameMs: 2,
   preparationFrameMs: 6,
-  releaseMs: 5000,
+  releaseMs: GRAPHICS_STREAMING_POLICY.releaseMs,
   cacheBytes: 64 * 1024 * 1024,
   // The manifest validates the finite grid; even the entire 256-cell reference is legal.
   requiredCells: 10_000,
@@ -320,10 +325,10 @@ export class CellStreamer {
               [...loaded.statics, ...loaded.buildings].map((item) => item.entityId),
             );
         }
-        if ((old.releaseModels || this.graphicsWanted.has(old.id)) && this.groups.enabled) {
+        if (this.graphicsWanted.has(old.id) && this.groups.enabled) {
           cell.releaseModels = () => {};
           cell.graphics = new Set(loaded.statics.map((item) => item.entityId));
-        } else if (old.releaseModels || this.graphicsWanted.has(old.id)) {
+        } else if (this.graphicsWanted.has(old.id)) {
           // Already pinned models have parsed/GPU resources even if their raw bytes left
           // the LRU. Retain them directly instead of downloading a changed pack for them.
           const descriptor = manifest.cells.find((entry) => entry.cellId === old.id)!;
@@ -631,14 +636,32 @@ export class CellStreamer {
     if (explicit) this.visualExplicit = true;
     if (this.disposed) return;
     this.visual = { center: { ...center }, radius: Math.max(125, drawRadius) };
-    const next = new Set([
-      ...this.critical,
-      ...circularCells(this.manifest, center, this.visual.radius + 125),
-    ]);
-    for (const id of this.graphicsWanted)
-      if (cellDistance(this.manifest, id, center) <= this.visual.radius + 300) next.add(id);
+    const next = new Set(this.critical);
+    for (const descriptor of this.manifest.cells) {
+      const held = this.cells.get(descriptor.cellId);
+      const heldGraphics = !!(
+        held?.releaseModels ||
+        (held?.graphicsController && !held.graphicsController.signal.aborted)
+      );
+      if (
+        inGraphicsArea(
+          descriptor.bounds,
+          this.visual,
+          GRAPHICS_STREAMING_POLICY.preloadMargin,
+          this.graphics,
+        ) ||
+        (heldGraphics &&
+          inGraphicsArea(
+            descriptor.bounds,
+            this.visual,
+            GRAPHICS_STREAMING_POLICY.retainMargin,
+            this.graphics,
+          ))
+      )
+        next.add(descriptor.cellId);
+    }
     this.graphicsWanted = next;
-    this.groups.plan(center, this.visual.radius, next);
+    this.groups.plan(center, this.visual.radius);
     this.refresh();
   }
   private refresh() {
@@ -936,14 +959,16 @@ export class CellStreamer {
       (this.groups.enabled ? 0 : (cell.set?.cell.buildings.length ?? 0))
     );
   }
-  private graphicsReady(cell: Cell): boolean {
+  private cellGraphicsReady(cell: Cell): boolean {
     return (
       !!cell.set &&
       !!cell.releaseModels &&
       !cell.error &&
-      cell.graphics.size === this.graphicsCount(cell) &&
-      this.groups.readyCell(cell.id)
+      cell.graphics.size === this.graphicsCount(cell)
     );
+  }
+  private graphicsReady(cell: Cell): boolean {
+    return this.cellGraphicsReady(cell) && this.groups.readyCell(cell.id);
   }
   /** Spend a bounded share of a frame on preparation while movement is not yet active. */
   pumpFrame(deltaSeconds: number) {
@@ -1127,10 +1152,14 @@ export class CellStreamer {
   graphicsReadyRadius(center: Vec3, targetRadius: number): number {
     let radius = targetRadius;
     for (const descriptor of this.manifest.cells) {
+      if (this.graphics.isGraphicsVisible && !this.graphics.isGraphicsVisible(descriptor.bounds))
+        continue;
       const cell = this.cells.get(descriptor.cellId);
-      if (!cell || !this.graphicsReady(cell))
+      if (!cell || !this.cellGraphicsReady(cell))
         radius = Math.min(radius, cellDistance(this.manifest, descriptor.cellId, center));
     }
+    // A visible protruding group can have an owner/coverage cell outside the camera.
+    radius = Math.min(radius, this.groups.readyRadius(center, targetRadius));
     return Math.max(0, radius);
   }
   diagnostics() {

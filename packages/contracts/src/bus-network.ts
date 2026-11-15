@@ -308,10 +308,17 @@ function forwardTripsInDirection(
   const dir = route.directions[directionIndex]!;
   const order = busStopOrder(dir);
   const n = order.length;
+  const first = dir.sequence[0];
+  const last = dir.sequence.at(-1);
   const repeatedTerminal =
     n >= 2 &&
-    ((order[0] !== null && order[n - 1]?.stopId === order[0].stopId) ||
-      (order[0] === null && order[n - 1] === null));
+    first !== undefined &&
+    last !== undefined &&
+    (('platformId' in first && 'platformId' in last && first.platformId === last.platformId) ||
+      ('offWorld' in first &&
+        'offWorld' in last &&
+        first.offWorld.length > 0 &&
+        first.offWorld[0] === last.offWorld.at(-1)));
   const trips: BusTrip[] = [];
   order.forEach((entry, i) => {
     if (!entry || entry.platformId !== fromPlatformId) return;

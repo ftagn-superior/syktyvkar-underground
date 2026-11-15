@@ -99,6 +99,23 @@ const network: BusNetwork = {
 };
 
 describe('bus trips v3', () => {
+  it('does not collapse distinct off-world stops or different platforms at a loop seam', () => {
+    const copy = structuredClone(network);
+    copy.routes = [copy.routes[1]!];
+    copy.routes[0]!.directions = [
+      dir(
+        'loop',
+        [{ offWorld: ['X'] }, ref('c', 'c-e'), ref('d', 'd-e'), { offWorld: ['Y'] }],
+        true,
+      ),
+    ];
+    expect(busTripsFrom(copy, 'd-e').get('c')![0]!.steps).toBe(3);
+    copy.routes[0]!.directions = [
+      dir('loop', [ref('c', 'c-e'), ref('d', 'd-e'), ref('c', 'c-w')], true),
+    ];
+    expect(busTripsFrom(copy, 'c-w').get('d')![0]!.steps).toBe(2);
+  });
+
   it('rides strictly forward per platform, handles opposite platforms and circular fasterOpposite', () => {
     expect(busStopOrder(network.routes[0]!.directions[0]!)).toEqual([
       ref('a', 'a-e'),

@@ -135,6 +135,32 @@ export class LineBundles {
     return `var(--bus-l${this.colors.get(ref) ?? 0})`;
   }
 
+  /** Общий отрезок встречных направлений рисуется один раз, даже при разбиении на разные legs. */
+  paths(route: BusRoute, spacing: number, slots: ReadonlyMap<string, string[]>): BusPoint[][] {
+    const seen = new Set<string>();
+    const paths: BusPoint[][] = [];
+    for (const piece of routePieces(route)) {
+      const shifted = this.offset(piece, route.ref, spacing, slots);
+      let path: BusPoint[] = [];
+      const flush = () => {
+        if (path.length > 1) paths.push(path);
+        path = [];
+      };
+      for (let i = 1; i < piece.length; i++) {
+        const key = segmentKey(piece[i - 1]!, piece[i]!);
+        if (seen.has(key)) {
+          flush();
+          continue;
+        }
+        seen.add(key);
+        if (!path.length) path.push(shifted[i - 1]!);
+        path.push(shifted[i]!);
+      }
+      flush();
+    }
+    return paths;
+  }
+
   /**
    * Сдвиг линии от оси улицы по её месту в пучке. Числовое сравнение концов отрезка
    * не даёт разворотов на границах разрядов, разброс пучка ограничен шириной дороги.
@@ -538,25 +564,7 @@ export class BusMapPanel {
     ];
     for (const route of ordered) {
       const active = on.has(route.ref);
-      const seen = new Set<string>();
-      const paths: string[] = [];
-      for (const dir of route.directions) {
-        for (const leg of dir.legs) {
-          for (const piece of leg) {
-            if (piece.length < 2) continue;
-            const fwd = piece.map((p) => `${p[0]},${p[1]}`).join(';');
-            const rev = [...piece]
-              .reverse()
-              .map((p) => `${p[0]},${p[1]}`)
-              .join(';');
-            const canon = fwd < rev ? fwd : rev;
-            if (seen.has(canon)) continue;
-            seen.add(canon);
-            paths.push(pathData(this.bundles.offset(piece, route.ref, spacing, slots)));
-          }
-        }
-      }
-      const d = paths.join('');
+      const d = this.bundles.paths(route, spacing, slots).map(pathData).join('');
       if (!d) continue;
       svgEl(
         'path',

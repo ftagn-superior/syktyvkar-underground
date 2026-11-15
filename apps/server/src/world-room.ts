@@ -977,8 +977,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   /**
-   * Быстрая поездка: игрок стоит у остановки `fromStopId`, и автобус с неё идёт до
-   * `toStopId`. Перемещение — тот же план подготовки области, что и возврат на старт,
+   * Быстрая поездка: игрок стоит у `fromPlatformId`, и выбранное направление
+   * маршрута идёт до `toPlatformId`. Перемещение — тот же план подготовки области, что и возврат на старт,
    * с общей перезарядкой; прибытие — на землю у платформы остановки назначения.
    */
   private busTravel(client: Client, request: unknown): void {

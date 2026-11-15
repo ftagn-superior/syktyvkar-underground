@@ -76,6 +76,47 @@ const network: BusNetwork = {
 };
 
 describe('LineBundles alignment and bundling', () => {
+  it('draws shared reverse segments once across differently split direction legs', () => {
+    const r = route('17М', [
+      [0, 0],
+      [10, 0],
+      [20, 0],
+      [30, 0],
+    ]);
+    r.directions.push({
+      ...r.directions[0]!,
+      legs: [
+        [
+          [
+            [30, 0],
+            [20, 0],
+          ],
+        ],
+        [
+          [
+            [20, 0],
+            [10, 0],
+            [0, 0],
+            [-10, 0],
+          ],
+        ],
+      ],
+    });
+    const bundles = new LineBundles({ ...network, routes: [r] });
+    expect(bundles.paths(r, 20, bundles.slotsFor([r]))).toEqual([
+      [
+        [0, 0],
+        [10, 0],
+        [20, 0],
+        [30, 0],
+      ],
+      [
+        [0, 0],
+        [-10, 0],
+      ],
+    ]);
+  });
+
   it('bundles only visible routes so hidden routes do not push an active route off-road', () => {
     const bundles = new LineBundles(network);
     const activeOnlySlots = bundles.slotsFor([network.routes[2]!]);

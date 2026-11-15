@@ -140,7 +140,29 @@ describe('command completion', () => {
         (c) => c.insert,
       ),
     ).toEqual(['@Маша ']);
+    expect(
+      completeCommand('/give ', 6, commands, players)?.candidates.map((c) => c.insert),
+    ).toEqual(['wooden-crate ', 'wooden-chair ', 'lamp ', '@Маша ', '@"Гость 2" ', '--list ']);
+    expect(
+      completeCommand('/give wooden-crate ', 19, commands, players)?.candidates.map(
+        (c) => c.insert,
+      ),
+    ).toEqual(['@Маша ', '@"Гость 2" ']);
+    expect(completeCommand('/give --list ', 13, commands, players)).toBeUndefined();
+    expect(completeCommand('/give --list w', 14, commands, players)).toBeUndefined();
+    expect(completeCommand('/give --list @', 14, commands, players)).toBeUndefined();
     expect(completeCommand('/give @Маша @', 13, commands, players)).toBeUndefined();
+  });
+
+  it('suppresses positional shorthand hints when --set or --reset already satisfies or blocks it', () => {
+    const players = ['Маша'];
+    expect(completeCommand('/time --set 18:30 --stop ', 25, commands)).toBeUndefined();
+    expect(completeCommand('/time --reset ', 14, commands)).toBeUndefined();
+    expect(
+      completeCommand('/speed --reset ', 15, commands, players)?.candidates.map((c) => c.insert),
+    ).toEqual(['@Маша ']);
+    expect(completeCommand('/speed @Маша --set 2 ', 21, commands, players)).toBeUndefined();
+    expect(completeCommand('/speed @Маша --reset ', 21, commands, players)).toBeUndefined();
   });
 
   it('only completes commands allowed in the provided catalog', () => {

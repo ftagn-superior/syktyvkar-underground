@@ -263,7 +263,8 @@ export class ChatConsole {
     if (!this.isOpen || !this.completion || !this.input.value.trimStart().startsWith('/')) return;
     const commands = this.completion.commands();
     if (!commands) return;
-    if (this.cycle && this.cycle.value === this.input.value) {
+    const cursor = this.input.selectionStart ?? this.input.value.length;
+    if (this.cycle && this.cycle.value === this.input.value && cursor === this.cycle.end) {
       return {
         completion: {
           start: this.cycle.start,
@@ -275,7 +276,6 @@ export class ChatConsole {
       };
     }
     this.cycle = undefined;
-    const cursor = this.input.selectionStart ?? this.input.value.length;
     const completion = completeCommand(
       this.input.value,
       cursor,

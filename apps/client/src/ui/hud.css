@@ -634,6 +634,12 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 }
 /* Подсказки команд над полем: имя моноширинным, описание — приглушённым. */
 .chat-suggest {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mut) transparent;
   align-self: stretch;
   display: grid;
   gap: 0.1em;

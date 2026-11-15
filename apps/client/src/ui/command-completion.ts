@@ -214,6 +214,9 @@ export function completeCommand(
     usedFlags.add('set');
 
   const blockedFlags = new Set(usedFlags);
+  // Флаг `--list` не сочетается с позиционными аргументами (`/give --list`).
+  if (positional.length > 0 && command.flags.some((f) => f.name === 'list'))
+    blockedFlags.add('list');
   for (const group of command.conflicts)
     if (group.some((name) => usedFlags.has(name))) for (const name of group) blockedFlags.add(name);
 
@@ -222,15 +225,19 @@ export function completeCommand(
     return candidates.length ? { start: current.start, end: current.end, candidates } : undefined;
   }
 
+  const listOnly = usedFlags.has('list');
+  const shorthandBlocked = command.flags.some((f) => f.name === 'set') && blockedFlags.has('set');
   const hasPlayer = positional.some((arg) => arg.startsWith('@'));
   const playerArg = command.args.find((arg) => arg.player);
   const nonPlayerArgs = command.args.filter((arg) => !arg.player);
   const nonPlayerCount = positional.filter((arg) => !arg.startsWith('@')).length;
   const nextArg = nonPlayerArgs[nonPlayerCount];
+  const allowPlayerArg = !listOnly && !!playerArg && !hasPlayer;
+  const allowNonPlayerArg = !listOnly && !shorthandBlocked;
   const uniquePlayers = [...new Set(players)];
 
   if (current.raw.startsWith('@')) {
-    if (!playerArg || hasPlayer) return;
+    if (!allowPlayerArg) return;
     const matches = filterPrefixOrIncludes(uniquePlayers, current.text.slice(1), true);
     const candidates = matches.map((name) => ({
       insert: formatPlayerInsert(name),
@@ -240,7 +247,7 @@ export function completeCommand(
     return candidates.length ? { start: current.start, end: current.end, candidates } : undefined;
   }
 
-  if (nextArg?.choices?.length) {
+  if (current.raw !== '' && allowNonPlayerArg && nextArg?.choices?.length) {
     const matches = filterPrefixOrIncludes(nextArg.choices, current.text);
     const candidates = matches.map((choice) => ({
       insert: `${choice} `,
@@ -252,7 +259,11 @@ export function completeCommand(
 
   if (current.raw === '') {
     const candidates: CompletionCandidate[] = [];
-    if (playerArg && !hasPlayer) {
+    if (allowNonPlayerArg && nextArg?.choices?.length) {
+      for (const choice of nextArg.choices)
+        candidates.push({ insert: `${choice} `, label: choice, help: nextArg.help });
+    }
+    if (allowPlayerArg) {
       for (const name of uniquePlayers)
         candidates.push({
           insert: formatPlayerInsert(name),
@@ -262,7 +273,7 @@ export function completeCommand(
     }
     candidates.push(...flagCandidates(command, '--', blockedFlags));
     if (candidates.length) return { start: current.start, end: current.end, candidates };
-    if (nextArg)
+    if (allowNonPlayerArg && nextArg)
       return {
         start: current.start,
         end: current.end,

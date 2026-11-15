@@ -62,6 +62,10 @@ export class CharacterAnimator {
     return this.distance;
   }
 
+  get animationState() {
+    return this.animationDiagnostic as Readonly<typeof this.animationDiagnostic>;
+  }
+
   resetMotion(): void {
     this.previous = undefined;
     this.footsteps.count = 0;

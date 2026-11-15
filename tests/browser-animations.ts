@@ -19,7 +19,8 @@ const relay = await createDelayRelay(new URL(app.url), {
   rttMs: 100,
   jitterMs: 20,
 });
-const browser = await launchTestBrowser();
+// The chat return policy uses native window focus, as in browser-chat.ts.
+const browser = await launchTestBrowser({ channel: 'chromium' });
 const errors: string[] = [],
   checks: string[] = [];
 const phaseErrorsMs: number[] = [];
@@ -127,7 +128,7 @@ try {
     for (const [clipIndex, definition] of ANIMATIONS.entries()) {
       await idle(sender);
       if (definition.id === 'wave') {
-        await hudClick(sender, '#chat-toggle');
+        await openChat(sender);
         await sender.locator('#chat-input').fill('Привет из меню анимаций!');
         await sender.locator('#chat-input').press('Enter');
         await chatSent(sender);
@@ -137,6 +138,15 @@ try {
       if (clipIndex < 9) await sender.keyboard.press(String(clipIndex + 1));
       else await sender.locator(`[data-animation-id="${definition.id}"]`).click();
       await Promise.all([active(sender, id, definition.id), active(observer, id, definition.id)]);
+      if (['smoke-cigarette', 'drink-beer', 'use-laptop'].includes(definition.id)) {
+        for (const [client, page] of [sender, observer].entries()) {
+          assert.ok(
+            (await avatar(page, id)).prop?.opacity > 0.9,
+            `${definition.id}: visible prop on client ${client}`,
+          );
+          await page.screenshot({ path: `${output}/${definition.id}-${index}-${client}.png` });
+        }
+      }
       await sender.locator('#animations-panel').waitFor({ state: 'hidden' });
       for (const page of [sender, observer]) {
         const error =
@@ -182,7 +192,7 @@ try {
         await sender.keyboard.up('s');
       }
       if (definition.id === 'dance') {
-        await hudClick(sender, '#chat-toggle');
+        await openChat(sender);
         await sender.locator('#chat-input').fill('wasd qer');
         await sender.keyboard.press('Escape');
         await active(sender, id, definition.id);
@@ -261,21 +271,56 @@ try {
     checks.push(
       'catalogs leave the chat field open; chat typing preserves dance; chat, reaction and gesture coexist with a shared action sequence',
     );
+    const seatedContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    try {
+      await seatedContext.addInitScript(() =>
+        localStorage.setItem('su:render-quality:v1', 'economy'),
+      );
+      const seated = await seatedContext.newPage();
+      seated.on('pageerror', (error) => errors.push(error.message));
+      await seated.goto(`${app.url}/?diagnostics=1`, { waitUntil: 'domcontentloaded' });
+      await seated.locator('#join:not([disabled])').waitFor({ timeout: 60000 });
+      await seated.locator('input[name="avatar-skin"][value="bear-wheelchair"]').check();
+      await seated.locator('#join:not([disabled])').click();
+      await seated.waitForFunction(
+        () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
+      );
+      const id = (await snapshot(seated)).authoritative.entityId;
+      for (const clip of ['smoke-cigarette', 'drink-beer', 'use-laptop']) {
+        await idle(seated);
+        await hudClick(seated, '#animations-toggle');
+        await seated.locator(`[data-animation-id="${clip}"]:not([disabled])`).click();
+        await Promise.all([active(seated, id, clip), active(pages[1], id, clip)]);
+        for (const page of [seated, pages[1]]) {
+          const displayed = await avatar(page, id);
+          assert.equal(displayed.skinId, 'bear-wheelchair');
+          assert.ok(displayed.prop?.opacity > 0.9);
+        }
+        await pages[1].screenshot({ path: `${output}/${clip}-wheelchair-observer.png` });
+      }
+      checks.push(
+        'all three new clips and their visible props replicate from the wheelchair skin to the delayed observer',
+      );
+    } finally {
+      await seatedContext.close();
+    }
   }
   const sender = pages[0];
   await sender.setViewportSize({ width: 1280, height: 720 });
   await sender.bringToFront();
+  await sender.locator('#world').focus();
   await openChat(sender);
   await sender.locator('#chat-input').fill('/help');
   await sender.locator('#chat-input').press('Enter');
-  await sender.locator('#commands-panel').waitFor({ state: 'visible' });
-  assert.ok((await sender.locator('#commands-panel .command-list button').count()) > 0);
+  // Current main exposes administrative commands only to signed-in admins.
+  await sender.getByText('Нет доступных команд.', { exact: true }).first().waitFor();
+  assert.equal(await sender.locator('#commands-panel').isVisible(), false);
   await sender.screenshot({ path: `${output}/command-help.png`, animations: 'disabled' });
   await hudClick(sender, '#animations-toggle');
   await sender.locator('#animations-panel').waitFor({ state: 'visible' });
   assert.equal(await sender.locator('#commands-panel').isVisible(), false);
   checks.push(
-    'server /help opens its command panel; opening animations closes it and keeps catalog input usable',
+    'guest /help respects administrative command access; opening animations after its reply keeps catalog input usable',
   );
   await sender.locator('#animations-panel [data-filter="Танцы"]').click();
   await sender.locator('#animation-search').fill('ТАНЦЫ robot');
@@ -310,6 +355,28 @@ try {
     [...app.room.state.players.values()].find((p) => p.entityId === performer)!;
   const sequence = replicated().animationSequence;
   await sender.locator('#animation-preview summary').click();
+  for (const clip of ['smoke-cigarette', 'drink-beer', 'use-laptop']) {
+    await sender.locator('#animation-preview-clip').selectOption(clip);
+    for (const { id: skin } of AVATAR_SKINS) {
+      await sender.locator('#animation-preview-skin').selectOption(skin);
+      for (const reduced of [false, true]) {
+        await sender.locator('#animation-preview-reduced').setChecked(reduced);
+        await sender.locator('#animation-preview-canvas').scrollIntoViewIfNeeded();
+        await sender.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            ),
+        );
+        await sender.locator('#animation-preview-canvas').screenshot({
+          path: `${output}/preview-${clip}-${skin}-${reduced ? 'reduced' : 'normal'}.png`,
+        });
+      }
+    }
+  }
+  checks.push(
+    'three prop clips preview on all eight skins in both motion settings; preview sends no server action',
+  );
   await sender.locator('#animation-preview-clip').selectOption('boxing');
   for (const { id: skin } of AVATAR_SKINS) {
     await sender.locator('#animation-preview-skin').selectOption(skin);

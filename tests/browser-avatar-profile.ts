@@ -71,30 +71,52 @@ try {
   browser = await launchTestBrowser();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('pageerror', (error) => {
+    errors.push(error.message);
+    console.error(error.stack ?? error.message);
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.error(message.text());
+  });
   await page.goto(`${server.resolvedUrls!.local[0]}avatar-profile`);
-  await page.waitForFunction(() => Boolean((window as any).avatarProfile));
+  await page.waitForFunction(() => Boolean((window as any).avatarProfile), undefined, {
+    timeout: 60000,
+  });
+  await page.waitForFunction(() => (window as any).avatarProfile.scene.isReady(), undefined, {
+    timeout: 60000,
+  });
   const profiles: {
     quality: string;
     animation: string;
     median: number;
     p95: number;
     samples: number;
+    durationMs: number;
     rendering: Record<string, unknown>;
   }[] = [];
   for (const quality of process.argv.includes('--gallery-only') ? [] : ['standard', 'economy']) {
     await page.evaluate((quality) => (window as any).avatarProfile.setQuality(quality), quality);
     await page.waitForTimeout(1500);
-    for (const animation of ['base', 'wave', 'clap', 'dance']) {
+    for (const animation of [
+      'base',
+      'wave',
+      'clap',
+      'dance',
+      'smoke-cigarette',
+      'drink-beer',
+      'use-laptop',
+    ]) {
       await page.evaluate((animation) => {
         (window as any).avatarProfileAnimation = animation;
       }, animation);
       await page.waitForTimeout(500);
+      await page.waitForFunction(() => (window as any).avatarProfile.scene.isReady());
       // Raw browser JavaScript avoids tsx function-name helpers inside evaluate.
       const timing = await page.evaluate<{
         median: number;
         p95: number;
         samples: number;
+        durationMs: number;
         rendering: Record<string, unknown>;
       }>(`new Promise(resolve => {
       const start = performance.now();
@@ -103,13 +125,23 @@ try {
       function frame(now) {
         samples.push(now-previous);
         previous = now;
-        if (now-start > 3000) {
+        if ((now-start > 3000 && samples.length >= 10) || now-start > 15000) {
           samples.sort((a,b) => a-b);
-          resolve({median:samples[Math.floor(samples.length*.5)],p95:samples[Math.floor(samples.length*.95)],samples:samples.length,rendering:window.avatarProfile.renderingDiagnostics()});
+          resolve({median:samples[Math.floor(samples.length*.5)],p95:samples[Math.floor(samples.length*.95)],samples:samples.length,durationMs:now-start,rendering:window.avatarProfile.renderingDiagnostics()});
         } else requestAnimationFrame(frame);
       }
       requestAnimationFrame(frame);
     })`);
+      console.log(
+        JSON.stringify({
+          quality,
+          animation,
+          median: timing.median,
+          p95: timing.p95,
+          samples: timing.samples,
+          durationMs: timing.durationMs,
+        }),
+      );
       assert.ok(timing.samples >= 10);
       profiles.push({ quality, animation, ...timing });
     }
@@ -122,12 +154,23 @@ try {
       (p) => p.quality === quality && p.animation === 'base',
     )!.rendering;
     for (const profile of profiles.filter((p) => p.quality === quality)) {
-      for (const field of ['meshes', 'materials', 'transformNodes', 'drawCalls'])
+      const hasProp = ['smoke-cigarette', 'drink-beer', 'use-laptop'].includes(profile.animation);
+      for (const field of ['meshes', 'materials', 'transformNodes'])
         assert.equal(
           profile.rendering[field],
-          baseline[field],
+          Number(baseline[field]) + (hasProp && field !== 'transformNodes' ? 8 : 0),
           `${quality}/${profile.animation}: ${field}`,
         );
+      const shadows = Boolean(profile.rendering.shadows);
+      const expectedCalls = Number(baseline.drawCalls) + (hasProp ? 8 * (shadows ? 2 : 1) : 0);
+      // Static shadow refreshes are intermittent; their caster passes vary between frames.
+      const staticPasses = shadows
+        ? (baseline.shadowMaps as { staticCasters: number }).staticCasters
+        : 0;
+      assert.ok(
+        Math.abs(Number(profile.rendering.drawCalls) - expectedCalls) <= staticPasses,
+        `${quality}/${profile.animation}: draw calls exceed the prop + static-shadow budget`,
+      );
     }
   }
   await page.setViewportSize({ width: 1200, height: 800 });
@@ -151,7 +194,7 @@ try {
     date: new Date().toISOString(),
     browser: browser.version(),
     experiment: profiles.length
-      ? 'isolated eight moving avatars, both skins, base/wave/clap/dance, SwiftShader, 1280x720; not hardware acceptance'
+      ? 'isolated eight moving avatars, both skins, base/wave/clap/dance and three prop clips, SwiftShader, 1280x720; scene warmed, windows >=3s and >=10 samples (15s cap); not hardware acceptance'
       : `${ANIMATIONS.length} clips on both skins at two phases, SwiftShader, 1200x800`,
     profiles,
     errors,

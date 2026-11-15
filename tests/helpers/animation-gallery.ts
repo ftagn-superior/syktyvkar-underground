@@ -11,9 +11,13 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { AvatarView } from '../../apps/client/src/rendering/avatars/avatar-view';
 import type { DisplayPlayer } from '../../apps/client/src/presentation/display-state';
-import { ANIMATIONS } from '../../packages/contracts/src/index';
+import { ANIMATIONS, AVATAR_SKINS, type AvatarSkinId } from '../../packages/contracts/src/index';
 
-const offset = Number(new URLSearchParams(location.search).get('offset') ?? 0);
+const params = new URLSearchParams(location.search);
+const offset = Number(params.get('offset') ?? 0);
+const selectedSkin = AVATAR_SKINS.find(({ id }) => id === params.get('skin'))?.id;
+const skins: AvatarSkinId[] = selectedSkin ? [selectedSkin] : ['minifigure', 'standard'];
+const reduced = params.get('reduced') === 'true';
 const selection = ANIMATIONS.slice(offset, offset + 3);
 document.querySelector('#gallery-titles')!.replaceChildren(
   ...selection.map(({ label }) => {
@@ -28,7 +32,9 @@ const preview = window as unknown as {
   galleryPose(ms: number): void;
   galleryDiagnostics(): { active: number };
 };
-const engine = new Engine(document.querySelector('canvas')!, true);
+const canvas = document.querySelector('canvas')!;
+if (selectedSkin) canvas.style.height = '400px';
+const engine = new Engine(canvas, true);
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.06, 0.095, 0.12, 1);
 const camera = new ArcRotateCamera(
@@ -42,8 +48,8 @@ const camera = new ArcRotateCamera(
 camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
 camera.orthoLeft = -4.5;
 camera.orthoRight = 4.5;
-camera.orthoTop = 3;
-camera.orthoBottom = -3;
+camera.orthoTop = selectedSkin ? 1.5 : 3;
+camera.orthoBottom = selectedSkin ? -1.5 : -3;
 scene.activeCamera = camera;
 new HemisphericLight('fill', new Vector3(0, 1, 1), scene);
 const shadow = new ShadowGenerator(
@@ -51,10 +57,11 @@ const shadow = new ShadowGenerator(
   new DirectionalLight('sun', new Vector3(-1, -2, -1), scene),
 );
 const avatars: { avatar: AvatarView; player: DisplayPlayer }[] = [];
-(['minifigure', 'standard'] as const).forEach((skinId, row) => {
+skins.forEach((skinId, row) => {
   selection.forEach(({ id: animationId }, col) => {
     const root = new TransformNode(skinId + animationId, scene);
-    root.position.set((1 - col) * 3, (0.5 - row) * 2.7, 0);
+    root.position.set((1 - col) * 3, ((skins.length - 1) / 2 - row) * 2.7, 0);
+    root.rotation.y = Number(params.get('angle') ?? 0);
     const avatar = new AvatarView(
       root,
       scene,
@@ -91,7 +98,7 @@ const avatars: { avatar: AvatarView; player: DisplayPlayer }[] = [];
 preview.galleryPose = (ms) =>
   avatars.forEach(({ avatar, player }) => {
     player.animation!.displayTick = ms * 0.06;
-    avatar.update(player, 1 / 60, false, false);
+    avatar.update(player, 1 / 60, false, reduced);
   });
 preview.galleryPose(825);
 engine.runRenderLoop(() => scene.render());

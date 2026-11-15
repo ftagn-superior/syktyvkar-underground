@@ -60,3 +60,24 @@
   margin: 0.4em 0;
   font-weight: 500;
 }
+
+@media (max-height: 520px) {
+  .animation-panel {
+    max-height: calc(100dvh - 104px);
+  }
+  .animation-panel > .ui-orn {
+    display: none;
+  }
+  .animation-panel .pop-h {
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+  .animation-panel .filters .ui-btn {
+    padding-inline: 0.4em;
+  }
+  .animation-panel .catalog-scroll {
+    /* Fit a complete card with a two-line title and description, including scroll padding. */
+    min-height: 8em;
+    max-height: 8em;
+  }
+}

@@ -133,5 +133,32 @@
     "mode": "upperBody",
     "rig": "humanoid-v1",
     "seated": "preserve-seat"
+  },
+  {
+    "id": "smoke-cigarette",
+    "label": "Курить сигарету",
+    "category": "Отдых",
+    "cooldownMs": 2000,
+    "mode": "upperBody",
+    "rig": "humanoid-v1",
+    "seated": "preserve-seat"
+  },
+  {
+    "id": "drink-beer",
+    "label": "Пить пиво",
+    "category": "Отдых",
+    "cooldownMs": 2000,
+    "mode": "upperBody",
+    "rig": "humanoid-v1",
+    "seated": "preserve-seat"
+  },
+  {
+    "id": "use-laptop",
+    "label": "Работать за ноутбуком",
+    "category": "Занятия",
+    "mode": "fullBody",
+    "cooldownMs": 1500,
+    "rig": "humanoid-v1",
+    "seated": "preserve-seat"
   }
 ]

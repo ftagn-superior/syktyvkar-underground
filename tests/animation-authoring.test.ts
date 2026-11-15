@@ -49,6 +49,30 @@ describe('animation content pipeline', () => {
   it('validates the real registry, channel assignment and reduced motion', () => {
     expect(validateAnimationClips(ANIMATIONS, ANIMATION_CLIPS)).toEqual([]);
   });
+  it('rejects malformed cosmetic geometry before publishing the catalog', () => {
+    const valid = ANIMATION_CLIPS['smoke-cigarette'].prop!;
+    for (const prop of [
+      { ...valid, anchor: 'world' },
+      { ...valid, rotation: [0, Infinity, 0] },
+      { ...valid, parts: [] },
+      { ...valid, parts: Array(17).fill(valid.parts[0]) },
+      ...[
+        { shape: 'item' },
+        { color: 'red' },
+        { size: [0, 0.1, 0.1] },
+        { position: [0, NaN, 0] },
+        { rotation: [0, 4, 0] },
+        { size: [0.01, 0.1, 0.02] },
+      ].map((patch) => ({ ...valid, parts: [{ ...valid.parts[0], ...patch }] })),
+    ]) {
+      expect(
+        validateAnimationClips(ANIMATIONS, {
+          ...ANIMATION_CLIPS,
+          'smoke-cigarette': { ...ANIMATION_CLIPS['smoke-cigarette'], prop },
+        } as typeof ANIMATION_CLIPS).join(),
+      ).toContain('animation smoke-cigarette: prop');
+    }
+  });
   it.each([
     [{ id: '' }, 'id must'],
     [{ id: '../escape' }, 'id must'],

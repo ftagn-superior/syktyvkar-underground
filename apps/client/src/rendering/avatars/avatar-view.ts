@@ -7,6 +7,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import {
   DEFAULT_AVATAR_SKIN,
+  findAnimation,
   resolveAvatarSkinId,
   type AvatarSkinId,
   type SimulationConfig,
@@ -15,6 +16,8 @@ import type { DisplayPlayer } from '../../presentation/display-state';
 import { CharacterAnimator, type FootstepMarkers } from './character-animator';
 import { AvatarRig } from './avatar-rig';
 import { SKIN_BUILDERS } from './skins';
+import { ANIMATION_CLIPS } from './animation-clips';
+import { AvatarAnimationProp } from './animation-prop';
 
 const MARKER_ALPHA = 0.55;
 const NO_STEPS: Readonly<FootstepMarkers> = { count: 0, running: false };
@@ -22,6 +25,7 @@ const NO_STEPS: Readonly<FootstepMarkers> = { count: 0, running: false };
 /** One animator and stable entity root; a skin supplies only the visual rig's appearance. */
 export class AvatarView {
   private rig: AvatarRig;
+  private prop: AvatarAnimationProp;
   private skinId: AvatarSkinId;
   private readonly animator: CharacterAnimator;
   private marker?: Mesh;
@@ -39,6 +43,7 @@ export class AvatarView {
     this.animator = new CharacterAnimator(config.speed, config.sprintSpeed);
     this.skinId = resolveAvatarSkinId(skinId);
     this.rig = this.buildRig();
+    this.prop = new AvatarAnimationProp(this.rig, this.skinId, config.height, shadow);
   }
 
   private buildRig(): AvatarRig {
@@ -60,9 +65,11 @@ export class AvatarView {
     const skinId = resolveAvatarSkinId(player.skinId);
     const changed = skinId !== this.skinId;
     if (changed) {
+      this.prop.dispose();
       this.rig.dispose();
       this.skinId = skinId;
       this.rig = this.buildRig();
+      this.prop = new AvatarAnimationProp(this.rig, this.skinId, this.config.height, this.shadow);
     }
     const color = player.color ?? '#d6a15a';
     if (changed || color !== this.color) {
@@ -104,14 +111,26 @@ export class AvatarView {
       this.config.height,
       this.animator.travel,
     );
+    const playback = this.animator.animationState;
+    const definition = playback.reason === 'playing' && findAnimation(playback.id);
+    this.prop.update(
+      definition ? ANIMATION_CLIPS[definition.id].prop : undefined,
+      playback.weight * alpha,
+    );
     return this.rig.seated ? NO_STEPS : this.animator.footsteps;
   }
 
   diagnostics() {
-    return { entityId: this.root.name, skinId: this.skinId, ...this.animator.diagnostics() };
+    return {
+      entityId: this.root.name,
+      skinId: this.skinId,
+      ...this.animator.diagnostics(),
+      prop: this.prop.diagnostics(),
+    };
   }
 
   dispose(): void {
+    this.prop.dispose();
     this.rig.dispose();
     this.marker?.dispose();
     this.markerMaterial?.dispose();

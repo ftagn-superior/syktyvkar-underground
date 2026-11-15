@@ -353,6 +353,12 @@ try {
     'running /time 17 and /time 5 agree in HUD and lighting across skewed wall clocks, without freezing',
   );
 
+  await owner.waitForFunction(
+    () =>
+      document.documentElement.dataset.uiTheme === 'night' &&
+      getComputedStyle(document.querySelector('#clock-chip')!).backgroundColor ===
+        'rgb(24, 33, 63)',
+  );
   const dawn = transition(owner, selectors, 'day');
   await command(owner, '/time 06:59 --start');
   measurements.naturalDawn = await dawn;

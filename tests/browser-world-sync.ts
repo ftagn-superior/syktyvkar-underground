@@ -328,7 +328,12 @@ try {
       pages.map(async (page) => {
         await page.waitForFunction((hour) => {
           const value = (window as any).__SU_DEBUG__.snapshot().worldHour;
-          return value >= hour && value < hour + 0.05;
+          const clock = document.querySelector('#clock-text')?.textContent;
+          return (
+            value >= hour &&
+            value < hour + 0.05 &&
+            clock?.startsWith(`${String(hour).padStart(2, '0')}:`)
+          );
         }, hour);
         return state(page);
       }),

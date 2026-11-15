@@ -1,4 +1,5 @@
 import type { PlacementCatalogReference } from './placement-catalog.js';
+import type { ContentCatalogVersions } from './content-catalogs.js';
 import type { StaticPlacementEffect } from './static-placement.js';
 import type { StaticRemovalEffect } from './static-removal.js';
 import { PROFILE_COLORS } from './accounts.js';
@@ -6,9 +7,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// Adds bus travel (`requestBusTravel`) on top of the v22 city near/far LOD and HLOD streaming.
-// Previously published v22 clients must reload.
-export const PROTOCOL_VERSION = 23;
+// v24 combines v23 bus travel and v22 LOD/HLOD with required catalog versions.
+// Earlier v23 bus-only and catalog-only clients must reload.
+export const PROTOCOL_VERSION = 24;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -18,6 +19,7 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
+  catalogVersions: ContentCatalogVersions;
   placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;
   layoutRevision: number;

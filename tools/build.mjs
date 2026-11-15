@@ -1,9 +1,17 @@
 import { build as bundle } from 'esbuild';
 import { build as viteBuild } from 'vite';
-import { cp, mkdir } from 'node:fs/promises';
+import { cp, mkdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { inspectReactionCatalog } from './reactions/catalog.ts';
+const reactions = await inspectReactionCatalog(process.cwd());
 const require = createRequire(new URL('../packages/simulation/package.json', import.meta.url));
 await viteBuild({ configFile: 'apps/client/vite.config.ts' });
+const clientRelease = JSON.parse(await readFile('dist/client/reaction-release.json', 'utf8'));
+if (
+  clientRelease.version !== reactions.version ||
+  (await inspectReactionCatalog(process.cwd())).version !== reactions.version
+)
+  throw new Error('Каталог реакций изменился во время сборки клиента; повторите сборку.');
 await mkdir('dist/server', { recursive: true });
 await bundle({
   entryPoints: {
@@ -21,6 +29,7 @@ await bundle({
   format: 'esm',
   target: 'node24',
   sourcemap: true,
+  define: { __SU_REACTION_CATALOG_VERSION__: JSON.stringify(reactions.version) },
   external: ['bufferutil', 'utf-8-validate', 'msgpackr-extract'],
   banner: {
     js: "import { createRequire as createBundleRequire } from 'node:module'; const require = createBundleRequire(import.meta.url);",
@@ -30,4 +39,6 @@ await cp(
   require.resolve('@babylonjs/havok/lib/esm/HavokPhysics.wasm'),
   'dist/server/HavokPhysics.wasm',
 );
+if ((await inspectReactionCatalog(process.cwd())).version !== reactions.version)
+  throw new Error('Каталог реакций изменился во время сборки сервера; повторите сборку.');
 console.log('Built client, server and versioned world. Run pnpm start.');

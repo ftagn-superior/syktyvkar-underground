@@ -39,6 +39,8 @@ export {
   mergeWorldCells,
 } from './world-grid.js';
 export * from './reactions.js';
+export * from './reaction-validation.js';
+export * from './content-catalogs.js';
 export * from './chat.js';
 export { GRAPHICS_PACK_LIMITS, encodeGraphicsPack, decodeGraphicsPack } from './graphics-pack.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';

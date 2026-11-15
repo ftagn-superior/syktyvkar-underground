@@ -1,4 +1,10 @@
-import { REACTION_COOLDOWN_MS, REACTIONS } from '@su/contracts';
+import {
+  REACTION_COOLDOWN_MS,
+  REACTIONS,
+  findReaction,
+  type ReactionDefinition,
+} from '@su/contracts';
+import { reactionAssetUrl } from '../presentation/reaction-release';
 import { CatalogFilter, CatalogShortcuts } from './catalog-shortcuts';
 
 export interface ReactionMenuStatus {
@@ -10,6 +16,25 @@ export interface ReactionMenuStatus {
 const RECENT_KEY = 'su:recent-reactions:v1';
 const RECENT_COUNT = 4;
 const known = new Set(REACTIONS.map((reaction) => reaction.id));
+
+export function normalizeReactionSearch(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('ru')
+    .replaceAll('ё', 'е')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function reactionSearchText(reaction: ReactionDefinition): string {
+  return normalizeReactionSearch(`${reaction.label} ${reaction.id} ${reaction.category}`);
+}
+
+export function matchesReactionSearch(text: string, query: string): boolean {
+  return normalizeReactionSearch(query)
+    .split(' ')
+    .every((word) => text.includes(word));
+}
 
 /** Last used reactions, newest first; ids outside the catalog are dropped. */
 export function rememberRecent(recent: readonly string[], id: string): string[] {
@@ -44,11 +69,16 @@ export class ReactionMenu {
   private readonly recentBlock: HTMLElement;
   private readonly recentGrid: HTMLElement;
   private readonly shown: HTMLElement;
+  private readonly search: HTMLInputElement;
+  private readonly clearSearch: HTMLButtonElement;
+  private readonly empty: HTMLElement;
+  private readonly searchIndex = new Map<string, string>();
   private readonly filter: CatalogFilter;
   private readonly shortcuts: CatalogShortcuts;
   private recent = loadRecent();
   private sent = false;
   private wasPending = false;
+  private disabled = true;
   constructor(
     private readonly toggle: HTMLButtonElement,
     private readonly panel: HTMLElement,
@@ -60,6 +90,29 @@ export class ReactionMenu {
     const options = { signal: this.controller.signal };
     panel.querySelector('[data-catalog-count]')!.textContent = String(REACTIONS.length);
     this.shown = panel.querySelector('[data-catalog-shown]')!;
+    this.search = panel.querySelector('#reaction-search')!;
+    this.clearSearch = panel.querySelector('#reaction-search-clear')!;
+    this.empty = panel.querySelector('#reactions-empty')!;
+    this.search.addEventListener('input', () => this.renderList(), options);
+    this.search.addEventListener(
+      'keydown',
+      (event) => {
+        if ((event.code === 'Enter' || event.code === 'ArrowDown') && !event.isComposing) {
+          event.preventDefault();
+          this.choices.find((button) => !button.hidden && !button.disabled)?.focus();
+        }
+      },
+      options,
+    );
+    this.clearSearch.addEventListener(
+      'click',
+      () => {
+        this.search.value = '';
+        this.renderList();
+        this.search.focus();
+      },
+      options,
+    );
     this.cooldown = panel.querySelector<HTMLProgressElement>('.reaction-cooldown')!;
     this.cooldown.max = REACTION_COOLDOWN_MS;
     this.scroll = panel.querySelector('.catalog-scroll')!;
@@ -67,12 +120,13 @@ export class ReactionMenu {
     this.recentGrid = panel.querySelector('.reaction-recents')!;
     const grid = panel.querySelector('.reaction-choices')!;
     for (const reaction of REACTIONS) {
-      const button = this.tile(reaction.id);
+      const button = this.tile(reaction);
       button.classList.add('reaction-choice');
       button.dataset.reactionId = reaction.id;
       button.dataset.category = reaction.category;
       grid.append(button);
       this.choices.push(button);
+      this.searchIndex.set(reaction.id, reactionSearchText(reaction));
     }
     this.shortcuts = new CatalogShortcuts(() => !panel.hidden, this.controller.signal);
     this.filter = new CatalogFilter(
@@ -107,13 +161,13 @@ export class ReactionMenu {
     );
     this.renderList();
   }
-  private tile(id: string): HTMLButtonElement {
-    const reaction = REACTIONS.find((entry) => entry.id === id)!;
+  private tile(reaction: ReactionDefinition): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'ui-btn';
+    button.disabled = this.disabled;
     const image = document.createElement('img');
-    image.src = `/reactions/${reaction.asset}`;
+    image.src = reactionAssetUrl(reaction);
     image.alt = '';
     image.width = image.height = 32;
     const label = document.createElement('span');
@@ -138,10 +192,13 @@ export class ReactionMenu {
     return button;
   }
   private renderList(): void {
+    const focused = document.activeElement;
     let count = 0;
     const visible: HTMLButtonElement[] = [];
     for (const button of this.choices) {
-      const show = this.filter.matches(button.dataset.category!);
+      const show =
+        this.filter.matches(button.dataset.category!) &&
+        matchesReactionSearch(this.searchIndex.get(button.dataset.reactionId!)!, this.search.value);
       button.hidden = !show;
       if (show) {
         count++;
@@ -149,21 +206,32 @@ export class ReactionMenu {
       }
     }
     this.shown.textContent = String(count);
-    const showRecent = this.filter.value === CatalogFilter.ALL && this.recent.length > 0;
+    this.clearSearch.hidden = this.search.value.length === 0;
+    this.empty.hidden = count > 0;
+    const showRecent =
+      this.filter.value === CatalogFilter.ALL &&
+      !this.search.value.trim() &&
+      this.recent.length > 0;
     this.recentBlock.hidden = !showRecent;
     if (showRecent && this.recents.map((b) => b.dataset.recentId).join() !== this.recent.join()) {
       this.recents.length = 0;
       for (const id of this.recent) {
-        const button = this.tile(id);
+        const button = this.tile(findReaction(id)!);
         button.classList.add('reaction-recent');
         button.dataset.recentId = id;
-        button.disabled = this.choices[0]?.disabled ?? false;
         this.recents.push(button);
       }
       this.recentGrid.replaceChildren(...this.recents);
     }
     this.shortcuts.bind(visible);
     this.scroll.scrollTop = 0;
+    if (
+      !this.panel.hidden &&
+      focused instanceof HTMLButtonElement &&
+      focused.classList.contains('reaction-choice') &&
+      focused.hidden
+    )
+      (visible.find((button) => !button.disabled) ?? this.search).focus({ preventScroll: true });
   }
   toggleOpen(): void {
     if (this.toggle.hidden || this.toggle.disabled) return;
@@ -174,10 +242,9 @@ export class ReactionMenu {
     // A hidden element cannot scroll: reset once the list is laid out.
     this.scroll.scrollTop = 0;
     this.toggle.setAttribute('aria-expanded', 'true');
-    (
-      this.choices.find((button) => !button.hidden && !button.disabled) ??
-      this.panel.querySelector<HTMLButtonElement>('.filters button')
-    )?.focus({ preventScroll: true });
+    (this.choices.find((button) => !button.hidden && !button.disabled) ?? this.search)?.focus({
+      preventScroll: true,
+    });
   }
   close(restoreFocus = true): void {
     const wasOpen = !this.panel.hidden;
@@ -211,7 +278,11 @@ export class ReactionMenu {
         : 'Стикер появится над персонажем';
     if (this.status.textContent !== message) this.status.textContent = message;
     const disabled = !state.available || state.pending || state.remainingMs > 0;
-    for (const button of [...this.choices, ...this.recents]) button.disabled = disabled;
+    if (this.disabled !== disabled) {
+      this.disabled = disabled;
+      for (const button of this.choices) button.disabled = disabled;
+      for (const button of this.recents) button.disabled = disabled;
+    }
   }
   dispose(): void {
     this.controller.abort();

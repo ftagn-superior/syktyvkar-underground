@@ -1,8 +1,12 @@
-import { readFile } from 'node:fs/promises';
+import { copyFile, readFile, rm, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, sep } from 'node:path';
 import { validateBytes } from 'gltf-validator';
 import {
+  BUS_FILE_MAX_BYTES,
+  BUS_MAP_FILE,
+  BUS_NETWORK_FILE,
+  validateBusNetwork,
   WORLD_FORMAT_VERSION,
   type WorldManifest,
   validateWorld,
@@ -552,6 +556,7 @@ export async function buildWorld(
     outputDirectory,
     terrainBytes,
   );
+  await writeBusFiles(sourceDirectory, outputDirectory);
   await writeWorldModelCatalog(
     modelCatalog,
     options.modelCatalogOutput ??
@@ -560,6 +565,35 @@ export async function buildWorld(
   );
   const manifest = publication.manifest;
   return manifest;
+}
+/**
+ * Автобусы входят в выпуск мира отдельными файлами рядом с manifest: сервер и клиент не
+ * читают `content/`. Источник — `bus-network/` рядом с world.json (`pnpm world:bus:network`);
+ * без него прежние файлы удаляются, и автобусов в мире нет.
+ */
+export async function writeBusFiles(
+  sourceDirectory: string,
+  outputDirectory: string,
+): Promise<void> {
+  for (const [from, to] of [
+    ['network.json', BUS_NETWORK_FILE],
+    ['map.json', BUS_MAP_FILE],
+  ] as const) {
+    const source = resolve(sourceDirectory, 'bus-network', from);
+    const target = resolve(outputDirectory, to);
+    const size = await stat(source).then(
+      (s) => s.size,
+      () => undefined,
+    );
+    if (size === undefined) {
+      await rm(target, { force: true });
+      continue;
+    }
+    if (size > BUS_FILE_MAX_BYTES) throw new Error(`Bus file is too large: ${source}`);
+    if (to === BUS_NETWORK_FILE && !validateBusNetwork(JSON.parse(await readFile(source, 'utf8'))))
+      throw new Error(`Invalid bus network: ${source}`);
+    await copyFile(source, target);
+  }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   for (const worldId of WORLDS) {

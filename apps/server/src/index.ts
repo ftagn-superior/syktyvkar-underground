@@ -8,7 +8,18 @@ import { createServer } from 'node:http';
 import { resolve, sep } from 'node:path';
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { MAX_PLAYERS, PROTOCOL_VERSION, type WorldInfo } from '@su/contracts';
+import {
+  BUS_FILE_MAX_BYTES,
+  BUS_MAP_FILE,
+  BUS_NETWORK_FILE,
+  MAX_PLAYERS,
+  PROTOCOL_VERSION,
+  selectBusNetwork,
+  validateBusNetwork,
+  type BusNetwork,
+  type WorldInfo,
+} from '@su/contracts';
+import { readFile, stat } from 'node:fs/promises';
 import { WorldRoom } from './world-room.js';
 import { readAuthoringRelease } from './layout/release.js';
 import { AccountHttp } from './accounts/http.js';
@@ -30,6 +41,21 @@ export interface GameServerOptions {
   itemCreationEnabled?: boolean;
   testDiagnostics?: boolean;
   accounts?: { config: AccountConfig; store: AccountStore; provider?: LoginProvider };
+  /** Автобусы вместо `bus-network.json` из выпуска мира (тесты); null — без автобусов. */
+  busNetwork?: BusNetwork | null;
+}
+/** Сеть автобусов из выпуска мира, сразу с маршрутами игры; без файла — мир без автобусов. */
+async function readBusNetwork(worldDirectory: string): Promise<BusNetwork | undefined> {
+  const path = resolve(worldDirectory, BUS_NETWORK_FILE);
+  const size = await stat(path).then(
+    (s) => s.size,
+    () => undefined,
+  );
+  if (size === undefined) return;
+  if (size > BUS_FILE_MAX_BYTES) throw new Error('Bus network file is too large');
+  const network = validateBusNetwork(JSON.parse(await readFile(path, 'utf8')));
+  if (!network) throw new Error('Invalid bus network. Run pnpm world:build.');
+  return selectBusNetwork(network);
 }
 export async function createGameServer(options: GameServerOptions = {}) {
   const itemCreationEnabled = options.itemCreationEnabled ?? readItemCreationEnabled();
@@ -38,6 +64,18 @@ export async function createGameServer(options: GameServerOptions = {}) {
   );
   const clientDirectory = resolve(options.clientDirectory ?? 'dist/client');
   const authored = await readAuthoringRelease(worldDirectory);
+  const busNetwork =
+    options.busNetwork === undefined
+      ? await readBusNetwork(worldDirectory)
+      : (options.busNetwork ?? undefined);
+  const busNetworkBody = busNetwork ? JSON.stringify(busNetwork) : undefined;
+  const busMapPath = resolve(worldDirectory, BUS_MAP_FILE);
+  const busMap = busNetwork
+    ? await stat(busMapPath).then(
+        () => true,
+        () => false,
+      )
+    : false;
   const placementCatalog = await readPlacementCatalog(
     authored,
     resolve(options.modelCatalogDirectory ?? `dist/model-catalogs/${authored.manifest.worldId}`),
@@ -129,6 +167,23 @@ export async function createGameServer(options: GameServerOptions = {}) {
         };
         res.json(info);
       });
+      // Автобусы мира: сеть (маршруты игры) и подложка карты. Нет автобусов — 404.
+      app.get('/api/bus-network', (_req, res) => {
+        if (!busNetworkBody) {
+          res.sendStatus(404);
+          return;
+        }
+        res.setHeader('Cache-Control', 'no-cache');
+        res.type('application/json').send(busNetworkBody);
+      });
+      app.get('/api/bus-map', (_req, res) => {
+        if (!busMap) {
+          res.sendStatus(404);
+          return;
+        }
+        res.setHeader('Cache-Control', 'no-cache');
+        res.sendFile(busMapPath);
+      });
       app.get('/api/diagnostics', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
         if (!ready || !room?.isReady()) {
@@ -198,6 +253,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
     placementCatalog,
     reconnectSeconds: options.reconnectSeconds,
     prepareTimeoutMs: options.prepareTimeoutMs,
+    busNetwork,
     itemCreationEnabled,
     testDiagnostics: options.testDiagnostics,
     accounts,

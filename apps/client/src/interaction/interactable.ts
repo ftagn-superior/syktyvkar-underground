@@ -1,3 +1,5 @@
+import { BUS_STOP_PROMPT_RANGE } from '@su/contracts';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -32,6 +34,14 @@ export interface Interactable {
 export const INTERACTION_KINDS = {
   pickup: { key: 'KeyZ', keyLabel: 'Z', action: 'Подобрать', priority: 2, range: 3 },
   vault: { key: 'Space', keyLabel: 'Пробел', action: 'Перепрыгнуть', priority: 1, range: 3 },
+  // Предмет на остановке важнее: подобрать его можно только вблизи.
+  bus: {
+    key: 'KeyZ',
+    keyLabel: 'Z',
+    action: 'Автобусы',
+    priority: 1,
+    range: BUS_STOP_PROMPT_RANGE,
+  },
 } as const satisfies Record<
   string,
   Pick<Interactable, 'key' | 'keyLabel' | 'action' | 'priority' | 'range'>

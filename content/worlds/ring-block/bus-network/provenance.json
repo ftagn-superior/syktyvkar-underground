@@ -1,0 +1,33 @@
+{
+  "formatVersion": 2,
+  "sources": {
+    "routes": {
+      "source": "transport11.ru, main route pages (direction 0)",
+      "pages": 60,
+      "sha256": "89e092d4cb0f076d79b8d509c0bd07e8bddb0eee28ca8cd84984fdf5f44eb235"
+    },
+    "geometry": {
+      "source": "OpenStreetMap via Overpass API",
+      "license": "ODbL 1.0, © OpenStreetMap contributors",
+      "osmTimestamp": "2026-11-15T10:44:21Z",
+      "snapshotSha256": "abfb7988dae94393ce448c07ddd80ba49b7d0dbdfc0f3dd1303bb40429298299",
+      "query": "[out:json][timeout:180];(way[highway~\"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|busway|tertiary|tertiary_link|unclassified|residential|living_street|service)$\"](61.64261,50.75917,61.68512,50.88219);way[building](61.65618,50.78756,61.67155,50.85380););out body;>;out skel qt;(node[highway=bus_stop](61.64261,50.75917,61.68512,50.88219);node[public_transport=platform](61.64261,50.75917,61.68512,50.88219););out body;"
+    }
+  },
+  "aliases": {
+    "драмтеатр": "театр драмы",
+    "жд вокзал": "вокзал",
+    "торговый центр аврора": "аврора",
+    "педколледж": "педучилище",
+    "школа искусства": "школа искусств",
+    "интернациональная": "интернациональная-пушкина"
+  },
+  "clusterRadiusMetres": 350,
+  "graphVertices": 37974,
+  "legsRouted": 281,
+  "legsOnewayFallback": 0,
+  "legsUnrouted": 0,
+  "routesInWorld": 30,
+  "stopsInWorld": 37,
+  "interpolatedStops": ["Городской суд", "Центральный универмаг", "Центральный универмаг"]
+}

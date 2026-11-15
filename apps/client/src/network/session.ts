@@ -49,6 +49,7 @@ import {
   precipitationFromCode,
   type WorldWeather,
   RESPAWN_COOLDOWN_MS,
+  type BusTravelRequest,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
   DEFAULT_DAY_CLOCK,
@@ -170,6 +171,8 @@ export class GameSession {
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
+  onBusTravelResult?: (result: ActionResult) => void;
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
   dayClock: DayClock = DEFAULT_DAY_CLOCK;
   onDayClock?: (clock: DayClock) => void;
@@ -236,6 +239,7 @@ export class GameSession {
   private readonly chatRequest = new PendingAction();
   private readonly reactionRequest = new PendingAction();
   private readonly respawnRequest = new PendingAction();
+  private readonly busRequest = new PendingAction();
   private readonly animationBuffer = new AnimationBuffer();
   private readonly animationRequest = new AnimationRequestState();
   private animationMoving = false;
@@ -268,6 +272,7 @@ export class GameSession {
       this.pendingSpawnSound = false;
       this.liveItemOperation = undefined;
       this.respawnRequest.cancel();
+      this.busRequest.cancel();
       this.reactionRequest.cancel();
       this.animationRequest.clear();
       this.animationBuffer.clear();
@@ -958,6 +963,18 @@ export class GameSession {
                 ? 'Слишком часто — подождите немного.'
                 : (messages[result.code] ?? result.code),
             );
+          return;
+        }
+        // Поездка и возврат на старт делят серверную перезарядку перемещения.
+        if (this.busRequest.settle(result, RESPAWN_COOLDOWN_MS)) {
+          if (!result.ok) this.onActionFeedback?.('error');
+          if (!result.ok && result.code)
+            this.onNotice(
+              result.code === 'RATE_LIMITED'
+                ? 'Автобус уже в пути — подождите пару секунд.'
+                : (messages[result.code] ?? result.code),
+            );
+          this.onBusTravelResult?.(result);
           return;
         }
         if (!this.respawnRequest.settle(result, RESPAWN_COOLDOWN_MS)) return;
@@ -1781,6 +1798,37 @@ export class GameSession {
       this.room.send('resync');
     }
   }
+  busTravelStatus(): { pending: boolean; remainingMs: number } {
+    return {
+      pending: this.busRequest.pending || this.respawnRequest.pending,
+      remainingMs: Math.max(this.busRequest.remainingMs(), this.respawnRequest.remainingMs()),
+    };
+  }
+  /** Поездка от остановки, у которой стоит игрок; итог придёт в `onBusTravelResult`. */
+  busTravel(fromStopId: string, toStopId: string): boolean {
+    const status = this.busTravelStatus();
+    if (
+      !this.room ||
+      this.state !== 'playing' ||
+      !this.inputEnabled ||
+      status.pending ||
+      status.remainingMs > 0
+    )
+      return false;
+    this.actionId++;
+    this.busRequest.begin(this.actionId, 21000, () => {
+      this.onNotice('Ответ на поездку не получен. Проверьте связь и попробуйте снова.');
+      this.onBusTravelResult?.({ requestId: 0, ok: false });
+    });
+    this.save();
+    this.room.send('requestBusTravel', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      fromStopId,
+      toStopId,
+    } satisfies BusTravelRequest);
+    return true;
+  }
   respawnStatus(): { pending: boolean; remainingMs: number } {
     return {
       pending: this.respawnRequest.pending,
@@ -1956,6 +2004,7 @@ export class GameSession {
     this.liveItemOperation = undefined;
     this.cancelPhysicsPreparation();
     this.respawnRequest.cancel();
+    this.busRequest.cancel();
     this.reactionRequest.cancel();
     this.animationRequest.clear();
     this.animationBuffer.clear();
@@ -1983,6 +2032,7 @@ export class GameSession {
     this.setWeather(DEFAULT_WEATHER);
     this.onInventoryChange?.();
     this.respawnRequest.reset();
+    this.busRequest.reset();
     this.reactionRequest.reset();
     this.animationRequest.reset();
     this.chatRequest.reset();

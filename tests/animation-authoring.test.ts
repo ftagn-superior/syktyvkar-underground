@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { cp, mkdtemp, readFile, rm, writeFile, readdir } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile, readdir, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
-import { animationCommand, checkAnimations, syncAnimations } from '../tools/animations.js';
+import { join, dirname } from 'node:path';
+import {
+  animationCommand,
+  checkAnimations,
+  syncAnimations,
+  animationContractFiles,
+} from '../tools/animations.js';
+import { v2Channels } from '../apps/client/src/rendering/avatars/clips/types.js';
 import { validateAnimationClips } from '../tools/animation-validation.js';
 import { ANIMATIONS, validateAnimationDefinitions } from '../packages/contracts/src/index.js';
 import { ANIMATION_CLIPS } from '../apps/client/src/rendering/avatars/animation-clips.js';
@@ -17,6 +23,10 @@ async function fixture(run: (root: string) => Promise<void>) {
   try {
     await cp('content/animations', join(root, 'content/animations'), { recursive: true });
     await cp(directory, join(root, directory), { recursive: true });
+    for (const file of await animationContractFiles()) {
+      await mkdir(dirname(join(root, file)), { recursive: true });
+      await cp(file, join(root, file));
+    }
     await syncAnimations(root);
     await run(root);
   } finally {
@@ -38,9 +48,11 @@ describe('animation content pipeline', () => {
           samples.push({
             ms,
             reduced,
-            values: (Object.keys(pose).sort() as (keyof AvatarPose)[]).map(
-              (key) => Math.round(pose[key] * precision) / precision,
-            ),
+            values: (
+              Object.keys(pose)
+                .filter((key) => !(v2Channels as readonly string[]).includes(key))
+                .sort() as (keyof AvatarPose)[]
+            ).map((key) => Math.round(pose[key] * precision) / precision),
           });
         }
       expect(createHash('sha256').update(JSON.stringify(samples)).digest('hex'), id).toBe(expected);
@@ -176,6 +188,84 @@ describe('animation content pipeline', () => {
         expect(await readFile(join(root, manifest), 'utf8')).toBe(metadata);
         expect((await checkAnimations(root)).version).toBe(result.version);
         expect(await readdir(join(root, 'content/animations'))).not.toContain('.authoring.lock');
+      });
+    },
+  );
+  it.each(['variant', 'unavailable'])(
+    'generates a complete v2 ground clip with %s wheelchair policy and fingerprints rig sources',
+    async (seated) => {
+      await fixture(async (root) => {
+        const result = await animationCommand(root, [
+          'add',
+          '--id',
+          'audit-ground',
+          '--label',
+          'Проверка позы',
+          '--category',
+          'Проверка',
+          '--mode',
+          'fullBody',
+          '--rig',
+          'humanoid-v2',
+          '--support',
+          'ground',
+          '--seated',
+          seated,
+          '--seated-message',
+          'Явный вариант или недоступность для коляски.',
+          '--reduced-motion',
+          'static',
+          '--reduced-motion-label',
+          'Статичная поза.',
+        ]);
+        expect(result.definitions.at(-1)).toMatchObject({
+          rig: 'humanoid-v2',
+          support: 'ground',
+          seated,
+        });
+        const file = await readFile(join(root, directory, 'audit-ground.ts'), 'utf8');
+        expect(file).toContain('mask: articulatedBody');
+        expect(file.includes('seated: {')).toBe(seated === 'variant');
+        const rig = join(root, 'apps/client/src/rendering/avatars/avatar-rig.ts');
+        await writeFile(rig, (await readFile(rig, 'utf8')) + '\n// Different rig semantics\n');
+        await expect(checkAnimations(root)).rejects.toThrow('fingerprint');
+        expect((await syncAnimations(root)).version).not.toBe(result.version);
+        const before = await readFile(join(root, manifest), 'utf8');
+        await expect(
+          animationCommand(root, [
+            'add',
+            '--id',
+            'bad-ground',
+            '--label',
+            'X',
+            '--category',
+            'X',
+            '--mode',
+            'upperBody',
+            '--rig',
+            'humanoid-v2',
+            '--support',
+            'ground',
+          ]),
+        ).rejects.toThrow('ground support');
+        expect(await readFile(join(root, manifest), 'utf8')).toBe(before);
+        const unsafe = file.replace(
+          /sample\(pose\) \{[^}]+\}/,
+          `sample(pose) {
+            neutralArticulatedPose(pose);
+            pose.lift = 0.1;
+            pose.rightArmRoll = 2.51;
+            pose.rootRoll = -0.94;
+            pose.rootYaw = -Math.PI / 4;
+            pose.rootX = pose.rootZ = 0.15;
+          }`,
+        );
+        await writeFile(join(root, directory, 'audit-ground.ts'), unsafe);
+        const index = join(root, 'packages/contracts/src/animation-catalog.generated.ts');
+        const published = await readFile(index, 'utf8');
+        await expect(checkAnimations(root)).rejects.toThrow('reserved ground space');
+        await expect(syncAnimations(root)).rejects.toThrow('reserved ground space');
+        expect(await readFile(index, 'utf8')).toBe(published);
       });
     },
   );

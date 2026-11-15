@@ -1,5 +1,12 @@
 import type { DisplayPlayer } from '../../presentation/display-state';
-import { findAnimation, TICK_RATE } from '@su/contracts';
+import {
+  findAnimation,
+  animationSkinSupport,
+  isGroundAnimation,
+  TICK_RATE,
+  type AnimationDefinition,
+} from '@su/contracts';
+import type { AnimationClip } from './clips/types';
 import { restingPose, sampleLocomotion, type AvatarPose } from './locomotion';
 import {
   ANIMATION_CLIPS,
@@ -20,7 +27,12 @@ export type AvatarMotion = Pick<
   | 'connected'
 > &
   Pick<DisplayPlayer, 'animation'> &
-  Partial<Pick<DisplayPlayer, 'entityId' | 'speedScale'>>;
+  Partial<Pick<DisplayPlayer, 'entityId' | 'speedScale' | 'skinId'>>;
+export interface AnimationLibrary {
+  find(id: unknown): AnimationDefinition | undefined;
+  clips: Readonly<Record<string, AnimationClip>>;
+}
+const library: AnimationLibrary = { find: findAnimation, clips: ANIMATION_CLIPS };
 const TAU = Math.PI * 2;
 /** Путь сворачивается ради точности float; рывок колеса раз в километр незаметен. */
 const TRAVEL_WRAP = 1000;
@@ -37,6 +49,8 @@ export interface FootstepMarkers {
 export class CharacterAnimator {
   readonly pose = restingPose();
   readonly footsteps: FootstepMarkers = { count: 0, running: false };
+  supportWeight = 0;
+  articulated = false;
   private previous?: { x: number; z: number; revision: number; motionRevision: number };
   private phase = 0;
   /** Путь по земле в метрах для колёс и других вращающихся деталей. */
@@ -50,12 +64,19 @@ export class CharacterAnimator {
   private readonly clipPose = restingPose();
   private animationKey = '';
   private animationMask: readonly (keyof AvatarPose)[] = [];
-  private transition?: { pose: AvatarPose; mask: readonly (keyof AvatarPose)[]; time: number };
+  private transition?: {
+    pose: AvatarPose;
+    mask: readonly (keyof AvatarPose)[];
+    time: number;
+    support: number;
+    articulated: boolean;
+  };
   private animationDiagnostic = { id: '', elapsedMs: 0, weight: 0, reason: 'inactive' };
 
   constructor(
     private readonly walkSpeed: number,
     private readonly sprintSpeed: number,
+    private readonly animations: AnimationLibrary = library,
   ) {}
 
   get travel(): number {
@@ -183,16 +204,21 @@ export class CharacterAnimator {
   private applyAnimation(frame: AvatarMotion, previousPose: AvatarPose, reduced: boolean): void {
     const playback = frame.animation;
     if (!playback) {
+      this.supportWeight = 0;
+      this.articulated = false;
       this.animationKey = '';
       this.transition = undefined;
       this.animationMask = [];
       this.animationDiagnostic = { id: '', elapsedMs: 0, weight: 0, reason: 'inactive' };
       return;
     }
-    const identity = `${playback.worldEpoch}/${frame.entityId ?? ''}/${frame.revision}`;
+    const identity = `${playback.worldEpoch}/${frame.entityId ?? ''}/${frame.revision}/${frame.skinId ?? ''}`;
     const key = `${identity}/${playback.sequence}/${playback.animationId ?? ''}`;
-    const definition = findAnimation(playback.animationId);
-    const clip = definition && ANIMATION_CLIPS[definition.id];
+    const definition = this.animations.find(playback.animationId);
+    const clip = definition && this.animations.clips[definition.id];
+    const capability = definition && animationSkinSupport(definition, frame.skinId ?? 'minifigure');
+    const sampler = capability === 'variant' ? clip?.seated : clip;
+    const ground = isGroundAnimation(definition) && capability !== 'variant';
     const elapsedMs = ((playback.displayTick - playback.startedAtTick) * 1000) / TICK_RATE;
     const time = playback.displayTimeMs ?? (playback.displayTick * 1000) / TICK_RATE;
     const reason = !definition
@@ -201,22 +227,40 @@ export class CharacterAnimator {
         ? 'missing-clip'
         : clip.rig !== definition.rig
           ? 'incompatible-rig'
-          : !frame.grounded
-            ? 'airborne'
-            : playback.endsAtTick && playback.displayTick >= playback.endsAtTick
-              ? 'expired'
-              : 'playing';
-    const mask = reason === 'playing' ? clip!.mask : [];
+          : capability === 'unavailable' || !sampler
+            ? 'unsupported-skin'
+            : ground &&
+                (Math.hypot(frame.velocity.x, frame.velocity.z) > 0.08 ||
+                  !frame.motionEnabled ||
+                  frame.connected === false)
+              ? 'moving'
+              : !frame.grounded
+                ? 'airborne'
+                : playback.endsAtTick && playback.displayTick >= playback.endsAtTick
+                  ? 'expired'
+                  : 'playing';
+    const mask = reason === 'playing' ? sampler!.mask : [];
     if (key !== this.animationKey) {
       // Entity/revision changes must discard decorative history as well as locomotion.
       this.transition =
         this.animationKey.startsWith(`${identity}/`) && this.animationMask.length
-          ? { pose: previousPose, mask: this.animationMask, time }
+          ? {
+              pose: previousPose,
+              mask: this.animationMask,
+              time,
+              support: this.supportWeight,
+              articulated: this.articulated,
+            }
           : undefined;
       this.animationKey = key;
     }
     // Falling always wins over the decorative pose.
-    if (!frame.grounded) this.transition = undefined;
+    if (
+      !frame.grounded ||
+      reason === 'unsupported-skin' ||
+      (this.supportWeight > 0 && Math.hypot(frame.velocity.x, frame.velocity.z) > 0.08)
+    )
+      this.transition = undefined;
     const weight =
       reason === 'playing'
         ? animationWeight(
@@ -227,15 +271,27 @@ export class CharacterAnimator {
           )
         : 0;
     if (weight > 0) {
-      clip!.sample(this.clipPose, elapsedMs, reduced);
+      sampler!.sample(this.clipPose, elapsedMs, reduced);
       for (const joint of mask)
-        this.pose[joint] += (this.clipPose[joint] - this.pose[joint]) * weight;
+        this.pose[joint] +=
+          (joint === 'rootPitch' || joint === 'rootYaw' || joint === 'rootRoll'
+            ? angleDifference(this.clipPose[joint] - this.pose[joint])
+            : this.clipPose[joint] - this.pose[joint]) * weight;
     }
+    this.supportWeight = ground ? weight : 0;
+    this.articulated = reason === 'playing' && definition?.rig === 'humanoid-v2';
     if (this.transition) {
       const t = smoothWeight((time - this.transition.time) / ANIMATION_BLEND_MS);
       for (const joint of this.transition.mask)
         this.pose[joint] =
-          this.transition.pose[joint] + (this.pose[joint] - this.transition.pose[joint]) * t;
+          this.transition.pose[joint] +
+          (joint === 'rootPitch' || joint === 'rootYaw' || joint === 'rootRoll'
+            ? angleDifference(this.pose[joint] - this.transition.pose[joint])
+            : this.pose[joint] - this.transition.pose[joint]) *
+            t;
+      this.supportWeight =
+        this.transition.support + (this.supportWeight - this.transition.support) * t;
+      this.articulated ||= this.transition.articulated;
       if (t >= 1) this.transition = undefined;
     }
     this.animationMask = mask.length ? mask : (this.transition?.mask ?? []);
@@ -252,6 +308,7 @@ export class CharacterAnimator {
       airborne: this.airborne,
       animation: { ...this.animationDiagnostic },
       pose: { ...this.pose },
+      supportWeight: this.supportWeight,
     };
   }
 }

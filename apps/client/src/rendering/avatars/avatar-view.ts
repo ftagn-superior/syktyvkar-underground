@@ -13,7 +13,11 @@ import {
   type SimulationConfig,
 } from '@su/contracts';
 import type { DisplayPlayer } from '../../presentation/display-state';
-import { CharacterAnimator, type FootstepMarkers } from './character-animator';
+import {
+  CharacterAnimator,
+  type FootstepMarkers,
+  type AnimationLibrary,
+} from './character-animator';
 import { AvatarRig } from './avatar-rig';
 import { SKIN_BUILDERS } from './skins';
 import { ANIMATION_CLIPS } from './animation-clips';
@@ -39,8 +43,9 @@ export class AvatarView {
     private readonly shadow: ShadowGenerator,
     private readonly config: SimulationConfig['character'],
     skinId: AvatarSkinId = DEFAULT_AVATAR_SKIN,
+    animations?: AnimationLibrary,
   ) {
-    this.animator = new CharacterAnimator(config.speed, config.sprintSpeed);
+    this.animator = new CharacterAnimator(config.speed, config.sprintSpeed, animations);
     this.skinId = resolveAvatarSkinId(skinId);
     this.rig = this.buildRig();
     this.prop = new AvatarAnimationProp(this.rig, this.skinId, config.height, shadow);
@@ -110,6 +115,8 @@ export class AvatarView {
       this.animator.update(player, delta, own, reducedMotion),
       this.config.height,
       this.animator.travel,
+      this.animator.supportWeight,
+      this.animator.articulated,
     );
     const playback = this.animator.animationState;
     const definition = playback.reason === 'playing' && findAnimation(playback.id);
@@ -126,6 +133,7 @@ export class AvatarView {
       skinId: this.skinId,
       ...this.animator.diagnostics(),
       prop: this.prop.diagnostics(),
+      rig: this.rig.diagnostics(),
     };
   }
 

@@ -87,26 +87,31 @@ export function buildKomiGirl(rig: AvatarRig, config: SimulationConfig['characte
   rig.part(
     'torso',
     rig.body,
-    [
-      cloth(s.cylinder('bodice', h * 0.2, r * 0.7, r * 0.64, h * 0.02)),
-      cloth(s.cylinder('skirt', waist - hem, skirtTop, skirtBottom, (waist + hem) / 2)),
-      cloth(trim('hem-band', -h * 0.335, hem, r * 0.015), 0.62),
-    ],
+    [cloth(s.cylinder('bodice', h * 0.2, r * 0.7, r * 0.64, h * 0.02))],
     [
       paint(s.cylinder('shirt-yoke', h * 0.075, r * 0.5, r * 0.71, h * 0.1575), LINEN),
-      ...ornamentBand(
-        s,
-        h,
-        'hem-ornament',
-        -h * 0.265,
-        -h * 0.3,
-        skirtAt(-h * 0.265) + r * 0.008,
-        skirtAt(-h * 0.3) + r * 0.008,
-        14,
-      ),
       ...belt(s, h, r, r * 0.69, waist),
       neck(s, h, r),
     ],
+  );
+
+  rig.part(
+    'skirt',
+    rig.garment,
+    [
+      cloth(s.cylinder('skirt', waist - hem, skirtTop, skirtBottom, (waist + hem) / 2)),
+      cloth(trim('hem-band', -h * 0.335, hem, r * 0.015), 0.62),
+    ],
+    ornamentBand(
+      s,
+      h,
+      'hem-ornament',
+      -h * 0.265,
+      -h * 0.3,
+      skirtAt(-h * 0.265) + r * 0.008,
+      skirtAt(-h * 0.3) + r * 0.008,
+      14,
+    ),
   );
 
   // Платок закрывает макушку, затылок и бока; лицо открыто спереди.

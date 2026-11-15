@@ -15,6 +15,19 @@ export interface AvatarPose {
   lift: number;
   /** Local correction relative to the entity's world rotation. */
   facingOffset: number;
+  /** v2 hinges, radians about local X: elbows flex forward (-X), knees backward (+X). */
+  leftElbow: number;
+  rightElbow: number;
+  leftKnee: number;
+  rightKnee: number;
+  /** v2 visual root Euler angles (Y * X * Z), radians. Never physics root motion. */
+  rootPitch: number;
+  rootYaw: number;
+  rootRoll: number;
+  /** v2 local displacement in character heights; rootY is clearance above the support. */
+  rootX: number;
+  rootY: number;
+  rootZ: number;
 }
 
 export function restingPose(): AvatarPose {
@@ -33,6 +46,16 @@ export function restingPose(): AvatarPose {
     roll: 0,
     lift: 0,
     facingOffset: 0,
+    leftElbow: 0,
+    rightElbow: 0,
+    leftKnee: 0,
+    rightKnee: 0,
+    rootPitch: 0,
+    rootYaw: 0,
+    rootRoll: 0,
+    rootX: 0,
+    rootY: 0,
+    rootZ: 0,
   };
 }
 
@@ -45,6 +68,8 @@ export function sampleLocomotion(
   airborne: number,
   reducedMotion: boolean,
 ): void {
+  pose.leftElbow = pose.rightElbow = pose.leftKnee = pose.rightKnee = 0;
+  pose.rootPitch = pose.rootYaw = pose.rootRoll = pose.rootX = pose.rootY = pose.rootZ = 0;
   const groundedMovement = movement * (1 - airborne);
   const swing = Math.sin(phase) * (0.62 + 0.4 * running) * groundedMovement;
   pose.leftLeg = -swing + 0.2 * airborne;

@@ -49,6 +49,8 @@ const gallery = `<!doctype html><html><head><meta charset="utf-8"></head><body s
 const server = await createServer({
   root: fileURLToPath(new URL('..', import.meta.url)),
   configFile: false,
+  cacheDir: `${output}/vite-cache`,
+  optimizeDeps: { noDiscovery: true },
   logLevel: 'error',
   server: { host: '127.0.0.1', port: 0 },
   plugins: [

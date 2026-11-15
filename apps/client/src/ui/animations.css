@@ -56,6 +56,9 @@
   height: 170px;
   touch-action: none;
 }
+#animation-preview-canvas[hidden] {
+  display: none;
+}
 #animation-preview p {
   margin: 0.4em 0;
   font-weight: 500;

@@ -69,6 +69,7 @@
     "test:streaming:matrix": "pnpm build && node --import tsx tests/streaming-matrix.ts",
     "test:streaming:verify": "pnpm build && node --import tsx tests/streaming-verify.ts",
     "test:streaming:evidence": "node --import tsx tests/streaming-evidence.ts",
+    "test:streaming:visibility": "node --import tsx tests/browser-streaming-visibility.ts",
     "db:migrate": "node --import tsx apps/server/src/migrate.ts",
     "db:migrate:built": "node dist/server/migrate.mjs",
     "world:layout:validate": "node --import tsx apps/server/src/layout-command.ts validate",
@@ -106,7 +107,8 @@
     "test:lod:migration": "node --import tsx tests/city-lod-upgrade.ts",
     "animations:add": "node --import tsx tools/animations.ts add",
     "animations:sync": "node --import tsx tools/animations.ts sync",
-    "animations:check": "node --import tsx tools/animations.ts check"
+    "animations:check": "node --import tsx tools/animations.ts check",
+    "test:animation-rig:browser": "node --import tsx tests/browser-animation-rig.ts"
   },
   "devDependencies": {
     "@babylonjs/core": "9.35.0",

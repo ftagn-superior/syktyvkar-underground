@@ -646,6 +646,58 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .chat-status:empty {
   display: none;
 }
+/* Подсказки команд над полем: имя моноширинным, описание — приглушённым. */
+.chat-suggest {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mut) transparent;
+  align-self: stretch;
+  display: grid;
+  gap: 0.1em;
+  padding: 0.3em;
+  font-size: 0.9em;
+}
+.chat-suggest[hidden] {
+  display: none;
+}
+.chat-suggest-option,
+.chat-suggest-hint {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+  padding: 0.2em 0.5em;
+  border-radius: 0.45em;
+}
+.chat-suggest-option {
+  cursor: pointer;
+}
+.chat-suggest-option code,
+.chat-suggest-hint code {
+  flex: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.chat-suggest-option span,
+.chat-suggest-hint span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mut);
+}
+.chat-suggest-option:hover,
+.chat-suggest-option[aria-selected='true'] {
+  background: var(--pri);
+  color: var(--pri-ink);
+}
+.chat-suggest-option:hover span,
+.chat-suggest-option[aria-selected='true'] span {
+  color: inherit;
+  opacity: 0.85;
+}
 
 .catalog {
   flex: 0 1 auto;
@@ -1355,6 +1407,7 @@ body[data-input-mode='touch'] .catalog-choice-key {
 @media (forced-colors: active) {
   .chat-line,
   .chat-status,
+  .chat-suggest,
   .player-label,
   .landmark-label,
   .player-chat {

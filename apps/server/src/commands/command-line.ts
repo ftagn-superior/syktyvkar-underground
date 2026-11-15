@@ -20,6 +20,11 @@ export interface ArgumentSpec {
   name: string;
   optional?: boolean;
   help: string;
+  /**
+   * Что клиент подставляет по Tab: `player` — `@имя` игрока в сети, иначе ключ списка значений,
+   * который передают в `commandHelpEntry`.
+   */
+  complete?: string;
 }
 export interface ParsedCommandLine {
   args: string[];
@@ -150,29 +155,51 @@ export function parseCommandLine(
   return parsed;
 }
 
-/** Строка формата: `time [--set ЧЧ[:ММ]] [--stop] …`. */
+/** Строка формата: `time [<ЧЧ[:ММ]>] [--set ЧЧ[:ММ]] [--stop | --start] …`. */
 export function commandUsage(spec: CommandSpec): string {
   const parts = [spec.name];
   for (const arg of spec.args ?? []) parts.push(arg.optional ? `[<${arg.name}>]` : `<${arg.name}>`);
-  for (const [name, flag] of Object.entries(spec.flags ?? {}))
+  const conflict = (a: string, b: string) =>
+    (spec.conflicts ?? []).some((group) => group.includes(a) && group.includes(b));
+  // Соседние флаги, каждый из которых исключает остальные, идут одной группой через `|`.
+  const groups: string[][] = [];
+  for (const name of Object.keys(spec.flags ?? {})) {
+    const last = groups.at(-1);
+    if (last?.every((other) => conflict(other, name))) last.push(name);
+    else groups.push([name]);
+  }
+  for (const group of groups)
     parts.push(
-      `[--${flag.negatable ? `[no-]` : ''}${name}${flag.value ? ` ${flag.value.name}` : ''}]`,
+      `[${group
+        .map((name) => {
+          const flag = spec.flags![name];
+          return `--${flag.negatable ? `[no-]` : ''}${name}${flag.value ? ` ${flag.value.name}` : ''}`;
+        })
+        .join(' | ')}]`,
     );
   return parts.join(' ');
 }
 
-export function commandHelpEntry(spec: CommandSpec): CommandHelpEntry {
+export function commandHelpEntry(
+  spec: CommandSpec,
+  choices: Readonly<Record<string, readonly string[]>> = {},
+): CommandHelpEntry {
   return {
     name: spec.name,
     aliases: [...(spec.aliases ?? [])],
     category: spec.category,
     summary: spec.summary,
     usage: commandUsage(spec),
-    args: (spec.args ?? []).map((arg) => ({
-      name: arg.name,
-      ...(arg.optional ? { optional: true } : {}),
-      help: arg.help,
-    })),
+    args: (spec.args ?? []).map((arg) => {
+      const list = arg.complete && arg.complete !== 'player' ? choices[arg.complete] : undefined;
+      return {
+        name: arg.name,
+        ...(arg.optional ? { optional: true } : {}),
+        help: arg.help,
+        ...(arg.complete === 'player' ? { player: true } : {}),
+        ...(list?.length ? { choices: [...list] } : {}),
+      };
+    }),
     flags: Object.entries(spec.flags ?? {}).map(([name, flag]) => ({
       name,
       ...(flag.short ? { short: flag.short } : {}),
@@ -180,6 +207,7 @@ export function commandHelpEntry(spec: CommandSpec): CommandHelpEntry {
       ...(flag.negatable ? { negatable: true } : {}),
       help: flag.help,
     })),
+    conflicts: (spec.conflicts ?? []).map((group) => [...group]),
     examples: [...spec.examples],
   };
 }

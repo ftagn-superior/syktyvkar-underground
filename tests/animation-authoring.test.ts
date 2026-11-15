@@ -190,6 +190,8 @@ describe('animation content pipeline', () => {
         expect(await readdir(join(root, 'content/animations'))).not.toContain('.authoring.lock');
       });
     },
+    // Each transaction revalidates the complete catalog's ground geometry on every skin.
+    60_000,
   );
   it.each(['variant', 'unavailable'])(
     'generates a complete v2 ground clip with %s wheelchair policy and fingerprints rig sources',

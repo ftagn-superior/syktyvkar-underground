@@ -502,16 +502,25 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   left: var(--edge);
   bottom: var(--edge);
   width: min(25em, 58vw);
+  /* Не заходит на кнопку «?» в левом верхнем углу при любом размере экрана. */
+  max-height: calc(100dvh - 2 * var(--edge) - 4.2em);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0.5em;
   pointer-events: none;
 }
+.hud-chat:has(> #chat-row[data-open='true'], > #commands-panel:not([hidden])) {
+  width: min(38em, calc(100vw - 2 * var(--edge) - 9.5em));
+}
 .hud-chat > * {
   pointer-events: auto;
 }
 .chat-log {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-width: min(25em, 100%);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -552,6 +561,7 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   color: var(--mut);
 }
 .chat-row {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 0.45em;
@@ -561,7 +571,7 @@ body[data-input-mode='touch'] [data-touch-hidden] {
     box-shadow var(--theme-ease);
 }
 .chat-row[data-open='true'] {
-  padding: 0.45em;
+  padding: 0.45em 0.5em;
   background: var(--p);
   border: 2px solid var(--ln);
   border-radius: 0.9em;
@@ -579,7 +589,10 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .chat-form .ui-input {
   flex: 1;
   width: 4em;
-  padding-right: 2.4em;
+  padding-right: 2.6em;
+}
+.chat-form:has(.chat-counter[data-near='true']) .ui-input {
+  padding-right: 6.4em;
 }
 .chat-form[aria-busy='true'] .ui-input {
   color: var(--mut);
@@ -629,6 +642,7 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   visibility: hidden;
 }
 .chat-status {
+  flex: none;
   align-self: flex-start;
   margin: 0;
   padding: 0.22em 0.65em;
@@ -641,9 +655,66 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .chat-status:empty {
   display: none;
 }
+/* Подсказки команд над полем: имя моноширинным, описание — приглушённым. */
+.chat-suggest {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mut) transparent;
+  align-self: stretch;
+  display: grid;
+  gap: 0.1em;
+  padding: 0.3em;
+  font-size: 0.9em;
+}
+.chat-suggest[hidden] {
+  display: none;
+}
+.chat-suggest-option,
+.chat-suggest-hint {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+  padding: 0.2em 0.5em;
+  border-radius: 0.45em;
+}
+.chat-suggest-option {
+  cursor: pointer;
+}
+.chat-suggest-option code,
+.chat-suggest-hint code {
+  flex: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.chat-suggest-option span,
+.chat-suggest-hint span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mut);
+}
+.chat-suggest-option:hover,
+.chat-suggest-option[aria-selected='true'] {
+  background: var(--pri);
+  color: var(--pri-ink);
+}
+.chat-suggest-option:hover span,
+.chat-suggest-option[aria-selected='true'] span {
+  color: inherit;
+  opacity: 0.85;
+}
 
 .catalog {
+  flex: 0 1 auto;
+  min-height: 0;
   transform-origin: bottom left;
+}
+.animation-panel {
+  width: min(25em, 100%);
 }
 .filters {
   display: flex;
@@ -821,19 +892,42 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .catalog-status[data-state='waiting'] {
   color: var(--ink);
 }
-/* Справка `/help`: карточки команд выше и шире прочих каталогов. */
+/* Справка `/help`: карточки выше и шире, категории переносятся целиком, отступы не режут фокус. */
+.commands-panel > :not(.catalog-scroll) {
+  flex-shrink: 0;
+}
+.commands-panel > .ui-orn {
+  margin-bottom: 0.75em;
+}
+.commands-panel .help-head {
+  margin-bottom: 0.65em;
+}
 .commands-panel .help-head .pop-h {
-  margin-bottom: 0.4em;
+  margin-bottom: 0;
+}
+.commands-panel .filters {
+  flex-wrap: wrap;
+  overflow: visible;
+  gap: 0.4em;
+  margin: -0.25em -0.35em 0;
+  padding: 0.35em 0.35em 0.6em;
 }
 .commands-panel .catalog-scroll {
-  max-height: min(22em, 46vh);
+  flex: 1 1 auto;
+  min-height: 5em;
+  max-height: min(26em, 48dvh);
+  margin: 0 -0.35em;
+  padding: 0.35em 0.55em 0.55em 0.35em;
+}
+.commands-panel .catalog-status {
+  margin-top: 0.6em;
 }
 .command-list {
   display: grid;
-  gap: 0.5em;
+  gap: 0.55em;
 }
 .command-entry {
-  padding: 0.55em 0.65em 0.6em;
+  padding: 0.65em 0.8em 0.7em;
   border: 1px solid color-mix(in srgb, var(--ln) 22%, transparent);
   border-radius: 0.6em;
   background: var(--p-veil);
@@ -883,8 +977,8 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .command-flags {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.15em 0.7em;
-  margin: 0.4em 0 0;
+  gap: 0.22em 0.9em;
+  margin: 0.5em 0 0;
   font-size: 0.76em;
 }
 .command-flags > div {
@@ -1238,6 +1332,7 @@ body[data-input-mode='touch'] .hud {
 }
 body[data-input-mode='touch'] .hud-chat {
   bottom: calc(max(24px, env(safe-area-inset-bottom)) + 150px);
+  max-height: calc(100dvh - max(24px, env(safe-area-inset-bottom)) - 150px - var(--edge) - 4.2em);
 }
 body[data-input-mode='touch'] .ui-btn,
 body[data-input-mode='touch'] button.ui-chip,
@@ -1268,6 +1363,9 @@ body[data-input-mode='touch'] .catalog-choice-key {
   .hud-chat {
     width: 68vw;
   }
+  .hud-chat:has(> #chat-row[data-open='true'], > #commands-panel:not([hidden])) {
+    width: calc(100vw - 2 * var(--edge) - 4.6em);
+  }
   .hud-dock {
     flex-direction: column;
   }
@@ -1289,6 +1387,10 @@ body[data-input-mode='touch'] .catalog-choice-key {
 @media (max-height: 520px) {
   .catalog-scroll {
     max-height: 6.4em;
+  }
+  .commands-panel .catalog-scroll {
+    min-height: 4em;
+    max-height: none;
   }
   #reactions-panel {
     max-height: calc(100dvh - 104px);
@@ -1317,6 +1419,7 @@ body[data-input-mode='touch'] .catalog-choice-key {
 @media (forced-colors: active) {
   .chat-line,
   .chat-status,
+  .chat-suggest,
   .player-label,
   .landmark-label,
   .player-chat {

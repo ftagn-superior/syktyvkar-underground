@@ -56,12 +56,14 @@ import {
   normalizeChatText,
   parseCommandHelpEffect,
   type CommandHelpEffect,
+  type CommandHelpEntry,
   DEFAULT_DAY_CLOCK,
   dayClockHour,
   type DayClock,
   TICK_RATE,
   findReaction,
   findAnimation,
+  animationSkinSupport,
   type AnimationId,
   type AnimationRequest,
   DEFAULT_AVATAR_SKIN,
@@ -181,6 +183,10 @@ export class GameSession {
   onControlInterruption?: () => void;
   /** Ответ на `/help`: список доступных команд, уже отфильтрованный сервером. */
   onCommandHelp?: (help: CommandHelpEffect, requestId: number) => void;
+  /** Список команд для автодополнения получен или сброшен. */
+  onCommandCatalog?: () => void;
+  private commandCatalog?: CommandHelpEntry[];
+  private commandCatalogRequestedAt = -Infinity;
   /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
   onBusTravelResult?: (result: ActionResult) => void;
   /** Игровые часы комнаты; вне комнаты синхронизируются по `/api/world` без локального `Date.now()`. */
@@ -805,6 +811,7 @@ export class GameSession {
       this.room = room;
       this.hasAuthoritativeWorldState = false;
       this.weatherSnapPending = true;
+      this.forgetCommandCatalog();
       this.preparationConfirmed = false;
       this.terminalNotice = undefined;
       this.ensureStreamer();
@@ -830,6 +837,7 @@ export class GameSession {
       });
       room.onReconnect(() => {
         if (this.room !== room) return;
+        this.forgetCommandCatalog();
         this.stopRecoveryCheck();
         this.stalled = false;
         this.waitingResync = false;
@@ -948,6 +956,13 @@ export class GameSession {
         this.onItemResult?.(result);
         this.onInventoryChange?.();
       });
+      room.onMessage('commands', (value: unknown) => {
+        if (this.room !== room) return;
+        const catalog = parseCommandHelpEffect(value);
+        if (!catalog) return;
+        this.commandCatalog = catalog.commands;
+        this.onCommandCatalog?.();
+      });
       room.onMessage<ActionResult>('actionResult', (result) => {
         if (this.room !== room) return;
         if (
@@ -973,6 +988,14 @@ export class GameSession {
             this.pendingChatCommand ? 0 : ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
           )
         ) {
+          // Отказ по правам или неизвестная команда: список мог устареть, запросим заново.
+          if (
+            !result.ok &&
+            (result.code === 'UNKNOWN_COMMAND' ||
+              result.code === 'AUTH_REQUIRED' ||
+              result.code === 'ADMIN_REQUIRED')
+          )
+            this.forgetCommandCatalog();
           const help = result.ok ? parseCommandHelpEffect(result.effect) : undefined;
           if (help) this.onCommandHelp?.(help, result.requestId);
           if (result.message) this.onNotice(result.message);
@@ -1889,8 +1912,13 @@ export class GameSession {
       remainingMs: Math.max(this.busRequest.remainingMs(), this.respawnRequest.remainingMs()),
     };
   }
-  /** Поездка от остановки, у которой стоит игрок; итог придёт в `onBusTravelResult`. */
-  busTravel(fromStopId: string, toStopId: string): boolean {
+  /** Поездка с конкретной платформы до целевой платформы по выбранному рейсу; итог придёт в `onBusTravelResult`. */
+  busTravel(
+    fromPlatformId: string,
+    toPlatformId: string,
+    routeId: string,
+    directionIndex: number,
+  ): boolean {
     const status = this.busTravelStatus();
     if (
       !this.room ||
@@ -1909,8 +1937,10 @@ export class GameSession {
     this.room.send('requestBusTravel', {
       requestId: this.actionId,
       worldEpoch: this.info.worldEpoch,
-      fromStopId,
-      toStopId,
+      fromPlatformId,
+      toPlatformId,
+      routeId,
+      directionIndex,
     } satisfies BusTravelRequest);
     return true;
   }
@@ -1957,6 +1987,7 @@ export class GameSession {
       moving: this.animationMoving || (!!state && isPlayerMoving(state.velocity)),
       paused: this.persistencePaused,
       message: this.animationRequest.message,
+      skinId: resolveAvatarSkinId(player?.skinId),
     };
   }
   animate(animationId: AnimationId): void {
@@ -1964,6 +1995,7 @@ export class GameSession {
     const definition = findAnimation(animationId);
     if (
       !definition ||
+      animationSkinSupport(definition, status.skinId) === 'unavailable' ||
       !status.available ||
       status.pending ||
       status.busy ||
@@ -2009,6 +2041,24 @@ export class GameSession {
       reactionId,
     } satisfies ReactionRequest);
   }
+  commands(): readonly CommandHelpEntry[] | undefined {
+    if (this.commandCatalog) return this.commandCatalog;
+    if (!this.room || this.state !== 'playing') return undefined;
+    const now = performance.now();
+    if (now - this.commandCatalogRequestedAt >= 1000) {
+      this.commandCatalogRequestedAt = now;
+      this.room.send('requestCommands');
+    }
+    return undefined;
+  }
+
+  private forgetCommandCatalog(): void {
+    const had = this.commandCatalog !== undefined;
+    this.commandCatalog = undefined;
+    this.commandCatalogRequestedAt = -Infinity;
+    if (had) this.onCommandCatalog?.();
+  }
+
   chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
     return {
       pending: this.chatRequest.pending,
@@ -2084,6 +2134,7 @@ export class GameSession {
       });
   }
   private cleanup(preserveRecovery = false): void {
+    this.forgetCommandCatalog();
     this.streamer?.cancelTransition();
     this.worldSounds.clear();
     this.pendingSpawnSound = false;

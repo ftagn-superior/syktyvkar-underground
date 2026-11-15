@@ -20,7 +20,7 @@ import {
 } from '@colyseus/core';
 import {
   BUS_STOP_SERVER_RANGE,
-  busStopNear,
+  busPlatformById,
   busTripsFrom,
   parseBusTravelRequest,
   type BusNetwork,
@@ -57,6 +57,9 @@ import {
   type Vec3,
   normalizeChatText,
   findAvatarSkin,
+  findAnimation,
+  isGroundAnimation,
+  animationSkinSupport,
   DEFAULT_AVATAR_SKIN,
   type ActionResult,
   type ErrorCode,
@@ -76,6 +79,7 @@ import { createAuthoritativeWorld } from '@su/simulation/server';
 import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
 import {
+  commandCatalog,
   commandHelp,
   parseChatCommand,
   giveFailureMessage,
@@ -272,6 +276,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
     this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
+    this.onMessage('requestCommands', (client) => this.sendCommandCatalog(client));
     this.onMessage('resync', (client) => {
       this.inputs.get(client.sessionId).clear();
       const session = this.sessions.get(client.sessionId);
@@ -834,6 +839,12 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       }
       const command = session.connected ? input.next() : undefined;
       session.lastInput = command ? readMoveInput(command) : { ...NEUTRAL_INPUT };
+      if (
+        player &&
+        isGroundAnimation(findAnimation(player.animationId)) &&
+        (session.lastInput.moveX !== 0 || session.lastInput.moveZ !== 0)
+      )
+        cancelAnimation(player, this.state.serverTick);
       this.world.setInput(session.entityId, session.lastInput);
     }
     const physicsStart = performance.now();
@@ -844,6 +855,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
       updatePlayerActivities(player, actual, this.state.serverTick + 1);
+      const animation = findAnimation(player.animationId);
+      if (
+        isGroundAnimation(animation) &&
+        animation &&
+        animationSkinSupport(animation, player.skinId) !== 'variant' &&
+        !this.world.checkAnimationSpace(player.entityId)
+      )
+        cancelAnimation(player, this.state.serverTick + 1);
       if (actual) {
         applyEntityState(player, actual);
         this.interest.upsert(player);
@@ -986,8 +1005,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   /**
-   * Быстрая поездка: игрок стоит у остановки `fromStopId`, и автобус с неё идёт до
-   * `toStopId`. Перемещение — тот же план подготовки области, что и возврат на старт,
+   * Быстрая поездка: игрок стоит у `fromPlatformId`, и выбранное направление
+   * маршрута идёт до `toPlatformId`. Перемещение — тот же план подготовки области, что и возврат на старт,
    * с общей перезарядкой; прибытие — на землю у платформы остановки назначения.
    */
   private busTravel(client: Client, request: unknown): void {
@@ -1002,25 +1021,37 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     let { code } = action;
     const network = this.busNetwork;
     const player = this.state.players.get(client.sessionId);
-    const origin = network?.stops.find((stop) => stop.id === parsed.fromStopId);
-    const target = network?.stops.find((stop) => stop.id === parsed.toStopId);
+    const origin = network ? busPlatformById(network, parsed.fromPlatformId) : undefined;
+    const target = network ? busPlatformById(network, parsed.toPlatformId) : undefined;
     let arrival: Vec3 | undefined;
     if (!code && !network) code = 'COMMAND_DISABLED';
     else if (!code && performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS)
       code = 'RATE_LIMITED';
-    // Любая платформа этой остановки рядом: соседняя остановка ближе не мешает.
+    // Конкретная платформа посадки рядом: соседняя остановка или встречная сторона не мешают.
     else if (
       !code &&
       (!player ||
         !origin ||
-        !busStopNear({ ...network!, stops: [origin] }, player, BUS_STOP_SERVER_RANGE))
+        Math.hypot(origin.platform.position[0] - player.x, origin.platform.position[1] - player.z) >
+          BUS_STOP_SERVER_RANGE)
     )
       code = 'NOT_AT_BUS_STOP';
-    else if (!code && (!target || !busTripsFrom(network!, parsed.fromStopId).has(target.id)))
+    else if (
+      !code &&
+      (!target ||
+        !busTripsFrom(network!, parsed.fromPlatformId)
+          .get(target.stop.id)
+          ?.some(
+            (trip) =>
+              trip.routeId === parsed.routeId &&
+              trip.directionIndex === parsed.directionIndex &&
+              trip.toPlatformId === parsed.toPlatformId,
+          ))
+    )
       code = 'NO_BUS_ROUTE';
     if (!code) {
       arrival = this.world.findGroundSpawn(
-        [...target!.platforms, target!.position].map(([x, z]) => ({ x, z })),
+        [{ x: target!.platform.position[0], z: target!.platform.position[1] }],
         session.entityId,
       );
       if (!arrival) code = 'SPAWN_UNAVAILABLE';
@@ -1067,6 +1098,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         (request as { animationId?: unknown }).animationId,
         this.state.serverTick,
         code,
+        () => this.world.checkAnimationSpace(session.entityId),
       ),
     });
   }
@@ -1096,7 +1128,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
    * `@имя` в командах: игроки в мире, чьё имя совпадает без учёта регистра, иначе начинается с
    * запроса. Несколько совпадений — ошибка с подсказкой, а не случайный выбор.
    */
-  private findPlayers(query: string): Session[] {
+  private findPlayers(query: string): [sessionId: string, session: Session][] {
     const key = (name: string) => name.normalize('NFC').toLocaleLowerCase('ru');
     const wanted = key(query);
     const present = [...this.sessions].filter(([sessionId]) => this.state.players.has(sessionId));
@@ -1104,7 +1136,35 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const matches = exact.length
       ? exact
       : present.filter(([, session]) => key(session.name).startsWith(wanted));
-    return matches.map(([, session]) => session);
+    return matches;
+  }
+
+  /** Один игрок по `@имя` либо готовый текст ошибки. */
+  private findPlayer(query: string): [sessionId: string, session: Session] | string {
+    const found = this.findPlayers(query);
+    if (!found.length) return `Игрок @${query} не найден.`;
+    if (found.length > 1)
+      return `Под @${query} подходят: ${found.map(([, other]) => other.name).join(', ')}. Уточните имя.`;
+    return found[0];
+  }
+
+  private commandHelpContext() {
+    return {
+      itemTypes: this.itemCreationEnabled
+        ? Object.keys(this.items.store.definition.itemCatalog.types).sort()
+        : [],
+    };
+  }
+
+  private sendCommandCatalog(client: Client) {
+    const session = this.sessions.get(client.sessionId);
+    if (!session) return;
+    const now = Date.now();
+    if (session.commandCatalogSentAt !== undefined && now - session.commandCatalogSentAt < 1000)
+      return;
+    session.commandCatalogSentAt = now;
+    const access = this.adminAccess(session) ? 'player' : 'admin';
+    client.send('commands', commandCatalog(access, this.commandHelpContext()));
   }
 
   private speedCommand(
@@ -1117,14 +1177,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.finishAction(client, session, { requestId, ok: false, code, message });
     let target = session;
     if (command.target !== undefined) {
-      const found = this.findPlayers(command.target);
-      if (!found.length) return fail('INVALID_INPUT', `Игрок @${command.target} не найден.`);
-      if (found.length > 1)
-        return fail(
-          'INVALID_INPUT',
-          `Под @${command.target} подходят: ${found.map((other) => other.name).join(', ')}. Уточните имя.`,
-        );
-      target = found[0];
+      const found = this.findPlayer(command.target);
+      if (typeof found === 'string') return fail('INVALID_INPUT', found);
+      target = found[1];
     }
     const state = this.world.getPlayerState(target.entityId);
     if (!state) return fail('WORLD_NOT_READY', 'Игрок ещё не вошёл в мир.');
@@ -1163,7 +1218,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       return fail(command.code, command.message);
     }
     if (command.kind === 'help') {
-      const effect = commandHelp(access ? 'player' : 'admin', command.focus);
+      const effect = commandHelp(
+        access ? 'player' : 'admin',
+        command.focus,
+        this.commandHelpContext(),
+      );
       if (!effect) return fail('ADMIN_REQUIRED', 'Нет доступных команд.');
       return this.finishAction(client, session, { requestId, ok: true, retryAfterMs: 0, effect });
     }
@@ -1211,13 +1270,25 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     const types = this.items.store.definition.itemCatalog.types;
     if (!Object.hasOwn(types, command.typeId))
       return fail('INVALID_INPUT', `Неизвестный тип предмета: ${command.typeId}.`);
+    let targetSessionId = client.sessionId;
+    let target = session;
+    if (command.target !== undefined) {
+      const found = this.findPlayer(command.target);
+      if (typeof found === 'string') return fail('INVALID_INPUT', found);
+      [targetSessionId, target] = found;
+      if (!target.auth)
+        return fail(
+          'INVALID_INPUT',
+          `${target.name} играет гостем — инвентарь есть только после входа через Telegram.`,
+        );
+    }
     if (this.itemRequests >= 32) return fail('RATE_LIMITED', giveFailureMessage('RATE_LIMITED'));
 
     session.actions.startPending(requestId);
     this.itemRequests++;
     try {
       const result = await this.items.give(
-        session.auth!.accountId,
+        target.auth!.accountId,
         `chat-${this.state.worldEpoch}-${client.sessionId}-${requestId}`,
         command.typeId,
         () => {
@@ -1227,18 +1298,24 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
             this.sessions.get(client.sessionId) !== session ||
             session.plan ||
             !session.connected ||
-            !this.state.players.has(client.sessionId)
+            !this.state.players.has(client.sessionId) ||
+            (target !== session && this.sessions.get(targetSessionId) !== target)
           )
             return 'WORLD_NOT_READY';
         },
       );
-      if (result.ok) await this.sendInventory(client);
+      if (result.ok) {
+        const recipient = this.clients.getById(targetSessionId);
+        if (recipient) await this.sendInventory(recipient);
+      }
       this.finishAction(client, session, {
         requestId,
         ok: result.ok,
         ...(result.code ? { code: result.code } : {}),
         message: result.ok
-          ? `Получен предмет: ${types[command.typeId].name} ×1.`
+          ? target === session
+            ? `Получен предмет: ${types[command.typeId].name} ×1.`
+            : `Выдан предмет ${target.name}: ${types[command.typeId].name} ×1.`
           : giveFailureMessage(result.code),
         ...(result.ok || result.code === 'RATE_LIMITED'
           ? { retryAfterMs: ITEM_GIVE_COOLDOWN_MS }

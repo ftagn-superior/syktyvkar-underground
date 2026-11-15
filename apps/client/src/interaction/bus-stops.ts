@@ -1,9 +1,9 @@
-import type { BusNetwork, BusStop } from '@su/contracts';
+import type { BusNetwork, BusPlatform, BusStop } from '@su/contracts';
 import { INTERACTION_KINDS, type Interactable, type Vec3 } from './interactable';
 
 /**
- * Остановки как места взаимодействия: у платформы появляется подсказка «Z · Автобусы»,
- * она открывает карту автобусов с этой остановкой как отправной. Один объект на остановку.
+ * Платформы остановок как места взаимодействия: у каждой платформы появляется подсказка
+ * «Z · Автобусы» с направлением движения на этой стороне улицы.
  */
 export class BusStopSource {
   private readonly cache = new Map<string, Interactable>();
@@ -11,7 +11,7 @@ export class BusStopSource {
 
   constructor(
     private readonly networkFor: () => BusNetwork | undefined,
-    private readonly open: (stopId: string) => void,
+    private readonly open: (platformId: string) => void,
   ) {}
 
   candidates(player: Vec3 | undefined): Iterable<Interactable> {
@@ -29,36 +29,33 @@ export class BusStopSource {
         Math.abs(stop.position[1] - player.z) > 400
       )
         continue;
-      let item = this.cache.get(stop.id);
-      if (!item) this.cache.set(stop.id, (item = this.create(stop)));
-      near.push(item);
+      for (const platform of stop.platforms) {
+        let item = this.cache.get(platform.id);
+        if (!item) this.cache.set(platform.id, (item = this.create(stop, platform)));
+        near.push(item);
+      }
     }
     return near;
   }
 
-  private create(stop: BusStop): Interactable {
+  private create(stop: BusStop, platform: BusPlatform): Interactable {
     const defaults = INTERACTION_KINDS.bus;
-    const points = [stop.position, ...stop.platforms];
-    let anchor: Vec3 = { x: stop.position[0], y: 0, z: stop.position[1] };
+    const [x, z] = platform.position;
+    let anchor: Vec3 = { x, y: 0, z };
+    const hint = platform.sideHint ? ` (${platform.sideHint})` : '';
     return {
-      id: `bus-stop:${stop.id}`,
+      id: `bus-stop:${platform.id}`,
       kind: 'bus',
       ...defaults,
-      objectName: `Остановка «${stop.name}»`,
+      objectName: `Остановка «${stop.name}»${hint}`,
       getAnchor: () => anchor,
       getDistance: (player: Vec3) => {
-        let best = Infinity;
-        for (const [x, z] of points) {
-          const d = Math.hypot(x - player.x, z - player.z);
-          if (d < best) {
-            best = d;
-            // Высоты остановки в данных нет: подсказка над головой стоящего рядом игрока.
-            anchor = { x, y: player.y + 1.4, z };
-          }
-        }
-        return best;
+        const d = Math.hypot(x - player.x, z - player.z);
+        // Высоты остановки в данных нет: подсказка над головой стоящего рядом игрока.
+        anchor = { x, y: player.y + 1.4, z };
+        return d;
       },
-      onActivate: () => this.open(stop.id),
+      onActivate: () => this.open(platform.id),
       setHighlighted: () => {},
     };
   }

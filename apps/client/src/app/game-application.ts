@@ -733,7 +733,8 @@ export function startGame(): void {
       if (!response.ok) throw new Error(`Bus map: HTTP ${response.status}`);
       return (await response.json()) as BusMapBackground;
     },
-    travel: (from, to) => session.busTravel(from, to),
+    travel: (fromPlatformId, toPlatformId, routeId, directionIndex) =>
+      session.busTravel(fromPlatformId, toPlatformId, routeId, directionIndex),
     travelStatus: () => session.busTravelStatus(),
     opened: () => {
       firstPerson?.overview();
@@ -744,7 +745,7 @@ export function startGame(): void {
     closed: () => canvas.focus({ preventScroll: true }),
   });
   session.onBusTravelResult = (result) => busMap?.travelResult(result.ok);
-  const busStops = new BusStopSource(busNetwork, (stopId) => busMap?.open(stopId));
+  const busStops = new BusStopSource(busNetwork, (platformId) => busMap?.open(platformId));
   const pickups = new PickupSource(
     session,
     () => view,
@@ -866,7 +867,19 @@ export function startGame(): void {
         session.chatStatus().available,
     },
     chatSettings,
+    element('chat-suggest'),
+    {
+      commands: () => session.commands(),
+      players: () => {
+        const names: string[] = [];
+        session.room?.state?.players?.forEach((player) => {
+          if (player.name) names.push(player.name);
+        });
+        return names;
+      },
+    },
   );
+  session.onCommandCatalog = () => chat?.refreshSuggestions();
   session.onDayClock = (clock) => view?.setDayClock(clock);
   session.onWeather = (weather, snap) => view?.setWeather(weather, snap);
   session.onChatResult = (result) => {
@@ -893,9 +906,23 @@ export function startGame(): void {
     element('chat-row'),
     (text) => chat?.insert(text),
     () => panels.open('commands', 'chat'),
+    element('chat-suggest'),
   );
   session.onCommandHelp = (help, requestId) => {
-    if (!chatReturn.acceptCommand(requestId, session.room) || !firstPersonEligible()) return;
+    const room = session.room;
+    // Ответ со справкой можно читать и во время ожидания сети: управление персонажем ему не нужно.
+    if (
+      !chatReturn.acceptCommand(requestId, room) ||
+      !loaded ||
+      graphicsLost ||
+      !pageActive ||
+      document.hidden ||
+      inputMode.value !== 'desktop' ||
+      placementOwner ||
+      !['playing', 'waiting'].includes(session.state) ||
+      !room?.state.players.has(room.sessionId)
+    )
+      return;
     commandHelp?.show(help);
   };
   const menuSounds = new MenuSounds(
@@ -914,12 +941,14 @@ export function startGame(): void {
   );
   function renderChat(): void {
     const state = session.chatStatus();
-    if (!state.available || graphicsLost || inputMode.value !== 'desktop')
-      commandHelp?.close(false);
+    const desktop = !graphicsLost && inputMode.value === 'desktop';
+    const keepOpen = desktop && session.state === 'waiting';
+    // Краткая сетевая пауза сохраняет и черновик, и справку, которую читают при вводе.
+    if (!desktop || (!state.available && !keepOpen)) commandHelp?.close(false);
     chat?.update({
       ...state,
-      available: state.available && !graphicsLost && inputMode.value === 'desktop',
-      keepOpen: session.state === 'waiting' && !graphicsLost && inputMode.value === 'desktop',
+      available: state.available && desktop,
+      keepOpen,
     });
   }
   keyboard = new KeyboardInput(

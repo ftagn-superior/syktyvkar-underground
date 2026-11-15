@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { WorldInfo } from '@su/contracts';
 import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 
-// v26 replicates the room clock start phase (`WorldState.dayStartPhaseMs`) on top of v25.
+// v25 adds chat commands and /speed on top of v24 bus travel, LOD/HLOD and catalogs.
 // Earlier releases stop before resource loads or reservation.
 const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({
@@ -23,8 +23,8 @@ import { GameSession } from './session';
 
 const current: WorldInfo = {
   roomId: 'new-room',
-  worldEpoch: 'server-clock-26',
-  protocolVersion: 26,
+  worldEpoch: 'server-clock-27',
+  protocolVersion: 27,
   catalogVersions: { ...CLIENT_CATALOG_VERSIONS },
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
@@ -41,7 +41,7 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(26);
+  expect(actual.PROTOCOL_VERSION).toBe(27);
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -62,8 +62,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe.each([16, 17, 18, 19, 20, 21, 22, 23, 24, 25])(
-  'legacy v%i tab discovering world clock protocol v26',
+describe.each([16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26])(
+  'legacy v%i tab discovering protocol v27',
   (version) => {
     beforeEach(() => {
       legacy.protocol = version;
@@ -103,6 +103,13 @@ describe.each([
   { name: 'missing reactions', versions: { animations: CLIENT_CATALOG_VERSIONS.animations } },
   { name: 'changed reactions', versions: { ...CLIENT_CATALOG_VERSIONS, reactions: 'previous' } },
   { name: 'changed animations', versions: { ...CLIENT_CATALOG_VERSIONS, animations: 'previous' } },
+  {
+    name: 'humanoid-v1 release at main 5521d946',
+    versions: {
+      ...CLIENT_CATALOG_VERSIONS,
+      animations: '83f53e682a3c192d1d04a42414d718046acc07c40bcebea645ca6d7a3ab501b3',
+    },
+  },
   { name: 'extra collection', versions: { ...CLIENT_CATALOG_VERSIONS, items: 'unsupported' } },
 ])('catalog compatibility: $name', ({ versions }) => {
   beforeEach(() => {

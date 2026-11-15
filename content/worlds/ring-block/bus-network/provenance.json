@@ -1,17 +1,21 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "sources": {
     "routes": {
       "source": "transport11.ru, main route pages (direction 0)",
       "pages": 60,
-      "sha256": "89e092d4cb0f076d79b8d509c0bd07e8bddb0eee28ca8cd84984fdf5f44eb235"
+      "sha256": "2701a29ffc055d5ac8a63900cfc1e7493f2a851510cb91859752b78f956dd823"
     },
     "geometry": {
       "source": "OpenStreetMap via Overpass API",
       "license": "ODbL 1.0, © OpenStreetMap contributors",
-      "osmTimestamp": "2026-11-15T10:44:21Z",
-      "snapshotSha256": "abfb7988dae94393ce448c07ddd80ba49b7d0dbdfc0f3dd1303bb40429298299",
-      "query": "[out:json][timeout:180];(way[highway~\"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|busway|tertiary|tertiary_link|unclassified|residential|living_street|service)$\"](61.64261,50.75917,61.68512,50.88219);way[building](61.65618,50.78756,61.67155,50.85380););out body;>;out skel qt;(node[highway=bus_stop](61.64261,50.75917,61.68512,50.88219);node[public_transport=platform](61.64261,50.75917,61.68512,50.88219););out body;"
+      "osmTimestamp": "2026-11-15T19:55:04Z",
+      "snapshotSha256": "0e4eb6095bd3208a29a7e78ad011ba9b5a1647b131e703c046871d59ca53ec92",
+      "query": "[out:json][timeout:180];(way[highway~\"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|busway|tertiary|tertiary_link|unclassified|residential|living_street|service)$\"](61.64261,50.75917,61.68512,50.88219);way[building](61.65618,50.78756,61.67155,50.85380);node[highway=bus_stop](61.64261,50.75917,61.68512,50.88219);node[public_transport=platform](61.64261,50.75917,61.68512,50.88219);rel[type=route][route=bus](61.64261,50.75917,61.68512,50.88219););out body;>;out skel qt;"
+    },
+    "overrides": {
+      "file": "content/worlds/ring-block/bus-network/overrides.json",
+      "sha256": "fa09c491d82bbfbba638a64e066b8d20cd4ec1f58b1874e5882ac9fbda21cdf2"
     }
   },
   "aliases": {
@@ -20,14 +24,17 @@
     "торговый центр аврора": "аврора",
     "педколледж": "педучилище",
     "школа искусства": "школа искусств",
-    "интернациональная": "интернациональная-пушкина"
+    "интернациональная": "интернациональная-пушкина",
+    "сыктывкарский государственный университет": "сгу",
+    "пединститут": "музтеатр"
   },
   "clusterRadiusMetres": 350,
   "graphVertices": 37974,
-  "legsRouted": 281,
+  "legsRouted": 552,
   "legsOnewayFallback": 0,
   "legsUnrouted": 0,
-  "routesInWorld": 30,
-  "stopsInWorld": 37,
-  "interpolatedStops": ["Городской суд", "Центральный универмаг", "Центральный универмаг"]
+  "routesInWorld": 31,
+  "stopsInWorld": 38,
+  "platformsInWorld": 61,
+  "interpolatedStops": []
 }

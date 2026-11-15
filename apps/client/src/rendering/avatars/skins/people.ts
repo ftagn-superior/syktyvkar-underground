@@ -100,13 +100,18 @@ export function buildGirl(rig: AvatarRig, config: SimulationConfig['character'])
       cloth(s.cylinder('top', h * 0.24, r * 0.67, r * 0.58, h * 0.06)),
       collar(rig, h, r),
     ],
+    [neck(s, h, r)],
+  );
+  rig.part(
+    'skirt',
+    rig.garment,
+    [],
     [
       paint(s.cylinder('skirt', h * 0.19, r * 0.6, r * 0.95, -h * 0.155), skirt),
       paint(
         s.cylinder('skirt-hem', h * 0.018, r * 0.93, r * 0.96, -h * 0.24),
         Color3.FromHexString('#2c3b5c'),
       ),
-      neck(s, h, r),
     ],
   );
   buildPersonHead(

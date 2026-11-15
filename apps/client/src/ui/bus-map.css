@@ -82,6 +82,9 @@
   width: 1.6em;
   height: 1.6em;
 }
+.bus-map-head > div {
+  min-width: 0;
+}
 .bus-map-head h2 {
   margin: 0;
   font-size: 1.55em;
@@ -93,6 +96,7 @@
   color: var(--mut);
   font-weight: 500;
   font-size: 0.88em;
+  overflow-wrap: anywhere;
 }
 .bus-map-close {
   margin-left: auto;
@@ -190,6 +194,28 @@
 .all .bus-map-line:not(.on) {
   opacity: 0.14;
 }
+.bus-map-arrow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.bus-map-plat {
+  fill: var(--p);
+  stroke: var(--ln);
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    fill 0.2s;
+}
+.bus-map-plat.here {
+  fill: var(--amber);
+  stroke: var(--ink);
+}
+.bus-map-plat.opp {
+  fill: var(--amber);
+  stroke: var(--ln);
+}
 .bus-map-stop {
   cursor: pointer;
 }
@@ -274,6 +300,8 @@
   display: none;
 }
 .bus-chip {
+  flex: none;
+  white-space: nowrap;
   min-width: 2.3em;
   padding: 0.4em 0.45em;
   font-family: var(--font-display);
@@ -292,6 +320,8 @@
 }
 .bus-chip.sm {
   display: inline-block;
+  flex: none;
+  white-space: nowrap;
   min-width: 2.1em;
   padding: 0.28em 0.35em;
   font-size: 0.8em;
@@ -316,15 +346,49 @@
   align-items: flex-start;
   gap: 0.65em;
 }
+.bus-opt.pick {
+  width: 100%;
+  padding: 0.35em 0.4em;
+  border: 1.5px solid transparent;
+  border-radius: 0.55em;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bus-opt.pick:hover,
+.bus-opt.pick:focus-visible {
+  background: var(--p2);
+}
+.bus-opt.pick[aria-pressed='true'] {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
 .bus-opt p {
   margin: 0;
   min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.9em;
   line-height: 1.35;
 }
 .bus-mut {
   color: var(--mut);
   font-weight: 500;
+}
+.bus-warn {
+  display: inline-block;
+  margin-top: 0.2em;
+  color: var(--amber);
+  font-size: 0.88em;
+  font-weight: 700;
+}
+.bus-opp-note {
+  padding: 0.45em 0.6em;
+  border-left: 3px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  border-radius: 0 0.4em 0.4em 0;
+  color: var(--ink);
 }
 .bus-flag {
   margin-top: 0.2em;
@@ -362,8 +426,13 @@
 .bus-dest button:focus-visible {
   background: var(--p2);
 }
+.bus-dest button > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .bus-dest .bus-chips {
   margin-left: auto;
+  flex: none;
   flex-wrap: nowrap;
   gap: 0.2em;
 }

@@ -1,8 +1,11 @@
 import {
+  busOppositePlatformTrips,
+  busPlatformById,
   busStopOrder,
   busTransferPath,
   busTripsFrom,
   type BusNetwork,
+  type BusPlatform,
   type BusPoint,
   type BusRoute,
   type BusStop,
@@ -21,8 +24,13 @@ export interface BusMapHost {
   bounds(): { minX: number; maxX: number; minZ: number; maxZ: number };
   /** Подложка грузится один раз при первом открытии и не входит в основной бандл. */
   loadBackground(): Promise<BusMapBackground>;
-  /** Отправляет поездку; false — запрос сейчас невозможен (ожидание, перезарядка). */
-  travel(fromStopId: string, toStopId: string): boolean;
+  /** Отправляет поездку с платформы на платформу по рейсу; false — запрос сейчас невозможен. */
+  travel(
+    fromPlatformId: string,
+    toPlatformId: string,
+    routeId: string,
+    directionIndex: number,
+  ): boolean;
   travelStatus(): { pending: boolean; remainingMs: number };
   /** Открытие карты закрывает другие панели и отпускает ввод мира. */
   opened(): void;
@@ -41,8 +49,13 @@ const ROAD_WIDTH: Record<string, number> = {
   service: 4.5,
 };
 const HUB = 4;
+/** Максимальный суммарный разброс пучка линий поперёк дороги (внутри полотна артериальной улицы). */
+const MAX_BUNDLE_SPAN = 11;
+const MAX_VERTEX_OFFSET = 6.5;
 const refOrder = (a: string, b: string) =>
   Number.parseInt(a, 10) - Number.parseInt(b, 10) || a.localeCompare(b);
+const canonicalPair = (a: BusPoint, b: BusPoint): [BusPoint, BusPoint] =>
+  a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]) ? [a, b] : [b, a];
 const plural = (n: number, one: string, few: string, many: string) => {
   const m = n % 10,
     h = n % 100;
@@ -65,24 +78,24 @@ const svgEl = <K extends keyof SVGElementTagNameMap>(
 const pathData = (pts: readonly BusPoint[]) =>
   'M' + pts.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('L');
 const segmentKey = (a: BusPoint, b: BusPoint) => {
-  const ka = `${a[0]},${a[1]}`,
-    kb = `${b[0]},${b[1]}`;
-  return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+  const [p, q] = canonicalPair(a, b);
+  return `${p[0]},${p[1]}|${q[0]},${q[1]}`;
+};
+
+const routePieces = (route: BusRoute): BusPoint[][] => {
+  const pieces: BusPoint[][] = [];
+  for (const dir of route.directions)
+    for (const leg of dir.legs) for (const piece of leg) pieces.push(piece);
+  return pieces;
 };
 
 /** Линии на общих улицах: место каждого маршрута в пучке и цвет без совпадений с соседями. */
-class LineBundles {
+export class LineBundles {
   readonly slots = new Map<string, string[]>();
   readonly colors = new Map<string, number>();
+
   constructor(network: BusNetwork) {
-    const sets = new Map<string, Set<string>>();
-    for (const route of network.routes)
-      for (const leg of route.legs)
-        for (const piece of leg)
-          for (let i = 1; i < piece.length; i++) {
-            const key = segmentKey(piece[i - 1]!, piece[i]!);
-            (sets.get(key) ?? sets.set(key, new Set()).get(key)!).add(route.ref);
-          }
+    const sets = this.collectSegments(network.routes);
     for (const [key, refs] of sets) this.slots.set(key, [...refs].sort(refOrder));
     const refs = [...new Set(network.routes.map((r) => r.ref))];
     const conflict = new Map(refs.map((r) => [r, new Map<string, number>()]));
@@ -99,14 +112,65 @@ class LineBundles {
       this.colors.set(ref, penalty.indexOf(Math.min(...penalty)));
     }
   }
+
+  /** Вычисляет пучки только для указанного видимого подмножества маршрутов. */
+  slotsFor(routes: readonly BusRoute[]): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const [key, refs] of this.collectSegments(routes)) out.set(key, [...refs].sort(refOrder));
+    return out;
+  }
+
+  private collectSegments(routes: readonly BusRoute[]): Map<string, Set<string>> {
+    const sets = new Map<string, Set<string>>();
+    for (const route of routes)
+      for (const piece of routePieces(route))
+        for (let i = 1; i < piece.length; i++) {
+          const key = segmentKey(piece[i - 1]!, piece[i]!);
+          (sets.get(key) ?? sets.set(key, new Set()).get(key)!).add(route.ref);
+        }
+    return sets;
+  }
+
   color(ref: string): string {
     return `var(--bus-l${this.colors.get(ref) ?? 0})`;
   }
+
+  /** Общий отрезок встречных направлений рисуется один раз, даже при разбиении на разные legs. */
+  paths(route: BusRoute, spacing: number, slots: ReadonlyMap<string, string[]>): BusPoint[][] {
+    const seen = new Set<string>();
+    const paths: BusPoint[][] = [];
+    for (const piece of routePieces(route)) {
+      const shifted = this.offset(piece, route.ref, spacing, slots);
+      let path: BusPoint[] = [];
+      const flush = () => {
+        if (path.length > 1) paths.push(path);
+        path = [];
+      };
+      for (let i = 1; i < piece.length; i++) {
+        const key = segmentKey(piece[i - 1]!, piece[i]!);
+        if (seen.has(key)) {
+          flush();
+          continue;
+        }
+        seen.add(key);
+        if (!path.length) path.push(shifted[i - 1]!);
+        path.push(shifted[i]!);
+      }
+      flush();
+    }
+    return paths;
+  }
+
   /**
-   * Сдвиг линии от оси улицы по её месту в пучке. На крутых поворотах (кольцо) пучок
-   * сжимается до 0,45 радиуса поворота, в вершинах смещения соседних отрезков усредняются.
+   * Сдвиг линии от оси улицы по её месту в пучке. Числовое сравнение концов отрезка
+   * не даёт разворотов на границах разрядов, разброс пучка ограничен шириной дороги.
    */
-  offset(piece: readonly BusPoint[], ref: string, spacing: number): BusPoint[] {
+  offset(
+    piece: readonly BusPoint[],
+    ref: string,
+    spacing: number,
+    slots: ReadonlyMap<string, string[]> = this.slots,
+  ): BusPoint[] {
     const n = piece.length;
     if (n < 2) return [...piece];
     const off: number[] = [],
@@ -116,20 +180,28 @@ class LineBundles {
     for (let i = 1; i < n; i++) {
       const a = piece[i - 1]!,
         b = piece[i]!;
-      const list = this.slots.get(segmentKey(a, b)) ?? [ref];
-      off.push((list.indexOf(ref) - (list.length - 1) / 2) * spacing);
-      const [p, q] = `${a[0]},${a[1]}` < `${b[0]},${b[1]}` ? [a, b] : [b, a];
+      const list = slots.get(segmentKey(a, b)) ?? [ref];
+      const idx = list.indexOf(ref);
+      const rank = idx >= 0 ? idx - (list.length - 1) / 2 : 0;
+      const effSpacing =
+        list.length > 1 ? Math.min(spacing, MAX_BUNDLE_SPAN / (list.length - 1)) : 0;
+      off.push(rank * effSpacing);
+      const [p, q] = canonicalPair(a, b);
       const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
       normal.push([-(q[1] - p[1]) / l, (q[0] - p[0]) / l]);
       length.push(l);
       dir.push([(b[0] - a[0]) / l, (b[1] - a[1]) / l]);
     }
-    const capAt = Array<number>(n).fill(Infinity);
+    const capAt = Array<number>(n).fill(MAX_VERTEX_OFFSET);
     for (let j = 1; j < n - 1; j++) {
       const d1 = dir[j - 1]!,
         d2 = dir[j]!;
       const angle = Math.acos(Math.max(-1, Math.min(1, d1[0] * d2[0] + d1[1] * d2[1])));
-      if (angle > 0.02) capAt[j] = (0.45 * ((length[j - 1]! + length[j]!) / 2)) / angle;
+      if (angle > 0.02)
+        capAt[j] = Math.min(
+          MAX_VERTEX_OFFSET,
+          (0.45 * ((length[j - 1]! + length[j]!) / 2)) / angle,
+        );
     }
     const cap = off.map((_, s) => Math.min(...capAt.slice(Math.max(0, s - 1), s + 3)));
     const shift = (s: number): BusPoint => {
@@ -138,10 +210,14 @@ class LineBundles {
     };
     return piece.map((p, j) => {
       const parts = [j - 1, j].filter((s) => s >= 0 && s < n - 1).map(shift);
-      return [
-        p[0] + parts.reduce((t, d) => t + d[0], 0) / parts.length,
-        p[1] + parts.reduce((t, d) => t + d[1], 0) / parts.length,
-      ] as BusPoint;
+      let dx = parts.reduce((t, d) => t + d[0], 0) / parts.length;
+      let dz = parts.reduce((t, d) => t + d[1], 0) / parts.length;
+      const mag = Math.hypot(dx, dz);
+      if (mag > MAX_VERTEX_OFFSET) {
+        dx = (dx / mag) * MAX_VERTEX_OFFSET;
+        dz = (dz / mag) * MAX_VERTEX_OFFSET;
+      }
+      return [p[0] + dx, p[1] + dz] as BusPoint;
     });
   }
 }
@@ -169,8 +245,11 @@ export class BusMapPanel {
   private stopsById = new Map<string, BusStop>();
   private trips = new Map<string, Map<string, BusTrip[]>>();
   private here?: string;
+  private herePlatform?: string;
   private target?: string;
+  private pickedTripIdx = 0;
   private next?: string;
+  private pendingToPlatform?: string;
   private line?: string;
   private all = false;
   private sending = false;
@@ -273,16 +352,23 @@ export class BusMapPanel {
     return !this.backdrop.hidden;
   }
 
-  /** Открывает карту у остановки `stopId`; `target` — уже выбранная цель (после пересадки). */
-  open(stopId: string, target?: string): void {
+  /** Открывает карту у платформы `platformOrStopId`; `target` — цель (после пересадки). */
+  open(platformOrStopId: string, target?: string): void {
     const network = this.host.network();
-    if (!network || !network.stops.some((s) => s.id === stopId)) return;
+    if (!network) return;
+    const byPlat = busPlatformById(network, platformOrStopId);
+    const stop = byPlat?.stop ?? network.stops.find((s) => s.id === platformOrStopId);
+    const platform = byPlat?.platform ?? stop?.platforms[0];
+    if (!stop || !platform) return;
     if (network !== this.network) this.setNetwork(network);
     this.host.opened();
-    this.here = stopId;
-    this.target = target && target !== stopId ? target : undefined;
+    this.here = stop.id;
+    this.herePlatform = platform.id;
+    this.target = target && target !== stop.id ? target : undefined;
+    this.pickedTripIdx = 0;
     this.line = undefined;
     this.sending = false;
+    this.pendingToPlatform = undefined;
     this.backdrop.hidden = false;
     this.openedAt = performance.now();
     this.resize ??= new ResizeObserver(() => this.applyView());
@@ -300,6 +386,7 @@ export class BusMapPanel {
     if (this.backdrop.hidden) return;
     this.backdrop.hidden = true;
     this.next = undefined;
+    this.pendingToPlatform = undefined;
     this.resize?.disconnect();
     this.host.closed();
   }
@@ -308,11 +395,17 @@ export class BusMapPanel {
   travelResult(ok: boolean): void {
     if (!this.sending) return;
     this.sending = false;
-    const arrived = this.target;
+    const arrivedPlatform = this.pendingToPlatform;
     const next = this.next;
+    this.pendingToPlatform = undefined;
     if (ok) {
       this.close();
-      if (arrived && next && next !== arrived) this.open(arrived, next);
+      if (
+        arrivedPlatform &&
+        next &&
+        busPlatformById(this.network!, arrivedPlatform)?.stop.id !== next
+      )
+        this.open(arrivedPlatform, next);
       return;
     }
     this.next = undefined;
@@ -331,7 +424,28 @@ export class BusMapPanel {
     this.bundles = new LineBundles(network);
     this.routes = new Map(network.routes.map((r) => [r.ref, r]));
     this.stopsById = new Map(network.stops.map((s) => [s.id, s]));
-    this.trips = new Map(network.stops.map((s) => [s.id, busTripsFrom(network, s.id)]));
+    this.trips.clear();
+  }
+
+  private tripsFor(platformId: string): Map<string, BusTrip[]> {
+    let map = this.trips.get(platformId);
+    if (!map && this.network) {
+      map = busTripsFrom(this.network, platformId);
+      this.trips.set(platformId, map);
+    }
+    return map ?? new Map();
+  }
+
+  private platformRefs(platformId: string): string[] {
+    if (!this.network) return [];
+    const refs: string[] = [];
+    for (const route of this.network.routes) {
+      const stopsHere = route.directions.some((dir) =>
+        dir.sequence.some((entry) => 'platformId' in entry && entry.platformId === platformId),
+      );
+      if (stopsHere) refs.push(route.ref);
+    }
+    return refs.sort(refOrder);
   }
 
   // ---------- рисование ----------
@@ -393,36 +507,15 @@ export class BusMapPanel {
   private draw(): void {
     if (!this.network || !this.bundles) return;
     if (!this.base.childElementCount) this.drawEdge();
-    this.lines.textContent = '';
-    const width = Math.max(3.5 / this.scale, 3.2);
-    const spacing = Math.max(4.4 / this.scale, 4);
-    for (const route of this.network.routes) {
-      const d = route.legs
-        .flatMap((leg) =>
-          leg.map((piece) => pathData(this.bundles!.offset(piece, route.ref, spacing))),
-        )
-        .join('');
-      if (d)
-        svgEl(
-          'path',
-          {
-            class: 'bus-map-line',
-            d,
-            stroke: this.bundles.color(route.ref),
-            'stroke-width': width,
-            'data-ref': route.ref,
-          },
-          this.lines,
-        );
-    }
     this.stopsLayer.textContent = '';
     for (const stop of this.network.stops) {
       const [x, y] = stop.position;
       const r = this.radius(stop);
+      const pr = Math.max(2.1 / this.scale, r * 0.45);
       const g = svgEl(
         'g',
         {
-          class: 'bus-map-stop' + (stop.source === 'interpolated' ? ' approx' : ''),
+          class: 'bus-map-stop',
           'data-stop': stop.id,
           tabindex: 0,
           role: 'button',
@@ -432,6 +525,20 @@ export class BusMapPanel {
       );
       svgEl('circle', { class: 'hit', cx: x, cy: y, r: r + 9 / this.scale }, g);
       svgEl('circle', { class: 'dot', cx: x, cy: y, r, 'stroke-width': 2.2 / this.scale }, g);
+      for (const plat of stop.platforms) {
+        svgEl(
+          'circle',
+          {
+            class: 'bus-map-plat',
+            'data-plat': plat.id,
+            cx: plat.position[0],
+            cy: plat.position[1],
+            r: pr,
+            'stroke-width': 1.4 / this.scale,
+          },
+          g,
+        );
+      }
       svgEl(
         'text',
         { x, y, 'font-size': 12.5 / this.scale, 'stroke-width': 4 / this.scale },
@@ -442,21 +549,130 @@ export class BusMapPanel {
     this.paint();
   }
 
+  private drawLines(on: ReadonlySet<string>, chosenTrip?: BusTrip): void {
+    if (!this.network || !this.bundles) return;
+    this.lines.textContent = '';
+    const visibleRoutes = this.all
+      ? this.network.routes
+      : this.network.routes.filter((r) => on.has(r.ref));
+    const slots = this.bundles.slotsFor(visibleRoutes);
+    const width = Math.min(7.5, Math.max(2.4 / this.scale, 2.2));
+    const spacing = Math.max(3.2 / this.scale, 2.6);
+    const ordered = [
+      ...visibleRoutes.filter((r) => !on.has(r.ref)),
+      ...visibleRoutes.filter((r) => on.has(r.ref)),
+    ];
+    for (const route of ordered) {
+      const active = on.has(route.ref);
+      const d = this.bundles.paths(route, spacing, slots).map(pathData).join('');
+      if (!d) continue;
+      svgEl(
+        'path',
+        {
+          class: active ? 'bus-map-line on' : 'bus-map-line',
+          d,
+          stroke: this.bundles.color(route.ref),
+          'stroke-width': active ? width * 1.1 : width * 0.9,
+          'data-ref': route.ref,
+        },
+        this.lines,
+      );
+
+      // На активном выбранном маршруте или рейсе рисуем стрелки направления движения.
+      const showDirs =
+        this.line === route.ref
+          ? route.directions
+          : chosenTrip && chosenTrip.routeId === route.id
+            ? [route.directions[chosenTrip.directionIndex]!]
+            : [];
+      for (const dir of showDirs) {
+        if (!dir) continue;
+        this.drawArrows(dir.legs, route.ref, spacing, slots, this.bundles.color(route.ref), width);
+      }
+    }
+  }
+
+  private drawArrows(
+    legs: readonly BusPoint[][][],
+    ref: string,
+    spacing: number,
+    slots: ReadonlyMap<string, string[]>,
+    color: string,
+    width: number,
+  ): void {
+    const arrowLen = Math.max(width * 1.35, Math.min(9, 4.5 / this.scale));
+    let acc = 120;
+    const cmds: string[] = [];
+    for (const leg of legs) {
+      for (const piece of leg) {
+        const pts = this.bundles!.offset(piece, ref, spacing, slots);
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1]!,
+            b = pts[i]!;
+          const segLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          acc += segLen;
+          if (acc < 240 || segLen < Math.max(14, arrowLen * 2)) continue;
+          acc = 0;
+          const mx = (a[0] + b[0]) / 2,
+            mz = (a[1] + b[1]) / 2;
+          const ux = (b[0] - a[0]) / segLen,
+            uz = (b[1] - a[1]) / segLen;
+          const px = -uz,
+            pz = ux;
+          const backX = mx - ux * arrowLen,
+            backZ = mz - uz * arrowLen;
+          cmds.push(
+            `M${(backX + px * arrowLen * 0.72).toFixed(1)} ${(backZ + pz * arrowLen * 0.72).toFixed(1)}` +
+              `L${mx.toFixed(1)} ${mz.toFixed(1)}` +
+              `L${(backX - px * arrowLen * 0.72).toFixed(1)} ${(backZ - pz * arrowLen * 0.72).toFixed(1)}`,
+          );
+        }
+      }
+    }
+    if (cmds.length)
+      svgEl(
+        'path',
+        {
+          class: 'bus-map-arrow',
+          d: cmds.join(''),
+          stroke: color,
+          'stroke-width': Math.max(1.8, width * 0.55),
+        },
+        this.lines,
+      );
+  }
+
   private radius(stop: BusStop): number {
     return (stop.routes.length >= HUB ? 6.5 : 4.8) / this.scale;
   }
 
-  /** Подписи по 8 позициям; без места мелкая остановка остаётся без подписи до приближения. */
+  /** Подписи по 8 позициям с удержанием внутри видимой области и без наложений. */
   private placeLabels(): void {
     if (!this.network) return;
+    const b = this.host.bounds();
+    const pad = 6 / this.scale;
+    const clip =
+      this.view.w > 1 && this.view.h > 1
+        ? {
+            x0: this.view.x + pad,
+            x1: this.view.x + this.view.w - pad,
+            y0: this.view.y + pad,
+            y1: this.view.y + this.view.h - pad,
+          }
+        : { x0: b.minX - 24, x1: b.maxX + 24, y0: b.minZ - 24, y1: b.maxZ + 24 };
     const must = new Set([this.here, this.target]);
     const boxes: { x: number; y: number; w: number; h: number }[] = [];
     const circles = this.network.stops.map((s) => {
       const r = this.radius(s);
       return { id: s.id, x: s.position[0] - r, y: s.position[1] - r, w: 2 * r, h: 2 * r };
     });
-    const hit = (a: (typeof boxes)[number], b: (typeof boxes)[number]) =>
-      a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const hit = (a: (typeof boxes)[number], c: (typeof boxes)[number]) =>
+      a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h;
+    const overflow = (box: (typeof boxes)[number]) =>
+      Math.max(0, clip.x0 - box.x) +
+      Math.max(0, box.x + box.w - clip.x1) +
+      Math.max(0, clip.y0 - box.y) +
+      Math.max(0, box.y + box.h - clip.y1);
     const order = [...this.network.stops].sort(
       (a, b) =>
         Number(must.has(b.id)) - Number(must.has(a.id)) || b.routes.length - a.routes.length,
@@ -467,9 +683,12 @@ export class BusMapPanel {
       text.style.display = '';
       const [x, y] = stop.position;
       const r = this.radius(stop) + 3.5 / this.scale;
-      const w = text.getComputedTextLength() + 3 / this.scale;
+      const measured =
+        typeof text.getComputedTextLength === 'function' ? text.getComputedTextLength() : 0;
+      const w = (measured > 0 ? measured : (stop.name.length * 7.2) / this.scale) + 3 / this.scale;
       const h = 16 / this.scale;
       let best: (typeof boxes)[number] | undefined;
+      let bestScore: [number, number] | undefined;
       for (const [dx, dy] of [
         [1, 0],
         [-1, 0],
@@ -489,12 +708,32 @@ export class BusMapPanel {
           w,
           h,
         };
-        if (boxes.some((o) => hit(box, o)) || circles.some((o) => o.id !== stop.id && hit(box, o)))
-          continue;
-        best = box;
-        break;
+        const overlaps =
+          boxes.filter((o) => hit(box, o)).length +
+          circles.filter((o) => o.id !== stop.id && hit(box, o)).length;
+        const out = overflow(box);
+        if (overlaps === 0 && out === 0) {
+          best = box;
+          break;
+        }
+        if (must.has(stop.id)) {
+          if (
+            !bestScore ||
+            overlaps < bestScore[0] ||
+            (overlaps === bestScore[0] && out < bestScore[1])
+          ) {
+            bestScore = [overlaps, out];
+            best = box;
+          }
+        }
       }
-      if (!best && must.has(stop.id)) best = { x: x + r, y: y - h / 2, w, h };
+      if (best && overflow(best) > 0) {
+        best = {
+          ...best,
+          x: Math.min(Math.max(clip.x0, best.x), Math.max(clip.x0, clip.x1 - best.w)),
+          y: Math.min(Math.max(clip.y0, best.y), Math.max(clip.y0, clip.y1 - best.h)),
+        };
+      }
       text.style.display = best ? '' : 'none';
       if (!best) continue;
       boxes.push(best);
@@ -503,37 +742,61 @@ export class BusMapPanel {
     }
   }
 
-  /** Подсветка без перерисовки: видимые маршруты, доступные остановки, «вы здесь». */
+  /** Подсветка и маршрутные линии: видимые маршруты, доступные остановки, «вы здесь». */
   private paint(): void {
-    if (!this.network || !this.here) return;
-    const reach = this.trips.get(this.here) ?? new Map<string, BusTrip[]>();
+    if (!this.network || !this.here || !this.herePlatform) return;
+    const reach = this.tripsFor(this.herePlatform);
+    const platRefs = this.platformRefs(this.herePlatform);
+    const options = this.target ? reach.get(this.target) : undefined;
+    const chosenTrip =
+      options && options.length > 0
+        ? options[Math.min(this.pickedTripIdx, options.length - 1)]
+        : undefined;
+    const opp =
+      this.target && !options?.length
+        ? busOppositePlatformTrips(this.network, this.herePlatform, this.target)
+        : [];
+    const oppPlatIds = new Set(opp.map((o) => o.platform.id));
+
     const on = new Set<string>();
     if (this.line) on.add(this.line);
-    else if (this.target && reach.has(this.target))
-      reach.get(this.target)!.forEach((t) => on.add(t.ref));
-    else this.stopsById.get(this.here)?.routes.forEach((r) => on.add(r));
+    else if (this.target && options?.length) options.forEach((t) => on.add(t.ref));
+    else if (opp.length) opp.forEach((o) => o.trips.forEach((t) => on.add(t.ref)));
+    else platRefs.forEach((r) => on.add(r));
+
     this.root.classList.toggle('all', this.all);
-    this.lines
-      .querySelectorAll<SVGPathElement>('.bus-map-line')
-      .forEach((p) => p.classList.toggle('on', on.has(p.dataset.ref!)));
+    this.drawLines(on, chosenTrip);
+
     const lineStops = this.line
-      ? new Set(busStopOrder(this.routes.get(this.line)!).filter(Boolean))
+      ? new Set(
+          this.routes
+            .get(this.line)!
+            .directions.flatMap((d) => busStopOrder(d).map((r) => r?.stopId))
+            .filter((id): id is string => Boolean(id)),
+        )
       : undefined;
     this.stopsLayer.querySelectorAll<SVGGElement>('.bus-map-stop').forEach((g) => {
       const id = g.dataset.stop!;
       const ok = lineStops ? lineStops.has(id) : reach.has(id) || id === this.here;
-      g.classList.toggle('far', !ok);
+      g.classList.toggle('far', !ok && !(this.target === id && opp.length > 0));
       g.classList.toggle('here', id === this.here);
       g.classList.toggle('target', id === this.target);
     });
-    const [hx, hy] = this.stopsById.get(this.here)!.position;
+    this.stopsLayer.querySelectorAll<SVGCircleElement>('.bus-map-plat').forEach((c) => {
+      const pid = c.dataset.plat!;
+      c.classList.toggle('here', pid === this.herePlatform);
+      c.classList.toggle('opp', oppPlatIds.has(pid));
+    });
+
+    const origin = busPlatformById(this.network, this.herePlatform)!;
+    const [hx, hy] = origin.platform.position;
     this.ring.setAttribute('cx', String(hx));
     this.ring.setAttribute('cy', String(hy));
     this.ring.setAttribute('r', String(10 / this.scale));
     this.ring.setAttribute('stroke-width', String(3 / this.scale));
-    const stop = this.stopsById.get(this.here)!;
-    this.subtitle.textContent = `Остановка «${stop.name}» · ${plural(stop.routes.length, 'маршрут', 'маршрута', 'маршрутов')}`;
-    this.renderSide(reach);
+    const hint = origin.platform.sideHint ? ` (${origin.platform.sideHint})` : '';
+    this.subtitle.textContent = `Остановка «${origin.stop.name}»${hint} · ${plural(platRefs.length, 'маршрут', 'маршрута', 'маршрутов')}`;
+    this.renderSide(reach, platRefs, opp);
   }
 
   // ---------- боковая колонка ----------
@@ -545,65 +808,124 @@ export class BusMapPanel {
       : `<span class="bus-chip sm" style="--c:${color}">${ref}</span>`;
   }
 
-  private renderSide(reach: Map<string, BusTrip[]>): void {
-    const here = this.stopsById.get(this.here!)!;
+  private renderSide(
+    reach: Map<string, BusTrip[]>,
+    platRefs: readonly string[],
+    opp: { platform: BusPlatform; trips: BusTrip[] }[],
+  ): void {
+    const origin = busPlatformById(this.network!, this.herePlatform!)!;
+    const here = origin.stop;
+    const herePlat = origin.platform;
     const name = (id: string) => escapeHtml(this.stopsById.get(id)?.name ?? id);
+    const platHint = (pid: string) => busPlatformById(this.network!, pid)?.platform.sideHint;
     const status = this.host.travelStatus();
     const busy = this.sending || status.pending;
-    let html = `<div class="bus-here"><div class="bus-eyebrow">Вы на остановке</div><h3 class="disp">${escapeHtml(here.name)}</h3></div>
-      <div class="bus-chips" role="group" aria-label="Маршруты с остановки">${here.routes.map((r) => this.chip(r, true)).join('')}</div>`;
+
+    let html = `<div class="bus-here"><div class="bus-eyebrow">Вы на остановке</div><h3 class="disp">${escapeHtml(here.name)}</h3>${
+      herePlat.sideHint ? `<div class="bus-flag">${escapeHtml(herePlat.sideHint)}</div>` : ''
+    }</div>
+      <div class="bus-chips" role="group" aria-label="Маршруты с этой платформы">${
+        platRefs.length
+          ? platRefs.map((r) => this.chip(r, true)).join('')
+          : '<p class="bus-note">На этой платформе только высадка.</p>'
+      }</div>`;
+
     if (this.line) {
       const route = this.routes.get(this.line)!;
-      const names = route.sequence.map((e) =>
-        typeof e === 'string'
-          ? `<b>${name(e)}</b>`
-          : `<span class="bus-mut">за краем: ${stops(e.offWorld.length)}</span>`,
-      );
+      const dirsHtml = route.directions
+        .map((dir) => {
+          const names = dir.sequence.map((e) =>
+            'stopId' in e
+              ? `<b>${name(e.stopId)}</b>`
+              : `<span class="bus-mut">за краем: ${stops(e.offWorld.length)}</span>`,
+          );
+          const dirLabel = dir.circular
+            ? `Кольцевой · ${escapeHtml(dir.towards)}`
+            : `→ ${escapeHtml(dir.towards)}`;
+          return `<div class="bus-flag"><b>${dirLabel}</b></div><p class="bus-note">${names.join(' → ')}</p>`;
+        })
+        .join('');
       html += `<div class="bus-card"><h3 class="disp">${this.chip(this.line)} ${escapeHtml(route.name)}</h3>
-        <p class="bus-note">${route.circular ? 'Кольцевой.' : 'Ходит в обе стороны.'} ${names.join(' → ')}</p>
-        <button class="ui-link" type="button" data-act="clear">Все маршруты с остановки</button></div>`;
+        ${dirsHtml}
+        <button class="ui-link" type="button" data-act="clear">Все маршруты с платформы</button></div>`;
     } else if (this.target) {
       const target = this.stopsById.get(this.target)!;
       const options = reach.get(this.target);
-      html += `<div class="bus-card"><div><div class="bus-eyebrow">Куда</div><h3 class="disp">${escapeHtml(target.name)}</h3>${
-        target.source === 'interpolated'
-          ? '<div class="bus-flag">Место остановки примерное</div>'
-          : ''
-      }</div>`;
-      if (options) {
+      html += `<div class="bus-card"><div><div class="bus-eyebrow">Куда</div><h3 class="disp">${escapeHtml(target.name)}</h3></div>`;
+      if (options?.length) {
+        const pickIdx = Math.min(this.pickedTripIdx, options.length - 1);
+        const chosen = options[pickIdx]!;
+        const formatTripBody = (t: BusTrip) => {
+          const destHint = platHint(t.toPlatformId);
+          return `в сторону «${escapeHtml(t.towards)}», ${stops(t.steps)}${
+            destHint ? `<br><span class="bus-mut">высадка: ${escapeHtml(destHint)}</span>` : ''
+          }${t.leaves ? '<br><span class="bus-mut">часть пути за краем мира</span>' : ''}${
+            t.fasterOpposite
+              ? `<br><span class="bus-warn">Быстрее со встречной стороны (${stops(t.fasterOpposite.steps)}, → ${escapeHtml(t.fasterOpposite.towards)})</span>`
+              : ''
+          }`;
+        };
         html += options
-          .map(
-            (t) =>
-              `<div class="bus-opt">${this.chip(t.ref)}<p>в сторону «${escapeHtml(t.towards)}», ${stops(t.steps)}${
-                t.leaves ? '<br><span class="bus-mut">часть пути за краем мира</span>' : ''
-              }</p></div>`,
+          .map((t, idx) =>
+            options.length > 1
+              ? `<button type="button" class="bus-opt pick" data-pick="${idx}" aria-pressed="${idx === pickIdx}">${this.chip(t.ref)}<p>${formatTripBody(t)}</p></button>`
+              : `<div class="bus-opt">${this.chip(t.ref)}<p>${formatTripBody(t)}</p></div>`,
           )
           .join('');
-        html += `<button class="ui-btn ui-pri bus-go disp" type="button" data-go="${this.target}"${busy ? ' disabled' : ''}>${
-          this.sending ? 'Едем…' : `Поехать на ${options[0]!.ref}`
+        html += `<button class="ui-btn ui-pri bus-go disp" type="button" data-go="${this.target}" data-to-platform="${chosen.toPlatformId}" data-route="${chosen.routeId}" data-dir="${chosen.directionIndex}"${busy ? ' disabled' : ''}>${
+          this.sending ? 'Едем…' : `Поехать на ${chosen.ref}`
         }<span class="k" aria-hidden="true">Z</span></button>`;
+      } else if (opp.length) {
+        const alt = opp[0]!;
+        html += `<p class="bus-note bus-opp-note"><b>В эту сторону автобусы идут с другой стороны остановки</b>${
+          alt.platform.sideHint ? ` (${escapeHtml(alt.platform.sideHint)})` : ''
+        }.</p>`;
+        html += alt.trips
+          .map(
+            (t) =>
+              `<div class="bus-opt">${this.chip(t.ref)}<p>в сторону «${escapeHtml(t.towards)}», ${stops(t.steps)}</p></div>`,
+          )
+          .join('');
       } else {
-        const path = busTransferPath(this.network!, this.here!, this.target);
-        html += '<p class="bus-note">Прямого автобуса отсюда нет.</p>';
-        if (path) {
-          html +=
-            '<div class="bus-eyebrow">С пересадкой</div>' +
-            path
-              .slice(1)
-              .map(
-                (s, i) =>
-                  `<div class="bus-opt">${this.chip(this.trips.get(path[i]!)!.get(s)![0]!.ref)}<p>до «${name(s)}»</p></div>`,
-              )
-              .join('') +
-            `<button class="ui-btn ui-pri bus-go disp" type="button" data-go="${path[1]}" data-next="${this.target}"${busy ? ' disabled' : ''}>${
-              this.sending ? 'Едем…' : `Поехать до «${name(path[1]!)}»`
-            }<span class="k" aria-hidden="true">Z</span></button>`;
+        const path = busTransferPath(this.network!, this.herePlatform!, this.target);
+        html += '<p class="bus-note">Прямого автобуса с этой стороны нет.</p>';
+        if (path && path.length >= 2) {
+          const hopTrips: BusTrip[] = [];
+          let curPlat = this.herePlatform!;
+          for (let i = 1; i < path.length; i++) {
+            const destStopId = path[i]!;
+            let trip = this.tripsFor(curPlat).get(destStopId)?.[0];
+            if (!trip) {
+              const curStop = this.stopsById.get(path[i - 1]!);
+              for (const sibling of curStop?.platforms ?? []) {
+                trip = this.tripsFor(sibling.id).get(destStopId)?.[0];
+                if (trip) break;
+              }
+            }
+            if (!trip) break;
+            hopTrips.push(trip);
+            curPlat = trip.toPlatformId;
+          }
+          const first = hopTrips[0];
+          if (first) {
+            html +=
+              '<div class="bus-eyebrow">С пересадкой</div>' +
+              hopTrips
+                .map(
+                  (t) =>
+                    `<div class="bus-opt">${this.chip(t.ref)}<p>до «${name(t.toStopId)}» (${stops(t.steps)})</p></div>`,
+                )
+                .join('') +
+              `<button class="ui-btn ui-pri bus-go disp" type="button" data-go="${first.toStopId}" data-to-platform="${first.toPlatformId}" data-route="${first.routeId}" data-dir="${first.directionIndex}" data-next="${this.target}"${busy ? ' disabled' : ''}>${
+                this.sending ? 'Едем…' : `Поехать до «${name(first.toStopId)}»`
+              }<span class="k" aria-hidden="true">Z</span></button>`;
+          } else html += '<p class="bus-note">Туда не доехать даже с пересадкой.</p>';
         } else html += '<p class="bus-note">Туда не доехать даже с пересадкой.</p>';
       }
       html += '</div>';
     } else {
       const items = [...reach.entries()].sort((a, b) => a[1][0]!.steps - b[1][0]!.steps);
-      html += `<p class="bus-note">Выберите остановку на карте. Яркие — куда можно уехать отсюда без пересадки.</p>
+      html += `<p class="bus-note">Выберите остановку на карте. Яркие — куда можно уехать с этой стороны без пересадки.</p>
         <div><div class="bus-eyebrow">Без пересадки · ${items.length}</div><ul class="bus-dest">${items
           .map(
             ([id, trips]) =>
@@ -619,19 +941,26 @@ export class BusMapPanel {
     const refs = [...this.routes.keys()].sort(refOrder);
     html += `<button class="ui-btn bus-more" type="button" data-act="all" aria-expanded="${this.all}" aria-controls="bus-all-routes"><span>Все маршруты · ${refs.length}</span><span aria-hidden="true">›</span></button>
       <div class="bus-chips" id="bus-all-routes"${this.all ? '' : ' hidden'}>${refs.map((r) => this.chip(r, true)).join('')}</div>
-      <p class="bus-note"><b>Правило.</b> Уехать можно только на автобусе, который останавливается здесь, и только туда, где он проходит.</p>
+      <p class="bus-note"><b>Правило.</b> Поездка начинается с текущей стороны остановки и идёт только по направлению маршрута.</p>
       <p class="bus-note bus-credit">Маршруты — «Транспорт 11», улицы и дома — © участники OpenStreetMap (ODbL).</p>`;
     this.side.innerHTML = html;
     this.side.querySelectorAll<HTMLButtonElement>('[data-line]').forEach((b) =>
       b.addEventListener('click', () => {
         this.line = this.line === b.dataset.line ? undefined : b.dataset.line;
         this.target = undefined;
+        this.pickedTripIdx = 0;
         this.paint();
       }),
     );
     this.side
       .querySelectorAll<HTMLButtonElement>('[data-stop]')
       .forEach((b) => b.addEventListener('click', () => this.choose(b.dataset.stop!)));
+    this.side.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.pickedTripIdx = Number.parseInt(b.dataset.pick!, 10) || 0;
+        this.paint();
+      }),
+    );
     this.side.querySelector('[data-act="clear"]')?.addEventListener('click', () => {
       this.line = undefined;
       this.paint();
@@ -644,9 +973,17 @@ export class BusMapPanel {
     this.side.querySelector<HTMLButtonElement>('[data-go]')?.addEventListener('click', (event) => {
       const button = event.currentTarget as HTMLButtonElement;
       const to = button.dataset.go!;
-      if (!this.here || !this.host.travel(this.here, to)) return;
+      const toPlatformId = button.dataset.toPlatform!;
+      const routeId = button.dataset.route!;
+      const directionIndex = Number.parseInt(button.dataset.dir!, 10);
+      if (
+        !this.herePlatform ||
+        !this.host.travel(this.herePlatform, toPlatformId, routeId, directionIndex)
+      )
+        return;
       this.sending = true;
       this.next = button.dataset.next;
+      this.pendingToPlatform = toPlatformId;
       this.target = to;
       this.paint();
     });
@@ -655,6 +992,7 @@ export class BusMapPanel {
   private choose(id: string): void {
     if (this.sending) return;
     this.target = id === this.here ? undefined : id;
+    this.pickedTripIdx = 0;
     this.line = undefined;
     this.placeLabels();
     this.paint();
@@ -696,6 +1034,8 @@ export class BusMapPanel {
       this.scale = scale;
       clearTimeout(this.redraw);
       this.redraw = setTimeout(() => this.draw(), 70);
+    } else if (this.stopsLayer.childElementCount) {
+      this.placeLabels();
     }
   }
 

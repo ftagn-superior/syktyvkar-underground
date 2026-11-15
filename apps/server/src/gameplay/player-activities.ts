@@ -6,7 +6,9 @@ import {
   WORLD_ACTIVITY_MOVE_DURATION_MS,
   floodCooldown,
   findAnimation,
-  findAvatarSkin,
+  animationSkinSupport,
+  isGroundAnimation,
+  type AnimationDefinition,
   findReaction,
   isPlayerMoving,
   millisecondsToTicks,
@@ -52,8 +54,16 @@ export function updatePlayerActivities(
   player: PlayerSchema,
   actual: PlayerState | undefined,
   tick: number,
+  lookup: (id: unknown) => AnimationDefinition | undefined = findAnimation,
 ): void {
   if (actual && (!actual.grounded || actual.revision !== player.revision))
+    cancelAnimation(player, tick);
+  const animation = lookup(player.animationId);
+  if (
+    animation &&
+    (animationSkinSupport(animation, player.skinId) === 'unavailable' ||
+      (isGroundAnimation(animation) && isPlayerMoving(actual?.velocity ?? { x: 0, y: 0, z: 0 })))
+  )
     cancelAnimation(player, tick);
   if (actual && isPlayerMoving(actual.velocity)) {
     const expires = tick + millisecondsToTicks(WORLD_ACTIVITY_MOVE_DURATION_MS);
@@ -81,6 +91,9 @@ export function updatePlayerActivities(
  * grows for a session that keeps spamming (see `floodCooldown`).
  */
 export class PlayerActivities {
+  constructor(
+    private readonly lookup: (id: unknown) => AnimationDefinition | undefined = findAnimation,
+  ) {}
   private reactionAvailableAtTick = 0;
   private chatAvailableAtTick = 0;
   private animationAvailableAtTick = 0;
@@ -120,29 +133,37 @@ export class PlayerActivities {
     animationId: unknown,
     tick: number,
     code?: ErrorCode,
+    spaceAvailable: () => boolean = () => false,
   ): ActivityResult {
-    const animation = findAnimation(animationId);
+    const animation = this.lookup(animationId);
     if (player) expireAnimation(player, tick);
     const remainingTicks = Math.max(
       0,
       this.animationAvailableAtTick - tick,
       player?.animationId
         ? player.animationStartedAtTick +
-            millisecondsToTicks(findAnimation(player.animationId)?.cooldownMs ?? 0) -
+            millisecondsToTicks(this.lookup(player.animationId)?.cooldownMs ?? 0) -
             tick
         : 0,
     );
     code ??= player ? undefined : 'WORLD_NOT_READY';
     if (!code) {
       if (!animation) code = 'INVALID_INPUT';
+      else if (animationSkinSupport(animation, player!.skinId) === 'unavailable')
+        code = 'ANIMATION_SKIN_UNSUPPORTED';
       else if (remainingTicks > 0) code = 'RATE_LIMITED';
       else if (
         !actual?.grounded ||
-        findAvatarSkin(player!.skinId)?.rig !== animation.rig ||
         (animation.mode === 'fullBody' &&
           (isPlayerMoving(actual.velocity) || lastInput.moveX !== 0 || lastInput.moveZ !== 0))
       )
         code = 'ANIMATION_NOT_ALLOWED';
+      else if (
+        isGroundAnimation(animation) &&
+        animationSkinSupport(animation, player!.skinId) !== 'variant' &&
+        !spaceAvailable()
+      )
+        code = 'ANIMATION_NO_SPACE';
       else {
         player!.animationSequence++;
         player!.animationId = animation.id;

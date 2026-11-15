@@ -9,8 +9,11 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// v26 replicates the room clock start phase (`WorldState.dayStartPhaseMs`) on top of v25.
-export const PROTOCOL_VERSION = 26;
+// v25 adds flag-based chat commands (`/help` sends a `commandHelp` effect) and `/speed`
+// (`PlayerSchema.speedPercent`) on top of v24 bus travel, LOD/HLOD and catalog versions.
+// v26 updates bus travel requests to explicit platform/direction selection.
+// v27 replicates the monotonic room clock start phase (`WorldState.dayStartPhaseMs`).
+export const PROTOCOL_VERSION = 27;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -51,6 +54,8 @@ export type ErrorCode =
   | 'INVALID_INPUT'
   | 'INVALID_SKIN'
   | 'ANIMATION_NOT_ALLOWED'
+  | 'ANIMATION_NO_SPACE'
+  | 'ANIMATION_SKIN_UNSUPPORTED'
   | 'COMMAND_DISABLED'
   | 'UNKNOWN_COMMAND'
   | 'RATE_LIMITED'

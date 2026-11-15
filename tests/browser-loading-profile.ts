@@ -1,3 +1,4 @@
+import { ANIMATION_CATALOG_VERSION } from '../packages/contracts/src/index.js';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -73,6 +74,7 @@ const info: WorldInfo = {
     protocolVersion < 24
       ? {}
       : {
+          animations: ANIMATION_CATALOG_VERSION,
           reactions: JSON.parse(
             await readFile(join(clientDirectory, 'reaction-release.json'), 'utf8'),
           ).version,

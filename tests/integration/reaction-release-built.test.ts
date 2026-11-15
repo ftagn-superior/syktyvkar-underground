@@ -110,10 +110,17 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('built reaction release', () 
     await ready(url);
     const info = await (await fetch(`${url}/api/world`)).json();
     expect(info.catalogVersions.reactions).toBe(manifest.version);
+    expect(Object.keys(info.catalogVersions).sort()).toEqual(['animations', 'reactions']);
     const sdk = new Client(url);
-    await expect(
-      sdk.joinById(info.roomId, { ...info, catalogVersions: { reactions: 'old-client' } }),
-    ).rejects.toThrow('VERSION_MISMATCH');
+    for (const key of ['reactions', 'animations']) {
+      for (const missing of [false, true]) {
+        const catalogVersions = { ...info.catalogVersions, [key]: 'old-client' };
+        if (missing) delete catalogVersions[key];
+        await expect(sdk.joinById(info.roomId, { ...info, catalogVersions })).rejects.toThrow(
+          'VERSION_MISMATCH',
+        );
+      }
+    }
     const room = await sdk.joinById(info.roomId, info);
     await room.leave();
     const assetPath = join(directory, 'dist/client/reactions/hello.svg');

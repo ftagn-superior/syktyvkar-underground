@@ -1,7 +1,7 @@
 import { PROTOCOL_VERSION, WORLD_FORMAT_VERSION } from '@su/contracts';
 import type { GameSession } from '../network/session';
 import type { WorldView } from '../rendering/world-view';
-import { CLIENT_CATALOG_VERSIONS } from '../presentation/reaction-release';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 
 declare const __SU_BUILD_INFO__: { version: string; builtAt: string };
 

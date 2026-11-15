@@ -1,5 +1,6 @@
 # Работа с игровыми коллекциями
 
+- Для анимаций сначала прочитайте [Добавить анимацию](docs/add-animation.md). Используйте `pnpm animations:add`, затем `pnpm animations:sync` и `pnpm animations:check`; выполните проверки скинов и локального предпросмотра из инструкции. Источник метаданных — `content/animations/catalog.json`, клипы — `apps/client/src/rendering/avatars/clips/`. Карты `catalogVersions` клиента и сервера содержат `reactions` и `animations`; сохраняйте оба ключа.
 - Для реакций сначала прочитайте [Добавление реакции](docs/reactions.md). Канонический путь: `pnpm reactions:add`, затем `pnpm reactions:check` и `pnpm test:reactions`. Инструкция содержит полный пример, правила SVG, проверку двух клиентов и выпуск.
 - Общие соглашения S-29 и порядок интеграции PR: [Коллекции](docs/collections.md). Сохраняйте стабильные ID и независимость контрактов от движка. Обычный стикер не требует нового серверного обработчика или миграции БД.
 - Источник истины реакций — `packages/contracts/src/reactions.ts`, авторские SVG — `apps/client/public/reactions/`. Не редактируйте `dist/` и не вычисляйте версию каталога вручную.

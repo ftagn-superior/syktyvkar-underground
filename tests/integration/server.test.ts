@@ -116,6 +116,25 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);
   });
 
+  it('rejects missing and mismatched catalog maps even with the same protocol', async () => {
+    expect(Object.keys(info.catalogVersions).sort()).toEqual(['animations', 'reactions']);
+    for (const catalogVersions of [
+      undefined,
+      {},
+      { ...info.catalogVersions, animations: 'old-catalog' },
+      { ...info.catalogVersions, reactions: 'old-catalog' },
+      { reactions: info.catalogVersions.reactions },
+      { animations: info.catalogVersions.animations },
+      { ...info.catalogVersions, unexpected: 'unknown-release' },
+    ]) {
+      await expect(sdk.joinById(info.roomId, { ...info, catalogVersions })).rejects.toThrow(
+        'VERSION_MISMATCH',
+      );
+    }
+    const room = await join();
+    expect(room.sessionId).toBeTruthy();
+  });
+
   it('rejects incompatible versions and room creation', async () => {
     await expect(
       sdk.joinById(info.roomId, {

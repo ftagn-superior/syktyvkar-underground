@@ -1,3 +1,4 @@
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 import {
   Client,
   CloseCode,
@@ -18,7 +19,6 @@ import {
   type WireMoveInput,
 } from '@su/protocol';
 import type { PredictionWorld } from '@su/simulation/prediction';
-import { CLIENT_CATALOG_VERSIONS } from '../presentation/reaction-release';
 import {
   MAX_INPUT_QUEUE,
   matchingCatalogVersions,

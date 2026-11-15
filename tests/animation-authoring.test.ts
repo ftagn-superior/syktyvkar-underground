@@ -23,7 +23,7 @@ async function fixture(run: (root: string) => Promise<void>) {
   try {
     await cp('content/animations', join(root, 'content/animations'), { recursive: true });
     await cp(directory, join(root, directory), { recursive: true });
-    for (const file of animationContractFiles) {
+    for (const file of await animationContractFiles()) {
       await mkdir(dirname(join(root, file)), { recursive: true });
       await cp(file, join(root, file));
     }

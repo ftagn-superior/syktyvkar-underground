@@ -9,7 +9,12 @@ import { prepareAnimationRigFixture } from './helpers/animation-rig-fixture';
 import { launchTestBrowser } from './helpers/browser';
 import { createDelayRelay } from './helpers/tcp-delay';
 import { hudClick } from './helpers/hud';
-import { AVATAR_SKINS, ANIMATION_CATALOG_VERSION, type WorldInfo } from '../packages/contracts/src';
+import {
+  AVATAR_SKINS,
+  ANIMATIONS,
+  ANIMATION_CATALOG_VERSION,
+  type WorldInfo,
+} from '../packages/contracts/src';
 import { rigDefinitions, rigClips } from './fixtures/animation-rig';
 import { restingPose } from '../apps/client/src/rendering/avatars/locomotion';
 
@@ -210,6 +215,43 @@ try {
   checks.push(
     'all 29 supported clip/skin pairs render their declared joints and contact on own client and independent 100ms/jitter observer, with both motion settings; wheelchair rejects the other three choices',
   );
+  const propIds = ['smoke-cigarette', 'drink-beer', 'use-laptop'].filter((id) =>
+    ANIMATIONS.some((a) => a.id === id),
+  );
+  if (propIds.length) {
+    assert.equal(propIds.length, 3, 'S-34 integration keeps all three prepared actions');
+    for (const skin of ['minifigure', 'bear-wheelchair']) {
+      player().skinId = skin;
+      for (const page of pages)
+        await page.waitForFunction(
+          ({ id, skin }) =>
+            (window as any).__SU_DEBUG__
+              .avatars()
+              .some((a: any) => a.entityId === id && a.skinId === skin),
+          { id, skin },
+        );
+      for (const propId of propIds) {
+        await choose(sender, propId);
+        await Promise.all(pages.map((page) => active(page, id, propId)));
+        for (const page of pages)
+          assert.ok(
+            (await avatar(page, id)).prop?.opacity > 0.99,
+            `${skin}/${propId} prop survives v2 integration`,
+          );
+      }
+      await choose(sender, 'rig-sit');
+      await Promise.all(pages.map((page) => active(page, id, 'rig-sit')));
+      for (const page of pages)
+        assert.equal(
+          (await avatar(page, id)).prop,
+          undefined,
+          'ground replacement releases the cosmetic prop',
+        );
+    }
+    checks.push(
+      'S-34 cigarette/beer/laptop remain visible on performer and observer after v2 playback, including wheelchair; replacement releases their props',
+    );
+  }
   player().skinId = 'minifigure';
   for (const page of pages) await page.emulateMedia({ reducedMotion: 'no-preference' });
   await choose(sender, 'rig-lie');
@@ -244,19 +286,29 @@ try {
   );
   // Test harness moves the real capsule to a legal stand near the wall; the request still uses the public UI/server path.
   const physical = (app.room as any).world;
-  assert.equal(physical.respawnPlayerAtPosition(id, { x: 3.6, y: 0.915, z: 0 }), true);
+  assert.equal(physical.respawnPlayerAtPosition(id, { x: 4, y: 0.915, z: -3.8 }), true);
   await sender.waitForFunction(() => {
     const s = (window as any).__SU_DEBUG__.snapshot();
-    return s.authoritative.position.x > 3.4 && s.animation.grounded;
+    return s.authoritative.position.z < -3.5 && s.animation.grounded;
   });
+  assert.equal(
+    physical.checkAnimationSpace(id),
+    false,
+    'standable place beside passage-left is too narrow for a ground pose',
+  );
   await choose(sender, 'rig-lie');
   await sender.waitForFunction(() =>
     (window as any).__SU_DEBUG__.snapshot().animation.message.includes('свободное ровное место'),
   );
   assert.equal(player().animationId, '');
-  assert.equal(physical.respawnPlayerAtPosition(id, { x: 0, y: 0.915, z: 0 }), true);
+  assert.equal(physical.respawnPlayerAtPosition(id, initial.position), true);
   await sender.waitForFunction(
-    () => Math.abs((window as any).__SU_DEBUG__.snapshot().authoritative.position.x) < 0.1,
+    (position) =>
+      Math.hypot(
+        (window as any).__SU_DEBUG__.snapshot().authoritative.position.x - position.x,
+        (window as any).__SU_DEBUG__.snapshot().authoritative.position.z - position.z,
+      ) < 0.1,
+    initial.position,
   );
   await choose(sender, 'rig-cartwheel');
   await active(sender, id, 'rig-cartwheel');

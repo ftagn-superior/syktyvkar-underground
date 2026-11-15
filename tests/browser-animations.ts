@@ -268,14 +268,14 @@ try {
   await openChat(sender);
   await sender.locator('#chat-input').fill('/help');
   await sender.locator('#chat-input').press('Enter');
-  await sender.locator('#commands-panel').waitFor({ state: 'visible' });
-  assert.ok((await sender.locator('#commands-panel .command-list button').count()) > 0);
-  await sender.screenshot({ path: `${output}/command-help.png`, animations: 'disabled' });
+  await sender.locator('#notice').filter({ hasText: 'Нет доступных команд' }).waitFor();
+  assert.equal(await sender.locator('#commands-panel').isVisible(), false);
+  await sender.screenshot({ path: `${output}/guest-command-feedback.png`, animations: 'disabled' });
   await hudClick(sender, '#animations-toggle');
   await sender.locator('#animations-panel').waitFor({ state: 'visible' });
   assert.equal(await sender.locator('#commands-panel').isVisible(), false);
   checks.push(
-    'server /help opens its command panel; opening animations closes it and keeps catalog input usable',
+    'guest /help respects command permissions; the animation catalog remains usable after denial',
   );
   await sender.locator('#animations-panel [data-filter="Танцы"]').click();
   await sender.locator('#animation-search').fill('ТАНЦЫ robot');

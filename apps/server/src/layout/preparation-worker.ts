@@ -1,4 +1,4 @@
-import { canonicalJson } from '@su/contracts';
+import { canonicalJson, changedWorldPublicationCells } from '@su/contracts';
 import { expectedStaticChange, staticChangeIds } from './static-change.js';
 import type { StaticLayoutGeometryDelta } from './release.js';
 import { parentPort } from 'node:worker_threads';
@@ -12,6 +12,7 @@ import {
 import { writeWorldPublication, WorldPublicationContentLimitError } from '@su/world-release';
 import { worldCompatibility } from '../items/store.js';
 import type { PreparationJob, PreparationReply } from './preparation-types.js';
+import { readCachedPublication } from './cached-publication.js';
 
 let release: AuthoringRelease | undefined;
 let publish: ReturnType<typeof createReleaseLayoutPublisher> | undefined;
@@ -27,7 +28,23 @@ parentPort!.on('message', async (job: PreparationJob) => {
       release.metadata.assetReleaseVersion !== job.assetReleaseVersion
     )
       throw new Error('Preparation worker asset release changed');
-    publish ??= createReleaseLayoutPublisher(release);
+    if (!publish) {
+      if (job.change)
+        previous = await readCachedPublication(
+          release,
+          job.change.beforeSnapshot,
+          job.change.beforeManifest,
+        );
+      publish = createReleaseLayoutPublisher(
+        release,
+        previous?.publication.manifest.graphics
+          ? {
+              graphics: previous.publication.manifest.graphics,
+              payloads: previous.publication.payloads,
+            }
+          : undefined,
+      );
+    }
     const before = job.change
       ? previous?.hash === layoutHash(job.change.beforeSnapshot)
         ? previous
@@ -67,6 +84,9 @@ parentPort!.on('message', async (job: PreparationJob) => {
         throw new Error('Prepared layout delta differs from the validated publication');
     }
     const compatibilityHash = worldCompatibility(candidate.world);
+    const changedCellIds = job.change
+      ? changedWorldPublicationCells(job.change.beforeManifest, candidate.publication.manifest)
+      : [];
     const built = performance.now();
     await writeWorldPublication(candidate.publication, job.stagingDirectory, 8);
     previous = candidate;
@@ -81,6 +101,7 @@ parentPort!.on('message', async (job: PreparationJob) => {
         layoutHash: candidate.hash,
         compatibilityHash,
         geometryDelta,
+        changedCellIds,
         stagingDirectory: job.stagingDirectory,
         buildMs: built - started,
         writeMs: performance.now() - built,

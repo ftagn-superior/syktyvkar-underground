@@ -8,6 +8,25 @@ const source = {
   buildingAssets: {},
 };
 describe('world contract', () => {
+  it('preserves canonical numeric spellings and mixed/sparse fallbacks', () => {
+    const numbers = [
+      0,
+      -0,
+      Number.MIN_VALUE,
+      Number.MAX_VALUE,
+      Number.MAX_SAFE_INTEGER,
+      1e-7,
+      1e21,
+      Math.fround(0.1),
+      ...Array.from({ length: 1000 }, (_, i) => Math.sin(i) * 10 ** ((i % 30) - 15)),
+    ];
+    expect(canonicalJson(numbers)).toBe(JSON.stringify(numbers));
+    expect(canonicalJson([numbers, [1, 2, 3]])).toBe(JSON.stringify([numbers, [1, 2, 3]]));
+    expect(canonicalJson([NaN, Infinity, undefined, '1', null])).toBe('[null,null,,"1",null]');
+    expect(canonicalJson(Array(2))).toBe('[,]');
+    const custom = Object.assign([1, 2, 3], { toJSON: () => ['different'] });
+    expect(canonicalJson(custom)).toBe('[1,2,3]');
+  });
   it('accepts zero, one and several initial items without a mandatory crate identity', () => {
     const world = structuredClone(source);
     world.initialItems = [];

@@ -2,7 +2,7 @@ import type { ItemCatalog, InitialItem } from './items.js';
 import type { Bounds, Quat, SimulationConfig, Vec3 } from './simulation.js';
 import type { TerrainSource } from './terrain.js';
 
-export const WORLD_FORMAT_VERSION = 5;
+export const WORLD_FORMAT_VERSION = 6;
 export interface BuildingInstance {
   entityId: string;
   assetId: string;
@@ -171,6 +171,7 @@ export type WorldHeader = Omit<WorldDefinition, 'entities' | 'buildings' | 'buil
 export interface WorldSource extends Omit<WorldBase, 'itemCatalog'> {
   /** Relative authoring file for a pinned, already-reviewed terrain release. */
   terrainRelease?: string;
+  graphicsPolicy?: 'detail-only' | 'two-level';
   itemCatalog: string;
   cellSize: number;
   cells: string[];
@@ -196,6 +197,8 @@ export interface WorldManifest {
   worldFile: string;
   cells: WorldCellManifest[];
   assets: Record<string, BuildingAssetManifest>;
+  /** Derived visual resources, separate from physical asset and entity identity. */
+  graphics?: import('./graphics-groups.js').WorldGraphics;
   /** Deterministic owner-local terrain geometry; authored assets never enter this registry. */
   generatedSupports?: Record<string, { ownerId: string; role: string }>;
 }

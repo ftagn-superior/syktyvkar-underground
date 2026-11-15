@@ -8,7 +8,7 @@ import type { WorldPublicationInfo } from './static-placement.js';
 
 // Combines selective live terrain publication with replicated rain, snow and fog.
 // Previously published v20 clients from either branch must reload.
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;

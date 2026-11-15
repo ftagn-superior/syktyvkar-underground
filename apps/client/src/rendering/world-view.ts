@@ -1,5 +1,9 @@
+import { FarGroups } from './far-groups';
+import { rayBoundsDistance, type GraphicsProjection } from '../streaming/graphics-plan';
+import type { GraphicsGroup, Bounds } from '@su/contracts';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { Engine } from '@babylonjs/core/Engines/engine';
+import { Constants } from '@babylonjs/core/Engines/constants';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
@@ -8,7 +12,7 @@ import { Vector3, Quaternion, Matrix } from '@babylonjs/core/Maths/math.vector';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { createModelVisual, type ModelResourceReader } from './model-visual';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -16,6 +20,7 @@ import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstr
 import '@babylonjs/core/Rendering/edgesRenderer';
 import {
   findReaction,
+  buildingBounds,
   normalizeYaw,
   type ItemPose,
   type Vec3,
@@ -32,7 +37,6 @@ import { StaticViews } from './statics';
 import { applyRadialFog, radialOpacity, type RadialState } from './radial-fog';
 import { Frustum } from '@babylonjs/core/Maths/math.frustum';
 import { BoundingInfo } from '@babylonjs/core/Culling/boundingInfo';
-import { worldCellBounds } from '@su/contracts';
 import { renderQualitySettings, type RenderQuality } from './render-quality';
 import { WorldEnvironment } from './environment/world-environment';
 import type { DayClock, WorldWeather } from '@su/contracts';
@@ -96,6 +100,11 @@ export class WorldView {
   private readonly buildings: BuildingViews;
   private readonly statics: StaticViews;
   private manifest?: WorldManifest;
+  private graphicsDefinitions?: () => Iterable<BuildingInstance>;
+  private graphicsOwners = new Map<string, string>();
+  private graphicsMemberBoxes = new WeakMap<BuildingInstance, Bounds>();
+  private editorProtectedIds?: ReadonlySet<string>;
+  private editorPicking = false;
   private cellBounds: BoundingInfo[] = [];
   private graphicalFrame?: { matrix: Matrix; x: number; z: number; radius: number };
   private readonly cellPreparations = new Set<Promise<unknown>>();
@@ -127,7 +136,28 @@ export class WorldView {
   private readonly projectedLabel = Vector3.Zero();
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private quality: RenderQuality;
-  private zoom = 1;
+  private zoom = Math.min(
+    MAX_ZOOM,
+    Math.max(MIN_ZOOM, Number(new URLSearchParams(location.search).get('initialZoom')) || 1),
+  );
+  private readonly farGroups: FarGroups;
+  private editorRayUntil = 0;
+  private editorSelectedGroup?: string;
+  private readonly graphicsBoxes = new WeakMap<Bounds, BoundingInfo>();
+  private readonly graphicsIds = new WeakMap<Bounds, string>();
+  private graphicsProjectionFrame?: {
+    at: number;
+    matrix: Matrix;
+    view: Matrix;
+    planes: ReturnType<typeof Frustum.GetPlanes>;
+    width: number;
+    height: number;
+    editor?: Ray;
+    editorPins?: Set<string>;
+    editorInput?: { x: number; y: number; protectedIds?: ReadonlySet<string>; placement: boolean };
+    sight?: Ray;
+  };
+  private placementPins = 0;
   private touchMode = false;
   private readonly resize = () => {
     this.applyQuality();
@@ -195,6 +225,18 @@ export class WorldView {
     this.scene.activeCamera = this.camera;
     this.environment = new WorldEnvironment(this.scene, this.camera, [this.eyeCamera]);
     this.shadow = this.environment.shadow;
+    this.scene.onBeforeRenderObservable.add(() => {
+      this.shadowSubmittedIndices = 0;
+    });
+    for (const shadow of [this.shadow, this.environment.staticShadow]) {
+      let before = 0;
+      shadow.onBeforeShadowMapRenderMeshObservable.add(() => {
+        before = this.scene.getActiveIndices();
+      });
+      shadow.onAfterShadowMapRenderMeshObservable.add(() => {
+        this.shadowSubmittedIndices += this.scene.getActiveIndices() - before;
+      });
+    }
     this.applyQuality();
     this.sizeCamera();
     // Неподвижный мир отбрасывает тени в кэшируемую карту; аватары и предметы — в покадровую.
@@ -202,6 +244,12 @@ export class WorldView {
       this.scene,
       this.environment.staticShadow,
       definition,
+      this.radial,
+      this.environment.nightLights,
+    );
+    this.farGroups = new FarGroups(
+      this.scene,
+      this.environment.staticShadow,
       this.radial,
       this.environment.nightLights,
     );
@@ -305,6 +353,7 @@ export class WorldView {
         this.radial.radius,
         this.firstPerson,
       );
+      this.farGroups.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
       this.statics.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
       const center = this.ownPosition ?? this.target;
       this.radial.center = this.dynamicRadial.center = center;
@@ -421,20 +470,153 @@ export class WorldView {
     this.preparation = this.buildings.prepare(manifest, readBytes);
     return this.preparation;
   }
+  projectGraphicsGroup(bounds: Bounds, groupId = this.graphicsIds.get(bounds)): GraphicsProjection {
+    const camera = this.activeCamera;
+    let frame = this.graphicsProjectionFrame;
+    if (!frame || frame.at !== this.lastFrame) {
+      const matrix = camera.getTransformationMatrix();
+      frame = this.graphicsProjectionFrame = {
+        at: this.lastFrame,
+        matrix,
+        view: camera.getViewMatrix(),
+        planes: Frustum.GetPlanes(matrix),
+        width: this.canvas.clientWidth,
+        height: this.canvas.clientHeight,
+      };
+      if (this.ownPosition) {
+        const from = this.firstPerson
+          ? camera.globalPosition
+          : this.ownPosition.subtract(camera.getForwardRay().direction.scale(camera.maxZ));
+        frame.sight = new Ray(
+          from,
+          this.ownPosition.subtract(from).normalize(),
+          Vector3.Distance(from, this.ownPosition),
+        );
+      }
+    }
+    let box = this.graphicsBoxes.get(bounds);
+    if (!box) {
+      box = new BoundingInfo(vector(bounds.min), vector(bounds.max));
+      this.graphicsBoxes.set(bounds, box);
+    }
+    const { matrix, width, height } = frame,
+      visible = box.isInFrustum(frame.planes);
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity,
+      nearPlane = false;
+    for (const point of box.boundingBox.vectorsWorld) {
+      const projected = Vector3.TransformCoordinates(point, matrix),
+        m = frame.view.m;
+      nearPlane ||= point.x * m[2] + point.y * m[6] + point.z * m[10] + m[14] > -camera.minZ;
+      minX = Math.min(minX, projected.x);
+      maxX = Math.max(maxX, projected.x);
+      minY = Math.min(minY, projected.y);
+      maxY = Math.max(maxY, projected.y);
+    }
+    let pinned = this.editorSelectedGroup !== undefined && this.editorSelectedGroup === groupId;
+    if (
+      this.editorPicking ||
+      this.editorRayUntil > performance.now() ||
+      this.placementPins > 0 ||
+      this.ghost?.isEnabled()
+    ) {
+      const input = {
+        x: this.scene.pointerX,
+        y: this.scene.pointerY,
+        protectedIds: this.editorProtectedIds,
+        placement: this.placementPins > 0,
+      };
+      if (
+        !frame.editorInput ||
+        Object.keys(input).some(
+          (k) => input[k as keyof typeof input] !== frame!.editorInput![k as keyof typeof input],
+        )
+      ) {
+        frame.editor = undefined;
+        frame.editorPins = undefined;
+        frame.editorInput = input;
+      }
+      if (!frame.editor) {
+        const { from, to } = this.pointerRay();
+        frame.editor = new Ray(
+          vector(from),
+          vector(to).subtract(vector(from)).normalize(),
+          camera.maxZ,
+        );
+        const ray = frame.editor;
+        const candidates = new Map<string, number>(),
+          known = new Set<string>(),
+          seen = new Set<string>();
+        const consider = (id: string, bounds: Bounds) => {
+          const distance = rayBoundsDistance(ray.origin, ray.direction, bounds, ray.length);
+          if (distance !== undefined)
+            candidates.set(id, Math.min(candidates.get(id) ?? Infinity, distance));
+        };
+        for (const member of this.graphicsDefinitions?.() ?? []) {
+          const owner = this.graphicsOwners.get(member.entityId);
+          if (!owner || seen.has(member.entityId)) continue;
+          seen.add(member.entityId);
+          known.add(owner);
+          if (!this.placementPins && this.editorProtectedIds?.has(member.entityId)) continue;
+          let bounds = this.graphicsMemberBoxes.get(member);
+          if (!bounds) {
+            const asset = this.manifest?.assets[member.assetId];
+            if (!asset) continue;
+            bounds = buildingBounds(member, asset.bounds);
+            this.graphicsMemberBoxes.set(member, bounds);
+          }
+          consider(owner, bounds);
+        }
+        // Until a lightweight owner/coverage JSON arrives, conservatively request
+        // its group. Loaded members refine broad terrain/building group envelopes.
+        for (const group of this.manifest?.graphics?.groups ?? [])
+          if (!known.has(group.groupId)) consider(group.groupId, group.bounds);
+        frame.editorPins = new Set([...candidates].sort((a, b) => a[1] - b[1]).map(([id]) => id));
+      }
+      pinned ||= frame.editorPins!.has(groupId ?? '');
+    }
+    if (frame.sight)
+      pinned ||= frame.sight.intersectsBoxMinMax(
+        box.boundingBox.minimumWorld,
+        box.boundingBox.maximumWorld,
+      );
+    return {
+      pixels: Math.max(((maxX - minX) * width) / 2, ((maxY - minY) * height) / 2),
+      visible,
+      nearPlane,
+      pinned,
+    };
+  }
+  prepareFarGroup(
+    group: GraphicsGroup,
+    read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
+    signal: AbortSignal,
+  ) {
+    return this.farGroups.prepare(group, read, signal);
+  }
+  setGraphicsManifest(manifest: WorldManifest, definitions?: () => Iterable<BuildingInstance>) {
+    if (definitions) this.graphicsDefinitions = definitions;
+    if (this.manifest === manifest) return;
+    this.manifest = manifest;
+    this.graphicsOwners = new Map(
+      manifest.graphics?.groups.flatMap((g) => g.memberIds.map((id) => [id, g.groupId] as const)) ??
+        [],
+    );
+    for (const g of manifest.graphics?.groups ?? []) this.graphicsIds.set(g.bounds, g.groupId);
+    this.graphicsProjectionFrame = undefined;
+    this.cellBounds = manifest.cells.map(
+      (cell) => new BoundingInfo(vector(cell.bounds.min), vector(cell.bounds.max)),
+    );
+    this.graphicalFrame = undefined;
+  }
   prepareCellAssets(
     manifest: WorldManifest,
     ids: string[],
     read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
     signal?: AbortSignal,
   ) {
-    if (this.manifest !== manifest) {
-      this.manifest = manifest;
-      this.cellBounds = manifest.cells.map((cell) => {
-        const bounds = worldCellBounds(manifest.bounds, manifest.grid, cell.cellId);
-        return new BoundingInfo(vector(bounds.min), vector(bounds.max));
-      });
-      this.graphicalFrame = undefined;
-    }
     const pending = this.buildings.prepareAssets(manifest, ids, read, signal);
     this.cellPreparations.add(pending);
     void pending.then(
@@ -504,6 +686,76 @@ export class WorldView {
       view.avatar ? [view.avatar.diagnostics()] : [],
     );
   }
+  private geometryPeak = { geometryBytes: 0, triangles: 0, cpuArrayEstimate: 0 };
+  private shadowSubmittedIndices = 0;
+  recordGraphicsResidency(): void {
+    const sample = this.geometryDiagnostics();
+    for (const key of ['geometryBytes', 'triangles', 'cpuArrayEstimate'] as const)
+      this.geometryPeak[key] = Math.max(this.geometryPeak[key], sample[key]);
+  }
+  private geometryDiagnostics() {
+    const buffers = new Set<object>(),
+      indices = new Set<object>();
+    const cpuArrays = new Set<object>();
+    let cpuArrayEstimate = 0,
+      instanceBufferBytes = 0;
+    const countCpu = (
+      data:
+        | import('@babylonjs/core/types').DataArray
+        | import('@babylonjs/core/types').IndicesArray
+        | null,
+    ) => {
+      if (!data) return;
+      const owner = Array.isArray(data) ? data : ArrayBuffer.isView(data) ? data.buffer : data;
+      if (cpuArrays.has(owner)) return;
+      cpuArrays.add(owner);
+      cpuArrayEstimate += Array.isArray(owner) ? owner.length * 8 : owner.byteLength;
+    };
+    let vertexBytes = 0,
+      indexBytes = 0,
+      triangles = 0;
+    for (const mesh of [
+      ...this.scene.meshes,
+      ...this.buildings.residentMeshes(),
+      ...this.farGroups.residentMeshes(),
+    ]) {
+      if (!(mesh instanceof Mesh) || !mesh.geometry) continue;
+      for (const vb of Object.values(mesh.geometry.getVertexBuffers() ?? {})) {
+        const buffer = vb.getBuffer();
+        if (!buffer || buffers.has(buffer)) continue;
+        buffers.add(buffer);
+        const data = vb.getData();
+        const bytes = data
+          ? Array.isArray(data)
+            ? data.length * 4
+            : data.byteLength
+          : mesh.getTotalVertices() * vb.byteStride;
+        vertexBytes += bytes;
+        if (vb.getIsInstanced()) instanceBufferBytes += bytes;
+        countCpu(data);
+      }
+      const buffer = mesh.geometry.getIndexBuffer();
+      if (!buffer || indices.has(buffer)) continue;
+      indices.add(buffer);
+      const data = mesh.getIndices();
+      countCpu(data);
+      indexBytes += data
+        ? Array.isArray(data)
+          ? data.length * 4
+          : data.byteLength
+        : mesh.getTotalIndices() * 4;
+      triangles += mesh.getTotalIndices() / 3;
+    }
+    return {
+      vertexBytes,
+      indexBytes,
+      instanceBufferBytes,
+      geometryBytes: vertexBytes + indexBytes,
+      triangles,
+      gpuAllocationEstimate: vertexBytes + indexBytes,
+      cpuArrayEstimate,
+    };
+  }
   renderingDiagnostics() {
     const shadows = this.environment.shadowDiagnostics();
     return {
@@ -540,9 +792,16 @@ export class WorldView {
         overlayBlocked: view.occlusion?.blocked ?? false,
         overlayVisible: view.label ? !view.label.hidden : false,
       })),
+      geometry: this.geometryDiagnostics(),
+      geometryPeak: { ...this.geometryPeak },
+      submittedTriangles: {
+        main: (this.scene.getActiveIndices() - this.shadowSubmittedIndices) / 3,
+        shadow: this.shadowSubmittedIndices / 3,
+      },
       geometries: this.scene.geometries.length,
       nodes: this.scene.transformNodes.length,
       textures: this.scene.textures.length,
+      texturePayloadEstimateBytes: this.texturePayloadEstimate(),
       shadowCasters: shadows.staticCasters + shadows.dynamicCasters,
       shadowMaps: shadows,
       streaming: {
@@ -584,6 +843,67 @@ export class WorldView {
       },
       buildings: this.buildings.aggregateDiagnostics(),
     };
+  }
+  /** Uncompressed color/depth payloads, including mips and multisample resolve.
+   * Uses uncompressed dimensions; default framebuffers, driver compression and padding are outside this estimate. */
+  private texturePayloadEstimate(): number {
+    let bytes = 0;
+    for (const t of new Set(this.engine.getLoadedTexturesCache())) {
+      const channels = [
+        Constants.TEXTUREFORMAT_ALPHA,
+        Constants.TEXTUREFORMAT_LUMINANCE,
+        Constants.TEXTUREFORMAT_RED,
+        Constants.TEXTUREFORMAT_RED_INTEGER,
+      ].includes(t.format)
+        ? 1
+        : [
+              Constants.TEXTUREFORMAT_RG,
+              Constants.TEXTUREFORMAT_RG_INTEGER,
+              Constants.TEXTUREFORMAT_LUMINANCE_ALPHA,
+            ].includes(t.format)
+          ? 2
+          : [Constants.TEXTUREFORMAT_RGB, Constants.TEXTUREFORMAT_RGB_INTEGER].includes(t.format)
+            ? 3
+            : 4;
+      const component =
+        t.type === Constants.TEXTURETYPE_FLOAT ||
+        t.type === Constants.TEXTURETYPE_INT ||
+        t.type === Constants.TEXTURETYPE_UNSIGNED_INTEGER
+          ? 4
+          : t.type === Constants.TEXTURETYPE_HALF_FLOAT ||
+              t.type === Constants.TEXTURETYPE_SHORT ||
+              t.type === Constants.TEXTURETYPE_UNSIGNED_SHORT
+            ? 2
+            : 1;
+      const packed =
+        t.type >= 8 && t.type <= 10
+          ? 2
+          : t.type >= 11 && t.type <= 14
+            ? 4
+            : t.type === Constants.TEXTURETYPE_FLOAT_32_UNSIGNED_INT_24_8_REV
+              ? 8
+              : undefined;
+      const depth =
+        t.format === Constants.TEXTUREFORMAT_DEPTH16
+          ? 2
+          : t.format === Constants.TEXTUREFORMAT_DEPTH32FLOAT_STENCIL8
+            ? 8
+            : t.format >= Constants.TEXTUREFORMAT_DEPTH24_STENCIL8 &&
+                t.format <= Constants.TEXTUREFORMAT_DEPTH24UNORM_STENCIL8
+              ? 4
+              : undefined;
+      const faces = t.isCube ? 6 : 1,
+        layers = Math.max(1, t.depth);
+      bytes +=
+        t.width *
+        t.height *
+        faces *
+        layers *
+        (depth ?? packed ?? channels * component) *
+        (t.generateMipMaps ? 4 / 3 : 1) *
+        (t.samples > 1 ? t.samples + 1 : 1);
+    }
+    return Math.ceil(bytes);
   }
   graphicalArea() {
     this.activeCamera.getViewMatrix(true);
@@ -921,9 +1241,21 @@ export class WorldView {
   getStaticObject(entityId: string): StaticObjectSelection | undefined {
     return this.buildings.selection(entityId);
   }
+  setStaticPicking(active: boolean): void {
+    if (this.editorPicking === active) return;
+    this.editorPicking = active;
+    this.graphicsProjectionFrame = undefined;
+    if (!active) {
+      this.editorRayUntil = 0;
+      this.editorProtectedIds = undefined;
+    }
+  }
   pickStaticObject(
     protectedEntityIds: ReadonlySet<string> = new Set(),
   ): StaticObjectSelection | undefined {
+    this.editorRayUntil = performance.now() + 250;
+    this.editorProtectedIds = protectedEntityIds;
+    if (!this.editorCandidatesReady()) return;
     const { from, to } = this.pointerRay();
     const direction = vector(to).subtract(vector(from)).normalize();
     const ray = new Ray(vector(from), direction, this.activeCamera.maxZ);
@@ -935,6 +1267,10 @@ export class WorldView {
   /** A private bounds cage makes the whole deletion unit visible without cloning materials. */
   highlightStaticObject(entityId?: string): void {
     const selection = entityId ? this.getStaticObject(entityId) : undefined;
+    this.editorSelectedGroup = selection
+      ? this.manifest?.graphics?.groups.find((g) => g.memberIds.includes(selection.entityId))
+          ?.groupId
+      : undefined;
     if (!selection) {
       if (this.staticHighlight) {
         this.staticHighlight.target = undefined;
@@ -976,7 +1312,32 @@ export class WorldView {
       visual.dispose();
       throw new Error('View disposed');
     }
-    return visual;
+    this.placementPins++;
+    let released = false;
+    return {
+      ...visual,
+      dispose: () => {
+        if (!released) {
+          released = true;
+          this.placementPins--;
+          visual.dispose();
+        }
+      },
+    };
+  }
+  /** Editors can confirm only after all ray candidates have their exact near meshes. */
+  graphicsAtPointerReady(): boolean {
+    this.editorRayUntil = performance.now() + 250;
+    this.editorProtectedIds = undefined;
+    return this.editorCandidatesReady();
+  }
+  private editorCandidatesReady(): boolean {
+    return !(
+      this.manifest?.graphics?.groups.some(
+        (g) =>
+          this.projectGraphicsGroup(g.bounds).pinned && !this.buildings.hasMembers(g.memberIds),
+      ) ?? false
+    );
   }
   showPlacement(typeId?: string, pose?: ItemPose, valid = false) {
     if (!typeId || !pose) {
@@ -1182,6 +1543,7 @@ export class WorldView {
     for (const view of this.entities.values()) this.disposeEntity(view);
     this.entities.clear();
     this.labels.replaceChildren();
+    this.farGroups.dispose();
     this.buildings.dispose();
     this.statics.dispose();
     this.instrumentation.dispose();

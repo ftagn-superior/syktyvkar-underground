@@ -41,7 +41,6 @@ import {
   TICK_RATE,
   NEUTRAL_INPUT,
   worldNeighborhood,
-  changedWorldPublicationCells,
   type PrepareArea,
   type LayoutChanged,
   type LayoutApplied,
@@ -210,16 +209,21 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     }
     // Seeding through the ownership transaction can advance the candidate revision.
     this.state.layoutRevision = options.layouts?.current.snapshot.revision ?? 1;
-    if (options.layouts)
+    if (options.layouts) {
       this.staticPlacement = new LiveStaticPlacement(
         options.layouts,
         this.items,
         this.world,
         this.state.worldEpoch,
-        (operationId) => this.layoutChanged(operationId),
+        (operationId, changedCellIds) => this.layoutChanged(operationId, changedCellIds),
         () => this.neutralAll(),
         options.placementCatalog,
       );
+      // Warmup is optional: failure leaves the ordinary bounded retry path available.
+      await this.staticPlacement
+        .initialize()
+        .catch((error) => console.warn('Static publisher warmup failed', error));
+    }
     this.onMessage('placeStatic', (client, request: unknown) => {
       void this.placeStatic(client, request);
     });
@@ -1252,10 +1256,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.world.setInput(session.entityId, NEUTRAL_INPUT);
     }
   }
-  private layoutChanged(operationId: string) {
+  private layoutChanged(operationId: string, changedCellIds: readonly string[]) {
     const p = this.staticPlacement!.publications;
     const previous = p.previous!;
-    const changed = new Set(changedWorldPublicationCells(previous.manifest, p.current.manifest));
+    const changed = new Set(changedCellIds);
     this.definition = p.current.definition;
     this.manifest = p.current.manifest;
     this.state.mapVersion = this.manifest.mapVersion;

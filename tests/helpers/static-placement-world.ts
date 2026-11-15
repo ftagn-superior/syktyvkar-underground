@@ -4,7 +4,10 @@ import { physicsFixture } from '../../packages/simulation/src/test-fixture.js';
 import { STATIC_PLACEMENT_ASSET_ID } from '../../packages/contracts/src/index.js';
 import { buildWorld } from '../../tools/world-build/src/index.js';
 /** Small authored release with the real selected bench and a flat foundation. */
-export async function buildStaticPlacementWorld(directory: string) {
+export async function buildStaticPlacementWorld(
+  directory: string,
+  graphicsPolicy: 'detail-only' | 'two-level' = 'detail-only',
+) {
   const source = join(directory, 'source');
   await mkdir(source, { recursive: true });
   await cp(
@@ -41,6 +44,7 @@ export async function buildStaticPlacementWorld(directory: string) {
     JSON.stringify({
       ...header,
       worldId: 'static-placement-lab',
+      graphicsPolicy,
       spawnPoints: [-12, -9, -6, -3, 0, 3, 6, 9].map((x) => ({ x, y: 0, z: -10 })),
       cellSize: 40,
       assetCatalog: 'catalog.json',

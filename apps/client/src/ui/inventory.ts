@@ -386,7 +386,7 @@ export class InventoryPanel {
       w: this.rotation.w,
     });
     this.pose = result.pose;
-    this.valid = !!result.pose && !result.error;
+    this.valid = !!result.pose && !result.error && view.graphicsAtPointerReady?.() !== false;
     view.showPlacement(this.selected.typeId, this.pose, this.valid);
     const text = this.session.itemPending
       ? 'Сохраняем…'

@@ -3,7 +3,7 @@ import type { BuildingPhysicsAsset, StaticCollider, Vec3, WorldDefinition } from
 
 export function physicsFixture(): WorldDefinition {
   return {
-    formatVersion: 5,
+    formatVersion: 6,
     worldId: 'test',
     itemCatalog: structuredClone(catalog) as WorldDefinition['itemCatalog'],
     initialItems: [

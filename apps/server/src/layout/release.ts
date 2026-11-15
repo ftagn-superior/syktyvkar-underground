@@ -1,9 +1,17 @@
+import {
+  VisualGroupBuilder,
+  validateVisualSource,
+  visualTemplate,
+  type VisualSource,
+  type PreparedGraphics,
+} from '@su/visual-build';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   canonicalJson,
+  GROUP_RENDER_LIMITS,
   MAX_EDITABLE_STATIC_INSTANCES,
-  validateWorld,
+  validateWorldBuildingPlacements,
   type StaticObjectInstance,
   type WorldLayoutSnapshot,
   type WorldDefinition,
@@ -17,6 +25,7 @@ import {
   hash,
   PRIVATE_TERRAIN_MAX_BYTES,
   validatePrivateTerrainReference,
+  validatePrivateVisualReference,
   type AuthoringMetadata,
   type CompiledWorldAsset,
 } from '@su/world-release';
@@ -36,11 +45,17 @@ export async function readAuthoringRelease(directory: string) {
   );
   if (
     !metadata ||
-    metadata.formatVersion !== 1 ||
+    metadata.formatVersion !== 2 ||
     !Array.isArray(metadata.fixedInstanceIds) ||
     canonicalJson(metadata) !==
       canonicalJson(
-        authoringMetadata(definition, manifest, metadata.fixedInstanceIds, metadata.terrain),
+        authoringMetadata(
+          definition,
+          manifest,
+          metadata.fixedInstanceIds,
+          metadata.terrain,
+          metadata.visual,
+        ),
       )
   )
     throw new Error('Invalid authored release metadata. Run pnpm world:build.');
@@ -73,11 +88,24 @@ export async function readAuthoringRelease(directory: string) {
         throw new Error(`Terrain support requires an editable model: ${support.assetId}`);
     }
   }
+  let visual: VisualSource | undefined;
+  if (metadata.visual) {
+    const ref = validatePrivateVisualReference(metadata.visual);
+    const path = resolve(directory, ref.file);
+    if ((await stat(path)).size > GROUP_RENDER_LIMITS.sourceBytes)
+      throw new Error('Private visual byte limit');
+    const bytes = await readFile(path);
+    if (bytes.length > GROUP_RENDER_LIMITS.sourceBytes || hash(bytes) !== ref.sha256)
+      throw new Error('Private visual hash mismatch');
+    visual = validateVisualSource(JSON.parse(bytes.toString('utf8')), manifest.worldId);
+    if (manifest.graphics?.sourceVersion !== ref.sha256)
+      throw new Error('Public/private visual identity mismatch');
+  } else if (manifest.graphics) throw new Error('Missing private visual source');
   const fixed = new Set(metadata.fixedInstanceIds);
   const seed: StaticObjectInstance[] = definition.buildings
     .filter((i) => !fixed.has(i.entityId))
     .map((i) => ({ ...i, instanceRevision: 1, enabled: true }));
-  return { manifest, definition, metadata, seed, terrain, directory: resolve(directory) };
+  return { manifest, definition, metadata, seed, terrain, visual, directory: resolve(directory) };
 }
 export type AuthoringRelease = Awaited<ReturnType<typeof readAuthoringRelease>>;
 export function editableStaticAssetIds(release: AuthoringRelease): string[] {
@@ -108,19 +136,34 @@ export function terrainSupportId(worldId: string, ownerId: string, role: string)
 export function createLayoutPublication(release: AuthoringRelease, snapshot: WorldLayoutSnapshot) {
   return prepareLayoutPublication(release, snapshot, () => readCompiledLayoutAssets(release));
 }
-export function createReleaseLayoutPublisher(release: AuthoringRelease) {
+type CachedSupport = {
+  signature: string;
+  rule: NonNullable<ReturnType<typeof selectSupportRule>>;
+  assets: { compiled: CompiledWorldAsset; visual: ReturnType<typeof visualTemplate> }[];
+};
+export function createReleaseLayoutPublisher(
+  release: AuthoringRelease,
+  graphics?: PreparedGraphics,
+) {
   let assets: Promise<Record<string, CompiledWorldAsset>> | undefined;
+  const graphicsBuilder = new VisualGroupBuilder();
+  if (graphics) graphicsBuilder.seed(graphics.graphics, graphics.payloads);
+  const supportCache = new Map<string, CachedSupport>();
   return (snapshot: WorldLayoutSnapshot) =>
     prepareLayoutPublication(
       release,
       snapshot,
       () => (assets ??= readCompiledLayoutAssets(release)),
+      graphicsBuilder,
+      supportCache,
     );
 }
 async function prepareLayoutPublication(
   release: AuthoringRelease,
   snapshot: WorldLayoutSnapshot,
   compiledAssets: () => Promise<Record<string, CompiledWorldAsset>>,
+  graphicsBuilder = new VisualGroupBuilder(),
+  supportCache = new Map<string, CachedSupport>(),
 ) {
   if (
     snapshot.formatVersion !== 1 ||
@@ -172,7 +215,7 @@ async function prepareLayoutPublication(
     10_000
   )
     throw new WorldPublicationContentLimitError('world building references');
-  validateWorld({
+  validateWorldBuildingPlacements({
     ...release.definition,
     buildings: [
       ...release.definition.buildings.filter((i) => reserved.has(i.entityId)),
@@ -188,7 +231,9 @@ async function prepareLayoutPublication(
     ],
   };
   const assets = { ...(await compiledAssets()) };
+  const visualDerived: Record<string, ReturnType<typeof visualTemplate>> = {};
   const generatedSupports: Record<string, { ownerId: string; role: string }> = {};
+  const nextSupportCache = new Map<string, CachedSupport>();
   // Start from the immutable authored release every time. Dynamic supports are
   // never source buildings, DB rows or editable catalog entries, so disabling,
   // deleting or changing a model cannot retain an earlier generated resource.
@@ -214,25 +259,42 @@ async function prepareLayoutPublication(
         if (usedIds.has(id)) throw new Error(`Reserved/duplicate terrain support ID: ${id}`);
         usedIds.add(id);
       }
-      const generated: ReturnType<typeof generateSupportAssets> = (() => {
-        try {
-          return generateSupportAssets(release.terrain!.grid, rule, owner, derivedIds);
-        } catch (error) {
-          throw new Error(
-            `Terrain support for ${owner.entityId} (${owner.assetId}): ${error instanceof Error ? error.message : String(error)}`,
-            { cause: error },
-          );
-        }
-      })();
+      const signature = canonicalJson({
+        assetId: owner.assetId,
+        position: owner.position,
+        rotation: owner.rotation,
+      });
+      let cached = supportCache.get(owner.entityId);
+      if (cached?.signature !== signature || cached.rule !== rule) {
+        const generated: ReturnType<typeof generateSupportAssets> = (() => {
+          try {
+            return generateSupportAssets(release.terrain!.grid, rule, owner, derivedIds);
+          } catch (error) {
+            throw new Error(
+              `Terrain support for ${owner.entityId} (${owner.assetId}): ${error instanceof Error ? error.message : String(error)}`,
+              { cause: error },
+            );
+          }
+        })();
+        cached = {
+          signature,
+          rule,
+          assets: generated.map(({ asset }) => ({
+            compiled: compileGeneratedAsset(asset.physics.assetId, asset),
+            visual: visualTemplate('support', asset.parts),
+          })),
+        };
+      }
+      nextSupportCache.set(owner.entityId, cached);
       for (const [id, role] of [
         [derivedIds.foundation, 'foundation'],
         ...Object.entries(derivedIds.approaches).map(([role, id]) => [id, `approach:${role}`]),
       ])
         generatedSupports[id] = { ownerId: owner.entityId, role };
-      for (const { asset } of generated) {
-        const assetId = asset.physics.assetId;
-        const compiled = compileGeneratedAsset(assetId, asset);
+      for (const { compiled, visual } of cached.assets) {
+        const assetId = compiled.physics.assetId;
         assets[assetId] = compiled;
+        visualDerived[assetId] = visual;
         world.buildingAssets[assetId] = compiled.physics;
         world.buildings.push({
           entityId: assetId,
@@ -244,12 +306,26 @@ async function prepareLayoutPublication(
     }
   }
   world.buildings.sort((a, b) => a.entityId.localeCompare(b.entityId));
+  const publication = createWorldPublication(world, release.manifest.grid, assets, {
+    physicsPacks: release.manifest.cells.some((cell) => cell.physicsPacks?.length),
+    ...(release.visual
+      ? {
+          graphics: graphicsBuilder.build(
+            world,
+            release.manifest.grid,
+            release.visual,
+            release.metadata.visual!.sha256,
+            visualDerived,
+          ),
+        }
+      : {}),
+    ...(Object.keys(generatedSupports).length ? { generatedSupports } : {}),
+  });
+  supportCache.clear();
+  for (const [id, value] of nextSupportCache) supportCache.set(id, value);
   return {
     world,
-    publication: createWorldPublication(world, release.manifest.grid, assets, {
-      physicsPacks: release.manifest.cells.some((cell) => cell.physicsPacks?.length),
-      ...(Object.keys(generatedSupports).length ? { generatedSupports } : {}),
-    }),
+    publication,
     hash: layoutHash(snapshot),
   };
 }
@@ -262,21 +338,27 @@ async function readCompiledLayoutAssets(release: AuthoringRelease) {
     return bytes;
   };
   const assets: Record<string, CompiledWorldAsset> = {};
-  for (const [id, descriptor] of Object.entries(release.manifest.assets)) {
-    const [model, collision, parts] = await Promise.all([
-      descriptor.modelFile ? read(descriptor.modelFile) : undefined,
-      read(descriptor.collisionFile),
-      read(descriptor.partsFile),
-    ]);
-    assets[id] = {
-      version: descriptor.version,
-      bounds: descriptor.bounds,
-      physics: release.definition.buildingAssets[id],
-      model,
-      collision,
-      parts,
-    };
-  }
+  const entries = Object.entries(release.manifest.assets);
+  let cursor = 0;
+  const load = async () => {
+    while (cursor < entries.length) {
+      const [id, descriptor] = entries[cursor++];
+      const [model, collision, parts] = await Promise.all([
+        descriptor.modelFile ? read(descriptor.modelFile) : undefined,
+        read(descriptor.collisionFile),
+        read(descriptor.partsFile),
+      ]);
+      assets[id] = {
+        version: descriptor.version,
+        bounds: descriptor.bounds,
+        physics: release.definition.buildingAssets[id],
+        model,
+        collision,
+        parts,
+      };
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, load));
   return assets;
 }
 

@@ -59,7 +59,7 @@ try {
   }
   const initialWorldCount = app.room.state.items.size;
   await command(observer, '/giveme wooden-crate');
-  await observer.locator('#notice').filter({ hasText: 'войдите через Telegram' }).waitFor();
+  await observer.locator('#notice').filter({ hasText: 'Неизвестная команда.' }).waitFor();
   assert.equal(await owner.locator('.player-chat').count(), 0);
   await observer.keyboard.press('Escape');
   await command(owner, '/giveme wooden-crate');
@@ -69,10 +69,7 @@ try {
     .filter({ hasText: 'Получен предмет: Деревянный ящик ×1.' })
     .waitFor();
   await chatSent(owner);
-  assert.equal(
-    await observer.locator('#notice').textContent(),
-    'Консольные команды доступны только администраторам. Войдите через Telegram.',
-  );
+  assert.equal(await observer.locator('#notice').textContent(), 'Неизвестная команда.');
   assert.equal(await observer.locator('.player-chat').count(), 0);
   assert.equal(app.room.state.items.size, initialWorldCount);
 

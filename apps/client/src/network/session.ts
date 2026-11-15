@@ -1,3 +1,4 @@
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 import {
   Client,
   CloseCode,
@@ -20,6 +21,7 @@ import {
 import type { PredictionWorld } from '@su/simulation/prediction';
 import {
   MAX_INPUT_QUEUE,
+  matchingCatalogVersions,
   canonicalJson,
   worldPublicationBaseIdentity,
   changedWorldPublicationCells,
@@ -49,8 +51,11 @@ import {
   precipitationFromCode,
   type WorldWeather,
   RESPAWN_COOLDOWN_MS,
+  type BusTravelRequest,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
+  parseCommandHelpEffect,
+  type CommandHelpEffect,
   DEFAULT_DAY_CLOCK,
   type DayClock,
   TICK_RATE,
@@ -161,6 +166,7 @@ export class GameSession {
   onStaticRemovalOpen?: (effect: StaticRemovalEffect, requestId: number) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
+  private ownSpeed?: { room: object; percent: number };
   private readonly itemOperation = new PersistentOperation<ItemCommand>(
     'su:item-operation',
     parseItemCommand,
@@ -172,6 +178,10 @@ export class GameSession {
   onChatResult?: (result: ActionResult) => void;
   /** Invalidate UI return intents even if a pause begins and ends between render frames. */
   onControlInterruption?: () => void;
+  /** Ответ на `/help`: список доступных команд, уже отфильтрованный сервером. */
+  onCommandHelp?: (help: CommandHelpEffect, requestId: number) => void;
+  /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
+  onBusTravelResult?: (result: ActionResult) => void;
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
   dayClock: DayClock = DEFAULT_DAY_CLOCK;
   onDayClock?: (clock: DayClock) => void;
@@ -238,6 +248,7 @@ export class GameSession {
   private readonly chatRequest = new PendingAction();
   private readonly reactionRequest = new PendingAction();
   private readonly respawnRequest = new PendingAction();
+  private readonly busRequest = new PendingAction();
   private readonly animationBuffer = new AnimationBuffer();
   private readonly animationRequest = new AnimationRequestState();
   private animationMoving = false;
@@ -270,6 +281,7 @@ export class GameSession {
       this.pendingSpawnSound = false;
       this.liveItemOperation = undefined;
       this.respawnRequest.cancel();
+      this.busRequest.cancel();
       this.reactionRequest.cancel();
       this.animationRequest.clear();
       this.animationBuffer.clear();
@@ -283,6 +295,12 @@ export class GameSession {
     this.reloadRequired = true;
     throw new Error('VERSION_MISMATCH');
   }
+  private compatibleVersion(info: WorldInfo): boolean {
+    return (
+      info.protocolVersion === PROTOCOL_VERSION &&
+      matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions)
+    );
+  }
   async load(): Promise<void> {
     const generation = ++this.generation;
     this.cancelPhysicsPreparation();
@@ -290,7 +308,7 @@ export class GameSession {
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
-      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      if (!this.compatibleVersion(info)) this.versionMismatch();
       const publication = await loadWorldPublication(info, this.verifiedBytes);
       if (generation !== this.generation) {
         publication.resources.dispose();
@@ -544,7 +562,7 @@ export class GameSession {
     const generation = this.generation;
     const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
     if (generation !== this.generation) return;
-    if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+    if (!this.compatibleVersion(info)) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
     else this.info = info;
   }
@@ -742,7 +760,7 @@ export class GameSession {
     try {
       const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
       if (generation !== this.generation) return;
-      if (info.protocolVersion !== PROTOCOL_VERSION) this.versionMismatch();
+      if (!this.compatibleVersion(info)) this.versionMismatch();
       if (info.mapVersion !== this.info.mapVersion) {
         await this.changePublication(info);
         generation = this.generation;
@@ -764,6 +782,7 @@ export class GameSession {
             info.roomId,
             {
               protocolVersion: PROTOCOL_VERSION,
+              catalogVersions: CLIENT_CATALOG_VERSIONS,
               mapVersion: info.mapVersion,
               simulationConfigHash: info.simulationConfigHash,
               accountMode: this.accountId ? 'account' : 'guest',
@@ -944,6 +963,8 @@ export class GameSession {
             this.pendingChatCommand ? 0 : ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
           )
         ) {
+          const help = result.ok ? parseCommandHelpEffect(result.effect) : undefined;
+          if (help) this.onCommandHelp?.(help, result.requestId);
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(
@@ -963,6 +984,18 @@ export class GameSession {
                 ? 'Слишком часто — подождите немного.'
                 : (messages[result.code] ?? result.code),
             );
+          return;
+        }
+        // Поездка и возврат на старт делят серверную перезарядку перемещения.
+        if (this.busRequest.settle(result, RESPAWN_COOLDOWN_MS)) {
+          if (!result.ok) this.onActionFeedback?.('error');
+          if (!result.ok && result.code)
+            this.onNotice(
+              result.code === 'RATE_LIMITED'
+                ? 'Автобус уже в пути — подождите пару секунд.'
+                : (messages[result.code] ?? result.code),
+            );
+          this.onBusTravelResult?.(result);
           return;
         }
         if (!this.respawnRequest.settle(result, RESPAWN_COOLDOWN_MS)) return;
@@ -1073,10 +1106,8 @@ export class GameSession {
       if (!retried && error instanceof Error && error.message.includes('VERSION_MISMATCH')) {
         try {
           const latest = (await (await getResponse('/api/world')).json()) as WorldInfo;
-          if (
-            latest.protocolVersion === PROTOCOL_VERSION &&
-            latest.mapVersion !== this.info.mapVersion
-          ) {
+          if (!this.compatibleVersion(latest)) this.reloadRequired = true;
+          if (this.compatibleVersion(latest) && latest.mapVersion !== this.info.mapVersion) {
             await this.changePublication(latest);
             this.setState('ready');
             await this.join(restore, true);
@@ -1116,7 +1147,7 @@ export class GameSession {
           const info = (await response.json()) as WorldInfo;
           if (controller.signal.aborted || this.generation !== generation) return;
           if (typeof info.worldEpoch === 'string' && info.worldEpoch !== previous.worldEpoch) {
-            this.reloadRequired = info.protocolVersion !== PROTOCOL_VERSION;
+            this.reloadRequired = !this.compatibleVersion(info);
             // Keep the old map identity until preview refresh / join replaces its context.
             // A layout change across restart does not require a new application bundle.
             if (this.reloadRequired || info.mapVersion === previous.mapVersion) this.info = info;
@@ -1173,6 +1204,13 @@ export class GameSession {
     const observed =
       animationSelf && this.animationBuffer.sample(animationSelf.entityId, room.clock.serverNow());
     if (observed) this.animationRequest.observe(observed.animation);
+    // Скорость меняет `/speed`, в том числе чужая: первое значение в комнате не объявляется.
+    if (animationSelf) {
+      const percent = animationSelf.speedPercent;
+      if (this.ownSpeed?.room === room && this.ownSpeed.percent !== percent)
+        this.onNotice(`Ваша скорость: ×${percent / 100}.`);
+      this.ownSpeed = { room, percent };
+    }
     if (this.persistencePaused !== room.state.paused) {
       this.persistencePaused = room.state.paused;
       if (this.persistencePaused) this.onControlInterruption?.();
@@ -1789,6 +1827,37 @@ export class GameSession {
       this.room.send('resync');
     }
   }
+  busTravelStatus(): { pending: boolean; remainingMs: number } {
+    return {
+      pending: this.busRequest.pending || this.respawnRequest.pending,
+      remainingMs: Math.max(this.busRequest.remainingMs(), this.respawnRequest.remainingMs()),
+    };
+  }
+  /** Поездка от остановки, у которой стоит игрок; итог придёт в `onBusTravelResult`. */
+  busTravel(fromStopId: string, toStopId: string): boolean {
+    const status = this.busTravelStatus();
+    if (
+      !this.room ||
+      this.state !== 'playing' ||
+      !this.inputEnabled ||
+      status.pending ||
+      status.remainingMs > 0
+    )
+      return false;
+    this.actionId++;
+    this.busRequest.begin(this.actionId, 21000, () => {
+      this.onNotice('Ответ на поездку не получен. Проверьте связь и попробуйте снова.');
+      this.onBusTravelResult?.({ requestId: 0, ok: false });
+    });
+    this.save();
+    this.room.send('requestBusTravel', {
+      requestId: this.actionId,
+      worldEpoch: this.info.worldEpoch,
+      fromStopId,
+      toStopId,
+    } satisfies BusTravelRequest);
+    return true;
+  }
   respawnStatus(): { pending: boolean; remainingMs: number } {
     return {
       pending: this.respawnRequest.pending,
@@ -1965,6 +2034,7 @@ export class GameSession {
     this.liveItemOperation = undefined;
     this.cancelPhysicsPreparation();
     this.respawnRequest.cancel();
+    this.busRequest.cancel();
     this.reactionRequest.cancel();
     this.animationRequest.clear();
     this.animationBuffer.clear();
@@ -1992,6 +2062,7 @@ export class GameSession {
     this.setWeather(DEFAULT_WEATHER);
     this.onInventoryChange?.();
     this.respawnRequest.reset();
+    this.busRequest.reset();
     this.reactionRequest.reset();
     this.animationRequest.reset();
     this.chatRequest.reset();

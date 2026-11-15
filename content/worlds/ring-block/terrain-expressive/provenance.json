@@ -1,0 +1,46 @@
+{
+  "formatVersion": 1,
+  "algorithm": "ring-terrain-expressiveness/1",
+  "baseline": {
+    "file": "terrain-smoothed/grid.json",
+    "sha256": "8b7a4df4cf97595d1f400dceb5cf6f7e00c9dad145e49ac9358a1a3414dd857c"
+  },
+  "config": {
+    "formatVersion": 1,
+    "river": {
+      "inlandX": 450,
+      "riverbankX": 1500,
+      "additionalDropMetres": 11
+    },
+    "bathHill": {
+      "center": [-50, -650],
+      "radiusX": 700,
+      "radiusZ": 500,
+      "additionalHeightMetres": 6.5
+    },
+    "dimitrova": {
+      "start": [125.01, 406],
+      "end": [-608.31, 827.86],
+      "additionalRiseMetres": 6.5,
+      "lateralPlateauMetres": 250,
+      "lateralBlendMetres": 500
+    },
+    "gradePreservationPads": [
+      {
+        "id": "legacy-bath-neighborhood",
+        "center": [100, -400],
+        "reference": [-50, -650],
+        "plateauRadiusMetres": 550,
+        "blendWidthMetres": 200
+      }
+    ]
+  },
+  "gridSha256": "b8fd55c33b26c4067e312f822e953d91c1e96938b012207993c48d8448087b50",
+  "sourceAssetReleaseVersion": "8e80d87483c5504f1b7bd6ebfc87b2ad6bea99b6e37873385436cf0228dbaf39",
+  "target": {
+    "assetReleaseVersion": "7825f3cdbbed6390d1c6a87af7bdb153730f7f2e73a0991a55de3b4baf3455f3",
+    "seedVersion": "edaa584b7f50cb45b8ca8a1540a524997a35895e98a0daf987474b0ba316448b",
+    "mapVersion": "f6005433356dd6a50bec73aa962260f45b2ec9e0b0bf1f9d16e099858917e922"
+  },
+  "seedPublicationMapVersion": "94c523754f93d2903640f2ed49f89a3d297d2588a3556bbff536bec8f102f6a1"
+}

@@ -50,6 +50,7 @@ import {
 } from './camera-controller';
 import type { DisplayEntity, DisplayPlayer } from '../presentation/display-state';
 import { ReactionSoundGate } from '../presentation/reaction-sounds';
+import { reactionAssetUrl } from '../presentation/reaction-release';
 import { createSign } from '../ui/player-sign';
 import type { GameAudio } from '../audio/game-audio';
 import { AvatarView } from './avatars/avatar-view';
@@ -1160,7 +1161,7 @@ export class WorldView {
       view.reactionSequence = active.sequence;
       view.reactionShownAt = performance.now();
       view.reaction.dataset.reactionId = definition.id;
-      view.reactionImage!.src = `/reactions/${definition.asset}`;
+      view.reactionImage!.src = reactionAssetUrl(definition);
       view.reactionImage!.alt = definition.label;
     }
     const appear = Math.min(1, (performance.now() - view.reactionShownAt!) / 150);

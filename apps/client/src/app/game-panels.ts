@@ -5,8 +5,10 @@ type PanelName =
   | 'removal'
   | 'reactions'
   | 'animations'
+  | 'commands'
   | 'chat'
   | 'inventory'
+  | 'bus'
   | 'diagnostics';
 
 type Panel = { close: () => void; isOpen: () => boolean };

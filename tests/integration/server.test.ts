@@ -31,6 +31,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
   async function join(ready = true, skinId?: string): Promise<Room<WorldState>> {
     const room = await sdk.joinById<WorldState>(info.roomId, {
       protocolVersion: info.protocolVersion,
+      catalogVersions: info.catalogVersions,
       mapVersion: info.mapVersion,
       simulationConfigHash: info.simulationConfigHash,
       skinId,
@@ -115,12 +116,30 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     expect((await fetch(app.url + '/health/ready')).status).toBe(200);
   });
 
+  it('rejects missing and mismatched catalog maps even with the same protocol', async () => {
+    expect(Object.keys(info.catalogVersions).sort()).toEqual(['animations', 'reactions']);
+    for (const catalogVersions of [
+      undefined,
+      {},
+      { ...info.catalogVersions, animations: 'old-catalog' },
+      { ...info.catalogVersions, reactions: 'old-catalog' },
+      { reactions: info.catalogVersions.reactions },
+      { animations: info.catalogVersions.animations },
+      { ...info.catalogVersions, unexpected: 'unknown-release' },
+    ]) {
+      await expect(sdk.joinById(info.roomId, { ...info, catalogVersions })).rejects.toThrow(
+        'VERSION_MISMATCH',
+      );
+    }
+    const room = await join();
+    expect(room.sessionId).toBeTruthy();
+  });
+
   it('rejects incompatible versions and room creation', async () => {
     await expect(
       sdk.joinById(info.roomId, {
+        ...info,
         protocolVersion: info.protocolVersion - 1,
-        mapVersion: info.mapVersion,
-        simulationConfigHash: info.simulationConfigHash,
       }),
     ).rejects.toThrow('VERSION_MISMATCH');
     await expect(sdk.create('world')).rejects.toThrow();
@@ -306,6 +325,35 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative WebSocket worl
     expect(app.room.state.players.get(sender.sessionId)!.reactionId).toBe('');
     request(6);
     await until(() => player.reactionId === 'hello' && player.reactionSequence === 2);
+  });
+
+  it('rejects missing or stale catalog versions before reserving a player', async () => {
+    const before = app.room.diagnostics().sessions;
+    for (const catalogVersions of [
+      undefined,
+      {},
+      { reactions: 'old' },
+      { ...info.catalogVersions, unknown: 'extra' },
+    ]) {
+      await expect(sdk.joinById(info.roomId, { ...info, catalogVersions })).rejects.toThrow(
+        'VERSION_MISMATCH',
+      );
+    }
+    expect(app.room.diagnostics().sessions).toBe(before);
+  });
+
+  it('serves the catalog SVG at its versioned URL and refuses a stale asset release', async () => {
+    const response = await fetch(
+      `${app.url}/reactions/hello.svg?v=${info.catalogVersions!.reactions}`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('image/svg+xml');
+    expect(response.headers.get('cache-control')).toContain('immutable');
+    expect(await response.text()).toContain('viewBox="0 0 64 64"');
+    const stale = await fetch(`${app.url}/reactions/hello.svg?v=old`);
+    expect(stale.status).toBe(410);
+    expect(stale.headers.get('cache-control')).toBe('no-store');
+    expect((await fetch(`${app.url}/reactions/missing.svg`)).status).toBe(404);
   });
 
   it('rejects malformed reactions and reactions before the character is ready', async () => {

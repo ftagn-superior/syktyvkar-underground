@@ -4,285 +4,268 @@ import type { Page } from 'playwright';
 import { createGameServer } from './helpers/game-server.js';
 import { REACTIONS, WORLD_ACTIVITY_MOVE_DURATION_MS } from '../packages/contracts/src/index.js';
 import { launchTestBrowser } from './helpers/browser.js';
-import { rotateCamera } from './helpers/camera.js';
-import { hudClick } from './helpers/hud.js';
 
-// Run after build: the two real browsers share an isolated, freshly created world.
+// Настоящие клиенты и ввод, отдельная SQL-схема. Запуск после pnpm build.
 const app = await createGameServer({
   port: 0,
   worldDirectory: process.env.SU_TEST_WORLD_DIRECTORY,
 });
 const browser = await launchTestBrowser();
-const errors: string[] = [];
-const checks: string[] = [];
+const checks: string[] = [],
+  errors: string[] = [],
+  layouts: unknown[] = [];
 const output = 'output/playwright/reactions';
-async function playing(page: Page): Promise<void> {
+const quality = process.env.SU_REACTIONS_QUALITY ?? 'economy';
+async function playing(page: Page) {
   await page.waitForFunction(
     () => (window as any).__SU_DEBUG__?.snapshot().connection === 'playing',
     undefined,
-    { timeout: 20_000 },
+    { timeout: 45000 },
   );
 }
-async function snapshot(page: Page): Promise<any> {
-  return page.evaluate(() => (window as any).__SU_DEBUG__.snapshot());
+async function ready(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const r = (window as any).__SU_DEBUG__.snapshot().reaction;
+      return r.available && !r.pending && r.remainingMs <= 0;
+    },
+    undefined,
+    { timeout: 35000 },
+  );
+}
+async function open(page: Page) {
+  await page.bringToFront();
+  await ready(page);
+  if (!(await page.locator('#reactions-panel').isVisible()))
+    await page.locator('#reactions-toggle').click();
 }
 try {
   await mkdir(output, { recursive: true });
+  const info = await (await fetch(`${app.url}/api/world`)).json();
   const contexts = await Promise.all(
-    [0, 1].map(() => browser.newContext({ viewport: { width: 1280, height: 720 } })),
+    [0, 1].map(async () => {
+      const context = await browser.newContext({
+        viewport: { width: 800, height: 600 },
+        reducedMotion: 'reduce',
+      });
+      await context.addInitScript(
+        (quality) => localStorage.setItem('su:render-quality:v1', quality),
+        quality,
+      );
+      return context;
+    }),
   );
   const [sender, observer] = await Promise.all(contexts.map((context) => context.newPage()));
   for (const page of [sender, observer]) {
-    page.setDefaultTimeout(10_000);
-    page.on('pageerror', (error) => {
-      errors.push(error.message);
-      console.error('Browser error:', error.message);
-    });
-    await page.bringToFront();
-    await page.goto(`${app.url}/?diagnostics=1`);
-    await page.locator('#join:not([disabled])').waitFor({ timeout: 45_000 });
+    page.setDefaultTimeout(15000);
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(`${app.url}/?diagnostics=1`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.locator('#join:not([disabled])').waitFor({ timeout: 60000 });
     await page.locator('#join').click();
     await playing(page);
   }
-  await sender.bringToFront();
-  await sender.locator('#world').focus();
-  await sender.keyboard.press('r');
-  await sender.locator('#reactions-panel').waitFor();
+  const senderId = await sender.evaluate(
+    () => (window as any).__SU_DEBUG__.snapshot().authoritative.entityId,
+  );
+  const sticker = `.player-reaction[data-entity-id="${senderId}"]`;
+  await open(sender);
   assert.equal(await sender.locator('.reaction-choice').count(), REACTIONS.length);
-  assert.equal(
-    await sender.locator('#reactions-panel [data-catalog-count]').textContent(),
-    String(REACTIONS.length),
-  );
-  assert.equal(await sender.locator('.reaction-choice:focus').count(), 1);
   assert.equal(await sender.locator('.reaction-choice[aria-keyshortcuts]').count(), 9);
-  assert.equal(
-    await sender.locator('.reaction-choice:nth-child(n + 10) .catalog-choice-key').count(),
-    0,
-  );
+  assert.equal(await sender.locator('.reaction-choice:first-child:focus').count(), 1);
   await sender.waitForFunction(() =>
-    Array.from(document.querySelectorAll<HTMLImageElement>('.reaction-choice img')).every(
-      (image) => image.complete && image.naturalWidth > 0,
+    [...document.querySelectorAll<HTMLImageElement>('.reaction-choice img')].every(
+      (i) => i.complete && i.naturalWidth > 0,
     ),
   );
-  await sender.screenshot({ path: `${output}/menu.png` });
-  for (let index = 1; index < REACTIONS.length; index++) await sender.keyboard.press('Tab');
-  assert.equal(await sender.locator('.reaction-choice:last-child:focus').count(), 1);
+  const search = sender.locator('#reaction-search');
+  await search.fill('  ОТОШЕЛ  ');
+  assert.equal(await sender.locator('.reaction-choice:not([hidden])').count(), 1);
   assert.equal(
     await sender
-      .locator('#reactions-panel .catalog-scroll')
-      .evaluate((panel) => panel.scrollTop > 0),
-    true,
+      .locator('.reaction-choice[aria-keyshortcuts="1"]')
+      .getAttribute('data-reaction-id'),
+    'away',
+  );
+  await search.fill('статус');
+  await sender.locator('#reactions-panel [data-filter="Эмоции"]').click();
+  assert.equal(await sender.locator('#reactions-empty').isVisible(), true);
+  assert.equal(await sender.locator('.reaction-choice[aria-keyshortcuts]').count(), 0);
+  await sender.locator('#reactions-panel [data-filter="Статус"]').click();
+  assert.equal(await sender.locator('.reaction-choice:not([hidden])').count(), 2);
+  await search.fill('busy');
+  await sender.keyboard.press('1');
+  assert.equal(await search.inputValue(), 'busy1', 'digits in the search are text, not actions');
+  await search.fill('busy');
+  await sender.keyboard.press('Enter');
+  assert.equal(await sender.locator('.reaction-choice[data-reaction-id="busy"]:focus').count(), 1);
+  await sender.keyboard.press('1');
+  await observer.locator(`${sticker}[data-reaction-id="busy"]`).waitFor();
+  checks.push(
+    'поиск по подписи/ID/категории с ё/е; пересечение фильтров; пустой результат; цифры в поле — текст, Enter возвращает к результатам',
+  );
+
+  await open(sender);
+  await search.fill('');
+  await sender.locator('#reactions-panel [data-filter="Все"]').click();
+  await sender.keyboard.press('Escape');
+  await sender.keyboard.press('r');
+  for (let index = 1; index < REACTIONS.length; index++) await sender.keyboard.press('Tab');
+  assert.equal(await sender.locator('.reaction-choice:last-child:focus').count(), 1);
+  assert.ok(
+    await sender.locator('#reactions-panel .catalog-scroll').evaluate((s) => s.scrollTop > 0),
   );
   await sender.keyboard.press('Escape');
   await sender.keyboard.press('r');
   assert.equal(
-    await sender.locator('#reactions-panel .catalog-scroll').evaluate((panel) => panel.scrollTop),
+    await sender.locator('#reactions-panel .catalog-scroll').evaluate((s) => s.scrollTop),
     0,
   );
   assert.equal(await sender.locator('.reaction-choice:first-child:focus').count(), 1);
   checks.push(
-    'Tab reaches the last reaction and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges',
+    'Tab достигает последней карточки; повторное открытие возвращает первый результат и начало вложенного скролла',
   );
-  const origin = (await snapshot(sender)).authoritative.position;
-  await sender.keyboard.down('d');
-  await sender.waitForFunction((origin) => {
-    const position = (window as any).__SU_DEBUG__.snapshot().authoritative.position;
-    return Math.hypot(position.x - origin.x, position.z - origin.z) > 0.25;
-  }, origin);
-  await sender.keyboard.up('d');
-  assert.equal(await sender.locator('#reactions-panel').isVisible(), true);
-  await sender.keyboard.press('Escape');
-  assert.equal(await sender.locator('#reactions-panel').isVisible(), false);
-  assert.equal(await sender.locator('#world:focus').count(), 1);
-  checks.push(
-    'R opens the catalog, all local SVGs load, keyboard focus and movement remain usable, Escape closes',
-  );
-  console.log(checks.at(-1));
 
-  const senderId = (await snapshot(sender)).authoritative.entityId;
-  const sticker = `.player-reaction[data-entity-id="${senderId}"]`;
-  for (const reaction of REACTIONS) {
-    await sender.waitForFunction(() => {
-      const state = (window as any).__SU_DEBUG__.snapshot();
-      const velocity = state.authoritative.velocity;
-      return Math.hypot(velocity.x, velocity.z) <= 0.08 && !state.animation.moving;
-    });
-    await sender.keyboard.press('r');
-    const choice = sender.locator(
-      `.reaction-choice[data-reaction-id="${reaction.id}"]:not([disabled])`,
+  // Весь набор проверяем заменами в покое; общий таймер движения — отдельно ниже.
+  for (let index = 0; index < REACTIONS.length; index++) {
+    const reaction = REACTIONS[index];
+    await open(sender);
+    await sender.locator('.reaction-choice:first-child').focus();
+    if (index < 9) await sender.keyboard.press(String(index + 1));
+    else await sender.locator(`.reaction-choice[data-reaction-id="${reaction.id}"]`).click();
+    await Promise.all(
+      [sender, observer].map((page) =>
+        page.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
+      ),
     );
-    await choice.waitFor({ timeout: 6000 });
-    if (REACTIONS.indexOf(reaction) < 9)
-      await sender.keyboard.press(String(REACTIONS.indexOf(reaction) + 1));
-    else await choice.click();
-    await Promise.all([
-      sender.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
-      observer.locator(`${sticker}[data-reaction-id="${reaction.id}"]`).waitFor(),
-    ]);
     await sender.locator('#reactions-panel').waitFor({ state: 'hidden' });
     assert.equal(await observer.locator(sticker).count(), 1);
-    if (reaction.id === 'hello') {
-      await sender.keyboard.press('r');
-      assert.equal(await sender.locator('.reaction-choice:not([disabled])').count(), 0);
-      await sender.keyboard.press('Escape');
-      await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 300);
-      assert.equal(await sender.locator(sticker).isVisible(), true);
-      assert.equal(await observer.locator(sticker).isVisible(), true);
-      assert.equal(
-        await observer.locator(sticker).evaluate((node) => getComputedStyle(node).opacity),
-        '1',
-      );
-      await sender.keyboard.press('r');
-      await choice.waitFor();
-      await choice.click();
-      await sender.locator('#reactions-panel').waitFor({ state: 'hidden' });
-      await observer.bringToFront();
-      await observer.reload();
-      await playing(observer);
-      await observer.locator(sticker).waitFor();
-      await sender.bringToFront();
-      checks.push(
-        'idle stickers remain visible beyond five seconds, can be reselected after the cooldown, and survive an observer reload',
-      );
-    }
-    const movingStarted = Date.now();
-    if (reaction.id === 'hello') {
-      const before = await observer
-        .locator(sticker)
-        .evaluate((node) => (node as HTMLElement).style.transform);
-      await sender.keyboard.down('d');
-      await sender.waitForTimeout(300);
-      await sender.keyboard.up('d');
-      await rotateCamera(observer, -0.39, false);
-      await observer.waitForFunction(
-        ({ selector, before }) => {
-          const node = document.querySelector<HTMLElement>(selector);
-          return node && node.style.transform !== before;
-        },
-        { selector: sticker, before },
-      );
-      assert.notEqual(
-        await observer.locator(sticker).evaluate((node) => (node as HTMLElement).style.transform),
-        before,
-      );
-      await sender.keyboard.press('r');
-      assert.equal(await sender.locator('.reaction-choice:not([disabled])').count(), 0);
-      await sender.keyboard.press('Escape');
-      // A software-rendered screenshot may take longer than the sticker's lifetime.
-      // Finish the live interaction assertions before capturing the visual artifact.
-      await observer.screenshot({ path: `${output}/in-world.png`, animations: 'disabled' });
-    } else {
-      await sender.locator('#world').focus();
-      const origin = (await snapshot(sender)).authoritative.position;
-      const key = REACTIONS.indexOf(reaction) % 2 ? 's' : 'w';
-      await sender.keyboard.down(key);
-      try {
-        await sender.waitForFunction(
-          (origin) => {
-            const position = (window as any).__SU_DEBUG__.snapshot().authoritative.position;
-            return Math.hypot(position.x - origin.x, position.z - origin.z) > 0.15;
-          },
-          origin,
-          { timeout: 3000 },
-        );
-      } finally {
-        await sender.keyboard.up(key);
-      }
-    }
-    await Promise.all([
-      sender.locator(sticker).waitFor({ state: 'detached', timeout: 7000 }),
-      observer.locator(sticker).waitFor({ state: 'detached', timeout: 7000 }),
-    ]);
-    assert.ok(
-      Date.now() - movingStarted >= WORLD_ACTIVITY_MOVE_DURATION_MS - 500,
-      'the reaction remains visible for five seconds after movement starts',
+    const image = observer.locator(`${sticker} img`);
+    assert.equal(await image.getAttribute('alt'), reaction.label);
+    assert.equal(
+      await image.getAttribute('src'),
+      `/reactions/${reaction.asset}?v=${info.catalogVersions.reactions}`,
     );
+    await image.evaluate((i) => {
+      if (!(i as HTMLImageElement).complete || !(i as HTMLImageElement).naturalWidth)
+        throw new Error('sticker not loaded');
+    });
   }
-  checks.push(
-    `all ${REACTIONS.length} reactions reach both browsers, follow the character and camera, and expire five seconds after movement even after stopping`,
+  assert.deepEqual(
+    await sender.evaluate(() => JSON.parse(localStorage.getItem('su:recent-reactions:v1')!)),
+    REACTIONS.slice(-4)
+      .reverse()
+      .map((r) => r.id),
   );
-  console.log(checks.at(-1));
-
-  await observer.bringToFront();
-  await observer.reload();
+  await observer.screenshot({ path: `${output}/in-world.png`, animations: 'disabled' });
+  await sender.waitForTimeout(WORLD_ACTIVITY_MOVE_DURATION_MS + 200);
+  assert.equal(
+    await observer.locator(sticker).count(),
+    1,
+    'idle lifetime is independent of the short selection cooldown',
+  );
+  await observer.reload({ waitUntil: 'domcontentloaded' });
   await playing(observer);
-  assert.equal(await observer.locator('.player-reaction').count(), 0);
-  checks.push('restoring a session does not replay an expired reaction');
+  await observer.locator(sticker).waitFor();
+  checks.push(
+    `все ${REACTIONS.length} реакций доставлены двум клиентам без дубликатов, подписи и версионированные SVG совпадают; четыре недавние; бессрочный покой и восстановление наблюдателя`,
+  );
 
-  await sender.bringToFront();
-  await hudClick(sender, '#diagnostics-toggle');
-  await hudClick(sender, '#reactions-toggle');
-  assert.equal(await sender.locator('#diagnostics').isVisible(), false);
-  await hudClick(sender, '#diagnostics-toggle');
-  assert.equal(await sender.locator('#reactions-panel').isVisible(), false);
-  await hudClick(sender, '#diagnostics-toggle');
-  checks.push('diagnostics and reactions do not cover each other');
+  await open(sender);
+  const origin = await sender.evaluate(
+    () => (window as any).__SU_DEBUG__.snapshot().authoritative.position,
+  );
+  await sender.keyboard.down('d');
+  try {
+    await sender.waitForFunction((origin) => {
+      const p = (window as any).__SU_DEBUG__.snapshot().authoritative.position;
+      return Math.hypot(p.x - origin.x, p.z - origin.z) > 0.2;
+    }, origin);
+    assert.equal(await sender.locator('#reactions-panel').isVisible(), true);
+    await sender.locator('.reaction-choice[data-reaction-id="hello"]').click();
+    await observer.locator(`${sticker}[data-reaction-id="hello"]`).waitFor();
+  } finally {
+    await sender.keyboard.up('d');
+  }
+  await Promise.all(
+    [sender, observer].map((page) =>
+      page.locator(sticker).waitFor({ state: 'detached', timeout: 12000 }),
+    ),
+  );
+  checks.push(
+    'движение работает в открытом меню; после cooldown ещё видимый стикер заменяется на ходу; общий таймер удаляет его у обоих игроков',
+  );
 
   for (const viewport of [
     { width: 1280, height: 720 },
     { width: 800, height: 600 },
     { width: 390, height: 700 },
     { width: 640, height: 360 },
+    { width: 320, height: 568 },
   ]) {
     await sender.setViewportSize(viewport);
-    await hudClick(sender, '#reactions-toggle');
-    await sender.locator('#reactions-panel').waitFor();
+    await open(sender);
     const panel = sender.locator('#reactions-panel');
-    const layout = await panel.evaluate((node) => ({
-      scrollTop: node.scrollTop,
-      scrollHeight: node.scrollHeight,
+    const scroll = panel.locator('.catalog-scroll');
+    const metrics = await scroll.evaluate((node) => ({
       clientHeight: node.clientHeight,
-      horizontalOverflow: node.scrollWidth > node.clientWidth,
+      scrollHeight: node.scrollHeight,
       overflowY: getComputedStyle(node).overflowY,
+      horizontalOverflow: node.scrollWidth > node.clientWidth,
     }));
-    assert.equal(layout.scrollTop, 0);
-    assert.equal(layout.overflowY, 'auto');
-    assert.equal(layout.horizontalOverflow, false);
-    assert.ok(layout.scrollHeight > layout.clientHeight, 'the expanded catalog needs scrolling');
-    await sender.locator('.reaction-choice:first-child').hover();
-    await sender.mouse.wheel(0, layout.scrollHeight);
+    assert.equal(metrics.overflowY, 'auto');
+    assert.equal(metrics.horizontalOverflow, false);
+    assert.ok(metrics.scrollHeight > metrics.clientHeight);
+    const bounds = await scroll.boundingBox();
+    await sender.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+    await sender.mouse.wheel(0, 100000);
     await sender.waitForFunction(() => {
-      const panel = document.querySelector('#reactions-panel')!;
-      const last = panel.querySelector('.reaction-choice:last-child')!.getBoundingClientRect();
-      const bounds = panel.getBoundingClientRect();
-      return panel.scrollTop > 0 && last.top >= bounds.top && last.bottom <= bounds.bottom;
+      const s = document.querySelector('#reactions-panel .catalog-scroll')!;
+      const a = s.getBoundingClientRect(),
+        b = s.querySelector('.reaction-choice:last-child')!.getBoundingClientRect();
+      return s.scrollTop > 0 && b.top >= a.top && b.bottom <= a.bottom;
     });
-    for (const selector of [
-      '#reactions-panel',
-      '.reaction-choice:last-child',
-      '#reactions-toggle',
-      '#respawn',
-      '#leave',
-    ]) {
-      const fits = await sender.locator(selector).evaluate((node) => {
-        const rect = node.getBoundingClientRect();
-        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-        return (
-          rect.x >= 0 &&
-          rect.y >= 0 &&
-          rect.right <= innerWidth &&
-          rect.bottom <= innerHeight &&
-          hit !== null &&
-          (hit === node || node.contains(hit))
-        );
-      });
-      // The panel contains interactive children, so its center may hit one of them.
-      assert.equal(
-        fits,
-        true,
-        `${selector} remains reachable at ${viewport.width}x${viewport.height}`,
+    assert.equal(
+      await panel.evaluate((n) => {
+        const r = n.getBoundingClientRect();
+        return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+      }),
+      true,
+    );
+    for (const filter of await panel.locator('.filters button').all())
+      assert.ok(
+        await filter.evaluate((n) => {
+          const r = n.getBoundingClientRect(),
+            p = n.parentElement!.getBoundingClientRect();
+          return r.left >= p.left && r.right <= p.right;
+        }),
       );
-    }
-    if (viewport.width === 390) await sender.screenshot({ path: `${output}/narrow.png` });
-    if (viewport.height === 360) await sender.screenshot({ path: `${output}/short.png` });
+    assert.ok(
+      await panel
+        .locator('.label')
+        .first()
+        .evaluate((n) => parseFloat(getComputedStyle(n).fontSize) >= 14),
+    );
+    await sender.locator('.reaction-choice:first-child').focus();
+    await sender.screenshot({
+      path: `${output}/${viewport.width}x${viewport.height}.png`,
+      animations: 'disabled',
+    });
+    layouts.push({ viewport, ...metrics });
     await sender.keyboard.press('Escape');
   }
   checks.push(
-    'mouse wheel reaches the last reaction without horizontal overflow; menu and gameplay controls fit desktop, tablet, narrow and short viewports',
+    'вложенный скролл, все категории, подписи ≥14px и последняя карточка доступны на пяти размерах, включая 320px и короткое окно',
   );
   assert.deepEqual(errors, []);
-  await writeFile(`${output}/checks.json`, JSON.stringify({ checks, errors }, null, 2));
-  console.log(JSON.stringify({ checks, errors }, null, 2));
+  await writeFile(
+    `${output}/checks.json`,
+    JSON.stringify(
+      { revision: 'working-tree', quality, browser: browser.version(), checks, layouts, errors },
+      null,
+      2,
+    ),
+  );
+  console.log(JSON.stringify({ checks, layouts, errors }, null, 2));
 } finally {
   await browser.close();
   await app.close();

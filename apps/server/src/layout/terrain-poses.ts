@@ -13,6 +13,7 @@ import {
 } from '@su/contracts';
 import { hash } from '@su/world-release';
 import { rectangle, terrainPatch, patchRange, type Point2 } from '@su/terrain-build';
+import type { TerrainSupportComponent } from '@su/terrain-build/private-data';
 import { planSupportPlacement, selectSupportRule } from '@su/terrain-build/supports';
 import { createLayoutPublication } from './release.js';
 import { planTerrainItemPoses, type TerrainItemPoseDecision } from './terrain-item-poses.js';
@@ -25,6 +26,13 @@ import type {
 
 export type TerrainObjectPolicy =
   | { kind: 'foundation'; maximumVisibleHeight: number }
+  | {
+      /** Migration-only policy for unchanged prisms whose plinth is part of the model.
+       * Prefer the existing roof offset, lowering only enough to keep the base buried. */
+      kind: 'embedded-footprint';
+      components: TerrainSupportComponent[];
+      minimumBurialMetres: number;
+    }
   | {
       kind: 'ground-anchor';
       anchor: Vec3;
@@ -334,6 +342,68 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
           ...(reseat ? { disabledReseat: { beforeOffset, reason: reseat.reason } } : {}),
           ...next,
         });
+      } else if (policy.kind === 'embedded-footprint') {
+        finitePositive(policy.minimumBurialMetres, 'minimum embedded burial');
+        const sourceAsset = context.sourceWorld.buildingAssets[owner.assetId];
+        const targetAsset = context.targetRelease.definition.buildingAssets[owner.assetId];
+        if (!sourceAsset || !targetAsset || !same(sourceAsset, targetAsset))
+          throw new Error('An embedded footprint requires unchanged model geometry');
+        if (
+          context.sourceRelease.terrain?.formatVersion === 2 &&
+          selectSupportRule(context.sourceRelease.terrain.supports, owner)
+        )
+          throw new Error('An embedded footprint requires no source foundation');
+        // The foundation planner provides exact clipping, concave contours and holes,
+        // but this probe never becomes a support rule or generated publication asset.
+        const probe = {
+          kind: 'foundation-v2' as const,
+          assetId: owner.assetId,
+          components: policy.components,
+          jointY: 0,
+          clearance: 0.08,
+          burial: 0.1,
+          color: '#888888',
+        };
+        const old = planSupportPlacement(previous, probe, owner);
+        const next = planSupportPlacement(terrain.grid, probe, owner);
+        const sourceBaseBurial = old.terrainMin - beforeY - sourceAsset.bounds.min.y;
+        const minimumRequiredBurial = Math.min(sourceBaseBurial, policy.minimumBurialMetres);
+        const preferredY = beforeY + (next.terrainMax - old.terrainMax);
+        // Spend only existing buried plinth reserve. A prism with shallower source
+        // burial keeps that accepted depth; it is never lifted through the low ground.
+        const maximumY =
+          beforeY + (next.terrainMin - old.terrainMin) + (sourceBaseBurial - minimumRequiredBurial);
+        const y = Math.min(preferredY, maximumY);
+        if (beforeY + sourceAsset.bounds.min.y > old.terrainMin + EPS)
+          throw new Error('Source embedded model base is exposed above its terrain footprint');
+        if (y + targetAsset.bounds.min.y > next.terrainMin + EPS)
+          throw new Error(
+            'Target embedded model base would be exposed above its terrain footprint',
+          );
+        if (beforeY + sourceAsset.bounds.max.y <= old.terrainMax + EPS)
+          throw new Error('Source embedded model roof is buried under its terrain footprint');
+        if (y + targetAsset.bounds.max.y <= next.terrainMax + EPS)
+          throw new Error('Target embedded model roof would be buried under its terrain footprint');
+        owner.position.y = y;
+        audit.push({
+          entityId: owner.entityId,
+          assetId: owner.assetId,
+          rule: policy.kind,
+          beforeY,
+          afterY: y,
+          preferredY,
+          loweringMetres: preferredY - y,
+          sourceTerrainMin: old.terrainMin,
+          sourceTerrainMax: old.terrainMax,
+          targetTerrainMin: next.terrainMin,
+          targetTerrainMax: next.terrainMax,
+          sourceBaseBurial,
+          minimumRequiredBurial,
+          targetBaseBurial: next.terrainMin - y - targetAsset.bounds.min.y,
+          sourceRoofClearance: beforeY + sourceAsset.bounds.max.y - old.terrainMax,
+          targetRoofClearance: y + targetAsset.bounds.max.y - next.terrainMax,
+          baseClearance: next.terrainMin - y - targetAsset.bounds.min.y,
+        });
       } else if (policy.kind === 'ground-anchor') {
         const sourceAsset = context.sourceWorld.buildingAssets[owner.assetId];
         const targetAsset = context.targetRelease.definition.buildingAssets[owner.assetId];
@@ -375,7 +445,7 @@ export function planStaticTerrainPoses(context: TerrainMigrationContext, rules: 
         const beforeOffset = beforeY + policy.anchor.y - sourceHeight;
         owner.position.y = reseat
           ? targetHeight - policy.anchor.y
-          : beforeY + targetHeight - sourceHeight;
+          : beforeY + (targetHeight - sourceHeight);
         audit.push({
           entityId: owner.entityId,
           assetId: owner.assetId,

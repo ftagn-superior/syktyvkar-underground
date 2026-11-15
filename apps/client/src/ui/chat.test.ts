@@ -145,6 +145,19 @@ describe('chat interaction lifecycle', () => {
     chat.dispose();
   });
 
+  it('inserts a help command without restarting an already open interaction', () => {
+    const { chat, input, lifecycle } = fixture();
+    chat.insert('/help ');
+    expect(chat.isOpen).toBe(true);
+    expect(input.value).toBe('/help ');
+    expect(lifecycle.beforeOpen).toHaveBeenCalledOnce();
+    chat.insert('/speed --help');
+    expect(input.value).toBe('/speed --help');
+    expect(lifecycle.beforeOpen).toHaveBeenCalledOnce();
+    expect(lifecycle.closed).not.toHaveBeenCalled();
+    chat.dispose();
+  });
+
   it('preserves the system-close reason and does not refocus over a newer panel', () => {
     const { chat, input, lifecycle } = fixture();
     chat.open();

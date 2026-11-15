@@ -7,6 +7,7 @@ export * from './item-shapes.js';
 export * from './foliage-shapes.js';
 export * from './avatars.js';
 export * from './animations.js';
+export * from './animation-validation.js';
 export * from './sounds.js';
 export * from './world-layout-patch.js';
 export * from './simulation.js';
@@ -15,9 +16,12 @@ export * from './terrain.js';
 export * from './world-model-catalog.js';
 export * from './input.js';
 export * from './session.js';
+export * from './content-catalogs.js';
 export * from './activity.js';
 export * from './day-clock.js';
 export * from './weather.js';
+export * from './commands.js';
+export * from './bus-network.js';
 export {
   validateWorld,
   validateWorldBuildingPlacements,
@@ -38,6 +42,8 @@ export {
   mergeWorldCells,
 } from './world-grid.js';
 export * from './reactions.js';
+export * from './reaction-validation.js';
+export * from './content-catalogs.js';
 export * from './chat.js';
 export { GRAPHICS_PACK_LIMITS, encodeGraphicsPack, decodeGraphicsPack } from './graphics-pack.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';

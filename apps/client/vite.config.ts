@@ -1,30 +1,52 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { inspectReactionCatalog } from '../../tools/reactions/catalog';
 
 const { version } = JSON.parse(
   readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
 );
 
-export default defineConfig({
-  root: fileURLToPath(new URL('.', import.meta.url)),
-  define: {
-    __SU_BUILD_INFO__: JSON.stringify({ version, builtAt: new Date().toISOString() }),
-  },
-  server: {
-    host: '127.0.0.1',
-    port: 5173,
-    strictPort: true,
-    proxy: {
-      '/api': 'http://127.0.0.1:2567',
-      '/health': 'http://127.0.0.1:2567',
-      '/worlds': 'http://127.0.0.1:2567',
-      '/matchmake': 'http://127.0.0.1:2567',
-      '^/(?!src/|@|node_modules/|assets/)[^/]+/[^/]+$': {
-        target: 'http://127.0.0.1:2567',
-        ws: true,
+export default defineConfig(async () => {
+  const release = await inspectReactionCatalog(fileURLToPath(new URL('../..', import.meta.url)));
+  return {
+    root: fileURLToPath(new URL('.', import.meta.url)),
+    define: {
+      __SU_BUILD_INFO__: JSON.stringify({ version, builtAt: new Date().toISOString() }),
+      __SU_REACTION_CATALOG_VERSION__: JSON.stringify(release.version),
+    },
+    plugins: [
+      {
+        name: 'reaction-release',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'reaction-release.json',
+            source: JSON.stringify({ formatVersion: 1, version: release.version }),
+          });
+        },
+      },
+    ],
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      strictPort: true,
+      proxy: {
+        '/api': 'http://127.0.0.1:2567',
+        '/health': 'http://127.0.0.1:2567',
+        '/worlds': 'http://127.0.0.1:2567',
+        '/matchmake': 'http://127.0.0.1:2567',
+        '^/(?!src/|@|node_modules/|assets/)[^/]+/[^/]+$': {
+          target: 'http://127.0.0.1:2567',
+          ws: true,
+        },
       },
     },
-  },
-  build: { outDir: '../../dist/client', emptyOutDir: true, target: 'es2022', assetsInlineLimit: 0 },
+    build: {
+      outDir: '../../dist/client',
+      emptyOutDir: true,
+      target: 'es2022',
+      assetsInlineLimit: 0,
+    },
+  };
 });

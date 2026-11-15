@@ -17,13 +17,23 @@ export function ringTerrainBoundaries(
   const inset = options.insetMetres ?? 0;
   assert.ok(Number.isFinite(inset) && inset >= 0, 'Invalid boundary inset');
   const result: WorldDefinition['entities'] = [];
-  for (const original of world.entities) {
+  for (const template of world.entities) {
     assert.ok(
-      /^boundary-(north|south|east|west)$/.test(original.entityId),
+      /^boundary-(north|south|east|west)$/.test(template.entityId),
       'Unexpected source primitive',
     );
-    const axis = original.size.x > original.size.z ? 'x' : 'z';
+    // Templates can still describe the legacy canvas. The published bounds are
+    // authoritative: otherwise expanding the world resurrects an internal cage.
+    const original = structuredClone(template);
+    const horizontal = /^boundary-(north|south)$/.test(original.entityId);
+    const axis = horizontal ? 'x' : 'z';
     const normal = axis === 'x' ? 'z' : 'x';
+    const minimum = /^boundary-(north|west)$/.test(original.entityId);
+    original.size[axis] = world.bounds.max[axis] - world.bounds.min[axis];
+    original.position[axis] = (world.bounds.min[axis] + world.bounds.max[axis]) / 2;
+    original.position[normal] = minimum
+      ? world.bounds.min[normal] + original.size[normal] / 2
+      : world.bounds.max[normal] - original.size[normal] / 2;
     assert.ok(inset < original.size[normal] / 2 && 2 * inset < original.size[axis]);
     const sign =
       Math.abs(original.position[normal] - world.bounds.min[normal]) <

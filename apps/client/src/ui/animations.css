@@ -1,0 +1,62 @@
+/* Scoped to animations so sibling collection work can use the same shared catalog primitives. */
+.animation-panel {
+  max-height: min(38em, calc(100dvh - 12em));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#animation-search {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: max(0.9em, 12px);
+  margin-bottom: 0.5em;
+}
+.animation-panel .filters {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.animation-panel > * {
+  flex-shrink: 0;
+}
+.animation-panel .catalog-scroll {
+  flex: none;
+  min-height: 6.4em;
+}
+.animation-panel .filters .ui-btn {
+  font-size: max(0.78em, 11px);
+}
+.animation-panel .animation-choice {
+  font-size: max(0.86em, 12px);
+  min-height: 2.5em;
+  overflow-wrap: anywhere;
+  padding-right: 1.1em;
+}
+.animation-description {
+  font-size: 0.8em;
+  font-weight: 500;
+}
+#animation-preview {
+  margin-top: 0.6em;
+  font-size: max(0.85em, 12px);
+}
+#animation-preview summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+#animation-preview label {
+  display: block;
+  margin: 0.5em 0;
+}
+#animation-preview select {
+  max-width: 100%;
+  font: inherit;
+}
+#animation-preview-canvas {
+  display: block;
+  width: 100%;
+  height: 170px;
+  touch-action: none;
+}
+#animation-preview p {
+  margin: 0.4em 0;
+  font-weight: 500;
+}

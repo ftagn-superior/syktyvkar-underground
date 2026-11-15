@@ -110,6 +110,8 @@ interface CharacterRecord {
   revision: number;
   yaw: number;
   grounded: boolean;
+  /** Множитель скорости от `/speed`, общий для ходьбы и бега. */
+  speedScale: number;
 }
 
 /** Renderer-free physics adapter. Only advance() can advance the common world. */
@@ -309,7 +311,8 @@ export class PhysicsWorld {
     );
     controller.characterMass = config.mass;
     controller.characterStrength = 500;
-    controller.maxCharacterSpeedForSolver = config.sprintSpeed;
+    const speedScale = state?.speedScale ?? 1;
+    controller.maxCharacterSpeedForSolver = config.sprintSpeed * speedScale;
     controller.keepDistance = 0.015;
     controller.keepContactTolerance = 0.05;
     controller.maxStepHeight = 0;
@@ -352,9 +355,19 @@ export class PhysicsWorld {
       revision: state?.revision ?? 0,
       yaw,
       grounded: state?.grounded ?? false,
+      speedScale,
     };
     this.characters.set(id, record);
     return record;
+  }
+  /** Меняет скорость без пересоздания контроллера; `restoreCharacter` переносит её через состояние. */
+  setCharacterSpeedScale(id: string, speedScale: number): boolean {
+    const record = this.characters.get(id);
+    if (!record || !Number.isFinite(speedScale) || speedScale <= 0) return false;
+    record.speedScale = speedScale;
+    record.controller.maxCharacterSpeedForSolver =
+      this.definition.simulation.character.sprintSpeed * speedScale;
+    return true;
   }
   removeCharacter(id: string) {
     this.impacts.clear(true);
@@ -373,6 +386,7 @@ export class PhysicsWorld {
       velocity: plain(player.controller.getVelocity()),
       angularVelocity: zero(),
       grounded: player.grounded,
+      ...(player.speedScale === 1 ? {} : { speedScale: player.speedScale }),
     };
   }
   private itemState(record: ItemBodyRecord): ItemState {
@@ -592,7 +606,7 @@ export class PhysicsWorld {
     for (const record of this.characters.values()) {
       const input = normalizeInput(record.input) ?? NEUTRAL_INPUT;
       const config = this.definition.simulation.character;
-      const speed = input.sprint ? config.sprintSpeed : config.speed;
+      const speed = (input.sprint ? config.sprintSpeed : config.speed) * record.speedScale;
       const wasGrounded = record.grounded;
       const support = record.controller.checkSupport(dt, down);
       record.grounded = support.supportedState === CharacterSupportedState.SUPPORTED;

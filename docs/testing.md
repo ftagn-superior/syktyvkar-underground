@@ -49,7 +49,7 @@ SQL-наборы проверяют обновление схемы 6 → 7, у�
 
 `pnpm test:accounts` на выделенной тестовой PostgreSQL проверяет миграцию 7 → 8, значение `is_admin=false` для существующих и новых аккаунтов, запрет `NULL`, сохранность профилей и сессий, повторное применение миграций, чтение назначения и снятия флага при входе и восстановлении сессии. Запрос изменения профиля с полями `is_admin`/`isAdmin` не назначает права. SQL-сценарии находятся в `tests/integration/accounts.test.ts` и используют временную схему.
 
-`tests/integration/giveme.test.ts` проверяет отказ гостям и обычным аккаунтам для всех консольных команд, запросов времени/погоды без аргументов и неизвестных команд, поддельные поля прав, приватность отказов, обычный чат и обновление прав при reconnect. `static-placement.test.ts` и `static-removal.test.ts` дополнительно проверяют запрет прямых запросов редактирования для обычного аккаунта. Успешные сценарии явно назначают тестовым аккаунтам `is_admin=true`; обычные фикстуры остаются без прав. `pnpm test:world-ui:browser` проверяет отсутствие команд в меню подсказок и управление временем администратором.
+`tests/integration/giveme.test.ts` проверяет, что для гостей и обычных аккаунтов все консольные команды (включая запросы времени/погоды без аргументов) неотличимы от неизвестных, а `/help` отвечает «Нет доступных команд»; также поддельные поля прав, приватность отказов, обычный чат и обновление прав при reconnect. `static-placement.test.ts` и `static-removal.test.ts` дополнительно проверяют запрет прямых запросов редактирования для обычного аккаунта. Успешные сценарии явно назначают тестовым аккаунтам `is_admin=true`; обычные фикстуры остаются без прав. `pnpm test:world-ui:browser` проверяет отсутствие команд в меню подсказок и управление временем администратором.
 
 ## Подготовка
 
@@ -71,6 +71,8 @@ pnpm build
 
 ## Подсистемы
 
+Автобусы: правила поездок, пересадки, разбор запроса и данные игры — `packages/contracts/src/bus-network.test.ts`; сеть и разбор «Транспорт 11» — `tests/bus-network.test.ts`; точка прибытия на уровне улицы — `packages/simulation/src/ground-spawn.test.ts`. Сквозная поездка на сервере `ring-block` (остановка, отказы `NOT_AT_BUS_STOP`/`NO_BUS_ROUTE`/`RATE_LIMITED`, неверный запрос) — `tests/integration/bus-travel.test.ts`, требует `SU_TEST_DATABASE_URL` с правом `CREATE SCHEMA` и собранный `dist/worlds/ring-block`.
+
 Файловые патчи размещений проверяются в `packages/contracts/src/world-layout-patch.test.ts` (офлайн diff, формат и конфликты) и `tests/integration/static-layout.test.ts` (настоящие CLI export/patch/check/apply, сохранность предметов, аудит, откат SQL-сбоя и блокировка работающего мира). Второй набор требует `SU_TEST_DATABASE_URL`.
 
 | Проверка                                                                                                        | Команда                                                                                   |
@@ -87,7 +89,7 @@ pnpm build
 | GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser`                                                             |
 | Повреждённый кеш и неверные ресурсы                                                                             | `pnpm test:assets:browser`                                                                |
 | Скины, походка, возврат и переподключение                                                                       | `pnpm test:avatars:browser`                                                               |
-| Реакции, выбираемые анимации, чат                                                                               | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser`   |
+| Реакции: авторинг, правила и UI; выбираемые анимации, чат                                                       | `pnpm test:reactions`, затем `pnpm test:reactions:browser` с тестовым `SU_TEST_DATABASE_URL` после сборки — [инструкция](reactions.md); `pnpm test:animations:browser`, `pnpm test:chat:browser` |
 | Общие часы `/time`, темы, список игроков и совместимость панелей                                                | `pnpm test:world-ui:browser`                                                              |
 | Перезапуск и восстановление                                                                                     | `pnpm test:restart:browser`                                                               |
 | Город, подготовка, камера 30× и выход в просмотр                                                                | `pnpm test:dynamic-map:browser`                                                           |

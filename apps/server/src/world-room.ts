@@ -19,7 +19,14 @@ import {
   type AuthContext,
 } from '@colyseus/core';
 import {
+  BUS_STOP_SERVER_RANGE,
+  busStopNear,
+  busTripsFrom,
+  parseBusTravelRequest,
+  type BusNetwork,
   MAX_PLAYERS,
+  matchingCatalogVersions,
+  type ContentCatalogVersions,
   parseAreaFailed,
   parsePlaceStaticRequest,
   type StaticPlacementError,
@@ -40,6 +47,7 @@ import {
   RESPAWN_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
+  speedPercentFromScale,
   worldNeighborhood,
   type PrepareArea,
   type LayoutChanged,
@@ -66,7 +74,12 @@ import {
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
-import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
+import {
+  commandHelp,
+  parseChatCommand,
+  giveFailureMessage,
+  type ChatCommand,
+} from './chat-commands.js';
 import { ActionLedger, rememberResult } from './gameplay/action-ledger.js';
 import { WorldClock } from './gameplay/world-clock.js';
 import { WorldWeatherControl } from './gameplay/world-weather.js';
@@ -79,6 +92,7 @@ import type { PlayerSession as Session, ClientAction } from './room/session.js';
 
 type PhysicsWorld = Awaited<ReturnType<typeof createAuthoritativeWorld>>;
 export interface WorldRoomOptions {
+  catalogVersions: ContentCatalogVersions;
   layouts?: LayoutPublications;
   placementCatalog?: ServerPlacementCatalog;
   ownership?: WorldOwnership;
@@ -91,10 +105,13 @@ export interface WorldRoomOptions {
   pool: Pool;
   testDiagnostics?: boolean;
   itemCreationEnabled?: boolean;
+  /** Автобусы мира (выбранные маршруты); без них поездки отклоняются как COMMAND_DISABLED. */
+  busNetwork?: BusNetwork;
 }
 
 /** Coordinates connections, world preparation and replication; gameplay rules live in gameplay/. */
 export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema }> {
+  private catalogVersions: ContentCatalogVersions = {};
   state = new WorldState();
   maxClients = MAX_PLAYERS;
   autoDispose = false;
@@ -112,6 +129,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private interest!: DynamicInterest;
   private manifest!: WorldManifest;
   private definition!: WorldDefinition;
+  private busNetwork?: BusNetwork;
   private items!: ItemRuntime;
   private positions!: PlayerPositionRuntime;
   private stopping = false;
@@ -161,8 +179,10 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }[] = [];
 
   async onCreate(options: WorldRoomOptions): Promise<void> {
+    this.catalogVersions = options.catalogVersions;
     this.manifest = options.manifest;
     this.definition = options.definition;
+    this.busNetwork = options.busNetwork;
     this.interest = new DynamicInterest(options.manifest.grid);
     this.testDiagnostics = options.testDiagnostics ?? false;
     this.loopDelay.enable();
@@ -242,6 +262,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('areaFailed', (client, data: unknown) => this.areaFailed(client, data));
     this.onMessage('layoutApplied', (client, data: unknown) => this.layoutApplied(client, data));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
+    this.onMessage('requestBusTravel', (client, request: unknown) =>
+      this.busTravel(client, request),
+    );
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
     this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
@@ -267,6 +290,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (
       !options ||
       options.protocolVersion !== PROTOCOL_VERSION ||
+      !matchingCatalogVersions(this.catalogVersions, options.catalogVersions) ||
       options.mapVersion !== this.state.mapVersion ||
       options.simulationConfigHash !== this.state.simulationConfigHash
     ) {
@@ -446,6 +470,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     deadline: number,
     requestId?: number,
     position?: Vec3,
+    busTravel = false,
   ): void {
     if (this.stopping) return;
     const initial = reason === 'spawn' ? session.initialSpawn : undefined;
@@ -492,7 +517,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       expiresAt: Date.now() + Math.max(0, deadline - performance.now()),
       ...(requestId !== undefined ? { requestId } : {}),
     };
-    session.plan = { message, deadline, spawnDeadline };
+    session.plan = { message, deadline, spawnDeadline, ...(busTravel ? { busTravel } : {}) };
     this.inputs.get(client.sessionId).clear();
     this.world.setInput(session.entityId, NEUTRAL_INPUT);
     client.send('prepareArea', message);
@@ -617,14 +642,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.fallbackPosition(client, session, checked.reason);
       return;
     }
-    const point = checked.ok ? plan.message.position : this.world.findDefaultPlayerSpawn(excludeId);
+    const point = checked.ok
+      ? plan.message.position
+      : plan.busTravel
+        ? this.world.findGroundSpawn([plan.message.position], excludeId)
+        : this.world.findDefaultPlayerSpawn(excludeId);
     if (!point) return; // Retry only until this stage's fixed execution deadline.
     if (
       !worldNeighborhood(this.definition.bounds, this.manifest.grid, point).every((id) =>
         cellIds.includes(id),
       )
     ) {
-      this.createPlan(client, session, reason, plan.deadline, requestId, point);
+      this.createPlan(client, session, reason, plan.deadline, requestId, point, plan.busTravel);
       return;
     }
     // No await between the final geometry check and body creation: contenders serialize here.
@@ -947,6 +976,59 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       );
   }
 
+  /**
+   * Быстрая поездка: игрок стоит у остановки `fromStopId`, и автобус с неё идёт до
+   * `toStopId`. Перемещение — тот же план подготовки области, что и возврат на старт,
+   * с общей перезарядкой; прибытие — на землю у платформы остановки назначения.
+   */
+  private busTravel(client: Client, request: unknown): void {
+    const parsed = parseBusTravelRequest(request);
+    if (!parsed) {
+      client.send('problem', { code: 'INVALID_INPUT' });
+      return;
+    }
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const network = this.busNetwork;
+    const player = this.state.players.get(client.sessionId);
+    const origin = network?.stops.find((stop) => stop.id === parsed.fromStopId);
+    const target = network?.stops.find((stop) => stop.id === parsed.toStopId);
+    let arrival: Vec3 | undefined;
+    if (!code && !network) code = 'COMMAND_DISABLED';
+    else if (!code && performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS)
+      code = 'RATE_LIMITED';
+    // Любая платформа этой остановки рядом: соседняя остановка ближе не мешает.
+    else if (
+      !code &&
+      (!player ||
+        !origin ||
+        !busStopNear({ ...network!, stops: [origin] }, player, BUS_STOP_SERVER_RANGE))
+    )
+      code = 'NOT_AT_BUS_STOP';
+    else if (!code && (!target || !busTripsFrom(network!, parsed.fromStopId).has(target.id)))
+      code = 'NO_BUS_ROUTE';
+    if (!code) {
+      arrival = this.world.findGroundSpawn(
+        [...target!.platforms, target!.position].map(([x, z]) => ({ x, z })),
+        session.entityId,
+      );
+      if (!arrival) code = 'SPAWN_UNAVAILABLE';
+    }
+    if (code) this.rememberAction(client, session, requestId, false, code);
+    else
+      this.createPlan(
+        client,
+        session,
+        'respawn',
+        performance.now() + this.prepareTimeoutMs,
+        requestId,
+        arrival,
+        true,
+      );
+  }
+
   private react(client: Client, request: unknown): void {
     const action = this.beginAction(client, request);
     if (!action) return;
@@ -985,7 +1067,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (!action) return;
     const { session, requestId, code } = action;
     const text = normalizeChatText((request as { text?: unknown }).text);
-    const command = text && parseChatCommand(text);
+    const command = text && parseChatCommand(text, this.adminAccess(session) ? 'player' : 'admin');
     if (command) {
       void this.chatCommand(client, action, command);
       return;
@@ -998,6 +1080,54 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.state.serverTick,
         code,
       ),
+    });
+  }
+
+  /**
+   * `@имя` в командах: игроки в мире, чьё имя совпадает без учёта регистра, иначе начинается с
+   * запроса. Несколько совпадений — ошибка с подсказкой, а не случайный выбор.
+   */
+  private findPlayers(query: string): Session[] {
+    const key = (name: string) => name.normalize('NFC').toLocaleLowerCase('ru');
+    const wanted = key(query);
+    const present = [...this.sessions].filter(([sessionId]) => this.state.players.has(sessionId));
+    const exact = present.filter(([, session]) => key(session.name) === wanted);
+    const matches = exact.length
+      ? exact
+      : present.filter(([, session]) => key(session.name).startsWith(wanted));
+    return matches.map(([, session]) => session);
+  }
+
+  private speedCommand(
+    client: Client,
+    session: Session,
+    requestId: number,
+    command: Extract<ChatCommand, { kind: 'speed' }>,
+  ) {
+    const fail = (code: ActionResult['code'], message: string) =>
+      this.finishAction(client, session, { requestId, ok: false, code, message });
+    let target = session;
+    if (command.target !== undefined) {
+      const found = this.findPlayers(command.target);
+      if (!found.length) return fail('INVALID_INPUT', `Игрок @${command.target} не найден.`);
+      if (found.length > 1)
+        return fail(
+          'INVALID_INPUT',
+          `Под @${command.target} подходят: ${found.map((other) => other.name).join(', ')}. Уточните имя.`,
+        );
+      target = found[0];
+    }
+    const state = this.world.getPlayerState(target.entityId);
+    if (!state) return fail('WORLD_NOT_READY', 'Игрок ещё не вошёл в мир.');
+    // Реплицируется в следующем такте вместе с остальным состоянием игрока.
+    if (command.percent !== undefined)
+      this.world.setPlayerSpeedScale(target.entityId, command.percent / 100);
+    const percent = command.percent ?? speedPercentFromScale(state.speedScale);
+    this.finishAction(client, session, {
+      requestId,
+      ok: true,
+      retryAfterMs: 0,
+      message: `${target === session ? 'Ваша скорость' : `Скорость ${target.name}`}: ×${percent / 100}.`,
     });
   }
 
@@ -1017,18 +1147,39 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.finishAction(client, session, { requestId, ok: false, code, message });
     if (code) return fail(code, 'Команда сейчас недоступна. Проверьте состояние мира.');
     const access = this.adminAccess(session);
+    if (command.kind === 'invalid') {
+      // Администратор с истёкшей сессией и так знает о командах: ему говорим, что войти заново.
+      if (command.forbidden && access === 'AUTH_REQUIRED' && session.auth?.isAdmin)
+        return fail(access, giveFailureMessage(access));
+      return fail(command.code, command.message);
+    }
+    if (command.kind === 'help') {
+      const effect = commandHelp(access ? 'player' : 'admin', command.focus);
+      if (!effect) return fail('ADMIN_REQUIRED', 'Нет доступных команд.');
+      return this.finishAction(client, session, { requestId, ok: true, retryAfterMs: 0, effect });
+    }
+    // Всё ниже — администраторские команды; парсер уже скрыл их от остальных.
     if (access) return fail(access, giveFailureMessage(access));
-    if (command.kind === 'invalid') return fail(command.code, command.message);
     if (command.kind === 'time')
       return this.finishAction(client, session, {
         requestId,
-        ...this.dayClock.command(command.action, Date.now()),
+        ...this.dayClock.command(command.actions, Date.now()),
       });
     if (command.kind === 'weather')
       return this.finishAction(client, session, {
         requestId,
-        ...this.weather.command(command.action, Date.now()),
+        ...this.weather.command(command.actions, Date.now()),
       });
+    if (command.kind === 'speed') return this.speedCommand(client, session, requestId, command);
+    if (command.kind === 'giveList') {
+      const types = Object.keys(this.items.store.definition.itemCatalog.types).sort();
+      return this.finishAction(client, session, {
+        requestId,
+        ok: true,
+        retryAfterMs: 0,
+        message: types.length ? `Типы предметов: ${types.join(', ')}.` : 'Каталог предметов пуст.',
+      });
+    }
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();
       if (!effect) return fail('COMMAND_DISABLED', 'Размещение объектов недоступно в этом мире.');

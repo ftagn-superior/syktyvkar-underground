@@ -20,13 +20,17 @@ export class WorldClock {
 
   constructor(private readonly state: ReplicatedDayClock) {}
 
-  /** Admission and duplicate requests are handled by the room's shared action ledger. */
-  command(change: DayClockAction | undefined, now: number): Omit<ActionResult, 'requestId'> {
+  /**
+   * Admission and duplicate requests are handled by the room's shared action ledger. Several
+   * changes from one command apply together under a single cooldown; none means a read-only query.
+   */
+  command(changes: readonly DayClockAction[], now: number): Omit<ActionResult, 'requestId'> {
     let clock: DayClock = {
       offsetMs: this.state.dayOffsetMs,
       frozenHour: this.state.dayFrozenHour,
     };
-    if (change) {
+    const changed = changes.length > 0;
+    if (changed) {
       // A time change refreshes shadows for everyone, so the cooldown is room-wide.
       if (now < this.changeAvailableAt)
         return {
@@ -36,7 +40,7 @@ export class WorldClock {
           retryAfterMs: this.changeAvailableAt - now,
         };
       this.changeAvailableAt = now + TIME_COMMAND_COOLDOWN_MS;
-      clock = applyDayClockAction(clock, change, now);
+      for (const change of changes) clock = applyDayClockAction(clock, change, now);
       this.state.dayOffsetMs = clock.offsetMs;
       this.state.dayFrozenHour = clock.frozenHour;
     }
@@ -44,13 +48,12 @@ export class WorldClock {
     return {
       ok: true,
       // Read-only /time must not acquire the ordinary chat cooldown on the client.
-      retryAfterMs: change ? TIME_COMMAND_COOLDOWN_MS : 0,
-      message:
-        change?.kind === 'reset'
-          ? `Часы идут по общему времени: ${hour}.`
-          : clock.frozenHour >= 0
-            ? `Время остановлено: ${hour}.`
-            : `Время идёт: ${hour}.`,
+      retryAfterMs: changed ? TIME_COMMAND_COOLDOWN_MS : 0,
+      message: changes.some((change) => change.kind === 'reset')
+        ? `Часы идут по общему времени: ${hour}.`
+        : clock.frozenHour >= 0
+          ? `Время остановлено: ${hour}.`
+          : `Время идёт: ${hour}.`,
     };
   }
 }

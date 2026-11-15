@@ -59,6 +59,19 @@ describe('character animation from displayed motion', () => {
       expect(backward.pose.leftLegRoll).toBe(0);
     },
   );
+  it('animates a /speed player as a faster version of the normal gait, not as teleports', () => {
+    const normal = new CharacterAnimator(4, 14),
+      fast = new CharacterAnimator(4, 14);
+    const a = frame(),
+      b = { ...frame(), speedScale: 4 };
+    a.velocity.z = 14;
+    b.velocity.z = 56;
+    // Remote at 20 fps: 2.8 m per frame would read as a teleport without the scaled threshold.
+    advance(normal, a, 1, { fps: 20, predicted: false });
+    advance(fast, b, 1, { fps: 20, predicted: false });
+    expect(fast.diagnostics().mode).toBe('run');
+    expect(fast.travel).toBeCloseTo(normal.travel * 4, 0);
+  });
   const playback = (id: AnimationId, tick = 60) => ({
     worldEpoch: 'epoch',
     animationId: id,
@@ -68,6 +81,27 @@ describe('character animation from displayed motion', () => {
     changedAtTick: 0,
     displayTick: tick,
   });
+
+  it.each([false, true])(
+    'keeps the selected gesture phase and mask at /speed x4 (reduced=%s)',
+    (reduced) => {
+      const normal = new CharacterAnimator(4, 14),
+        fast = new CharacterAnimator(4, 14);
+      const a = frame(),
+        b = { ...frame(), speedScale: 4 };
+      a.velocity.z = 4;
+      b.velocity.z = 16;
+      a.animation = playback('wave');
+      b.animation = playback('wave');
+      advance(normal, a, 1, { reduced });
+      advance(fast, b, 1, { reduced });
+      expect(normal.diagnostics().animation.reason).toBe('playing');
+      expect(fast.diagnostics().animation.reason).toBe('playing');
+      for (const channel of ANIMATION_CLIPS.wave.mask)
+        expect(fast.pose[channel]).toBeCloseTo(normal.pose[channel]);
+      expect(fast.travel).toBeCloseTo(normal.travel * 4, 0);
+    },
+  );
 
   it.each(ANIMATIONS.filter((entry) => entry.mode === 'upperBody').map((entry) => entry.id))(
     'keeps unmasked locomotion under %s',

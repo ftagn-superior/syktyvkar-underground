@@ -460,7 +460,33 @@
             <span>Реакции</span
             ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
           </h2>
+          <div class="reaction-search">
+            <label for="reaction-search">Поиск</label>
+            <div class="reaction-search-row">
+              <input
+                id="reaction-search"
+                class="ui-input"
+                type="search"
+                maxlength="120"
+                autocomplete="off"
+                placeholder="Название, ID или категория"
+                aria-describedby="reaction-keys"
+              />
+              <button
+                id="reaction-search-clear"
+                class="ui-btn"
+                type="button"
+                aria-label="Очистить поиск"
+                hidden
+              >
+                ×
+              </button>
+            </div>
+          </div>
           <div class="filters" role="group" aria-label="Категория реакций"></div>
+          <p id="reaction-keys" class="reaction-keys">
+            1–9 — первые результаты. Enter из поиска — к карточкам.
+          </p>
           <div class="catalog-scroll">
             <div class="catalog-recent" hidden>
               <span class="pop-sub">Недавние</span>
@@ -468,6 +494,9 @@
               <span class="pop-sub">Все</span>
             </div>
             <div class="rgrid reaction-choices" role="group" aria-label="Выбор реакции"></div>
+            <p id="reactions-empty" role="status" hidden>
+              Ничего не найдено. Измените поиск или категорию.
+            </p>
           </div>
           <p id="reactions-status" class="catalog-status" role="status"></p>
           <progress
@@ -487,11 +516,68 @@
             <span>Анимации</span
             ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
           </h2>
+          <input
+            id="animation-search"
+            class="ui-input"
+            type="search"
+            aria-label="Поиск анимаций"
+            placeholder="Название, ID или категория…"
+            autocomplete="off"
+          />
           <div class="filters" role="group" aria-label="Категория анимаций"></div>
           <div class="catalog-scroll">
             <div class="elist animation-choices" role="group" aria-label="Выбор анимации"></div>
+            <p id="animation-empty" hidden>Ничего не найдено. Измените поиск или категорию.</p>
           </div>
+          <details id="animation-preview">
+            <summary>Предпросмотр на персонаже</summary>
+            <p>
+              Предпросмотр виден только вам. Нажмите карточку или цифру, чтобы выполнить анимацию в
+              мире.
+            </p>
+            <label
+              >Анимация
+              <select id="animation-preview-clip"></select
+            ></label>
+            <label
+              >Персонаж
+              <select id="animation-preview-skin"></select
+            ></label>
+            <label
+              ><input id="animation-preview-reduced" type="checkbox" /> Уменьшить движение</label
+            >
+            <canvas
+              id="animation-preview-canvas"
+              aria-label="Предпросмотр анимации. Потяните мышью для поворота персонажа."
+            ></canvas>
+            <p id="animation-preview-note" role="status"></p>
+          </details>
           <p id="animations-status" class="catalog-status" role="status"></p>
+        </section>
+        <section
+          id="commands-panel"
+          class="catalog commands-panel ui-pop ui-panel"
+          aria-labelledby="commands-title"
+          hidden
+        >
+          <div class="ui-orn"></div>
+          <div class="help-head">
+            <h2 id="commands-title" class="pop-h disp">
+              <span>Команды</span
+              ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
+            </h2>
+            <button
+              class="ui-btn pop-close"
+              type="button"
+              aria-label="Закрыть (Esc)"
+              data-icon="close"
+            ></button>
+          </div>
+          <div class="filters" role="group" aria-label="Категория команд"></div>
+          <div class="catalog-scroll">
+            <div class="command-list"></div>
+          </div>
+          <p class="catalog-status">Щелчок по команде или примеру вставляет её в чат.</p>
         </section>
         <p id="chat-status" class="chat-status" role="status"></p>
         <div id="chat-row" class="chat-row">

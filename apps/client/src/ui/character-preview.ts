@@ -8,7 +8,12 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
-import type { AvatarSkinId, SimulationConfig } from '@su/contracts';
+import {
+  TICK_RATE,
+  type AnimationId,
+  type AvatarSkinId,
+  type SimulationConfig,
+} from '@su/contracts';
 import { AvatarView } from '../rendering/avatars/avatar-view';
 import type { DisplayPlayer } from '../presentation/display-state';
 
@@ -24,6 +29,10 @@ export class CharacterPreview {
   private dragging?: { pointer: number; x: number };
   private idleTime = 0;
   private disposed = false;
+  private animationId?: AnimationId;
+  private animationTimeMs = 0;
+  private animationSequence = 0;
+  private reducedOverride?: boolean;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -78,20 +87,42 @@ export class CharacterPreview {
     this.engine.runRenderLoop(() => {
       if (document.hidden || canvas.hidden) return;
       const delta = Math.min(0.1, this.engine.getDeltaTime() / 1000);
+      const reduced = this.reducedOverride ?? this.reducedMotion.matches;
       this.idleTime += delta;
-      if (!this.dragging && !this.reducedMotion.matches) this.yaw += delta * 0.45;
-      const bob = this.reducedMotion.matches
-        ? 0
-        : Math.sin((this.idleTime / 3.2) * Math.PI * 2) * 0.03;
+      this.animationTimeMs += delta * 1000;
+      this.player.animation = this.animationId
+        ? {
+            animationId: this.animationId,
+            worldEpoch: 'local-preview',
+            sequence: this.animationSequence,
+            startedAtTick: 0,
+            endsAtTick: 0,
+            changedAtTick: 0,
+            displayTick: (this.animationTimeMs * TICK_RATE) / 1000,
+            displayTimeMs: this.animationTimeMs,
+          }
+        : undefined;
+      if (!this.dragging && !reduced) this.yaw += delta * 0.45;
+      const bob =
+        reduced || this.animationId ? 0 : Math.sin((this.idleTime / 3.2) * Math.PI * 2) * 0.03;
       this.root.position.y = config.height / 2 + bob;
       this.root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), this.yaw);
-      this.view.update(this.player, delta, false, this.reducedMotion.matches);
+      this.view.update(this.player, delta, false, reduced);
       this.scene.render();
     });
     this.resize();
   }
   setSkin(skinId: AvatarSkinId): void {
     this.player.skinId = skinId;
+  }
+  /** Local preview only. No GameSession or server request is involved. */
+  setAnimation(id?: AnimationId): void {
+    this.animationId = id;
+    this.animationTimeMs = 0;
+    this.animationSequence++;
+  }
+  setReducedMotion(reduced?: boolean): void {
+    this.reducedOverride = reduced;
   }
   setColor(color: string): void {
     this.player.color = color;

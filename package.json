@@ -29,7 +29,7 @@
     "reactions:check": "node --import tsx tools/reactions/command.ts check",
     "reactions:add": "node --import tsx tools/reactions/command.ts add",
     "test:reactions": "vitest run tests/reaction-authoring.test.ts packages/contracts/src/reactions.test.ts apps/client/src/ui/reactions.test.ts apps/client/src/network/session-version.test.ts apps/client/src/presentation/reaction-sounds.test.ts apps/server/src/gameplay/player-activities.test.ts apps/server/src/reactions/release.test.ts",
-    "check": "pnpm reactions:check && tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",
+    "check": "pnpm reactions:check && pnpm animations:check && tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",
     "test": "vitest run",
     "build": "pnpm world:build && pnpm check && node --import tsx tools/build.mjs",
     "start": "node dist/server/main.mjs",
@@ -100,7 +100,10 @@
     "test:static-removal:city": "node --import tsx tests/browser-static-removal-city.ts",
     "test:world-ui:browser": "node --import tsx tests/browser-world-ui.ts",
     "test:lod:browser": "node --import tsx tests/browser-city-lod.ts",
-    "test:lod:migration": "node --import tsx tests/city-lod-upgrade.ts"
+    "test:lod:migration": "node --import tsx tests/city-lod-upgrade.ts",
+    "animations:add": "node --import tsx tools/animations.ts add",
+    "animations:sync": "node --import tsx tools/animations.ts sync",
+    "animations:check": "node --import tsx tools/animations.ts check"
   },
   "devDependencies": {
     "@babylonjs/core": "9.35.0",

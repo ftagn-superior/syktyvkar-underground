@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 
 // v25 adds chat commands and /speed on top of v24 bus travel, LOD/HLOD and catalogs.
 // Earlier releases stop before resource loads or reservation.
@@ -24,7 +25,7 @@ const current: WorldInfo = {
   roomId: 'new-room',
   worldEpoch: 'commands-speed-25',
   protocolVersion: 25,
-  catalogVersions: { reactions: 'test-reactions' },
+  catalogVersions: { ...CLIENT_CATALOG_VERSIONS },
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
   layoutHash: 'b'.repeat(64),
@@ -95,34 +96,54 @@ describe.each([16, 17, 18, 19, 20, 21, 22, 23, 24])(
   },
 );
 
-describe('catalog changes without a map change', () => {
+describe.each([
+  { name: 'missing map', versions: undefined },
+  { name: 'empty map', versions: {} },
+  { name: 'missing animations', versions: { reactions: CLIENT_CATALOG_VERSIONS.reactions } },
+  { name: 'missing reactions', versions: { animations: CLIENT_CATALOG_VERSIONS.animations } },
+  { name: 'changed reactions', versions: { ...CLIENT_CATALOG_VERSIONS, reactions: 'previous' } },
+  { name: 'changed animations', versions: { ...CLIENT_CATALOG_VERSIONS, animations: 'previous' } },
+  { name: 'extra collection', versions: { ...CLIENT_CATALOG_VERSIONS, items: 'unsupported' } },
+])('catalog compatibility: $name', ({ versions }) => {
   beforeEach(() => {
-    legacy.protocol = 24;
+    legacy.protocol = current.protocolVersion;
   });
-  it.each([
-    undefined,
-    {},
-    { reactions: 'previous-release' },
-    { reactions: 'test-reactions', animations: 'other-release' },
-  ])(
-    'requires reload for incompatible catalogs %j before resource download',
-    async (catalogVersions) => {
-      fetchWorld.mockImplementation(async () => Response.json({ ...current, catalogVersions }));
-      await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
-      expect(instance.reloadRequired).toBe(true);
-      expect(fetchWorld).toHaveBeenCalledTimes(1);
-      expect(reserve).not.toHaveBeenCalled();
-    },
-  );
-  it('requires reload during recovery when only the catalog changed', async () => {
+  beforeEach(() => {
+    fetchWorld.mockImplementation(async () =>
+      Response.json({ ...current, catalogVersions: versions }),
+    );
+  });
+  it('requires reload before resource download', async () => {
+    await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
+    expect(instance.reloadRequired).toBe(true);
+    expect(fetchWorld).toHaveBeenCalledTimes(1);
+    expect(reserve).not.toHaveBeenCalled();
+  });
+  it('requires reload on publication refresh even when the map is unchanged', async () => {
+    instance.info = current;
+    instance.state = 'ready';
+    await expect(instance.refreshPublication()).rejects.toThrow('VERSION_MISMATCH');
+    expect(instance.reloadRequired).toBe(true);
+    expect(reserve).not.toHaveBeenCalled();
+  });
+  it('requires reload before room reservation or reconnection', async () => {
+    instance.info = current;
+    instance.state = 'ready';
+    await instance.join();
+    expect(instance.reloadRequired).toBe(true);
+    expect(reserve).not.toHaveBeenCalled();
+    instance.state = 'reconnecting';
+    await instance.join({ token: 'previous-token', epoch: current.worldEpoch, actionId: 0 });
+    expect(instance.reloadRequired).toBe(true);
+    expect(reserve).not.toHaveBeenCalled();
+  });
+  it('requires reload during recovery when only catalogs changed', async () => {
     instance.info = { ...current, worldEpoch: 'previous-process' };
     instance.state = 'reconnecting';
-    fetchWorld.mockImplementation(async () =>
-      Response.json({ ...current, catalogVersions: { reactions: 'new-release' } }),
-    );
     (instance as unknown as { beginRecoveryCheck(): void }).beginRecoveryCheck();
     await vi.waitFor(() => expect(instance.state).toBe('ready'));
     expect(instance.reloadRequired).toBe(true);
     expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Перезагрузите страницу'));
+    expect(reserve).not.toHaveBeenCalled();
   });
 });

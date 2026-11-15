@@ -266,7 +266,10 @@ export function startGame(): void {
     const reaction = session.reactionStatus();
     const animation = session.animationStatus();
     reactions?.update({ ...reaction, available: available && reaction.available });
-    animations?.update({ ...animation, available: available && animation.available });
+    animations?.update(
+      { ...animation, available: available && animation.available },
+      available && !!session.room && ['playing', 'waiting'].includes(session.state),
+    );
     renderChat();
     inventory?.update();
     renderFirstPerson();
@@ -355,7 +358,9 @@ export function startGame(): void {
       playing &&
       !graphicsLost &&
       !staticPlacement?.browsing &&
-      !document.querySelector('.inventory-panel:not([hidden]), .chat-form:not([hidden])')
+      !document.querySelector(
+        '.inventory-panel:not([hidden]), .chat-form:not([hidden]), .catalog:not([hidden])',
+      )
     ) {
       canvas.focus({ preventScroll: true });
     }
@@ -731,6 +736,14 @@ export function startGame(): void {
       // Opening a catalog must not wait for the periodic HUD refresh to enable shortcuts.
       renderGamePanels();
     },
+    () =>
+      loaded
+        ? {
+            character: session.definition.simulation.character,
+            skinId: accounts.selectedSkinId,
+            color: accounts.previewColor,
+          }
+        : undefined,
   );
   chat = new ChatConsole(
     element<HTMLButtonElement>('chat-toggle'),

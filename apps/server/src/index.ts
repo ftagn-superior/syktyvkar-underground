@@ -15,6 +15,8 @@ import {
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import {
+  ANIMATION_CATALOG_VERSION,
+  type ContentCatalogVersions,
   BUS_FILE_MAX_BYTES,
   BUS_MAP_FILE,
   BUS_NETWORK_FILE,
@@ -80,7 +82,10 @@ export async function createGameServer(options: GameServerOptions = {}) {
     throw new ReactionReleaseError(
       'Каталог реакций не совпадает со сборкой сервера. Выпустите клиент и сервер вместе.',
     );
-  const catalogVersions = { reactions: reactions.version };
+  const catalogVersions: ContentCatalogVersions = {
+    reactions: reactions.version,
+    animations: ANIMATION_CATALOG_VERSION,
+  };
   const authored = await readAuthoringRelease(worldDirectory);
   const busNetwork =
     options.busNetwork === undefined

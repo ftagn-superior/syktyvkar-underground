@@ -82,6 +82,27 @@ describe('character animation from displayed motion', () => {
     displayTick: tick,
   });
 
+  it.each([false, true])(
+    'keeps the selected gesture phase and mask at /speed x4 (reduced=%s)',
+    (reduced) => {
+      const normal = new CharacterAnimator(4, 14),
+        fast = new CharacterAnimator(4, 14);
+      const a = frame(),
+        b = { ...frame(), speedScale: 4 };
+      a.velocity.z = 4;
+      b.velocity.z = 16;
+      a.animation = playback('wave');
+      b.animation = playback('wave');
+      advance(normal, a, 1, { reduced });
+      advance(fast, b, 1, { reduced });
+      expect(normal.diagnostics().animation.reason).toBe('playing');
+      expect(fast.diagnostics().animation.reason).toBe('playing');
+      for (const channel of ANIMATION_CLIPS.wave.mask)
+        expect(fast.pose[channel]).toBeCloseTo(normal.pose[channel]);
+      expect(fast.travel).toBeCloseTo(normal.travel * 4, 0);
+    },
+  );
+
   it.each(ANIMATIONS.filter((entry) => entry.mode === 'upperBody').map((entry) => entry.id))(
     'keeps unmasked locomotion under %s',
     (id) => {

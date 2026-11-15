@@ -67,10 +67,10 @@ const info: WorldInfo = {
   roomId: 'loading-profile',
   worldEpoch: 'loading-profile',
   protocolVersion,
-  // Only explicit legacy measurement fixtures can omit the v23 catalog manifest.
+  // Only explicit legacy measurement fixtures can omit the v24 catalog manifest.
   // A current bundle with a missing release must fail rather than bypass its gate.
   catalogVersions:
-    protocolVersion < 23
+    protocolVersion < 24
       ? {}
       : {
           reactions: JSON.parse(

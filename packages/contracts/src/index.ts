@@ -18,6 +18,7 @@ export * from './session.js';
 export * from './activity.js';
 export * from './day-clock.js';
 export * from './weather.js';
+export * from './bus-network.js';
 export {
   validateWorld,
   validateWorldBuildingPlacements,

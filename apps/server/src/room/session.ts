@@ -24,6 +24,8 @@ export interface PreparationPlan {
   deadline: number;
   readyAt?: number;
   spawnDeadline?: number;
+  /** Поездка на автобусе: занятая точка прибытия отменяет поездку, а не ведёт на старт. */
+  busTravel?: boolean;
 }
 
 /** Connection state survives a transport reconnect; physics remains owned by the world. */

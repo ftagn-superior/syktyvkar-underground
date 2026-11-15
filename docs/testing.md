@@ -71,6 +71,8 @@ pnpm build
 
 ## Подсистемы
 
+Автобусы: правила поездок, пересадки, разбор запроса и данные игры — `packages/contracts/src/bus-network.test.ts`; сеть и разбор «Транспорт 11» — `tests/bus-network.test.ts`; точка прибытия на уровне улицы — `packages/simulation/src/ground-spawn.test.ts`. Сквозная поездка на сервере `ring-block` (остановка, отказы `NOT_AT_BUS_STOP`/`NO_BUS_ROUTE`/`RATE_LIMITED`, неверный запрос) — `tests/integration/bus-travel.test.ts`, требует `SU_TEST_DATABASE_URL` с правом `CREATE SCHEMA` и собранный `dist/worlds/ring-block`.
+
 Файловые патчи размещений проверяются в `packages/contracts/src/world-layout-patch.test.ts` (офлайн diff, формат и конфликты) и `tests/integration/static-layout.test.ts` (настоящие CLI export/patch/check/apply, сохранность предметов, аудит, откат SQL-сбоя и блокировка работающего мира). Второй набор требует `SU_TEST_DATABASE_URL`.
 
 | Проверка                                                                                                        | Команда                                                                                   |

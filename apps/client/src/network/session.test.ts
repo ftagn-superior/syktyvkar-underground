@@ -1,4 +1,4 @@
-import { ANIMATION_CATALOG_VERSION } from '@su/contracts';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 import {
   createWorldPublication,
   type WorldPublication,
@@ -147,7 +147,7 @@ beforeAll(async () => {
     layoutHash: 'b'.repeat(64),
     worldEpoch: 'epoch',
     protocolVersion: PROTOCOL_VERSION,
-    catalogVersions: { animations: ANIMATION_CATALOG_VERSION },
+    catalogVersions: { ...CLIENT_CATALOG_VERSIONS },
     mapVersion: manifest.mapVersion,
     simulationConfigHash: manifest.simulationConfigHash,
     manifestUrl: '/worlds/test/manifest.json',

@@ -1,4 +1,3 @@
-import { matchingCatalogVersions, type ContentCatalogVersions } from '@su/contracts';
 import { LiveStaticPlacement, type LayoutPublications } from './layout/live.js';
 import type { ServerPlacementCatalog } from './layout/placement-catalog.js';
 import type { Pool } from 'pg';
@@ -20,7 +19,14 @@ import {
   type AuthContext,
 } from '@colyseus/core';
 import {
+  BUS_STOP_SERVER_RANGE,
+  busStopNear,
+  busTripsFrom,
+  parseBusTravelRequest,
+  type BusNetwork,
   MAX_PLAYERS,
+  matchingCatalogVersions,
+  type ContentCatalogVersions,
   parseAreaFailed,
   parsePlaceStaticRequest,
   type StaticPlacementError,
@@ -93,6 +99,8 @@ export interface WorldRoomOptions {
   pool: Pool;
   testDiagnostics?: boolean;
   itemCreationEnabled?: boolean;
+  /** Автобусы мира (выбранные маршруты); без них поездки отклоняются как COMMAND_DISABLED. */
+  busNetwork?: BusNetwork;
 }
 
 /** Coordinates connections, world preparation and replication; gameplay rules live in gameplay/. */
@@ -115,6 +123,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   private interest!: DynamicInterest;
   private manifest!: WorldManifest;
   private definition!: WorldDefinition;
+  private busNetwork?: BusNetwork;
   private items!: ItemRuntime;
   private positions!: PlayerPositionRuntime;
   private stopping = false;
@@ -167,6 +176,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.catalogVersions = options.catalogVersions;
     this.manifest = options.manifest;
     this.definition = options.definition;
+    this.busNetwork = options.busNetwork;
     this.interest = new DynamicInterest(options.manifest.grid);
     this.testDiagnostics = options.testDiagnostics ?? false;
     this.loopDelay.enable();
@@ -246,6 +256,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.onMessage('areaFailed', (client, data: unknown) => this.areaFailed(client, data));
     this.onMessage('layoutApplied', (client, data: unknown) => this.layoutApplied(client, data));
     this.onMessage('requestRespawn', (client, request: unknown) => this.respawn(client, request));
+    this.onMessage('requestBusTravel', (client, request: unknown) =>
+      this.busTravel(client, request),
+    );
     this.onMessage('requestReaction', (client, request: unknown) => this.react(client, request));
     this.onMessage('requestAnimation', (client, request: unknown) => this.animate(client, request));
     this.onMessage('requestChat', (client, request: unknown) => this.chat(client, request));
@@ -451,6 +464,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     deadline: number,
     requestId?: number,
     position?: Vec3,
+    busTravel = false,
   ): void {
     if (this.stopping) return;
     const initial = reason === 'spawn' ? session.initialSpawn : undefined;
@@ -497,7 +511,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       expiresAt: Date.now() + Math.max(0, deadline - performance.now()),
       ...(requestId !== undefined ? { requestId } : {}),
     };
-    session.plan = { message, deadline, spawnDeadline };
+    session.plan = { message, deadline, spawnDeadline, ...(busTravel ? { busTravel } : {}) };
     this.inputs.get(client.sessionId).clear();
     this.world.setInput(session.entityId, NEUTRAL_INPUT);
     client.send('prepareArea', message);
@@ -622,14 +636,18 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.fallbackPosition(client, session, checked.reason);
       return;
     }
-    const point = checked.ok ? plan.message.position : this.world.findDefaultPlayerSpawn(excludeId);
+    const point = checked.ok
+      ? plan.message.position
+      : plan.busTravel
+        ? this.world.findGroundSpawn([plan.message.position], excludeId)
+        : this.world.findDefaultPlayerSpawn(excludeId);
     if (!point) return; // Retry only until this stage's fixed execution deadline.
     if (
       !worldNeighborhood(this.definition.bounds, this.manifest.grid, point).every((id) =>
         cellIds.includes(id),
       )
     ) {
-      this.createPlan(client, session, reason, plan.deadline, requestId, point);
+      this.createPlan(client, session, reason, plan.deadline, requestId, point, plan.busTravel);
       return;
     }
     // No await between the final geometry check and body creation: contenders serialize here.
@@ -949,6 +967,59 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         'respawn',
         performance.now() + this.prepareTimeoutMs,
         requestId,
+      );
+  }
+
+  /**
+   * Быстрая поездка: игрок стоит у остановки `fromStopId`, и автобус с неё идёт до
+   * `toStopId`. Перемещение — тот же план подготовки области, что и возврат на старт,
+   * с общей перезарядкой; прибытие — на землю у платформы остановки назначения.
+   */
+  private busTravel(client: Client, request: unknown): void {
+    const parsed = parseBusTravelRequest(request);
+    if (!parsed) {
+      client.send('problem', { code: 'INVALID_INPUT' });
+      return;
+    }
+    const action = this.beginAction(client, request);
+    if (!action) return;
+    const { session, requestId } = action;
+    let { code } = action;
+    const network = this.busNetwork;
+    const player = this.state.players.get(client.sessionId);
+    const origin = network?.stops.find((stop) => stop.id === parsed.fromStopId);
+    const target = network?.stops.find((stop) => stop.id === parsed.toStopId);
+    let arrival: Vec3 | undefined;
+    if (!code && !network) code = 'COMMAND_DISABLED';
+    else if (!code && performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS)
+      code = 'RATE_LIMITED';
+    // Любая платформа этой остановки рядом: соседняя остановка ближе не мешает.
+    else if (
+      !code &&
+      (!player ||
+        !origin ||
+        !busStopNear({ ...network!, stops: [origin] }, player, BUS_STOP_SERVER_RANGE))
+    )
+      code = 'NOT_AT_BUS_STOP';
+    else if (!code && (!target || !busTripsFrom(network!, parsed.fromStopId).has(target.id)))
+      code = 'NO_BUS_ROUTE';
+    if (!code) {
+      arrival = this.world.findGroundSpawn(
+        [...target!.platforms, target!.position].map(([x, z]) => ({ x, z })),
+        session.entityId,
+      );
+      if (!arrival) code = 'SPAWN_UNAVAILABLE';
+    }
+    if (code) this.rememberAction(client, session, requestId, false, code);
+    else
+      this.createPlan(
+        client,
+        session,
+        'respawn',
+        performance.now() + this.prepareTimeoutMs,
+        requestId,
+        arrival,
+        true,
       );
   }
 

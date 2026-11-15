@@ -17,6 +17,9 @@ export const ICONS = {
     '<path d="M6 9a6 6 0 0 1 12 0v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"/><path d="M9.5 5V3.5h5V5M9 14h6v3H9Z"/>',
   ),
   send: stroke('<path d="M5 12h13M13 6l6 6-6 6"/>', 2.6),
+  bus: fill(
+    '<path d="M5 4.5A2.5 2.5 0 0 1 7.5 2h9A2.5 2.5 0 0 1 19 4.5V17a1 1 0 0 1-1 1h-.5v1.5a1 1 0 0 1-2 0V18h-7v1.5a1 1 0 0 1-2 0V18H6a1 1 0 0 1-1-1Zm2 2V11h10V6.5ZM8 13.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm8 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z"/>',
+  ),
   close: stroke('<path d="M6 6l12 12M18 6 6 18"/>', 2.6),
   prev: stroke('<path d="M15 5l-7 7 7 7"/>', 2.6),
   next: stroke('<path d="M9 5l7 7-7 7"/>', 2.6),

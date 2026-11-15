@@ -7,9 +7,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// v23 retains v22 graphics/world-v6 contracts and adds exact catalog-map matching.
-// Previously published v22 graphics clients must reload; catalog keys are independent.
-export const PROTOCOL_VERSION = 23;
+// v24 combines v23 bus travel and v22 LOD/HLOD with required catalog versions.
+// Earlier v23 bus-only and catalog-only clients must reload.
+export const PROTOCOL_VERSION = 24;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -49,7 +49,9 @@ export type ErrorCode =
   | 'RATE_LIMITED'
   | 'STALE_WORLD'
   | 'ALREADY_PROCESSED'
-  | 'PLAN_REPLACED';
+  | 'PLAN_REPLACED'
+  | 'NOT_AT_BUS_STOP'
+  | 'NO_BUS_ROUTE';
 export interface ActionResult {
   requestId: number;
   ok: boolean;

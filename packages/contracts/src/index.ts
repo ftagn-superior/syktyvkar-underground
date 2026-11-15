@@ -20,6 +20,7 @@ export * from './content-catalogs.js';
 export * from './activity.js';
 export * from './day-clock.js';
 export * from './weather.js';
+export * from './bus-network.js';
 export {
   validateWorld,
   validateWorldBuildingPlacements,
@@ -40,6 +41,8 @@ export {
   mergeWorldCells,
 } from './world-grid.js';
 export * from './reactions.js';
+export * from './reaction-validation.js';
+export * from './content-catalogs.js';
 export * from './chat.js';
 export { GRAPHICS_PACK_LIMITS, encodeGraphicsPack, decodeGraphicsPack } from './graphics-pack.js';
 export { validateClosedMeshTopology, pointInsideClosedMesh } from './mesh-volume.js';

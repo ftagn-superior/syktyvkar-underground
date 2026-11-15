@@ -71,6 +71,16 @@ try {
     const manifest: WorldManifest = JSON.parse(
       await readFile(join(candidate.world, 'manifest.json'), 'utf8'),
     );
+    // The frozen v21 measurement client predates catalog gates. Current bundles
+    // must receive their real embedded versions, just like production discovery.
+    const catalogVersions =
+      candidate.name === 'baseline'
+        ? undefined
+        : {
+            reactions: JSON.parse(
+              await readFile(join(candidate.client, 'reaction-release.json'), 'utf8'),
+            ).version,
+          };
     inputIdentities[candidate.name] = {
       mapVersion: manifest.mapVersion,
       simulationConfigHash: manifest.simulationConfigHash,
@@ -94,6 +104,7 @@ try {
                     roomId: 'lod-profile',
                     worldEpoch: 'lod-profile',
                     protocolVersion: candidate.protocol,
+                    catalogVersions,
                     mapVersion: manifest.mapVersion,
                     simulationConfigHash: manifest.simulationConfigHash,
                     manifestUrl: '/worlds/lod/manifest.json',

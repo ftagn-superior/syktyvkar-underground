@@ -32,11 +32,19 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     fixture.config.publicOrigin = app.url;
     info = await fetch(app.url + '/api/world').then((r) => r.json());
   }
-  async function login(subject: string, admin = true) {
+  async function login(subject: string, admin = true, name?: string) {
     const { result } = await (admin
       ? loginAdminAccount(app.url, subject, fixture.store)
       : loginAccount(app.url, subject));
-    return responseCookie(result, 'su_session');
+    const cookie = responseCookie(result, 'su_session');
+    if (name) {
+      const account = await fixture.store.authenticate(cookie.split('=')[1]);
+      await fixture.pool.query('UPDATE player_profiles SET display_name=$2 WHERE account_id=$1', [
+        account!.accountId,
+        name,
+      ]);
+    }
+    return cookie;
   }
   async function join(cookie?: string, ready = true) {
     const room = await new Client(
@@ -61,6 +69,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       results,
       send(text: string, requestId: number, worldEpoch = info.worldEpoch) {
         room.send('requestChat', { requestId, worldEpoch, text });
+      },
+      async requestCommands() {
+        return await new Promise<unknown>((resolve) => {
+          room.onMessage('commands', (value) => resolve(value));
+          room.send('requestCommands');
+        });
       },
     };
   }
@@ -440,5 +454,59 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       () => observer.room.state.players.get(restored.room.sessionId)?.chatText === 'Вещи остались!',
     );
     expect(observer.inventories).toEqual([]);
+  });
+
+  it('filters requestCommands by role and lets admins /give items to other accounts', async () => {
+    const guest = await join();
+    const ordinary = await join(await login('ordinary-catalog', false, 'Получатель'));
+    const admin = await join(await login('admin-catalog', true, 'Администратор'));
+
+    const guestCatalog = (await guest.requestCommands()) as { commands: { name: string }[] };
+    expect(guestCatalog.commands.map((c) => c.name)).toEqual(['help']);
+    const ordinaryCatalog = (await ordinary.requestCommands()) as { commands: { name: string }[] };
+    expect(ordinaryCatalog.commands.map((c) => c.name)).toEqual(['help']);
+
+    const adminCatalog = (await admin.requestCommands()) as {
+      commands: { name: string; args: { choices?: string[] }[]; conflicts: string[][] }[];
+    };
+    expect(adminCatalog.commands.map((c) => c.name)).toContain('give');
+    const giveEntry = adminCatalog.commands.find((c) => c.name === 'give')!;
+    expect(giveEntry.args[1].choices).toContain('wooden-crate');
+    expect(adminCatalog.commands.find((c) => c.name === 'time')!.conflicts).toContainEqual([
+      'stop',
+      'start',
+    ]);
+
+    const guestName = app.room.state.players.get(guest.room.sessionId)!.name;
+    admin.send(`/give @"${guestName}" wooden-crate`, 1);
+    await until(() => admin.results.length === 1);
+    expect(admin.results[0]).toMatchObject({ ok: false, code: 'INVALID_INPUT' });
+
+    const ordinaryName = app.room.state.players.get(ordinary.room.sessionId)!.name;
+    admin.send(`/give @"${ordinaryName}" wooden-crate`, 2);
+    await until(
+      () => admin.results.length === 2 && ordinary.inventories.at(-1)?.slots[0]?.items.length === 1,
+    );
+    expect(admin.results[1].ok).toBe(true);
+    expect(admin.inventories.flatMap((i) => i.slots)).toEqual([]);
+  });
+
+  it('rejects ambiguous /give targets without granting to either account', async () => {
+    const first = await join(await login('duplicate-first', false, 'Тёзка'));
+    const second = await join(await login('duplicate-second', false, 'Тёзка'));
+    const admin = await join(await login('duplicate-admin', true, 'Администратор'));
+    admin.send('/give @Тёзка wooden-crate', 1);
+    await until(() => admin.results.length === 1);
+    expect(admin.results[0]).toMatchObject({
+      ok: false,
+      code: 'INVALID_INPUT',
+      message: 'Под @Тёзка подходят: Тёзка, Тёзка. Уточните имя.',
+    });
+    expect(
+      (await fixture.pool.query('SELECT count(*)::int AS count FROM item_operations')).rows[0]
+        .count,
+    ).toBe(0);
+    expect(first.inventories.flatMap((inventory) => inventory.slots)).toEqual([]);
+    expect(second.inventories.flatMap((inventory) => inventory.slots)).toEqual([]);
   });
 });

@@ -7,9 +7,14 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import {
   TICK_RATE,
+  findAnimation,
+  isGroundAnimation,
   type AnimationId,
   type AvatarSkinId,
   type SimulationConfig,
@@ -22,6 +27,7 @@ export class CharacterPreview {
   private readonly engine: Engine;
   private readonly scene: Scene;
   private readonly root: TransformNode;
+  private readonly ground: Mesh;
   private readonly view: AvatarView;
   private readonly player: DisplayPlayer;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -44,6 +50,17 @@ export class CharacterPreview {
     this.scene = new Scene(this.engine);
     this.scene.useRightHandedSystem = true;
     this.scene.clearColor = new Color4(0, 0, 0, 0);
+    this.ground = MeshBuilder.CreateGround(
+      'preview-support',
+      { width: config.height * 2.6, height: config.height * 2.6 },
+      this.scene,
+    );
+    const groundMaterial = new StandardMaterial('preview-support', this.scene);
+    groundMaterial.diffuseColor = Color3.FromHexString('#52616a');
+    groundMaterial.specularColor = Color3.Black();
+    groundMaterial.alpha = 0.65;
+    this.ground.material = groundMaterial;
+    this.ground.setEnabled(false);
     const camera = new ArcRotateCamera(
       'preview',
       Math.PI / 2,
@@ -117,7 +134,9 @@ export class CharacterPreview {
   }
   /** Local preview only. No GameSession or server request is involved. */
   setAnimation(id?: AnimationId): void {
+    if (id === this.animationId) return;
     this.animationId = id;
+    this.ground.setEnabled(isGroundAnimation(findAnimation(id)));
     this.animationTimeMs = 0;
     this.animationSequence++;
   }

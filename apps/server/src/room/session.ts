@@ -50,6 +50,8 @@ export interface PlayerSession {
   connectionPeriod: number;
   disconnectSnapshot?: PlayerPositionSnapshot;
   lastCapturedPosition?: Vec3;
+  /** Когда клиенту последний раз отправляли список команд для автодополнения. */
+  commandCatalogSentAt?: number;
 }
 
 export interface ClientAction {

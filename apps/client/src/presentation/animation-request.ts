@@ -29,11 +29,15 @@ export class AnimationRequestState {
           ? 'Слишком часто — подождите немного.'
           : result.code === 'ANIMATION_NOT_ALLOWED'
             ? 'Дождитесь опоры; для движений всем телом остановитесь.'
-            : result.code === 'WORLD_NOT_READY'
-              ? 'Мир пока недоступен.'
-              : result.code === 'STALE_WORLD'
-                ? 'Мир изменился. Войдите снова.'
-                : 'Сервер отклонил анимацию. Попробуйте снова.';
+            : result.code === 'ANIMATION_NO_SPACE'
+              ? 'Нужно свободное ровное место вокруг персонажа. Отойдите от стен, предметов и края.'
+              : result.code === 'ANIMATION_SKIN_UNSUPPORTED'
+                ? 'Это движение недоступно выбранному скину. Выберите другую внешность.'
+                : result.code === 'WORLD_NOT_READY'
+                  ? 'Мир пока недоступен.'
+                  : result.code === 'STALE_WORLD'
+                    ? 'Мир изменился. Войдите снова.'
+                    : 'Сервер отклонил анимацию. Попробуйте снова.';
       this.pending = undefined;
     }
     return true;

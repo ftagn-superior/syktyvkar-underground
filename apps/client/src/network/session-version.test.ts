@@ -103,6 +103,13 @@ describe.each([
   { name: 'missing reactions', versions: { animations: CLIENT_CATALOG_VERSIONS.animations } },
   { name: 'changed reactions', versions: { ...CLIENT_CATALOG_VERSIONS, reactions: 'previous' } },
   { name: 'changed animations', versions: { ...CLIENT_CATALOG_VERSIONS, animations: 'previous' } },
+  {
+    name: 'humanoid-v1 release at main 5521d946',
+    versions: {
+      ...CLIENT_CATALOG_VERSIONS,
+      animations: '83f53e682a3c192d1d04a42414d718046acc07c40bcebea645ca6d7a3ab501b3',
+    },
+  },
   { name: 'extra collection', versions: { ...CLIENT_CATALOG_VERSIONS, items: 'unsupported' } },
 ])('catalog compatibility: $name', ({ versions }) => {
   beforeEach(() => {

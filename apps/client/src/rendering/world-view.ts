@@ -818,6 +818,7 @@ export class WorldView {
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
       hour: this.environment.hour,
+      weather: { ...this.environment.weatherAmounts },
       nightLampSources: this.environment.nightLights.sourceCount,
       bloom: this.environment.bloomDiagnostics(),
       lights: this.scene.lights.map((light) => ({

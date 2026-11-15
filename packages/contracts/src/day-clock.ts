@@ -1,6 +1,6 @@
 /**
- * Игровые часы мира. Сутки длятся 24 реальные минуты и по умолчанию привязаны
- * к настенному времени, поэтому одинаковы у всех клиентов без обмена сообщениями.
+ * Игровые часы мира. Сутки длятся 24 реальные минуты. Вызывающий передаёт общую
+ * шкалу времени: начальную фазу суток плюс монотонное время комнаты.
  * Команда `/time` сдвигает или останавливает часы; сдвиг хранится в состоянии комнаты.
  */
 
@@ -8,7 +8,7 @@
 export const DAY_LENGTH_MS = 24 * 60 * 1000;
 
 export interface DayClock {
-  /** Сдвиг относительно настенного времени, 0..DAY_LENGTH_MS. */
+  /** Сдвиг относительно общей шкалы времени, 0..DAY_LENGTH_MS. */
   offsetMs: number;
   /** Час, на котором часы остановлены; отрицательное значение — часы идут. */
   frozenHour: number;
@@ -17,7 +17,7 @@ export const DEFAULT_DAY_CLOCK: DayClock = { offsetMs: 0, frozenHour: -1 };
 
 export type DayClockAction = { kind: 'set'; hour: number } | { kind: 'stop' | 'start' | 'reset' };
 
-/** Game hour (0..24) for a moment of wall-clock time; the same on every client. */
+/** Game hour (0..24) on the caller's shared time axis. */
 export function hourAt(epochMs: number): number {
   const phase = epochMs / DAY_LENGTH_MS;
   return (phase - Math.floor(phase)) * 24;

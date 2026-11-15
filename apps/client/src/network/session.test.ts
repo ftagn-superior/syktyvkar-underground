@@ -201,6 +201,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   for (const instance of sessions.splice(0)) instance.dispose();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -1328,6 +1329,85 @@ describe('catalog discovery recovery', () => {
     await instance.leave();
     expect(instance.commands()).toBeUndefined();
   });
+  it('keeps discovery sample age through a slow publication load', async () => {
+    let now = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(url), location.href).pathname === '/api/world')
+        return Promise.resolve(
+          Response.json({ ...info, dayStartPhaseMs: 400_000, serverElapsedMs: 20_000 }),
+        );
+      now = 6000;
+      return originalFetch(url, init);
+    });
+    const instance = session();
+    await instance.load();
+    expect(instance.worldTimeMs()).toBe(425_000);
+  });
+
+  it.each(['epoch', 'previous-process'])(
+    'ignores a late discovery response from %s',
+    async (oldEpoch) => {
+      vi.spyOn(performance, 'now').mockReturnValue(1000);
+      const instance = session();
+      await instance.load();
+      instance.markPrepared();
+      const delayed = deferred<Response>();
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockReturnValueOnce(delayed.promise)
+          .mockResolvedValueOnce(
+            Response.json({
+              ...info,
+              dayStartPhaseMs: 400_000,
+              serverElapsedMs: 20_000,
+              dayClock: { offsetMs: 0, frozenHour: 17 },
+            }),
+          ),
+      );
+      const first = instance.refreshPublication();
+      await instance.refreshPublication();
+      delayed.resolve(
+        Response.json({
+          ...info,
+          worldEpoch: oldEpoch,
+          dayStartPhaseMs: 400_000,
+          serverElapsedMs: 10_000,
+          dayClock: { offsetMs: 0, frozenHour: 5 },
+        }),
+      );
+      await first;
+      expect(instance.worldTimeMs()).toBe(420_000);
+      expect(instance.currentHour()).toBe(17);
+      expect(instance.info.worldEpoch).toBe(info.worldEpoch);
+    },
+  );
+
+  it('keeps discovery time until a full room snapshot supplies its phase', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) =>
+      new URL(String(url), location.href).pathname === '/api/world'
+        ? Promise.resolve(
+            Response.json({ ...info, dayStartPhaseMs: 400_000, serverElapsedMs: 20_000 }),
+          )
+        : originalFetch(url, init),
+    );
+    const instance = session();
+    await instance.load();
+    const beforeJoin = instance.worldTimeMs();
+    instance.room = {
+      state: { dayStartPhaseMs: 0 },
+      clock: { lastServerTime: () => 100, renderNow: () => 100 },
+    } as unknown as NonNullable<GameSession['room']>;
+    expect(beforeJoin).toBe(420_000);
+    expect(instance.worldTimeMs()).toBe(beforeJoin);
+    instance.room = undefined;
+  });
+
   it('uses the replicated room clock instead of client Date.now() for world time and hour', async () => {
     let stateChange: (() => void) | undefined;
     const dayStartPhaseMs = 450_000;
@@ -1495,5 +1575,10 @@ describe('catalog discovery recovery', () => {
     expect(instance.weather).toEqual({ clouds: false, precipitation: 'none', fog: true });
     expect(instance.dayClock).toEqual({ offsetMs: 360_000, frozenHour: 22 });
     expect(weatherEvents).toHaveLength(countBeforeRecoveryLeave);
+    const beforeFallback = instance.worldTimeMs();
+    expect(beforeFallback).toBeGreaterThanOrEqual(125_000);
+    await instance.leave();
+    expect(instance.currentHour()).toBe(22);
+    expect(instance.worldTimeMs()).toBeGreaterThanOrEqual(beforeFallback);
   });
 });

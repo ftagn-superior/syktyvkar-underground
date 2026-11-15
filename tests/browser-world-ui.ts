@@ -233,6 +233,9 @@ try {
   }
   await owner.keyboard.press('Escape');
   assert.equal(await owner.locator('#animations-panel').isHidden(), true);
+  assert.equal(await owner.locator('#chat-console').isVisible(), true);
+  // S-48 routes Escape to the foreground catalog before the preserved chat draft.
+  await owner.keyboard.press('Escape');
   assert.equal(await owner.locator('#chat-console').isHidden(), true);
   await openChat(owner);
   assert.equal(await owner.locator('#chat-input').inputValue(), draft);

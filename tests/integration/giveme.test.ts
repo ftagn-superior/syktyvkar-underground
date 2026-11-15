@@ -375,7 +375,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     expect(app.room.state.dayFrozenHour).toBe(-1);
     expect(app.room.state.dayOffsetMs).toBe(0);
 
-    vi.useFakeTimers({ toFake: ['Date'] });
+    let worldNow = app.room.worldTimeMs();
+    vi.spyOn(app.room, 'worldTimeMs').mockImplementation(() => worldNow);
     try {
       owner.send('/time --set 18:30', 1);
       await until(() => owner.results.length === 1);
@@ -386,7 +387,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       owner.send('/time --stop', 2);
       await until(() => owner.results.length === 2);
       expect(owner.results[1]).toMatchObject({ code: 'RATE_LIMITED' });
-      vi.setSystemTime(Date.now() + 1000);
+      worldNow += 1000;
       owner.send('/time --stop', 3);
       await until(() => owner.results.length === 3);
       expect(owner.results[2]).toMatchObject({ ok: true, message: 'Время остановлено: 18:31.' });
@@ -400,14 +401,14 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       await until(() => owner.results.length === 5);
       expect(owner.results[4]).toMatchObject({ ok: false, code: 'INVALID_INPUT' });
 
-      vi.setSystemTime(Date.now() + 1000);
+      worldNow += 1000;
       owner.send('/time --reset', 6);
       await until(() => owner.results.length === 6);
       expect(owner.results[5].ok).toBe(true);
       await until(() => guest.room.state.dayFrozenHour === -1);
       expect(guest.room.state.dayOffsetMs).toBe(0);
     } finally {
-      vi.useRealTimers();
+      vi.restoreAllMocks();
     }
     expect(guest.results).toHaveLength(1);
     expect(app.room.state.players.get(owner.room.sessionId)!.chatSequence).toBe(0);

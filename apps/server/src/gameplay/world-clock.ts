@@ -14,7 +14,7 @@ interface ReplicatedDayClock {
   dayFrozenHour: number;
 }
 
-/** One clock per room. Replication is its source of truth; restarting restores wall time. */
+/** One clock per room. `now` is the start phase plus the room's monotonic elapsed time. */
 export class WorldClock {
   private changeAvailableAt = 0;
 

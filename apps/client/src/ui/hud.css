@@ -1199,6 +1199,34 @@ body[data-scene='lobby'] .su-prompts {
   pointer-events: none;
   will-change: transform;
 }
+
+/* These elements own theme colors instead of inheriting their panel's interpolation. */
+.help-note,
+.setting-label,
+.chat-counter,
+.chat-suggest-option span,
+.chat-suggest-hint span,
+.command-aliases,
+.command-usage,
+.command-flags dd,
+.reaction-keys,
+.player-label .note {
+  transition: color var(--theme-ease);
+}
+.command-entry,
+.chat-status,
+.chat-send,
+.player-chat {
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
+}
+.keys > div,
+.audio-settings {
+  transition: border-color var(--theme-ease);
+}
 .player-reaction {
   position: fixed;
   top: 0;

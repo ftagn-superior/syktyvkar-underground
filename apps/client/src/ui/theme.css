@@ -170,6 +170,11 @@
   opacity: 0.5;
   cursor: default;
 }
+.ui-link,
+.pop-h small,
+.pop-sub {
+  transition: color var(--theme-ease);
+}
 
 /* ---------- поле ввода ---------- */
 .ui-input {
@@ -188,6 +193,7 @@
 }
 .ui-input::placeholder {
   color: var(--mut);
+  transition: color var(--theme-ease);
 }
 
 /* ---------- чип, значок, клавиша ---------- */
@@ -239,6 +245,10 @@ button.ui-chip[aria-expanded='true'] {
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease);
 }
 /* Клавиша в тексте: Golos Text 700, без моноширинного шрифта и без обрезки. */
 .ui-kbd {

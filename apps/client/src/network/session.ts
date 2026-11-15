@@ -196,7 +196,15 @@ export class GameSession {
   onWeather?: (weather: WorldWeather, snap: boolean) => void;
   private hasAuthoritativeWorldState = false;
   private weatherSnapPending = true;
-  private worldInfoAnchor?: { startPhaseMs: number; elapsedMs: number; loadedAtPerfMs: number };
+  private worldInfoAnchor?: {
+    worldEpoch: string;
+    startPhaseMs: number;
+    elapsedMs: number;
+    loadedAtPerfMs: number;
+  };
+  private readonly worldInfoSamples = new WeakMap<WorldInfo, { sequence: number; at: number }>();
+  private worldInfoSequence = 0;
+  private acceptedWorldInfoSequence = 0;
   onSpawn?: () => void;
   onActionFeedback?: (cue: 'click' | 'error') => void;
   private readonly worldSounds = new WorldSoundEvents();
@@ -316,7 +324,7 @@ export class GameSession {
     this.cancelPhysicsPreparation();
     this.setState('loading');
     try {
-      const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+      const info = await this.readWorldInfo();
       if (generation !== this.generation) return;
       if (!this.compatibleVersion(info)) this.versionMismatch();
       const publication = await loadWorldPublication(info, this.verifiedBytes);
@@ -405,7 +413,7 @@ export class GameSession {
       this.resources = publication.resources;
       this.info = { ...this.info, ...info };
       if ('dayStartPhaseMs' in info || 'serverElapsedMs' in info) {
-        this.applyWorldInfo(this.info);
+        this.synchronizeWorldTime(info as WorldInfo);
       }
       if (playing) await this.preparePhysics(generation);
       if (generation !== this.generation) return;
@@ -573,7 +581,7 @@ export class GameSession {
     )
       return;
     const generation = this.generation;
-    const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+    const info = await this.readWorldInfo();
     if (generation !== this.generation) return;
     if (!this.compatibleVersion(info)) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
@@ -771,7 +779,7 @@ export class GameSession {
     let generation = ++this.generation;
     this.setState(restore ? 'reconnecting' : 'connecting');
     try {
-      const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+      const info = await this.readWorldInfo();
       if (generation !== this.generation) return;
       if (!this.compatibleVersion(info)) this.versionMismatch();
       if (info.mapVersion !== this.info.mapVersion) {
@@ -815,7 +823,8 @@ export class GameSession {
       this.preparationConfirmed = false;
       this.terminalNotice = undefined;
       this.ensureStreamer();
-      room.reconnection.minUptime = 0;
+      // SDK compares Date.now() with join time: even a zero gate rejects a backward clock jump.
+      room.reconnection.minUptime = Number.NEGATIVE_INFINITY;
       room.reconnection.maxRetries = 30;
       room.reconnection.minDelay = 300;
       room.reconnection.maxDelay = 1500;
@@ -1138,7 +1147,7 @@ export class GameSession {
       if (generation !== this.generation) return;
       if (!retried && error instanceof Error && error.message.includes('VERSION_MISMATCH')) {
         try {
-          const latest = (await (await getResponse('/api/world')).json()) as WorldInfo;
+          const latest = await this.readWorldInfo();
           if (!this.compatibleVersion(latest)) this.reloadRequired = true;
           if (this.compatibleVersion(latest) && latest.mapVersion !== this.info.mapVersion) {
             await this.changePublication(latest);
@@ -1258,6 +1267,13 @@ export class GameSession {
       offsetMs: room.state.dayOffsetMs,
       frozenHour: room.state.dayFrozenHour,
     });
+    // Retain the latest room sample when recovery temporarily removes the SDK room.
+    this.worldInfoAnchor = {
+      worldEpoch: room.state.worldEpoch,
+      startPhaseMs: room.state.dayStartPhaseMs,
+      elapsedMs: room.clock.renderNow(),
+      loadedAtPerfMs: performance.now(),
+    };
     this.setWeather(
       {
         clouds: room.state.weatherClouds,
@@ -1293,16 +1309,14 @@ export class GameSession {
   /** Единый источник времени игровых суток для неба и HUD; не зависит от `Date.now()` клиента. */
   worldTimeMs(perfNow = performance.now()): number {
     const roomClock = this.room?.clock;
-    if (this.room && roomClock) {
+    if (this.hasAuthoritativeWorldState && this.room && roomClock) {
       const hasSample =
         typeof roomClock.lastServerTime === 'function' ? roomClock.lastServerTime() > 0 : true;
       if (hasSample) {
         const startPhaseMs =
           this.room.state?.dayStartPhaseMs ?? this.worldInfoAnchor?.startPhaseMs ?? 0;
         const elapsedMs =
-          typeof roomClock.renderNow === 'function'
-            ? roomClock.renderNow()
-            : roomClock.serverNow();
+          typeof roomClock.renderNow === 'function' ? roomClock.renderNow() : roomClock.serverNow();
         return startPhaseMs + elapsedMs;
       }
     }
@@ -1319,11 +1333,36 @@ export class GameSession {
     return dayClockHour(this.dayClock, this.worldTimeMs(perfNow));
   }
   private applyWorldInfo(info: WorldInfo): void {
+    const sample = this.worldInfoSamples.get(info);
+    if (sample && sample.sequence < this.acceptedWorldInfoSequence) return;
+    if (sample) this.acceptedWorldInfoSequence = sample.sequence;
     this.info = info;
+    this.synchronizeWorldTime(info);
+  }
+  private async readWorldInfo(): Promise<WorldInfo> {
+    const sequence = ++this.worldInfoSequence;
+    const started = performance.now();
+    const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+    // Anchor at receipt, before any manifest/physics loading; half the RTT estimates transit.
+    this.worldInfoSamples.set(info, { sequence, at: (started + performance.now()) / 2 });
+    return info;
+  }
+  private synchronizeWorldTime(info: WorldInfo): void {
+    const previous = this.worldInfoAnchor;
+    const sample = this.worldInfoSamples.get(info);
+    // An HTTP response cannot override a live snapshot, nor revive an older discovery sample.
+    if (
+      this.hasAuthoritativeWorldState ||
+      (sample && sample.sequence < this.acceptedWorldInfoSequence) ||
+      (previous?.worldEpoch === info.worldEpoch && (info.serverElapsedMs ?? 0) < previous.elapsedMs)
+    )
+      return;
+    if (sample) this.acceptedWorldInfoSequence = sample.sequence;
     this.worldInfoAnchor = {
+      worldEpoch: info.worldEpoch,
       startPhaseMs: info.dayStartPhaseMs ?? 0,
       elapsedMs: info.serverElapsedMs ?? 0,
-      loadedAtPerfMs: performance.now(),
+      loadedAtPerfMs: sample?.at ?? performance.now(),
     };
     if (!this.hasAuthoritativeWorldState && info.dayClock) {
       this.setDayClock(info.dayClock);
@@ -2168,7 +2207,6 @@ export class GameSession {
     this.hasAuthoritativeWorldState = false;
     this.weatherSnapPending = true;
     if (!preserveRecovery) {
-      this.setDayClock(this.info?.dayClock ?? DEFAULT_DAY_CLOCK);
       this.setWeather(DEFAULT_WEATHER, true);
     }
     this.onInventoryChange?.();
@@ -2249,6 +2287,10 @@ export class GameSession {
     const self = room?.state?.players?.get(room.sessionId);
     return {
       connection: this.state,
+      worldTimeMs: this.worldTimeMs(),
+      worldHour: this.currentHour(),
+      dayClock: this.dayClock,
+      weather: this.weather,
       worldEpoch: room?.state?.worldEpoch ?? this.info?.worldEpoch,
       sessionId: room?.sessionId,
       playerCount: this.playerCount,

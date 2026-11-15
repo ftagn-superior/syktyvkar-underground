@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { WorldInfo } from '@su/contracts';
 import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 
-// v25 adds chat commands and /speed on top of v24 bus travel, LOD/HLOD and catalogs.
+// v27 adds the room clock phase after v26's explicit bus platforms/directions.
 // Earlier releases stop before resource loads or reservation.
 const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({

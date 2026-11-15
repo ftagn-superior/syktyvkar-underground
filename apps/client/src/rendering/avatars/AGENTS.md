@@ -7,3 +7,9 @@ Clips are pure pose samplers in `clips/`. Assign all masked channels on every ca
 DOM, time and physics side effects, and preserve the reduced-motion and seated-rig policies.
 Do not change locomotion or server handlers merely to add a catalog item. A new joint, imported
 skeleton or gameplay action needs a separate contract. Test all catalog entries against all skins.
+
+For articulated clips use the versioned contract in `docs/animation-rig-v2.md`. Keep legacy masks
+and defaults unchanged. Ground clips replace the full articulated pose, declare wheelchair
+capabilities, and supply a named static reduced-motion pose. Root channels move only the visual
+posture node. Test actual geometry/contact, movement cancellation, skin changes and an observer.
+Format rig/skin/animator sources before sync: they participate in the catalog fingerprint.

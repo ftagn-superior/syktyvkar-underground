@@ -37,6 +37,7 @@ import {
   buildingBounds,
   NEUTRAL_INPUT,
   ITEM_REACH,
+  GROUND_ANIMATION_SPACE,
   initialItemState,
   itemShapeParts,
   itemSupportDistance,
@@ -129,6 +130,7 @@ export class PhysicsWorld {
     { node: TransformNode; body: PhysicsBody; shape: PhysicsShape }
   >();
   readonly spawnShape: PhysicsShapeCapsule;
+  private animationSpaceShape?: PhysicsShapeBox;
   readonly gravity: Vector3;
   private buildings: BuildingColliders;
   private staticReferences = new Map<
@@ -750,6 +752,71 @@ export class PhysicsWorld {
         }
       : undefined;
   }
+  /** Cosmetic ground poses reserve space without moving, resizing or rotating the capsule.
+   * A static, nearly level 3x3 support grid excludes ledges and movable props. The box
+   * covers every permitted v2 pose and its transition (authoring checks actual skin vertices).
+   */
+  checkAnimationSpace(playerId: string): boolean {
+    const player = this.characters.get(playerId);
+    if (!player?.grounded) return false;
+    const h = this.definition.simulation.character.height;
+    const center = player.controller.getPosition();
+    const floor = center.y - h / 2;
+    const radius = h * GROUND_ANIMATION_SPACE.halfWidth;
+    const ceiling = h * GROUND_ANIMATION_SPACE.height;
+    const { min, max } = this.definition.bounds;
+    if (
+      center.x - radius < min.x ||
+      center.x + radius > max.x ||
+      center.z - radius < min.z ||
+      center.z + radius > max.z ||
+      floor + ceiling > max.y
+    )
+      return false;
+    const hit = new PhysicsRaycastResult();
+    for (const x of [-radius, 0, radius])
+      for (const z of [-radius, 0, radius]) {
+        this.plugin.raycast(
+          new Vector3(center.x + x, floor + 0.08, center.z + z),
+          new Vector3(center.x + x, floor - 0.08, center.z + z),
+          hit,
+          { ignoreBody: player.body, shouldHitTriggers: false },
+        );
+        if (
+          !hit.hasHit ||
+          hit.hitNormalWorld.y < 0.995 ||
+          Math.abs(hit.hitPointWorld.y - floor) > 0.04 ||
+          hit.body?.getMotionType() !== PhysicsMotionType.STATIC
+        )
+          return false;
+        if (this.buildings.contains(new Vector3(center.x + x, floor + ceiling / 2, center.z + z)))
+          return false;
+      }
+    this.animationSpaceShape ??= new PhysicsShapeBox(
+      Vector3.Zero(),
+      Quaternion.Identity(),
+      new Vector3(radius * 2, ceiling, radius * 2),
+      this.scene,
+    );
+    const overlap = new ProximityCastResult();
+    this.plugin.shapeProximity(
+      {
+        shape: this.animationSpaceShape,
+        position: new Vector3(
+          center.x,
+          floor + GROUND_ANIMATION_SPACE.floorGap + ceiling / 2,
+          center.z,
+        ),
+        rotation: Quaternion.Identity(),
+        maxDistance: 0,
+        shouldHitTriggers: false,
+        ignoreBody: player.body,
+      },
+      new ProximityCastResult(),
+      overlap,
+    );
+    return !overlap.hasHit || overlap.hitDistance >= -0.001;
+  }
   canReach(playerId: string, position: Vec3, targetId?: string): ItemError | undefined {
     const player = this.characters.get(playerId);
     if (!player) return 'WORLD_NOT_READY';
@@ -1121,6 +1188,7 @@ export class PhysicsWorld {
     this.staticReferences.clear();
     this.remotePlayers.clear();
     this.spawnShape.dispose();
+    this.animationSpaceShape?.dispose();
     this.scene.dispose();
     this.engine.dispose();
   }

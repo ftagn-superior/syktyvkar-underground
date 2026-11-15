@@ -225,6 +225,23 @@ describe('animation content pipeline', () => {
           ]),
         ).rejects.toThrow('ground support');
         expect(await readFile(join(root, manifest), 'utf8')).toBe(before);
+        const unsafe = file.replace(
+          /sample\(pose\) \{[^}]+\}/,
+          `sample(pose) {
+            neutralArticulatedPose(pose);
+            pose.lift = 0.1;
+            pose.rightArmRoll = 2.51;
+            pose.rootRoll = -0.94;
+            pose.rootYaw = -Math.PI / 4;
+            pose.rootX = pose.rootZ = 0.15;
+          }`,
+        );
+        await writeFile(join(root, directory, 'audit-ground.ts'), unsafe);
+        const index = join(root, 'packages/contracts/src/animation-catalog.generated.ts');
+        const published = await readFile(index, 'utf8');
+        await expect(checkAnimations(root)).rejects.toThrow('reserved ground space');
+        await expect(syncAnimations(root)).rejects.toThrow('reserved ground space');
+        expect(await readFile(index, 'utf8')).toBe(published);
       });
     },
   );

@@ -27,7 +27,10 @@ export type AnimationDefinition = AnimationMetadata &
       }
   );
 
-/** Conservative space reserved by ground poses, in fractions of character height. */
+/** Ground body vertices must fit a horizontal disk of radius halfWidth * character height.
+ * The server reserves its enclosing world-axis box, independent of facing and smoothing.
+ * Height/floorGap are vertical fractions/metres respectively; the capsule stays upright.
+ */
 export const GROUND_ANIMATION_SPACE = { halfWidth: 0.8, height: 1.3, floorGap: 0.025 } as const;
 export function isGroundAnimation(animation: AnimationDefinition | undefined): boolean {
   return animation?.rig === 'humanoid-v2' && animation.support === 'ground';

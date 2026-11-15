@@ -271,14 +271,26 @@ export class AvatarRig {
     return {
       articulated: this.articulated,
       supportY: this.supportY,
-      bounds: bounds ? { min: point(bounds.min), max: point(bounds.max) } : undefined,
+      bounds: bounds
+        ? {
+            min: point(bounds.min),
+            max: point(bounds.max),
+            horizontalRadius: bounds.horizontalRadius,
+          }
+        : undefined,
     };
   }
 
-  /** Exact vertex bounds of the visual body, without chair, props or the physical capsule. */
-  bounds(): { min: Vector3; max: Vector3 } {
+  /** Exact body vertices, excluding chair/props; radius is about the physical root's X/Z.
+   * Unlike the corners of an AABB, this reach is invariant under any facing yaw.
+   */
+  bounds(): { min: Vector3; max: Vector3; horizontalRadius: number } {
     const min = new Vector3(Infinity, Infinity, Infinity),
       max = min.scale(-1);
+    const root = this.facing.parent as TransformNode;
+    root.computeWorldMatrix(true);
+    const center = root.getAbsolutePosition();
+    let radiusSquared = 0;
     for (const [mesh, vertices] of this.supportVertices) {
       const m = mesh.computeWorldMatrix(true).m;
       for (let i = 0; i < vertices.length; i += 3) {
@@ -288,6 +300,7 @@ export class AvatarRig {
         const wx = x * m[0] + y * m[4] + z * m[8] + m[12];
         const wy = x * m[1] + y * m[5] + z * m[9] + m[13];
         const wz = x * m[2] + y * m[6] + z * m[10] + m[14];
+        radiusSquared = Math.max(radiusSquared, (wx - center.x) ** 2 + (wz - center.z) ** 2);
         min.x = Math.min(min.x, wx);
         max.x = Math.max(max.x, wx);
         min.y = Math.min(min.y, wy);
@@ -296,7 +309,7 @@ export class AvatarRig {
         max.z = Math.max(max.z, wz);
       }
     }
-    return { min, max };
+    return { min, max, horizontalRadius: Math.sqrt(radiusSquared) };
   }
 
   dispose(): void {

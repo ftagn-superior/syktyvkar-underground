@@ -754,7 +754,8 @@ export class PhysicsWorld {
   }
   /** Cosmetic ground poses reserve space without moving, resizing or rotating the capsule.
    * A static, nearly level 3x3 support grid excludes ledges and movable props. The box
-   * covers every permitted v2 pose and its transition (authoring checks actual skin vertices).
+   * encloses the yaw-invariant body disk: authoring checks actual vertex distance from
+   * the physical root, including root offsets and transition poses, for every skin.
    */
   checkAnimationSpace(playerId: string): boolean {
     const player = this.characters.get(playerId);

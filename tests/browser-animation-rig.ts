@@ -13,6 +13,7 @@ import {
   AVATAR_SKINS,
   ANIMATIONS,
   ANIMATION_CATALOG_VERSION,
+  GROUND_ANIMATION_SPACE,
   type WorldInfo,
 } from '../packages/contracts/src';
 import { rigDefinitions, rigClips } from './fixtures/animation-rig';
@@ -196,11 +197,16 @@ try {
                 : Math.abs(actual.pose[channel] - expected[channel]);
             assert.ok(error < 0.001, `${skin.id}/${definition.id}/${channel}/${reduced}: ${error}`);
           }
-          if (skin.id !== 'bear-wheelchair')
+          if (skin.id !== 'bear-wheelchair') {
             assert.ok(
               actual.rig.bounds.min.y >= -0.01 && actual.rig.bounds.min.y <= 0.05,
               `support ${actual.rig.bounds.min.y}`,
             );
+            assert.ok(
+              actual.rig.bounds.horizontalRadius <= 1.8 * GROUND_ANIMATION_SPACE.halfWidth + 0.001,
+              `${skin.id}/${definition.id}: rendered horizontal reach ${actual.rig.bounds.horizontalRadius}`,
+            );
+          }
           matrix.push({
             skin: skin.id,
             clip: definition.id,

@@ -65,21 +65,25 @@ export function validateAnimationRigs(
                   errors.add(
                     `animation ${definition.id}: skin ${skin.id}, reduced=${reduced}, phase=${i}/32, blend=${weight}: ${reason}`,
                   );
-                if (![...bounds.min.asArray(), ...bounds.max.asArray()].every(Number.isFinite))
+                if (
+                  ![
+                    ...bounds.min.asArray(),
+                    ...bounds.max.asArray(),
+                    bounds.horizontalRadius,
+                  ].every(Number.isFinite)
+                )
                   fail('non-finite rig geometry');
                 if (!ground) continue;
                 const radius = config.height * GROUND_ANIMATION_SPACE.halfWidth;
                 if (
-                  Math.max(
-                    Math.abs(bounds.min.x),
-                    Math.abs(bounds.max.x),
-                    Math.abs(bounds.min.z),
-                    Math.abs(bounds.max.z),
-                  ) >
-                    radius + 0.001 ||
+                  // The server reserves a world-axis box. A disk fits that box at every
+                  // entity yaw, including the animator's independent facing smoothing.
+                  bounds.horizontalRadius > radius + 0.001 ||
                   bounds.max.y > config.height * GROUND_ANIMATION_SPACE.height + 0.001
                 )
-                  fail('pose leaves the reserved ground space; reduce root offset or limb spread');
+                  fail(
+                    'pose leaves the reserved ground space at some facing; reduce horizontal reach (root offset or limb spread)',
+                  );
                 if (bounds.min.y < -0.001) fail('pose penetrates its support plane');
                 if (weight === 1 && Math.abs(bounds.min.y - pose.rootY * config.height) > 0.001)
                   fail('pose does not meet its declared support clearance');

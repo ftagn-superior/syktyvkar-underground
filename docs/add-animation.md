@@ -277,6 +277,11 @@ Ground-клип требует неподвижного игрока, стати
 со стороной 1,6 высоты и высотой 1,3 высоты персонажа. Сервер проверяет коллизии объёма и 3×3 луча
 опоры при запуске и во время показа. Стены, другие игроки, предметы, узкий край и подвижная опора
 мешают запуску; UI сообщает «Нужно свободное ровное место». Это намеренно консервативный допуск.
+Реальные вершины тела, включая смещение корня, должны помещаться в горизонтальный круг радиусом
+0,8 высоты вокруг физического корня. Этот круг помещается в серверный квадрат при **любом**
+направлении персонажа и локальном сглаживании facing. Проверка только X/Z при нулевом направлении
+недостаточна: диагональная поза после поворота может выйти за проверенный объём. Валидатор измеряет
+расстояние самих вершин, а не пустых углов их AABB, поэтому корректные граничные позы сохраняются.
 Капсула остаётся вертикальной: сидение и лежание не дают пролезать под препятствиями.
 Принятый ввод движения отменяет ground до шага физики, фактическая скорость тоже отменяет его.
 При движении, падении и несовместимом скине история ground не смешивается обратно, чтобы поза
@@ -293,7 +298,7 @@ pnpm animations:sync
 pnpm animations:check
 pnpm reactions:check
 pnpm check
-pnpm exec vitest run tests/animation-authoring.test.ts tests/animation-rig.test.ts tests/animation-rig-activities.test.ts packages/simulation/src/animation-space.test.ts apps/client/src/rendering/avatars/character-animator.test.ts apps/client/src/rendering/avatars/animation-skins.test.ts apps/client/src/network/session-version.test.ts
+pnpm exec vitest run tests/animation-authoring.test.ts tests/animation-rig.test.ts tests/animation-ground-space.test.ts tests/animation-rig-activities.test.ts packages/simulation/src/animation-space.test.ts apps/client/src/rendering/avatars/character-animator.test.ts apps/client/src/rendering/avatars/animation-skins.test.ts apps/client/src/network/session-version.test.ts
 pnpm build
 # Только выделенная тестовая PostgreSQL, как выше:
 pnpm exec vitest run tests/integration/animations.test.ts tests/integration/server.test.ts

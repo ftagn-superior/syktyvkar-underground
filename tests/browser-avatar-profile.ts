@@ -12,7 +12,7 @@ const html = `<!doctype html><html><body style="margin:0">
 <script type="module">
 import { WorldView } from '/apps/client/src/rendering/world-view.ts';
 import { physicsFixture } from '/packages/simulation/src/test-fixture.ts';
-import { ANIMATIONS } from '/packages/contracts/src/index.ts';
+import { ANIMATIONS, isGroundAnimation } from '/packages/contracts/src/index.ts';
 const view = new WorldView(document.querySelector('canvas'), document.querySelector('#labels'), physicsFixture());
 const colors = ['#65d6bc','#e5b867','#cb93db','#79b6ed'];
 const entities = Array.from({length:8}, (_,i) => ({
@@ -26,12 +26,13 @@ let time = 0;
 view.onFrame((now,delta) => {
   time += delta;
   entities.forEach((entity,i) => {
-    const angle = time*4/1.4+i*.3;
+    const selected = ANIMATIONS.find(a => a.id === window.avatarProfileAnimation);
+    const ground = isGroundAnimation(selected);
+    const angle = ground ? i*.3 : time*4/1.4+i*.3;
     const yaw = Math.atan2(-Math.sin(angle),Math.cos(angle));
     entity.position = {x:(i%4-1.5)*4+1.4*Math.cos(angle),y:.915,z:(Math.floor(i/4)-.5)*6+1.4*Math.sin(angle)};
-    entity.velocity = {x:-4*Math.sin(angle),y:0,z:4*Math.cos(angle)};
+    entity.velocity = ground ? {x:0,y:0,z:0} : {x:-4*Math.sin(angle),y:0,z:4*Math.cos(angle)};
     entity.rotation = {x:0,y:Math.sin(yaw/2),z:0,w:Math.cos(yaw/2)};
-    const selected = ANIMATIONS.find(a => a.id === window.avatarProfileAnimation);
     entity.animation = selected ? {worldEpoch:'profile', animationId:selected.id,
       sequence:1, startedAtTick:0, endsAtTick:0, changedAtTick:0,
       displayTick:time*60, displayTimeMs:time*1000} : undefined;
@@ -97,6 +98,10 @@ try {
     rendering: Record<string, unknown>;
   }[] = [];
   for (const quality of process.argv.includes('--gallery-only') ? [] : ['standard', 'economy']) {
+    await page.reload();
+    await page.waitForFunction(() => (window as any).avatarProfile?.scene.isReady(), undefined, {
+      timeout: 60000,
+    });
     await page.evaluate((quality) => (window as any).avatarProfile.setQuality(quality), quality);
     await page.waitForTimeout(1500);
     for (const animation of [
@@ -107,6 +112,11 @@ try {
       'smoke-cigarette',
       'drink-beer',
       'use-laptop',
+      'sit',
+      'lie-down',
+      'lie-on-side',
+      'cartwheel',
+      'base-restored',
     ]) {
       await page.evaluate((animation) => {
         (window as any).avatarProfileAnimation = animation;
@@ -157,14 +167,22 @@ try {
     )!.rendering;
     for (const profile of profiles.filter((p) => p.quality === quality)) {
       const hasProp = ['smoke-cigarette', 'drink-beer', 'use-laptop'].includes(profile.animation);
+      const articulated = ['sit', 'lie-down', 'lie-on-side', 'cartwheel', 'base-restored'].includes(
+        profile.animation,
+      );
       for (const field of ['meshes', 'materials', 'transformNodes'])
         assert.equal(
           profile.rendering[field],
-          Number(baseline[field]) + (hasProp && field !== 'transformNodes' ? 8 : 0),
+          Number(baseline[field]) +
+            (hasProp && field !== 'transformNodes' ? 8 : 0) +
+            (articulated && field === 'meshes' ? 32 : 0),
           `${quality}/${profile.animation}: ${field}`,
         );
       const shadows = Boolean(profile.rendering.shadows);
-      const expectedCalls = Number(baseline.drawCalls) + (hasProp ? 8 * (shadows ? 2 : 1) : 0);
+      const expectedCalls =
+        Number(baseline.drawCalls) +
+        (hasProp ? 8 * (shadows ? 2 : 1) : 0) +
+        (articulated ? 32 * (shadows ? 2 : 1) : 0);
       // Static shadow refreshes are intermittent; their caster passes vary between frames.
       const staticPasses = shadows
         ? (baseline.shadowMaps as { staticCasters: number }).staticCasters
@@ -196,7 +214,7 @@ try {
     date: new Date().toISOString(),
     browser: browser.version(),
     experiment: profiles.length
-      ? 'isolated eight moving avatars, both skins, base/wave/clap/dance and three prop clips, SwiftShader, 1280x720; scene warmed, windows >=3s and >=10 samples (15s cap); not hardware acceptance'
+      ? 'isolated eight avatars, two skins; base/wave/clap/dance and props moving, four ground clips stationary, then restored locomotion; SwiftShader, 1280x720; scene warmed, windows >=3s and >=10 samples (15s cap); not hardware acceptance'
       : `${ANIMATIONS.length} clips on both skins at two phases, SwiftShader, 1200x800`,
     profiles,
     errors,

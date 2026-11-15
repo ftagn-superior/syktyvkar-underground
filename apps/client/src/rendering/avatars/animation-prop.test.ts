@@ -67,7 +67,7 @@ describe('cosmetic animation props', () => {
         const mesh = scene.getMeshByName('animation-prop-props')!;
         expect(mesh).toBeTruthy();
         expect(mesh.isPickable).toBe(false);
-        expect(mesh.parent?.name).toBe(id === 'use-laptop' ? 'pose-props' : 'rightShoulder-props');
+        expect(mesh.parent?.name).toBe(id === 'use-laptop' ? 'pose-props' : 'rightHand-props');
         expect(scene.meshes).toHaveLength(baseMeshes + 1);
         expect(scene.materials).toHaveLength(baseMaterials + 1);
         for (let frame = 0; frame < 120; frame++) {
@@ -94,6 +94,25 @@ describe('cosmetic animation props', () => {
         avatar.update(player, 1 / 60, false, false);
         expect(avatar.diagnostics().prop).toBeUndefined();
       }
+      // A v2 pose lazily splits the limbs. Returning to a prop clip must retain its grip.
+      play('drink-beer');
+      for (let i = 0; i < 20; i++) {
+        player.animation!.displayTimeMs! += 20;
+        avatar.update(player, 1 / 60, false, true);
+      }
+      scene.getMeshByName('animation-prop-props')!.computeWorldMatrix(true);
+      const gripBefore = scene.getMeshByName('animation-prop-props')!.getAbsolutePosition().clone();
+      play('sit');
+      expect(avatar.diagnostics().prop).toBeUndefined();
+      play('drink-beer');
+      for (let i = 0; i < 20; i++) {
+        player.animation!.displayTimeMs! += 20;
+        avatar.update(player, 1 / 60, false, true);
+      }
+      scene.getMeshByName('animation-prop-props')!.computeWorldMatrix(true);
+      const gripAfter = scene.getMeshByName('animation-prop-props')!.getAbsolutePosition();
+      // Extra joint matrices use Float32 coordinates; tolerate less than 0.1 mm.
+      expect(Vector3.Distance(gripBefore, gripAfter)).toBeLessThan(0.0001);
       play('use-laptop');
       const oldProp = scene.getMeshByName('animation-prop-props')!;
       player.skinId = skinId === 'bear-wheelchair' ? 'guy' : 'bear-wheelchair';

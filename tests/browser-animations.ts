@@ -125,7 +125,9 @@ try {
     assert.equal(await sender.locator('#chat-console').isVisible(), true);
     assert.equal(await sender.locator('#animations-panel').isVisible(), true);
     await sender.keyboard.press('Escape');
-    for (const [clipIndex, definition] of ANIMATIONS.entries()) {
+    for (const [clipIndex, definition] of ANIMATIONS.filter(
+      (a) => a.rig === 'humanoid-v1',
+    ).entries()) {
       await idle(sender);
       if (definition.id === 'wave') {
         await openChat(sender);
@@ -257,13 +259,13 @@ try {
   }
   if (!catalogOnly) {
     checks.push(
-      `all ${ANIMATIONS.length} clips on both skins reach independent clients, including an observer with 100ms RTT and jitter`,
+      `all ${ANIMATIONS.filter((a) => a.rig === 'humanoid-v1').length} legacy-rig clips on both skins reach independent clients, including an observer with 100ms RTT and jitter`,
     );
     checks.push(
       'upper-body and full-body clips loop beyond five seconds while idle and permit another selection after the cooldown; wave preserves walking legs and shares the reaction sticker',
     );
     checks.push(
-      'movement starts a five-second countdown for every clip including dance; stopping does not cancel it and sprint alone does not start it',
+      'movement starts a five-second countdown for every legacy-rig clip including dance; stopping does not cancel it and sprint alone does not start it',
     );
     checks.push(
       'Tab reaches the last choice and scrolls it into view; reopening restores the first choice; only 1–9 have shortcut badges; Escape and successful selection close the menu',

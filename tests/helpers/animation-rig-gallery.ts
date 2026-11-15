@@ -11,11 +11,23 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
-import { AVATAR_SKINS, animationSkinSupport, type AnimationId } from '../../packages/contracts/src';
+import {
+  AVATAR_SKINS,
+  ANIMATIONS,
+  isGroundAnimation,
+  animationSkinSupport,
+  type AnimationId,
+} from '../../packages/contracts/src';
 import { AvatarView } from '../../apps/client/src/rendering/avatars/avatar-view';
 import type { DisplayPlayer } from '../../apps/client/src/presentation/display-state';
+import { ANIMATION_CLIPS } from '../../apps/client/src/rendering/avatars/animation-clips';
 import { rigDefinitions, rigLibrary } from '../fixtures/animation-rig';
 
+const catalog = new URLSearchParams(location.search).has('catalog');
+const definitions = catalog ? ANIMATIONS.filter(isGroundAnimation) : rigDefinitions;
+const library = catalog
+  ? { find: (id: unknown) => ANIMATIONS.find((a) => a.id === id), clips: ANIMATION_CLIPS }
+  : rigLibrary;
 const engine = new Engine(document.querySelector('canvas')!, true);
 const scene = new Scene(engine);
 scene.useRightHandedSystem = true;
@@ -46,7 +58,7 @@ floorMaterial.diffuseColor = Color3.FromHexString('#364652');
 floorMaterial.specularColor = Color3.Black();
 const figures: { view: AvatarView; player: DisplayPlayer }[] = [];
 AVATAR_SKINS.forEach((skin, row) => {
-  rigDefinitions.forEach((definition, col) => {
+  definitions.forEach((definition, col) => {
     if (animationSkinSupport(definition, skin.id) === 'unavailable') return;
     const root = new TransformNode(`${skin.id}/${definition.id}`, scene);
     const y = (3.5 - row) * 3.25;
@@ -62,7 +74,7 @@ AVATAR_SKINS.forEach((skin, row) => {
       shadow,
       { height: 1.8, radius: 0.35, speed: 4, sprintSpeed: 14, mass: 70 },
       skin.id,
-      rigLibrary,
+      library,
     );
     const player: DisplayPlayer = {
       entityId: root.name,

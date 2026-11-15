@@ -11,6 +11,7 @@ import {
   AVATAR_SKINS,
   ANIMATIONS,
   animationSkinSupport,
+  isGroundAnimation,
   findAnimation,
   validateAnimationDefinitions,
   type AnimationId,
@@ -42,6 +43,8 @@ function sceneFixture() {
     },
   };
 }
+const activityDefinitions = [...rigDefinitions, ...ANIMATIONS.filter(isGroundAnimation)];
+const activityClips: Record<string, AnimationClip> = { ...rigClips, ...ANIMATION_CLIPS };
 const library = {
   find: (id: unknown) => rigLibrary.find(id) ?? findAnimation(id),
   clips: { ...ANIMATION_CLIPS, ...rigClips },
@@ -72,9 +75,21 @@ function frame(id = 'rig-sit'): AvatarMotion {
 }
 
 describe('humanoid-v2 contract and actual geometry', () => {
-  it('validates four technical clips, all skins, support, transitions and both motion settings', () => {
+  it('validates technical and released clips, all skins, support, transitions and both motion settings', () => {
     expect(validateAnimationClips(rigDefinitions, rigClips)).toEqual([]);
     expect(validateAnimationRigs(rigDefinitions, rigClips)).toEqual([]);
+    expect(validateAnimationClips(ANIMATIONS, ANIMATION_CLIPS)).toEqual([]);
+    expect(validateAnimationRigs(ANIMATIONS, ANIMATION_CLIPS)).toEqual([]);
+    for (const id of [
+      'smoke-cigarette',
+      'drink-beer',
+      'use-laptop',
+      'sit',
+      'lie-down',
+      'lie-on-side',
+      'cartwheel',
+    ])
+      expect(findAnimation(id)).toBeDefined();
     expect(ANIMATIONS.some((a) => a.id.startsWith('rig-'))).toBe(false);
   });
   it.each(AVATAR_SKINS)(
@@ -114,10 +129,10 @@ describe('humanoid-v2 contract and actual geometry', () => {
           rig.applyPose(pose, height, 0, 0, true);
           expect(Array.from(upper.computeWorldMatrix(true).m)).toEqual(upperBefore);
           expect(Array.from(lower.computeWorldMatrix(true).m)).not.toEqual(lowerBefore);
-          for (const definition of rigDefinitions) {
+          for (const definition of activityDefinitions) {
             const capability = animationSkinSupport(definition, skin.id);
             if (capability === 'unavailable') continue;
-            const clip = rigClips[definition.id as keyof typeof rigClips];
+            const clip = activityClips[definition.id];
             const sampler = capability === 'variant' ? clip.seated! : clip;
             for (const ms of [0, 750, 1500, 3000, 4500, 5999])
               for (const reduced of [false, true]) {
@@ -151,14 +166,16 @@ describe('humanoid-v2 contract and actual geometry', () => {
               }
               return y;
             };
-            const wheel = restingPose();
-            rigClips['rig-cartwheel'].sample(wheel, 3000, false);
-            rig.applyPose(wheel, height, 0, 1, true);
-            expect(minimum([rig.leftElbow, rig.rightElbow])).toBeCloseTo(0, 5);
-            expect(minimum([rig.head])).toBeGreaterThan(height * 0.004);
-            rigClips['rig-cartwheel'].sample(wheel, 0, false);
-            rig.applyPose(wheel, height, 0, 1, true);
-            expect(minimum([rig.leftKnee, rig.rightKnee])).toBeCloseTo(0, 5);
+            for (const id of ['rig-cartwheel', 'cartwheel']) {
+              const wheel = restingPose();
+              activityClips[id].sample(wheel, 3000, false);
+              rig.applyPose(wheel, height, 0, 1, true);
+              expect(minimum([rig.leftElbow, rig.rightElbow])).toBeCloseTo(0, 5);
+              expect(minimum([rig.head])).toBeGreaterThan(height * 0.004);
+              activityClips[id].sample(wheel, 0, false);
+              rig.applyPose(wheel, height, 0, 1, true);
+              expect(minimum([rig.leftKnee, rig.rightKnee])).toBeCloseTo(0, 5);
+            }
           }
           rig.applyPose(restingPose(), height);
           expect(rig.posture.position.asArray()).toEqual([0, 0, 0]);

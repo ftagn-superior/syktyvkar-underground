@@ -268,6 +268,8 @@ describe('animation content pipeline', () => {
         expect(await readFile(index, 'utf8')).toBe(published);
       });
     },
+    // Repeated full-catalog skin/vertex checks now include the four released ground clips.
+    60_000,
   );
   it('rejects bad arguments without creating files; detects stale indexes and edited clip code', async () => {
     await fixture(async (root) => {

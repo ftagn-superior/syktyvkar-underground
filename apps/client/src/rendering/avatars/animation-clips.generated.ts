@@ -19,6 +19,10 @@ import { clip as clip14 } from './clips/conduct';
 import { clip as clip15 } from './clips/smoke-cigarette';
 import { clip as clip16 } from './clips/drink-beer';
 import { clip as clip17 } from './clips/use-laptop';
+import { clip as clip18 } from './clips/sit';
+import { clip as clip19 } from './clips/lie-down';
+import { clip as clip20 } from './clips/lie-on-side';
+import { clip as clip21 } from './clips/cartwheel';
 export const ANIMATION_CLIPS: Record<AnimationId, AnimationClip> = {
   wave: clip0,
   clap: clip1,
@@ -38,4 +42,8 @@ export const ANIMATION_CLIPS: Record<AnimationId, AnimationClip> = {
   'smoke-cigarette': clip15,
   'drink-beer': clip16,
   'use-laptop': clip17,
+  sit: clip18,
+  'lie-down': clip19,
+  'lie-on-side': clip20,
+  cartwheel: clip21,
 };

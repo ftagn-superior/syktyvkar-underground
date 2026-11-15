@@ -28,6 +28,19 @@ export class AvatarAnimationProp {
       if (definition) this.create(definition);
     }
     if (this.material) this.material.alpha = opacity;
+    if (this.mesh && definition?.anchor === 'right-hand') {
+      // Keep the authored grip on the new wrist, including after lazy limb splitting.
+      // The offsets preserve the three v1 clips' existing hand/paw centres.
+      const bear = this.skin === 'bear' || this.skin === 'bear-wheelchair';
+      const minifigure = this.skin === 'minifigure';
+      this.mesh.position.set(
+        0,
+        -this.height * (minifigure ? 0.31 : bear ? 0.235 : 0.25) -
+          this.rig.rightElbow.position.y -
+          this.rig.rightHand.position.y,
+        minifigure ? this.height * 0.045 : 0,
+      );
+    }
   }
 
   private create(definition: AnimationProp): void {
@@ -50,18 +63,8 @@ export class AvatarAnimationProp {
     });
     const mesh = Mesh.MergeMeshes(pieces, true)!;
     mesh.name = `animation-prop-${this.rig.facing.parent!.name}`;
-    mesh.parent = definition.anchor === 'body' ? this.rig.body : this.rig.rightShoulder;
+    mesh.parent = definition.anchor === 'body' ? this.rig.body : this.rig.rightHand;
     if (definition.rotation) mesh.rotation.set(...definition.rotation);
-    if (definition.anchor === 'right-hand') {
-      // Hand/paw centres in the existing rigid-arm skin geometry; no additional joint.
-      const bear = this.skin === 'bear' || this.skin === 'bear-wheelchair';
-      const minifigure = this.skin === 'minifigure';
-      mesh.position.set(
-        0,
-        -this.height * (minifigure ? 0.31 : bear ? 0.235 : 0.25),
-        minifigure ? this.height * 0.045 : 0,
-      );
-    }
     this.material = new StandardMaterial(mesh.name, scene);
     this.material.diffuseColor = Color3.White();
     this.material.specularColor.set(0.15, 0.15, 0.15);

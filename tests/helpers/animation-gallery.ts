@@ -36,6 +36,7 @@ const canvas = document.querySelector('canvas')!;
 if (selectedSkin) canvas.style.height = '400px';
 const engine = new Engine(canvas, true);
 const scene = new Scene(engine);
+scene.useRightHandedSystem = true;
 scene.clearColor = new Color4(0.06, 0.095, 0.12, 1);
 const camera = new ArcRotateCamera(
   'camera',

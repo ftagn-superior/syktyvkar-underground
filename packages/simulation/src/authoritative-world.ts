@@ -45,6 +45,10 @@ export class AuthoritativeWorld {
     this.world.createCharacter(entityId, center);
     return this.world.state(entityId);
   }
+  /** `/speed`: множитель ходьбы и бега; респаун его сохраняет, выход из мира сбрасывает. */
+  setPlayerSpeedScale(id: string, speedScale: number): boolean {
+    return this.world.setCharacterSpeedScale(id, speedScale);
+  }
   removePlayer(id: string) {
     this.world.removeCharacter(id);
   }

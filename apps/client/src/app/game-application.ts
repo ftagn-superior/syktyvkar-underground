@@ -33,6 +33,7 @@ import { diagnosticReport, downloadDiagnosticReport } from '../ui/diagnostic-rep
 import { ReactionMenu } from '../ui/reactions';
 import { AnimationMenu } from '../ui/animations';
 import { ChatConsole } from '../ui/chat';
+import { CommandHelpPanel } from '../ui/command-help';
 import { ChatSettings } from '../ui/chat-settings';
 import { StaticPlacement } from '../ui/static-placement';
 import { StaticRemoval } from '../ui/static-removal';
@@ -112,6 +113,7 @@ export function startGame(): void {
   let reactions: ReactionMenu | undefined;
   let animations: AnimationMenu | undefined;
   let chat: ChatConsole | undefined;
+  let commandHelp: CommandHelpPanel | undefined;
   let inventory: InventoryPanel | undefined;
   let staticPlacement: StaticPlacement | undefined;
   let staticRemoval: StaticRemoval | undefined;
@@ -179,6 +181,7 @@ export function startGame(): void {
     removal: () => staticRemoval?.close(),
     reactions: () => reactions?.close(false),
     animations: () => animations?.close(false),
+    commands: () => commandHelp?.close(false),
     chat: () => chat?.close(false),
     inventory: () => inventory?.close(),
     bus: () => busMap?.close(),
@@ -760,7 +763,8 @@ export function startGame(): void {
     (open) => {
       if (open) firstPerson?.suspend();
       resetGameInput();
-      if (open) panels.closeExcept('chat');
+      // Справку по командам читают, пока набирают команду.
+      if (open) panels.closeExcept('chat', 'commands');
     },
     chatSettings,
   );
@@ -770,11 +774,23 @@ export function startGame(): void {
     chat?.complete(result.ok);
     renderChat();
   };
+  commandHelp = new CommandHelpPanel(
+    element('commands-panel'),
+    canvas,
+    element('chat-row'),
+    (text) => chat?.insert(text),
+    () => panels.closeExcept('commands', 'chat'),
+  );
+  session.onCommandHelp = (help) => {
+    if (inputMode.value !== 'desktop' || graphicsLost) return;
+    commandHelp?.show(help);
+  };
   const menuSounds = new MenuSounds(
     [
       'help-panel',
       'reactions-panel',
       'animations-panel',
+      'commands-panel',
       'inventory-panel',
       'players-panel',
       'chat-console',
@@ -785,6 +801,8 @@ export function startGame(): void {
   );
   function renderChat(): void {
     const state = session.chatStatus();
+    if (!state.available || graphicsLost || inputMode.value !== 'desktop')
+      commandHelp?.close(false);
     chat?.update({
       ...state,
       available: state.available && !graphicsLost && inputMode.value === 'desktop',
@@ -1262,6 +1280,7 @@ export function startGame(): void {
       lobbyPreview.dispose();
       reactions?.dispose();
       animations?.dispose();
+      commandHelp?.dispose();
       chat?.dispose();
       inventory?.dispose();
       busMap?.dispose();

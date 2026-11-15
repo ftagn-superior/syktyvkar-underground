@@ -30,8 +30,10 @@ export class WorldWeatherControl {
     };
   }
 
-  command(change: WeatherAction | undefined, now: number): Omit<ActionResult, 'requestId'> {
-    if (change) {
+  /** Несколько изменений одной команды применяются вместе; пустой список — только запрос. */
+  command(changes: readonly WeatherAction[], now: number): Omit<ActionResult, 'requestId'> {
+    const changed = changes.length > 0;
+    if (changed) {
       // Смену погоды видят все, поэтому cooldown общий для комнаты, как у `/time`.
       if (now < this.changeAvailableAt)
         return {
@@ -41,14 +43,14 @@ export class WorldWeatherControl {
           retryAfterMs: this.changeAvailableAt - now,
         };
       this.changeAvailableAt = now + WEATHER_COMMAND_COOLDOWN_MS;
-      const weather = applyWeatherAction(this.weather, change);
+      const weather = changes.reduce(applyWeatherAction, this.weather);
       this.state.weatherClouds = weather.clouds;
       this.state.weatherPrecipitation = precipitationCode(weather.precipitation);
       this.state.weatherFog = weather.fog;
     }
     return {
       ok: true,
-      retryAfterMs: change ? WEATHER_COMMAND_COOLDOWN_MS : 0,
+      retryAfterMs: changed ? WEATHER_COMMAND_COOLDOWN_MS : 0,
       message: `Погода: ${describeWeather(this.weather)}.`,
     };
   }

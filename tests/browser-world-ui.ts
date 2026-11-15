@@ -46,7 +46,7 @@ async function chooseTheme(page: Page, mode: 'auto' | 'day' | 'night'): Promise<
   if (!(await page.locator('#help-panel').isVisible())) await page.locator('#help-toggle').click();
   assert.doesNotMatch(
     await page.locator('#help-panel').innerText(),
-    /\/(?:motherlode|vilievna|giveme|time|weather|clouds)\b/,
+    /\/(?:motherlode|vilievna|giveme|give|place|remove|help|time|weather|clouds)\b/,
   );
   await page.locator(`[data-theme-mode="${mode}"]`).click();
   assert.equal(
@@ -131,9 +131,9 @@ try {
     'world chips count both players and list the local player first; Escape restores toggle focus',
   );
 
-  await timeCommand(owner, 'stop');
+  await timeCommand(owner, '--stop');
   assert.ok(app.room.state.dayFrozenHour >= 0);
-  await timeCommand(owner, '13:15');
+  await timeCommand(owner, '--set 13:15');
   for (const page of pages) {
     await clock(page, '13:15', true);
     await theme(page, 'day');
@@ -152,7 +152,7 @@ try {
   await chooseTheme(owner, 'auto');
   await theme(owner, 'day');
   await owner.screenshot({ path: `${output}/day.png` });
-  await timeCommand(owner, '01:30');
+  await timeCommand(owner, '--set 01:30');
   for (const page of pages) {
     await clock(page, '01:30', false);
     await theme(page, 'night');
@@ -230,13 +230,13 @@ try {
   );
 
   await owner.setViewportSize({ width: 1280, height: 720 });
-  await timeCommand(owner, 'start');
+  await timeCommand(owner, '--start');
   assert.equal(app.room.state.dayFrozenHour, -1);
   for (const page of pages)
     await page.waitForFunction(
       () => document.querySelector('#clock-text')?.textContent !== '01:30',
     );
-  await timeCommand(owner, 'reset');
+  await timeCommand(owner, '--reset');
   assert.equal(app.room.state.dayOffsetMs, 0);
   assert.equal(app.room.state.dayFrozenHour, -1);
   for (const page of pages)

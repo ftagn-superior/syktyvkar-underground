@@ -20,7 +20,7 @@ export type AvatarMotion = Pick<
   | 'connected'
 > &
   Pick<DisplayPlayer, 'animation'> &
-  Partial<Pick<DisplayPlayer, 'entityId'>>;
+  Partial<Pick<DisplayPlayer, 'entityId' | 'speedScale'>>;
 const TAU = Math.PI * 2;
 /** Путь сворачивается ради точности float; рывок колеса раз в километр незаметен. */
 const TRAVEL_WRAP = 1000;
@@ -77,6 +77,9 @@ export class CharacterAnimator {
       q.w * q.w + q.x * q.x - q.y * q.y - q.z * q.z,
     );
     const previous = this.previous;
+    // `/speed`: позы выбираются по обычной скорости, а шаг ускоряется — ускоренная съёмка без
+    // скольжения ног. Порог рывка растёт вместе со скоростью.
+    const scale = frame.speedScale ?? 1;
     const vx = predicted
       ? frame.velocity.x
       : previous
@@ -97,7 +100,7 @@ export class CharacterAnimator {
       !Number.isFinite(delta) ||
       delta <= 0 ||
       delta > 0.25 ||
-      distance > Math.max(2, this.sprintSpeed * delta * 1.8);
+      distance > Math.max(2, this.sprintSpeed * scale * delta * 1.8);
     if (!this.previous) this.previous = { x: 0, z: 0, revision: 0, motionRevision: 0 };
     Object.assign(this.previous, {
       x: frame.position.x,
@@ -116,7 +119,7 @@ export class CharacterAnimator {
         : predicted
           ? Math.hypot(frame.velocity.x, frame.velocity.z)
           : distance / delta;
-      const speed = Math.min(this.sprintSpeed, measuredSpeed);
+      const speed = Math.min(this.sprintSpeed, measuredSpeed / scale);
       const blend = 1 - Math.exp(-14 * delta);
       this.speed += (speed - this.speed) * blend;
       const moving = frame.grounded && enabled && speed > 0.08;
@@ -126,9 +129,11 @@ export class CharacterAnimator {
       );
       this.running += (run - this.running) * blend;
       this.airborne += ((frame.grounded ? 0 : 1) - this.airborne) * blend;
-      if (frame.grounded) this.distance = (this.distance + this.speed * delta) % TRAVEL_WRAP;
+      if (frame.grounded)
+        this.distance = (this.distance + this.speed * scale * delta) % TRAVEL_WRAP;
       if (moving) {
-        const cyclesPerSecond = 1.85 * clamp(this.speed / this.walkSpeed) + 0.95 * this.running;
+        const cyclesPerSecond =
+          (1.85 * clamp(this.speed / this.walkSpeed) + 0.95 * this.running) * scale;
         const nextPhase = this.phase + TAU * cyclesPerSecond * delta;
         // The procedural body's vertical motion reaches the ground at 0 and PI.
         // Count crossings before wrapping so one cycle has exactly two contacts.

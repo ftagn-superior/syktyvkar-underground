@@ -9,7 +9,7 @@ import {
   AVATAR_SKINS,
   WORLD_ACTIVITY_MOVE_DURATION_MS,
 } from '../packages/contracts/src/index.js';
-import { chatSent, hudClick } from './helpers/hud.js';
+import { chatSent, hudClick, openChat } from './helpers/hud.js';
 
 const output = 'output/playwright/animations';
 const catalogOnly = process.argv.includes('--catalog-only');
@@ -260,7 +260,19 @@ try {
   }
   const sender = pages[0];
   await sender.setViewportSize({ width: 1280, height: 720 });
+  await sender.bringToFront();
+  await openChat(sender);
+  await sender.locator('#chat-input').fill('/help');
+  await sender.locator('#chat-input').press('Enter');
+  await sender.locator('#commands-panel').waitFor({ state: 'visible' });
+  assert.ok((await sender.locator('#commands-panel .command-list button').count()) > 0);
+  await sender.screenshot({ path: `${output}/command-help.png`, animations: 'disabled' });
   await hudClick(sender, '#animations-toggle');
+  await sender.locator('#animations-panel').waitFor({ state: 'visible' });
+  assert.equal(await sender.locator('#commands-panel').isVisible(), false);
+  checks.push(
+    'server /help opens its command panel; opening animations closes it and keeps catalog input usable',
+  );
   await sender.locator('#animations-panel [data-filter="Танцы"]').click();
   await sender.locator('#animation-search').fill('ТАНЦЫ robot');
   const robotMatches = ANIMATIONS.filter(

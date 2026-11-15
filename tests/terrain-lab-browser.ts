@@ -276,7 +276,7 @@ async function runGame(variant: 'flat' | 'hill', directory: string) {
     await owner.bringToFront();
     // Main now has a 24-minute day/night cycle. Hold both variants at the
     // same sun position through the real, replicated room-clock controls.
-    for (const time of ['stop', '12:00']) {
+    for (const time of ['--set 12:00 --stop']) {
       await hudClick(owner, '#chat-toggle');
       await owner.locator('#chat-input').fill(`/time ${time}`);
       await owner.locator('#chat-send:not([disabled])').click();

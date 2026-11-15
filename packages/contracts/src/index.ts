@@ -20,6 +20,7 @@ export * from './content-catalogs.js';
 export * from './activity.js';
 export * from './day-clock.js';
 export * from './weather.js';
+export * from './commands.js';
 export * from './bus-network.js';
 export {
   validateWorld,

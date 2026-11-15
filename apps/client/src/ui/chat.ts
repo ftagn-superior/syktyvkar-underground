@@ -123,6 +123,14 @@ export class ChatConsole {
     this.render();
     this.focusInput();
   }
+  /** Заменяет текст поля (например, командой из справки) и ставит курсор в конец. */
+  insert(text: string): void {
+    if (!this.state.available) return;
+    if (!this.isOpen) this.open();
+    this.input.value = text.slice(0, CHAT_MAX_LENGTH);
+    this.render();
+    this.focusInput();
+  }
   close(restoreFocus = true): void {
     const wasOpen = this.isOpen;
     this.form.hidden = true;

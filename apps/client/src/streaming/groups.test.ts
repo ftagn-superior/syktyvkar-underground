@@ -3,6 +3,23 @@ import { cityLodFixture } from '../../../../tests/fixtures/city-lod.js';
 import { CellStreamer, type CellGraphics } from './cells';
 import { VerifiedResources } from './resources';
 import { graphicsLevel, rayBoundsDistance } from './graphics-plan';
+import type { Bounds } from '@su/contracts';
+type CameraArea = { minX: number; maxX: number; minZ: number; maxZ: number };
+const cameraArea = (x: number, z: number): CameraArea => ({
+  minX: x - 2,
+  maxX: x + 2,
+  minZ: z - 2,
+  maxZ: z + 2,
+});
+const inCameraArea = (
+  area: CameraArea,
+  bounds: { min: { x: number; z: number }; max: { x: number; z: number } },
+  margin = 0,
+) =>
+  bounds.max.x + margin >= area.minX &&
+  bounds.min.x - margin <= area.maxX &&
+  bounds.max.z + margin >= area.minZ &&
+  bounds.min.z - margin <= area.maxZ;
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 it('orders editor candidates by forward ray entry, including parallel, inside and clipped rays', () => {
   const bounds = { min: { x: 10, y: -1, z: -1 }, max: { x: 20, y: 1, z: 1 } },
@@ -21,7 +38,7 @@ async function ready(s: CellStreamer) {
   }
   throw new Error(JSON.stringify(s.diagnostics()));
 }
-function fixture(radius = 1000, eastX?: number, backgroundBodies = 0) {
+function fixture(radius = 1000, eastX?: number, backgroundBodies = 0, camera?: CameraArea) {
   const f = cityLodFixture();
   if (backgroundBodies) {
     f.world.buildings[0].position.x = -200;
@@ -47,7 +64,8 @@ function fixture(radius = 1000, eastX?: number, backgroundBodies = 0) {
   const reads: string[] = [],
     live = new Set<string>(),
     far = new Set<string>(),
-    physical = new Set<string>();
+    physical = new Set<string>(),
+    editorPins = new Set<string>();
   let farWait: (() => Promise<void>) | undefined,
     corrupt = false,
     lateDisposals = 0;
@@ -85,7 +103,15 @@ function fixture(radius = 1000, eastX?: number, backgroundBodies = 0) {
     releaseStatic: (id) => {
       if (!live.delete(id)) throw new Error('double instance release');
     },
-    projectGraphicsGroup: () => ({ pixels, visible: true, nearPlane: false }),
+    ...(camera
+      ? { isGraphicsVisible: (bounds: Bounds, margin = 0) => inCameraArea(camera, bounds, margin) }
+      : {}),
+    projectGraphicsGroup: (bounds, id) => ({
+      pixels,
+      visible: camera ? inCameraArea(camera, bounds) : true,
+      nearPlane: false,
+      pinned: editorPins.has(id ?? ''),
+    }),
     prepareFarGroup: async (g, read, signal) => {
       for (const r of g.far.resources) {
         await read(r.partsFile);
@@ -127,6 +153,7 @@ function fixture(radius = 1000, eastX?: number, backgroundBodies = 0) {
     far,
     physical,
     graphics,
+    editorPins,
     holdFar: (wait?: () => Promise<void>) => (farWait = wait),
     corrupt: (value: boolean) => (corrupt = value),
     get lateDisposals() {
@@ -136,7 +163,8 @@ function fixture(radius = 1000, eastX?: number, backgroundBodies = 0) {
       return pins;
     },
     zoom: (n: number) => (pixels = n),
-    advance: () => (clock += 6000),
+    advance: (ms = 6000) => (clock += ms),
+    replan: () => stream.setVisualArea({ x: 0, y: 0, z: 0 }, radius),
     clockTax: (step: number) => (clockStep = step),
   };
 }
@@ -188,8 +216,8 @@ describe('group streaming lifecycle', () => {
     expect(f.far.size).toBe(0);
     expect(f.pins).toBe(0);
   });
-  it('loads a coverage owner even when its own bounds lie beyond the circular preload edge', async () => {
-    const f = fixture(125, 260);
+  it('loads the camera border group even beyond the former circular preload edge', async () => {
+    const f = fixture(125, 260, 0, cameraArea(260, 10));
     await ready(f.stream);
     expect(f.stream.diagnostics().groups.find((g) => g.id === 'group-4_2')?.current).toBe('far');
     f.stream.dispose();
@@ -347,5 +375,295 @@ describe('group streaming lifecycle', () => {
     expect(f.far.size).toBe(1);
     expect(f.live.size).toBe(0);
     f.stream.dispose();
+  });
+});
+
+describe('camera visibility streaming', () => {
+  it('does not turn a queued cold group into a retention request when the camera narrows before preparation', async () => {
+    const camera: CameraArea = { minX: -140, maxX: 20, minZ: -40, maxZ: 20 },
+      f = fixture(1000, undefined, 0, camera),
+      west = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('west'))!,
+      east = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('east'))!;
+    try {
+      // The first plan queued both groups, but no pump has begun their preparation.
+      Object.assign(camera, cameraArea(10, 10));
+      expect(inCameraArea(camera, west.bounds, 125)).toBe(false);
+      expect(inCameraArea(camera, west.bounds, 250)).toBe(true);
+      f.replan();
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([east.version]));
+      expect(
+        f.stream.diagnostics().groups.find((g) => g.id === west.groupId)?.wanted,
+      ).toBeUndefined();
+      for (const resource of west.far.resources) {
+        expect(f.reads).not.toContain(resource.modelFile);
+        expect(f.reads).not.toContain(resource.partsFile);
+      }
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('includes the complete bounds at the exact 125 metre load and 250 metre retention edges', async () => {
+    const camera = cameraArea(1000, 1000),
+      f = fixture(1000, undefined, 0, camera),
+      east = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('east'))!;
+    try {
+      Object.assign(camera, {
+        minX: east.bounds.max.x + 125,
+        maxX: east.bounds.max.x + 129,
+        minZ: east.bounds.min.z,
+        maxZ: east.bounds.max.z,
+      });
+      f.replan();
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([east.version]));
+      camera.minX = east.bounds.max.x + 250;
+      camera.maxX = camera.minX + 4;
+      f.replan();
+      f.advance(6000);
+      await ready(f.stream);
+      expect(f.far.has(east.version)).toBe(true);
+      camera.minX += 0.001;
+      camera.maxX += 0.001;
+      f.replan();
+      f.advance(5000);
+      await ready(f.stream);
+      expect(f.far.size).toBe(0);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('loads only the 125 metre camera area without waiting for an unseen coverage neighbour', async () => {
+    const camera = cameraArea(10, 10),
+      f = fixture(1000, undefined, 0, camera),
+      groups = f.publication.manifest.graphics!.groups,
+      east = groups.find((g) => g.memberIds.includes('east'))!,
+      west = groups.find((g) => g.memberIds.includes('west'))!;
+    try {
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([east.version]));
+      expect(inCameraArea(camera, west.bounds, 125)).toBe(false);
+      expect(inCameraArea(camera, west.bounds, 250)).toBe(true);
+      expect(
+        west.coverageCellIds.some((id) => f.stream.diagnostics().graphicsRequired.includes(id)),
+      ).toBe(true);
+      for (const resource of west.far.resources) {
+        expect(f.reads).not.toContain(resource.modelFile);
+        expect(f.reads).not.toContain(resource.partsFile);
+      }
+      expect(f.stream.graphicsReadyRadius({ x: 0, y: 0, z: 0 }, 1000)).toBe(1000);
+      expect(f.stream.backgroundReady).toBe(true);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('retains loaded groups inside 250 metres and gives a full new five seconds after a cancelled release', async () => {
+    const camera = cameraArea(-127, -30),
+      f = fixture(1000, undefined, 0, camera),
+      west = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('west'))!,
+      east = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('east'))!;
+    try {
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([west.version]));
+      Object.assign(camera, cameraArea(10, 10));
+      f.replan();
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([west.version, east.version]));
+      f.advance(6000);
+      await ready(f.stream);
+      expect(f.far.has(west.version)).toBe(true);
+
+      Object.assign(camera, cameraArea(200, 10));
+      f.replan();
+      f.advance(4000);
+      await ready(f.stream);
+      expect(f.far.has(west.version)).toBe(true);
+      Object.assign(camera, cameraArea(10, 10));
+      f.replan();
+      f.advance(6000);
+      await ready(f.stream);
+      expect(f.far.has(west.version)).toBe(true);
+
+      Object.assign(camera, cameraArea(200, 10));
+      f.replan();
+      f.advance(4999);
+      await ready(f.stream);
+      expect(f.far.has(west.version)).toBe(true);
+      f.advance(1);
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([east.version]));
+
+      const oldReads = f.reads.length;
+      Object.assign(camera, cameraArea(10, 10));
+      f.replan();
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([east.version]));
+      expect(
+        f.reads
+          .slice(oldReads)
+          .some((path) => west.far.resources.some((r) => r.modelFile === path)),
+      ).toBe(false);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('keeps player and editor near pins beyond the camera area while preserving critical physics', async () => {
+    const camera = cameraArea(1000, 1000),
+      f = fixture(1000, undefined, 0, camera),
+      east = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('east'))!;
+    try {
+      f.stream.setArea({ x: -127, y: 0, z: -30 });
+      await ready(f.stream);
+      expect(f.stream.criticalReady).toBe(true);
+      expect(f.live).toEqual(new Set(['west']));
+      expect(f.physical).toEqual(new Set(['east', 'west']));
+
+      f.editorPins.add(east.groupId);
+      f.replan();
+      await ready(f.stream);
+      expect(f.live).toEqual(new Set(['east', 'west']));
+      f.editorPins.delete(east.groupId);
+      f.replan();
+      f.advance(5000);
+      await ready(f.stream);
+      expect(f.live).toEqual(new Set(['west']));
+      expect(f.pins).toBe(1);
+      expect(f.stream.criticalReady).toBe(true);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('uses the same camera plan when staging changed offscreen groups in a new publication', async () => {
+    const camera = cameraArea(10, 10),
+      f = fixture(1000, undefined, 0, camera);
+    try {
+      await ready(f.stream);
+      f.world.buildings[0].position.x -= 1;
+      const next = f.publish(),
+        west = next.manifest.graphics!.groups.find((g) => g.memberIds.includes('west'))!,
+        east = next.manifest.graphics!.groups.find((g) => g.memberIds.includes('east'))!,
+        nextReads: string[] = [];
+      const resources = new VerifiedResources(next.manifest, 'http://next/', {
+        fetch: async (url) => {
+          const path = new URL(String(url)).pathname.slice(1);
+          nextReads.push(path);
+          return new Response(next.payloads.get(path)!.slice().buffer);
+        },
+      });
+      const changed = f.stream.transition(next.manifest, resources);
+      await ready(f.stream);
+      await changed;
+      expect(f.far).toEqual(new Set([east.version]));
+      for (const resource of west.far.resources) {
+        expect(nextReads).not.toContain(resource.modelFile);
+        expect(nextReads).not.toContain(resource.partsFile);
+      }
+      expect(f.stream.backgroundReady).toBe(true);
+      expect(f.stream.graphicsReadyRadius({ x: 0, y: 0, z: 0 }, 1000)).toBe(1000);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('keeps the remaining release delay across an unchanged group publication transfer', async () => {
+    const camera = cameraArea(-127, -30),
+      f = fixture(1000, undefined, 0, camera),
+      west = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('west'))!;
+    try {
+      await ready(f.stream);
+      Object.assign(camera, cameraArea(200, 10));
+      f.replan();
+      f.advance(4000);
+      f.world.buildings[1].position.x += 1;
+      const next = f.publish(),
+        resources = new VerifiedResources(next.manifest, 'http://next/', {
+          fetch: async (url) =>
+            new Response(next.payloads.get(new URL(String(url)).pathname.slice(1))!.slice().buffer),
+        });
+      const changed = f.stream.transition(next.manifest, resources);
+      await ready(f.stream);
+      await changed;
+      expect(f.far.has(west.version)).toBe(true);
+      f.advance(999);
+      await ready(f.stream);
+      expect(f.far.has(west.version)).toBe(true);
+      f.advance(1);
+      await ready(f.stream);
+      expect(f.far.has(west.version)).toBe(false);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('drops a changed group at publication adoption without loading its offscreen replacement during release grace', async () => {
+    const camera = cameraArea(-127, -30),
+      f = fixture(1000, undefined, 0, camera),
+      oldWest = f.publication.manifest.graphics!.groups.find((g) => g.memberIds.includes('west'))!;
+    try {
+      await ready(f.stream);
+      expect(f.far).toEqual(new Set([oldWest.version]));
+      Object.assign(camera, cameraArea(200, 10));
+      f.replan();
+      f.advance(1000);
+      f.world.buildings[0].position.x -= 1;
+      const next = f.publish(),
+        west = next.manifest.graphics!.groups.find((g) => g.memberIds.includes('west'))!,
+        blocked = new Set(west.far.resources.flatMap((r) => [r.modelFile, r.partsFile])),
+        nextReads: string[] = [];
+      expect(west.version).not.toBe(oldWest.version);
+      const resources = new VerifiedResources(next.manifest, 'http://next/', {
+        fetch: async (url) => {
+          const path = new URL(String(url)).pathname.slice(1);
+          nextReads.push(path);
+          if (blocked.has(path)) throw new Error('Offscreen replacement must not load');
+          return new Response(next.payloads.get(path)!.slice().buffer);
+        },
+      });
+      const changed = f.stream.transition(next.manifest, resources);
+      expect(f.stream.manifest).toBe(f.publication.manifest);
+      expect(f.far).toEqual(new Set([oldWest.version]));
+      await ready(f.stream);
+      await changed;
+      expect(f.stream.manifest).toBe(next.manifest);
+      expect(f.far.size).toBe(0);
+      expect(nextReads.some((path) => blocked.has(path))).toBe(false);
+      expect(f.stream.diagnostics().groups.some((g) => g.id === west.groupId)).toBe(false);
+      expect(f.stream.backgroundReady).toBe(true);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('disposes a late far preparation after its group leaves the camera area', async () => {
+    const camera = cameraArea(-127, -30),
+      f = fixture(1000, undefined, 0, camera);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    f.holdFar(() => held);
+    try {
+      for (let i = 0; i < 30; i++) {
+        f.stream.pump(100);
+        await tick();
+      }
+      expect(f.reads.some((path) => path.startsWith('hlod/'))).toBe(true);
+      Object.assign(camera, cameraArea(1000, 1000));
+      f.replan();
+      await ready(f.stream);
+      release();
+      for (let i = 0; i < 20; i++) await tick();
+      f.advance(5000);
+      await ready(f.stream);
+      expect(f.far.size).toBe(0);
+      expect(f.lateDisposals).toBeGreaterThan(0);
+      expect(f.stream.backgroundProblem).toBeUndefined();
+    } finally {
+      release();
+      f.stream.dispose();
+    }
   });
 });

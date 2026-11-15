@@ -69,6 +69,7 @@
     "test:streaming:matrix": "pnpm build && node --import tsx tests/streaming-matrix.ts",
     "test:streaming:verify": "pnpm build && node --import tsx tests/streaming-verify.ts",
     "test:streaming:evidence": "node --import tsx tests/streaming-evidence.ts",
+    "test:streaming:visibility": "node --import tsx tests/browser-streaming-visibility.ts",
     "db:migrate": "node --import tsx apps/server/src/migrate.ts",
     "db:migrate:built": "node dist/server/migrate.mjs",
     "world:layout:validate": "node --import tsx apps/server/src/layout-command.ts validate",

@@ -229,6 +229,44 @@ async function generatedSupportPublication(
 }
 
 describe('live publication ownership', () => {
+  it('drops changed detail-only graphics in the release grace without preparing an offscreen replacement', async () => {
+    const v = fixture();
+    let visible = true;
+    v.graphics.isGraphicsVisible = () => visible;
+    try {
+      v.stream.setPreview({ x: 0, y: 0, z: 0 }, 125);
+      await until(v.stream, () => v.stream.backgroundReady);
+      const cell: WorldCell = JSON.parse(
+        await readFile(join(directory, manifest.cells[0].file), 'utf8'),
+      );
+      const id = cell.statics[0].entityId;
+      expect(v.graphical.has(id)).toBe(true);
+      visible = false;
+      v.stream.setPreview({ x: 0, y: 0, z: 0 }, 125);
+      expect(v.stream.diagnostics().graphicsRequired).toHaveLength(0);
+      let preparations = 0;
+      v.graphics.prepareCellAssets = async () => {
+        preparations++;
+        throw new Error('Unwanted offscreen model');
+      };
+      const publication = await livePublication(manifest, new Map(), (changed) => {
+        for (const item of changed.statics) if (item.entityId === id) item.color = '#abcdef';
+      });
+      const applied = v.stream.transition(
+        publication.manifest,
+        liveResources(publication, v.cache, []),
+      );
+      expect(v.graphical.has(id)).toBe(true);
+      await until(v.stream, () => !v.stream.transitioning);
+      await applied;
+      expect(preparations).toBe(0);
+      expect(v.graphical.has(id)).toBe(false);
+      expect(v.stream.backgroundProblem).toBeUndefined();
+    } finally {
+      v.stream.dispose();
+    }
+  });
+
   it('adds and removes one seam instance while transferring every unchanged body, mesh and model pin', async () => {
     const v = fixture();
     const position = { x: 0, y: 0, z: 0 };

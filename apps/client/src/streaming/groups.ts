@@ -13,7 +13,13 @@ import {
 } from '@su/contracts';
 import type { CellGraphics } from './cells';
 import type { VerifiedResources } from './resources';
-import { graphicsLevel } from './graphics-plan';
+import {
+  GRAPHICS_LOD_POLICY,
+  GRAPHICS_STREAMING_POLICY,
+  graphicsLevel,
+  inGraphicsArea,
+  type GraphicsProjection,
+} from './graphics-plan';
 type Context = { manifest: WorldManifest; resources: VerifiedResources };
 export interface FarGroupView {
   activate(): void;
@@ -42,7 +48,6 @@ export class GroupGraphics {
   private players: Vec3[] = [];
   private playerPins = new Set<string>();
   private coverage = new Map<string, string[]>();
-  private coverageCells = new Set<string>();
   private visual?: { center: Vec3; radius: number };
   private generation = 0;
   private planVersion = 0;
@@ -79,7 +84,9 @@ export class GroupGraphics {
     this.players = players;
     this.playerPins = new Set(
       (this.context.manifest.graphics?.groups ?? [])
-        .filter((g) => players.some((p) => distanceToBoundsXZ(p, g.bounds) <= 60))
+        .filter((g) =>
+          players.some((p) => distanceToBoundsXZ(p, g.bounds) <= GRAPHICS_LOD_POLICY.playerRadius),
+        )
         .map((g) => g.groupId),
     );
   }
@@ -102,41 +109,21 @@ export class GroupGraphics {
   get playerProblem() {
     return [...this.playerPins].map((id) => this.states.get(id)?.error).find(Boolean);
   }
-  plan(center: Vec3, radius: number, coverageCells: Iterable<string>) {
-    this.coverageCells = new Set(coverageCells);
+  plan(center: Vec3, radius: number) {
     this.visual = { center, radius };
     this.planVersion++;
     this.refresh();
   }
   private refresh() {
     if (!this.enabled || !this.visual || this.staged) return;
-    const { center, radius } = this.visual;
     for (const group of this.context.manifest.graphics!.groups) {
       let s = this.states.get(group.groupId);
-      const distance = distanceToBoundsXZ(center, group.bounds);
-      const projection = this.graphics.projectGraphicsGroup?.(group.bounds, group.groupId) ?? {
-        pixels: Infinity,
-        visible: true,
-        nearPlane: false,
-      };
-      const playerPinned = this.playerPins.has(group.groupId),
-        pinned = projection.pinned || playerPinned;
-      const covered = group.coverageCellIds.some((id) => this.coverageCells.has(id));
-      if (!s && distance > radius + 125 && !pinned && !covered) continue;
+      const { wanted, level } = this.selection(group, s);
+      if (!s && !wanted) continue;
       if (!s) {
         s = { group };
         this.states.set(group.groupId, s);
       }
-      const wanted =
-        covered ||
-        distance <= radius + 125 ||
-        pinned ||
-        (s.wanted !== undefined && distance <= radius + 300);
-      const level = wanted
-        ? playerPinned
-          ? 'near'
-          : graphicsLevel(group.bounds, projection, [], s.wanted ?? s.current?.level)
-        : undefined;
       if (level !== s.wanted) {
         s.wanted = level;
         s.controller?.abort();
@@ -145,8 +132,60 @@ export class GroupGraphics {
         s.error = undefined;
       }
       if (wanted) s.releaseAt = undefined;
-      else s.releaseAt ??= this.clock() + 5000;
+      else s.releaseAt ??= this.clock() + GRAPHICS_STREAMING_POLICY.releaseMs;
     }
+  }
+  /** Both ordinary loading and live-publication staging obey the same camera policy. */
+  private selection(group: GraphicsGroup, previous?: State) {
+    const projection: GraphicsProjection = this.graphics.projectGraphicsGroup?.(
+      group.bounds,
+      group.groupId,
+    ) ?? { pixels: Infinity, visible: true, nearPlane: false };
+    const pinned =
+      !!projection.pinned ||
+      this.players.some(
+        (p) => distanceToBoundsXZ(p, group.bounds) <= GRAPHICS_LOD_POLICY.playerRadius,
+      );
+    const visible = this.visual
+      ? inGraphicsArea(group.bounds, this.visual, 0, this.graphics)
+      : false;
+    const preload = this.visual
+      ? inGraphicsArea(
+          group.bounds,
+          this.visual,
+          GRAPHICS_STREAMING_POLICY.preloadMargin,
+          this.graphics,
+        )
+      : false;
+    const retained = this.visual
+      ? inGraphicsArea(
+          group.bounds,
+          this.visual,
+          GRAPHICS_STREAMING_POLICY.retainMargin,
+          this.graphics,
+        )
+      : false;
+    const held = !!(
+      previous?.current ||
+      previous?.pending ||
+      (previous?.controller && !previous.controller.signal.aborted)
+    );
+    const wanted = pinned || preload || (held && retained);
+    return {
+      visible,
+      preload,
+      retained,
+      pinned,
+      wanted,
+      level: wanted
+        ? graphicsLevel(
+            group.bounds,
+            projection,
+            this.players,
+            previous?.wanted ?? previous?.current?.level,
+          )
+        : undefined,
+    };
   }
   schedule(available: number) {
     if (this.scheduledPlan === this.planVersion) this.refresh();
@@ -324,29 +363,18 @@ export class GroupGraphics {
     this.staged = stage;
     const groups = new Map(context.manifest.graphics?.groups.map((g) => [g.groupId, g]) ?? []);
     const work = [...groups.values()].flatMap((group) => {
-      const old = this.states.get(group.groupId),
-        visual = this.visual;
-      const distance = visual ? distanceToBoundsXZ(visual.center, group.bounds) : Infinity;
-      const projection = this.graphics.projectGraphicsGroup?.(group.bounds, group.groupId) ?? {
-        pixels: Infinity,
-        visible: true,
-        nearPlane: false,
-      };
-      const pinned =
-        projection.pinned || this.players.some((p) => distanceToBoundsXZ(p, group.bounds) <= 60);
-      const wanted =
-        group.coverageCellIds.some((id) => this.coverageCells.has(id)) ||
-        pinned ||
-        (visual &&
-          (distance <= visual.radius + 125 || (old?.wanted && distance <= visual.radius + 300)));
+      const old = this.states.get(group.groupId);
+      const { wanted, level } = this.selection(group, old);
       if (!wanted && !old?.current) return [];
-      const level = wanted
-        ? graphicsLevel(group.bounds, projection, this.players, old?.wanted ?? old?.current?.level)
-        : undefined;
+      const releaseAt = wanted
+        ? undefined
+        : (old?.releaseAt ?? this.clock() + GRAPHICS_STREAMING_POLICY.releaseMs);
+      if (!wanted && releaseAt! <= this.clock()) return [];
       const s: State = {
         ...old,
         group,
         wanted: level,
+        releaseAt,
         pending: undefined,
         controller: undefined,
         error: undefined,
@@ -374,6 +402,12 @@ export class GroupGraphics {
             ))
         ) {
           s.current = old.current;
+          continue;
+        }
+        // Grace keeps the unchanged old view alive; it must not download a changed
+        // offscreen replacement or make publication adoption depend on that fetch.
+        if (!s.wanted) {
+          states.delete(group.groupId);
           continue;
         }
         const prepared = await this.prepare(
@@ -435,7 +469,7 @@ export class GroupGraphics {
       !this.enabled ||
       (this.coverage.get(id) ?? []).every((groupId) => {
         const s = this.states.get(groupId);
-        return !!s?.current && (s.wanted !== 'near' || s.current.level === 'near');
+        return !s?.wanted || !!s.current;
       })
     );
   }
@@ -448,7 +482,17 @@ export class GroupGraphics {
     );
   }
   get problem() {
-    return [...this.states.values()].find((s) => s.error)?.error;
+    return [...this.states.values()].find((s) => s.wanted && s.error)?.error;
+  }
+  readyRadius(center: Vec3, targetRadius: number) {
+    if (!this.enabled || !this.visual) return targetRadius;
+    let radius = targetRadius;
+    for (const group of this.context.manifest.graphics!.groups) {
+      if (!inGraphicsArea(group.bounds, this.visual, 0, this.graphics)) continue;
+      const state = this.states.get(group.groupId);
+      if (!state?.current) radius = Math.min(radius, distanceToBoundsXZ(center, group.bounds));
+    }
+    return radius;
   }
   retry() {
     for (const s of this.states.values()) s.error = undefined;
@@ -460,17 +504,25 @@ export class GroupGraphics {
     }
   }
   diagnostics() {
-    return [...this.states.values()].map((s) => ({
-      id: s.group.groupId,
-      version: s.group.version,
-      wanted: s.wanted,
-      current: s.current?.level,
-      pending: s.pending?.level,
-      preparing: !!s.controller,
-      error: s.error,
-      nearInstances: s.current?.members.length ?? 0,
-      geometryBytes: s.current?.level === 'far' ? s.group.far.geometryBytes : 0,
-    }));
+    return [...this.states.values()].map((s) => {
+      const { visible, preload, retained, pinned } = this.selection(s.group, s);
+      return {
+        id: s.group.groupId,
+        version: s.group.version,
+        wanted: s.wanted,
+        current: s.current?.level,
+        pending: s.pending?.level,
+        preparing: !!s.controller,
+        error: s.error,
+        nearInstances: s.current?.members.length ?? 0,
+        geometryBytes: s.current?.level === 'far' ? s.group.far.geometryBytes : 0,
+        visible,
+        preload,
+        retained,
+        pinned,
+        releaseAt: s.releaseAt,
+      };
+    });
   }
   dispose() {
     this.generation++;

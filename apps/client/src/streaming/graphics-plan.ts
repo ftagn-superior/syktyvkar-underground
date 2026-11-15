@@ -4,6 +4,29 @@ export const GRAPHICS_LOD_POLICY = Object.freeze({
   promotePixels: 320,
   demotePixels: 240,
 });
+export const GRAPHICS_STREAMING_POLICY = Object.freeze({
+  preloadMargin: 125,
+  retainMargin: 250,
+  releaseMs: 5000,
+});
+export interface GraphicsArea {
+  center: Vec3;
+  radius: number;
+}
+export interface GraphicsVisibility {
+  isGraphicsVisible?(bounds: Bounds, margin?: number): boolean;
+}
+/** Camera-backed clients use the complete AABB. Headless callers supply a circular area. */
+export function inGraphicsArea(
+  bounds: Bounds,
+  area: GraphicsArea,
+  margin: number,
+  graphics: GraphicsVisibility,
+): boolean {
+  return graphics.isGraphicsVisible
+    ? graphics.isGraphicsVisible(bounds, margin)
+    : distanceToBoundsXZ(area.center, bounds) <= area.radius + margin;
+}
 export interface GraphicsProjection {
   pixels: number;
   visible: boolean;

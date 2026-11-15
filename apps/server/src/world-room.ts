@@ -47,6 +47,7 @@ import {
   RESPAWN_COOLDOWN_MS,
   TICK_RATE,
   NEUTRAL_INPUT,
+  speedPercentFromScale,
   worldNeighborhood,
   type PrepareArea,
   type LayoutChanged,
@@ -73,7 +74,12 @@ import {
 import { createAuthoritativeWorld } from '@su/simulation/server';
 import type { AccountHttp } from './accounts/http.js';
 import type { AuthenticatedAccount } from './accounts/store.js';
-import { parseChatCommand, giveFailureMessage, type ChatCommand } from './chat-commands.js';
+import {
+  commandHelp,
+  parseChatCommand,
+  giveFailureMessage,
+  type ChatCommand,
+} from './chat-commands.js';
 import { ActionLedger, rememberResult } from './gameplay/action-ledger.js';
 import { WorldClock } from './gameplay/world-clock.js';
 import { WorldWeatherControl } from './gameplay/world-weather.js';
@@ -1061,7 +1067,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (!action) return;
     const { session, requestId, code } = action;
     const text = normalizeChatText((request as { text?: unknown }).text);
-    const command = text && parseChatCommand(text);
+    const command = text && parseChatCommand(text, this.adminAccess(session) ? 'player' : 'admin');
     if (command) {
       void this.chatCommand(client, action, command);
       return;
@@ -1074,6 +1080,54 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         this.state.serverTick,
         code,
       ),
+    });
+  }
+
+  /**
+   * `@имя` в командах: игроки в мире, чьё имя совпадает без учёта регистра, иначе начинается с
+   * запроса. Несколько совпадений — ошибка с подсказкой, а не случайный выбор.
+   */
+  private findPlayers(query: string): Session[] {
+    const key = (name: string) => name.normalize('NFC').toLocaleLowerCase('ru');
+    const wanted = key(query);
+    const present = [...this.sessions].filter(([sessionId]) => this.state.players.has(sessionId));
+    const exact = present.filter(([, session]) => key(session.name) === wanted);
+    const matches = exact.length
+      ? exact
+      : present.filter(([, session]) => key(session.name).startsWith(wanted));
+    return matches.map(([, session]) => session);
+  }
+
+  private speedCommand(
+    client: Client,
+    session: Session,
+    requestId: number,
+    command: Extract<ChatCommand, { kind: 'speed' }>,
+  ) {
+    const fail = (code: ActionResult['code'], message: string) =>
+      this.finishAction(client, session, { requestId, ok: false, code, message });
+    let target = session;
+    if (command.target !== undefined) {
+      const found = this.findPlayers(command.target);
+      if (!found.length) return fail('INVALID_INPUT', `Игрок @${command.target} не найден.`);
+      if (found.length > 1)
+        return fail(
+          'INVALID_INPUT',
+          `Под @${command.target} подходят: ${found.map((other) => other.name).join(', ')}. Уточните имя.`,
+        );
+      target = found[0];
+    }
+    const state = this.world.getPlayerState(target.entityId);
+    if (!state) return fail('WORLD_NOT_READY', 'Игрок ещё не вошёл в мир.');
+    // Реплицируется в следующем такте вместе с остальным состоянием игрока.
+    if (command.percent !== undefined)
+      this.world.setPlayerSpeedScale(target.entityId, command.percent / 100);
+    const percent = command.percent ?? speedPercentFromScale(state.speedScale);
+    this.finishAction(client, session, {
+      requestId,
+      ok: true,
+      retryAfterMs: 0,
+      message: `${target === session ? 'Ваша скорость' : `Скорость ${target.name}`}: ×${percent / 100}.`,
     });
   }
 
@@ -1093,18 +1147,39 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       this.finishAction(client, session, { requestId, ok: false, code, message });
     if (code) return fail(code, 'Команда сейчас недоступна. Проверьте состояние мира.');
     const access = this.adminAccess(session);
+    if (command.kind === 'invalid') {
+      // Администратор с истёкшей сессией и так знает о командах: ему говорим, что войти заново.
+      if (command.forbidden && access === 'AUTH_REQUIRED' && session.auth?.isAdmin)
+        return fail(access, giveFailureMessage(access));
+      return fail(command.code, command.message);
+    }
+    if (command.kind === 'help') {
+      const effect = commandHelp(access ? 'player' : 'admin', command.focus);
+      if (!effect) return fail('ADMIN_REQUIRED', 'Нет доступных команд.');
+      return this.finishAction(client, session, { requestId, ok: true, retryAfterMs: 0, effect });
+    }
+    // Всё ниже — администраторские команды; парсер уже скрыл их от остальных.
     if (access) return fail(access, giveFailureMessage(access));
-    if (command.kind === 'invalid') return fail(command.code, command.message);
     if (command.kind === 'time')
       return this.finishAction(client, session, {
         requestId,
-        ...this.dayClock.command(command.action, Date.now()),
+        ...this.dayClock.command(command.actions, Date.now()),
       });
     if (command.kind === 'weather')
       return this.finishAction(client, session, {
         requestId,
-        ...this.weather.command(command.action, Date.now()),
+        ...this.weather.command(command.actions, Date.now()),
       });
+    if (command.kind === 'speed') return this.speedCommand(client, session, requestId, command);
+    if (command.kind === 'giveList') {
+      const types = Object.keys(this.items.store.definition.itemCatalog.types).sort();
+      return this.finishAction(client, session, {
+        requestId,
+        ok: true,
+        retryAfterMs: 0,
+        message: types.length ? `Типы предметов: ${types.join(', ')}.` : 'Каталог предметов пуст.',
+      });
+    }
     if (command.kind === 'staticPlacement') {
       const effect = this.staticPlacement?.effect();
       if (!effect) return fail('COMMAND_DISABLED', 'Размещение объектов недоступно в этом мире.');

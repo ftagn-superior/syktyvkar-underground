@@ -1,85 +1,319 @@
 import {
   ITEM_GIVE_COOLDOWN_MS,
+  PLAYER_SPEED_PERCENT,
+  type CommandHelpEffect,
   type DayClockAction,
   type ItemError,
   type WeatherAction,
   type WeatherPart,
 } from '@su/contracts';
+import {
+  CommandLineError,
+  commandHelpEntry,
+  editDistance,
+  parseCommandLine,
+  tokenize,
+  type CommandAccess,
+  type CommandSpec,
+  type ParsedCommandLine,
+} from './commands/command-line.js';
+
+export type { CommandAccess } from './commands/command-line.js';
 
 export type ChatCommand =
   | { kind: 'give'; typeId: string }
-  /** Без `action` команда только сообщает текущее время. */
-  | { kind: 'time'; action?: DayClockAction }
-  /** Без `action` команда только сообщает текущую погоду. */
-  | { kind: 'weather'; action?: WeatherAction }
+  | { kind: 'giveList' }
+  /** Пустой список действий — только сообщить текущее время. */
+  | { kind: 'time'; actions: DayClockAction[] }
+  /** Пустой список действий — только сообщить текущую погоду. */
+  | { kind: 'weather'; actions: WeatherAction[] }
   | { kind: 'staticPlacement' }
   | { kind: 'staticRemoval' }
-  | { kind: 'invalid'; code: 'INVALID_INPUT' | 'UNKNOWN_COMMAND'; message: string };
+  | { kind: 'help'; focus?: string }
+  /**
+   * `target` — имя игрока без `@`, по умолчанию отправитель. Без `percent` только сообщает
+   * скорость; 100 — обычная.
+   */
+  | { kind: 'speed'; target?: string; percent?: number }
+  | {
+      kind: 'invalid';
+      code: 'INVALID_INPUT' | 'UNKNOWN_COMMAND';
+      message: string;
+      /** Команда существует, но отправителю недоступна; для него она выглядит неизвестной. */
+      forbidden?: boolean;
+    };
 
-const invalid = (message: string): ChatCommand => ({
-  kind: 'invalid',
-  code: 'INVALID_INPUT',
-  message,
-});
-
-/** Slash-prefixed input is always private, including unknown or malformed commands. */
-export function parseChatCommand(text: string): ChatCommand | undefined {
-  if (!text.startsWith('/')) return;
-  const [name, argument, ...extra] = text.split(' ');
-  if (name === '/motherlode')
-    return argument || extra.length
-      ? invalid('Формат команды: /motherlode.')
-      : { kind: 'staticPlacement' };
-  if (name === '/vilievna')
-    return argument || extra.length
-      ? invalid('Формат команды: /vilievna.')
-      : { kind: 'staticRemoval' };
-  if (name === '/giveme') {
-    if (!argument || !/^[a-zA-Z0-9_-]{1,64}$/.test(argument) || extra.length)
-      return invalid('Формат команды: /giveme <type-id>.');
-    return { kind: 'give', typeId: argument };
-  }
-  if (name === '/time') {
-    if (extra.length) return invalid(TIME_FORMAT);
-    if (!argument) return { kind: 'time' };
-    if (argument === 'stop' || argument === 'start' || argument === 'reset')
-      return { kind: 'time', action: { kind: argument } };
-    const match = /^(\d{1,2})(?::(\d{2}))?$/.exec(argument);
-    const hours = Number(match?.[1]),
-      minutes = Number(match?.[2] ?? 0);
-    if (!match || hours > 23 || minutes > 59) return invalid(TIME_FORMAT);
-    return { kind: 'time', action: { kind: 'set', hour: hours + minutes / 60 } };
-  }
-  if (name === '/weather') {
-    if (!argument) return extra.length ? invalid(WEATHER_FORMAT) : { kind: 'weather' };
-    if ((argument === 'reset' || argument === 'clear') && !extra.length)
-      return { kind: 'weather', action: { kind: argument } };
-    if (extra.length > 1 || !isWeatherPart(argument)) return invalid(WEATHER_FORMAT);
-    return weatherPart(argument, extra[0] ?? 'on');
-  }
-  // Короткая форма `/weather clouds on|off`.
-  if (name === '/clouds')
-    return argument && !extra.length ? weatherPart('clouds', argument) : invalid(WEATHER_FORMAT);
-  return { kind: 'invalid', code: 'UNKNOWN_COMMAND', message: 'Неизвестная команда.' };
+interface ChatCommandDefinition extends CommandSpec {
+  build(parsed: ParsedCommandLine): ChatCommand | string;
 }
+
+const hour = {
+  name: 'ЧЧ[:ММ]',
+  parse(raw: string) {
+    const match = /^(\d{1,2})(?::(\d{2}))?$/.exec(raw);
+    if (!match) return;
+    const hours = Number(match[1]),
+      minutes = Number(match[2] ?? 0);
+    if (hours > 23 || minutes > 59) return;
+    return hours + minutes / 60;
+  },
+};
+
 const WEATHER_PARTS: readonly WeatherPart[] = ['clouds', 'rain', 'snow', 'fog'];
-const isWeatherPart = (value: string): value is WeatherPart =>
-  (WEATHER_PARTS as readonly string[]).includes(value);
-function weatherPart(part: WeatherPart, state: string): ChatCommand {
-  return state === 'on' || state === 'off'
-    ? { kind: 'weather', action: { kind: 'set', part, enabled: state === 'on' } }
-    : invalid(WEATHER_FORMAT);
+
+const SPEED_RANGE = `от ${PLAYER_SPEED_PERCENT.min / 100} до ${PLAYER_SPEED_PERCENT.max / 100}`;
+/** `2`, `1.5`, `1,5`, `x2` или `×2` → целые проценты. */
+const speedMultiplier = {
+  name: 'МНОЖИТЕЛЬ',
+  parse(raw: string) {
+    const match = /^[x×]?(\d{1,3}(?:[.,]\d{1,2})?)$/i.exec(raw);
+    if (!match) return;
+    const percent = Math.round(Number(match[1].replace(',', '.')) * 100);
+    if (percent < PLAYER_SPEED_PERCENT.min || percent > PLAYER_SPEED_PERCENT.max)
+      throw new CommandLineError(`Множитель скорости — ${SPEED_RANGE}.`);
+    return percent;
+  },
+};
+
+/** Порядок задаёт и порядок в `/help`. */
+const COMMANDS: readonly ChatCommandDefinition[] = [
+  {
+    name: 'time',
+    category: 'Мир',
+    access: 'admin',
+    summary: 'Игровое время. Без флагов сообщает текущий час.',
+    flags: {
+      set: { short: 's', value: hour, help: 'Установить час' },
+      stop: { help: 'Остановить часы' },
+      start: { help: 'Запустить остановленные часы' },
+      reset: { help: 'Вернуть общее время' },
+    },
+    conflicts: [
+      ['stop', 'start'],
+      ['reset', 'set'],
+      ['reset', 'stop'],
+      ['reset', 'start'],
+    ],
+    examples: [
+      '/time',
+      '/time --set 18:30',
+      '/time --set 22 --stop',
+      '/time --start',
+      '/time --reset',
+    ],
+    build({ flags }) {
+      const actions: DayClockAction[] = [];
+      // Сначала остановка: тогда `--set` закрепляет ровно указанный час.
+      if (flags.get('stop')) actions.push({ kind: 'stop' });
+      if (flags.has('set')) actions.push({ kind: 'set', hour: flags.get('set') as number });
+      if (flags.get('start')) actions.push({ kind: 'start' });
+      if (flags.get('reset')) actions.push({ kind: 'reset' });
+      return { kind: 'time', actions };
+    },
+  },
+  {
+    name: 'weather',
+    category: 'Мир',
+    access: 'admin',
+    summary: 'Погода в комнате. Без флагов сообщает текущую.',
+    flags: {
+      clouds: { negatable: true, help: 'Облака' },
+      rain: { negatable: true, help: 'Дождь' },
+      snow: { negatable: true, help: 'Снег' },
+      fog: { negatable: true, help: 'Туман' },
+      clear: { help: 'Ясно: убрать облака, осадки и туман' },
+      reset: { help: 'Погода по умолчанию' },
+    },
+    conflicts: [['reset', 'clear'], ...WEATHER_PARTS.map((part) => ['reset', part])],
+    examples: [
+      '/weather',
+      '/weather --rain --fog',
+      '/weather --no-clouds',
+      '/weather --clear --snow',
+      '/weather --reset',
+    ],
+    build({ flags }) {
+      if (flags.get('rain') === true && flags.get('snow') === true)
+        return 'Дождь и снег одновременно включить нельзя.';
+      const actions: WeatherAction[] = [];
+      if (flags.get('reset')) actions.push({ kind: 'reset' });
+      if (flags.get('clear')) actions.push({ kind: 'clear' });
+      for (const part of WEATHER_PARTS)
+        if (flags.has(part))
+          actions.push({ kind: 'set', part, enabled: flags.get(part) as boolean });
+      return { kind: 'weather', actions };
+    },
+  },
+  {
+    name: 'speed',
+    category: 'Игроки',
+    access: 'admin',
+    summary: 'Скорость ходьбы и бега игрока. Без флагов сообщает текущую.',
+    args: [
+      {
+        name: '@игрок',
+        optional: true,
+        help: 'По умолчанию вы. Имя с пробелами — в кавычках: @"Гость 2"',
+      },
+    ],
+    flags: {
+      set: { short: 's', value: speedMultiplier, help: `Множитель ${SPEED_RANGE}` },
+      reset: { help: 'Обычная скорость' },
+    },
+    conflicts: [['set', 'reset']],
+    examples: ['/speed', '/speed --set 2', '/speed @"Гость 2" --set 0.5', '/speed @Гость --reset'],
+    build({ args, flags }) {
+      const [target] = args;
+      if (target !== undefined && (!target.startsWith('@') || target.length < 2))
+        return 'Игрока указывают через @: @Имя.';
+      const percent = flags.has('set')
+        ? (flags.get('set') as number)
+        : flags.get('reset')
+          ? PLAYER_SPEED_PERCENT.normal
+          : undefined;
+      return {
+        kind: 'speed',
+        ...(target ? { target: target.slice(1) } : {}),
+        ...(percent === undefined ? {} : { percent }),
+      };
+    },
+  },
+  {
+    name: 'give',
+    aliases: ['giveme'],
+    category: 'Предметы',
+    access: 'admin',
+    summary: 'Выдать себе предмет из каталога.',
+    args: [{ name: 'тип', optional: true, help: 'ID типа предмета' }],
+    flags: { list: { short: 'l', help: 'Показать ID доступных типов' } },
+    examples: ['/give wooden-crate', '/give --list'],
+    build({ args, flags }) {
+      const [typeId] = args;
+      if (flags.get('list'))
+        return typeId ? 'С --list тип предмета не указывают.' : { kind: 'giveList' };
+      if (!typeId) return 'Не указан тип предмета.';
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(typeId)) return `Неверный тип предмета «${typeId}».`;
+      return { kind: 'give', typeId };
+    },
+  },
+  {
+    name: 'place',
+    aliases: ['motherlode'],
+    category: 'Строительство',
+    access: 'admin',
+    summary: 'Каталог моделей для размещения в мире.',
+    examples: ['/place'],
+    build: () => ({ kind: 'staticPlacement' }),
+  },
+  {
+    name: 'remove',
+    aliases: ['vilievna'],
+    category: 'Строительство',
+    access: 'admin',
+    summary: 'Выбрать и удалить статичный объект.',
+    examples: ['/remove'],
+    build: () => ({ kind: 'staticRemoval' }),
+  },
+  {
+    name: 'help',
+    aliases: ['h'],
+    category: 'Справка',
+    access: 'player',
+    summary: 'Список доступных команд.',
+    args: [{ name: 'команда', optional: true, help: 'Показать одну команду' }],
+    examples: ['/help', '/help time', '/time --help'],
+    build({ args }) {
+      return { kind: 'help', focus: args[0]?.replace(/^\//, '').toLowerCase() };
+    },
+  },
+];
+
+const LEVELS: Record<CommandAccess, number> = { player: 0, admin: 1 };
+const allowed = (command: ChatCommandDefinition, access: CommandAccess) =>
+  LEVELS[command.access] <= LEVELS[access];
+const byName = new Map(
+  COMMANDS.flatMap((command) =>
+    [command.name, ...(command.aliases ?? [])].map((name) => [name, command] as const),
+  ),
+);
+
+function findCommand(name: string, access: CommandAccess) {
+  const command = byName.get(name.toLowerCase());
+  return command && allowed(command, access) ? command : undefined;
 }
-const WEATHER_FORMAT =
-  'Формат команды: /weather [clouds | rain | snow | fog] [on | off], /weather clear или /weather reset.';
-const TIME_FORMAT = 'Формат команды: /time [ЧЧ[:ММ] | stop | start | reset].';
+
+function unknown(name: string, access: CommandAccess): ChatCommand {
+  const known = byName.get(name.toLowerCase());
+  const names = COMMANDS.filter(
+    (command) => allowed(command, access) && command.name !== 'help',
+  ).flatMap((command) => [command.name, ...(command.aliases ?? [])]);
+  const suggestion = names
+    .map((candidate) => ({ candidate, distance: editDistance(name.toLowerCase(), candidate) }))
+    .filter(({ distance }) => distance <= 2)
+    .sort((a, b) => a.distance - b.distance)[0]?.candidate;
+  return {
+    kind: 'invalid',
+    code: 'UNKNOWN_COMMAND',
+    message: `Неизвестная команда.${suggestion ? ` Возможно, /${suggestion}?` : ''}${names.length ? ' Список: /help.' : ''}`,
+    ...(known ? { forbidden: true } : {}),
+  };
+}
+
+/**
+ * Текст со `/` всегда остаётся приватным, включая неизвестные и неверные команды. Команды выше прав
+ * отправителя неотличимы от несуществующих.
+ */
+export function parseChatCommand(text: string, access: CommandAccess): ChatCommand | undefined {
+  if (!text.startsWith('/')) return;
+  let tokens: string[];
+  try {
+    tokens = tokenize(text.slice(1));
+  } catch (error) {
+    if (error instanceof CommandLineError)
+      return { kind: 'invalid', code: 'INVALID_INPUT', message: error.message };
+    throw error;
+  }
+  const [name = '', ...rest] = tokens;
+  const command = findCommand(name, access);
+  if (!command) return unknown(name, access);
+  try {
+    const parsed = parseCommandLine(command, rest);
+    if (!parsed) return { kind: 'help', focus: command.name };
+    const result = command.build(parsed);
+    if (typeof result === 'string') throw new CommandLineError(result);
+    if (result.kind === 'help' && result.focus !== undefined) {
+      const focus = findCommand(result.focus, access);
+      if (!focus) return unknown(result.focus, access);
+      return { kind: 'help', focus: focus.name };
+    }
+    return result;
+  } catch (error) {
+    if (!(error instanceof CommandLineError)) throw error;
+    return {
+      kind: 'invalid',
+      code: 'INVALID_INPUT',
+      message: `${error.message} Справка: /${command.name} --help.`,
+    };
+  }
+}
+
+/** Справка по командам, доступным с этими правами; `/help` в счёт не идёт. */
+export function commandHelp(access: CommandAccess, focus?: string): CommandHelpEffect | undefined {
+  const commands = COMMANDS.filter((command) => allowed(command, access));
+  if (!commands.some((command) => command.name !== 'help')) return;
+  return {
+    kind: 'commandHelp',
+    commands: commands.map(commandHelpEntry),
+    ...(focus ? { focus } : {}),
+  };
+}
 
 export function giveFailureMessage(code: ItemError | undefined): string {
   switch (code) {
     case 'AUTH_REQUIRED':
-      return 'Консольные команды доступны только администраторам. Войдите через Telegram.';
+      return 'Сессия истекла. Войдите через Telegram снова.';
     case 'ADMIN_REQUIRED':
-      return 'Консольные команды доступны только администраторам.';
+      return 'Нет доступа к этой команде.';
     case 'RATE_LIMITED':
       return `Получать предметы можно раз в ${ITEM_GIVE_COOLDOWN_MS / 1000} секунды.`;
     case 'STALE_WORLD':

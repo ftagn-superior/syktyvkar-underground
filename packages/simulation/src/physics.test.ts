@@ -26,6 +26,49 @@ describe('Havok shared world', () => {
     }
   });
 
+  it('scales walking with /speed, predicts it identically and keeps it through respawn', async () => {
+    const definition = fixture();
+    const server = await createAuthoritativeWorld(definition);
+    const prediction = await createPredictionWorld(definition, await loadServerWasm());
+    try {
+      server.addPlayer('normal');
+      server.addPlayer('fast', { x: -3, y: 0, z: 0 });
+      expect(server.setPlayerSpeedScale('fast', 2)).toBe(true);
+      expect(server.setPlayerSpeedScale('missing', 2)).toBe(false);
+      for (let step = 0; step < 30; step++) server.step();
+      expect(server.getPlayerState('normal')).not.toHaveProperty('speedScale');
+      expect(server.getPlayerState('fast')!.speedScale).toBe(2);
+      const fast = server.getPlayerState('fast')!;
+      prediction.reconcile(fast, server.getSnapshot());
+      const start = {
+        normal: server.getPlayerState('normal')!.position.z,
+        fast: fast.position.z,
+      };
+      const input = { moveX: 0, moveZ: -1 };
+      server.setInput('normal', input);
+      server.setInput('fast', input);
+      for (let step = 0; step < 20; step++) {
+        server.step();
+        prediction.step(input);
+      }
+      const moved = {
+        normal: start.normal - server.getPlayerState('normal')!.position.z,
+        fast: start.fast - server.getPlayerState('fast')!.position.z,
+      };
+      expect(moved.normal).toBeGreaterThan(0.5);
+      expect(moved.fast / moved.normal).toBeCloseTo(2, 1);
+      expect(prediction.getState().position.z).toBeCloseTo(
+        server.getPlayerState('fast')!.position.z,
+        4,
+      );
+      expect(server.respawnPlayer('fast')).toBe(true);
+      expect(server.getPlayerState('fast')!.speedScale).toBe(2);
+    } finally {
+      server.dispose();
+      prediction.dispose();
+    }
+  });
+
   it('identifies wall and peer ray hits while excluding the local collision body', async () => {
     const world = await createAuthoritativeWorld(fixture());
     const prediction = await createPredictionWorld(fixture(), await loadServerWasm());

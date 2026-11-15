@@ -59,6 +59,19 @@ describe('character animation from displayed motion', () => {
       expect(backward.pose.leftLegRoll).toBe(0);
     },
   );
+  it('animates a /speed player as a faster version of the normal gait, not as teleports', () => {
+    const normal = new CharacterAnimator(4, 14),
+      fast = new CharacterAnimator(4, 14);
+    const a = frame(),
+      b = { ...frame(), speedScale: 4 };
+    a.velocity.z = 14;
+    b.velocity.z = 56;
+    // Remote at 20 fps: 2.8 m per frame would read as a teleport without the scaled threshold.
+    advance(normal, a, 1, { fps: 20, predicted: false });
+    advance(fast, b, 1, { fps: 20, predicted: false });
+    expect(fast.diagnostics().mode).toBe('run');
+    expect(fast.travel).toBeCloseTo(normal.travel * 4, 0);
+  });
   const playback = (id: AnimationId, tick = 60) => ({
     worldEpoch: 'epoch',
     animationId: id,

@@ -812,6 +812,94 @@ body[data-input-mode='touch'] [data-touch-hidden] {
 .catalog-status[data-state='waiting'] {
   color: var(--ink);
 }
+/* Справка `/help`: карточки команд выше и шире прочих каталогов. */
+.commands-panel .help-head .pop-h {
+  margin-bottom: 0.4em;
+}
+.commands-panel .catalog-scroll {
+  max-height: min(22em, 46vh);
+}
+.command-list {
+  display: grid;
+  gap: 0.5em;
+}
+.command-entry {
+  padding: 0.55em 0.65em 0.6em;
+  border: 1px solid color-mix(in srgb, var(--ln) 22%, transparent);
+  border-radius: 0.6em;
+  background: var(--p-veil);
+}
+.command-entry[hidden] {
+  display: none;
+}
+.command-entry[data-focus='true'] {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 45%, transparent);
+}
+.command-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25em 0.6em;
+}
+.command-name,
+.command-example,
+.command-usage,
+.command-flags dt {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-variant-ligatures: none;
+}
+.command-name {
+  padding: 0.2em 0.6em;
+  font-size: 0.9em;
+  font-weight: 700;
+  box-shadow: 0 0.15em 0 var(--hard);
+}
+.command-aliases {
+  font-size: 0.75em;
+  color: var(--mut);
+}
+.command-summary {
+  margin: 0.35em 0 0.2em;
+  font-size: 0.84em;
+}
+.command-usage {
+  display: block;
+  font-size: 0.72em;
+  color: var(--mut);
+}
+.command-usage span {
+  white-space: nowrap;
+}
+.command-flags {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15em 0.7em;
+  margin: 0.4em 0 0;
+  font-size: 0.76em;
+}
+.command-flags > div {
+  display: contents;
+}
+.command-flags dt {
+  white-space: nowrap;
+}
+.command-flags dd {
+  margin: 0;
+  color: var(--mut);
+}
+.command-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+  margin-top: 0.45em;
+}
+.command-example {
+  padding: 0.2em 0.55em;
+  font-size: 0.72em;
+  font-weight: 500;
+  box-shadow: 0 0.12em 0 var(--hard);
+}
 .reaction-cooldown {
   display: block;
   width: 100%;

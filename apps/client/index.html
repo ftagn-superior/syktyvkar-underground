@@ -522,6 +522,31 @@
           </div>
           <p id="animations-status" class="catalog-status" role="status"></p>
         </section>
+        <section
+          id="commands-panel"
+          class="catalog commands-panel ui-pop ui-panel"
+          aria-labelledby="commands-title"
+          hidden
+        >
+          <div class="ui-orn"></div>
+          <div class="help-head">
+            <h2 id="commands-title" class="pop-h disp">
+              <span>Команды</span
+              ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
+            </h2>
+            <button
+              class="ui-btn pop-close"
+              type="button"
+              aria-label="Закрыть (Esc)"
+              data-icon="close"
+            ></button>
+          </div>
+          <div class="filters" role="group" aria-label="Категория команд"></div>
+          <div class="catalog-scroll">
+            <div class="command-list"></div>
+          </div>
+          <p class="catalog-status">Щелчок по команде или примеру вставляет её в чат.</p>
+        </section>
         <p id="chat-status" class="chat-status" role="status"></p>
         <div id="chat-row" class="chat-row">
           <button

@@ -54,6 +54,8 @@ import {
   type BusTravelRequest,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
+  parseCommandHelpEffect,
+  type CommandHelpEffect,
   DEFAULT_DAY_CLOCK,
   type DayClock,
   TICK_RATE,
@@ -164,6 +166,7 @@ export class GameSession {
   onStaticRemovalOpen?: (effect: StaticRemovalEffect) => void;
   private openedStaticActions = new Set<number>();
   private pendingChatCommand = false;
+  private ownSpeed?: { room: object; percent: number };
   private readonly itemOperation = new PersistentOperation<ItemCommand>(
     'su:item-operation',
     parseItemCommand,
@@ -173,6 +176,8 @@ export class GameSession {
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  /** Ответ на `/help`: список доступных команд, уже отфильтрованный сервером. */
+  onCommandHelp?: (help: CommandHelpEffect) => void;
   /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
   onBusTravelResult?: (result: ActionResult) => void;
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
@@ -953,6 +958,8 @@ export class GameSession {
             this.pendingChatCommand ? 0 : ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
           )
         ) {
+          const help = result.ok ? parseCommandHelpEffect(result.effect) : undefined;
+          if (help) this.onCommandHelp?.(help);
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(
@@ -1192,6 +1199,13 @@ export class GameSession {
     const observed =
       animationSelf && this.animationBuffer.sample(animationSelf.entityId, room.clock.serverNow());
     if (observed) this.animationRequest.observe(observed.animation);
+    // Скорость меняет `/speed`, в том числе чужая: первое значение в комнате не объявляется.
+    if (animationSelf) {
+      const percent = animationSelf.speedPercent;
+      if (this.ownSpeed?.room === room && this.ownSpeed.percent !== percent)
+        this.onNotice(`Ваша скорость: ×${percent / 100}.`);
+      this.ownSpeed = { room, percent };
+    }
     if (this.persistencePaused !== room.state.paused) {
       this.persistencePaused = room.state.paused;
       this.simulation?.reset();

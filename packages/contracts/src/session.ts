@@ -6,9 +6,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// Combines selective live terrain publication with replicated rain, snow and fog.
-// Previously published v20 clients from either branch must reload.
-export const PROTOCOL_VERSION = 22;
+// Adds bus travel (`requestBusTravel`) on top of the v22 city near/far LOD and HLOD streaming.
+// Previously published v22 clients must reload.
+export const PROTOCOL_VERSION = 23;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -47,7 +47,9 @@ export type ErrorCode =
   | 'RATE_LIMITED'
   | 'STALE_WORLD'
   | 'ALREADY_PROCESSED'
-  | 'PLAN_REPLACED';
+  | 'PLAN_REPLACED'
+  | 'NOT_AT_BUS_STOP'
+  | 'NO_BUS_ROUTE';
 export interface ActionResult {
   requestId: number;
   ok: boolean;

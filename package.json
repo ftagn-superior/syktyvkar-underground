@@ -23,6 +23,7 @@
     "world:ground:ring-verge": "node --import tsx tools/world-build/src/ring-verge.ts",
     "world:ground:streets": "node --import tsx tools/world-build/src/street-pass.ts",
     "world:boxes:expansion": "node --import tsx tools/world-build/src/expansion-boxes.ts",
+    "world:bus:network": "node --import tsx tools/world-build/src/bus-network.ts",
     "world:acceptance": "node --import tsx tests/streaming-fixture.ts",
     "dev": "pnpm world:build && node tools/dev.mjs",
     "check": "tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",

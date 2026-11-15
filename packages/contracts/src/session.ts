@@ -1,4 +1,5 @@
 import type { PlacementCatalogReference } from './placement-catalog.js';
+import type { ContentCatalogVersions } from './content-catalogs.js';
 import type { StaticPlacementEffect } from './static-placement.js';
 import type { StaticRemovalEffect } from './static-removal.js';
 import { PROFILE_COLORS } from './accounts.js';
@@ -6,9 +7,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// Combines selective live terrain publication with replicated rain, snow and fog.
-// Previously published v20 clients from either branch must reload.
-export const PROTOCOL_VERSION = 21;
+// v23 retains v22 graphics/world-v6 contracts and adds exact catalog-map matching.
+// Previously published v22 graphics clients must reload; catalog keys are independent.
+export const PROTOCOL_VERSION = 23;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -18,7 +19,7 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
-  animationCatalogVersion: string;
+  catalogVersions: ContentCatalogVersions;
   placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;
   layoutRevision: number;

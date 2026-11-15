@@ -12,6 +12,7 @@ import {
   ANIMATION_CATALOG_VERSION,
   MAX_PLAYERS,
   PROTOCOL_VERSION,
+  type ContentCatalogVersions,
   type WorldInfo,
 } from '@su/contracts';
 import { WorldRoom } from './world-room.js';
@@ -37,6 +38,7 @@ export interface GameServerOptions {
   accounts?: { config: AccountConfig; store: AccountStore; provider?: LoginProvider };
 }
 export async function createGameServer(options: GameServerOptions = {}) {
+  const catalogVersions: ContentCatalogVersions = { animations: ANIMATION_CATALOG_VERSION };
   const itemCreationEnabled = options.itemCreationEnabled ?? readItemCreationEnabled();
   const worldDirectory = resolve(
     options.worldDirectory ?? `dist/worlds/${process.env.SU_WORLD ?? 'ring-block'}`,
@@ -128,7 +130,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           roomId: room.roomId,
           ...layouts.info(room.state.worldEpoch),
           protocolVersion: PROTOCOL_VERSION,
-          animationCatalogVersion: ANIMATION_CATALOG_VERSION,
+          catalogVersions,
           maxPlayers: MAX_PLAYERS,
           available: !room.hasReachedMaxClients(),
           ...(placementCatalog ? { placementCatalog: placementCatalog.reference } : {}),
@@ -197,6 +199,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
   server.define('world', WorldRoom, {
     definition,
     manifest,
+    catalogVersions,
     pool,
     ownership,
     itemStore: prepared.items,

@@ -16,6 +16,7 @@
     "@su/world-release": "workspace:*",
     "express": "5.3.0",
     "openid-client": "6.8.9",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "@su/visual-build": "workspace:*"
   }
 }

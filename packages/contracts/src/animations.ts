@@ -1,4 +1,4 @@
-import { ANIMATIONS, ANIMATION_CATALOG_VERSION } from './animation-catalog.generated.js';
+import { ANIMATIONS } from './animation-catalog.generated.js';
 export { ANIMATIONS, ANIMATION_CATALOG_VERSION } from './animation-catalog.generated.js';
 
 /** Engine-independent catalog. IDs also key the client's procedural clip registry. */
@@ -33,7 +33,3 @@ export interface AnimationPlayback {
   endsAtTick: number;
   changedAtTick: number;
 }
-
-/** Exact release matching: no implicit support for missing or newer IDs. */
-export const isAnimationCatalogCompatible = (value: unknown): boolean =>
-  value === ANIMATION_CATALOG_VERSION;

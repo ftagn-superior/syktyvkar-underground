@@ -1,5 +1,5 @@
 {
-  "formatVersion": 5,
+  "formatVersion": 6,
   "worldId": "physics-lab",
   "bounds": {
     "min": {
@@ -290,5 +290,6 @@
       }
     }
   ],
-  "cellSize": 125
+  "cellSize": 125,
+  "graphicsPolicy": "detail-only"
 }

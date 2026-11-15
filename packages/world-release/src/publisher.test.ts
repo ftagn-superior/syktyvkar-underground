@@ -172,7 +172,7 @@ it('splits large graphics packs deterministically without changing individual fi
   const first = createWorldPublication(world, grid, compiled);
   const second = createWorldPublication(world, grid, compiled);
   expect(first.manifest).toEqual(second.manifest);
-  expect(first.manifest.formatVersion).toBe(5);
+  expect(first.manifest.formatVersion).toBe(6);
   const packedPaths = new Set<string>();
   for (const path of first.manifest.cells[0].graphicsPacks!) {
     const bytes = first.payloads.get(path)!;

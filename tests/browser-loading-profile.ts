@@ -28,16 +28,30 @@ assert.ok(quality === 'economy' || quality === 'standard');
 assert.ok(Number.isInteger(coldRuns) && coldRuns >= 1 && coldRuns <= 5);
 assert.ok(Number.isFinite(timeoutMs) && timeoutMs >= 1000 && timeoutMs <= 300_000);
 await mkdir(output, { recursive: true });
-const clientDirectory = join(output, 'client');
-await build({
-  configFile: 'apps/client/vite.config.ts',
-  logLevel: 'warn',
-  build: { outDir: clientDirectory, emptyOutDir: true },
-});
+const clientDirectory = resolve(process.env.SU_PROFILE_CLIENT_DIRECTORY ?? join(output, 'client'));
+if (!process.env.SU_PROFILE_CLIENT_DIRECTORY)
+  await build({
+    configFile: 'apps/client/vite.config.ts',
+    logLevel: 'warn',
+    build: { outDir: clientDirectory, emptyOutDir: true },
+  });
 const manifest: WorldManifest = JSON.parse(
   await readFile(join(directory, 'manifest.json'), 'utf8'),
 );
 const header: WorldHeader = JSON.parse(await readFile(join(directory, manifest.worldFile), 'utf8'));
+const groupModelVersions: Record<string, string[]> = {};
+for (const group of manifest.graphics?.groups ?? []) {
+  const cell = manifest.cells.find((c) => c.cellId === group.ownerCellId)!;
+  const body = JSON.parse(await readFile(join(directory, cell.file), 'utf8'));
+  const members = new Set(group.memberIds);
+  groupModelVersions[group.groupId] = [
+    ...new Set<string>(
+      body.buildings
+        .filter((b: { entityId: string }) => members.has(b.entityId))
+        .map((b: { assetId: string }) => manifest.assets[b.assetId].version),
+    ),
+  ];
+}
 const previewCenter =
   manifest.bounds.min.x <= 0 &&
   manifest.bounds.max.x >= 0 &&
@@ -47,13 +61,13 @@ const previewCenter =
     : { ...header.spawnPoints[0], y: 0 };
 const worldPath = '/worlds/profile/';
 const info: WorldInfo = {
-  animationCatalogVersion: ANIMATION_CATALOG_VERSION,
+  catalogVersions: { animations: ANIMATION_CATALOG_VERSION },
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 1,
   layoutHash: 'b'.repeat(64),
   roomId: 'loading-profile',
   worldEpoch: 'loading-profile',
-  protocolVersion: PROTOCOL_VERSION,
+  protocolVersion: Number(process.env.SU_PROFILE_PROTOCOL_VERSION ?? PROTOCOL_VERSION),
   mapVersion: manifest.mapVersion,
   simulationConfigHash: manifest.simulationConfigHash,
   manifestUrl: `${worldPath}manifest.json`,
@@ -312,12 +326,6 @@ async function profile(label: string, context: BrowserContext, url: string) {
           })
           .map((cell) => cell.cellId)
           .sort();
-        if (phase === 'zoom30' && manifest.worldId === 'ring-block')
-          assert.equal(
-            expectedIds.length,
-            manifest.cells.length,
-            '30x must request all ring cells',
-          );
         const expectedVersions = new Set(
           manifest.cells
             .filter((cell) => expectedIds.includes(cell.cellId))
@@ -327,10 +335,17 @@ async function profile(label: string, context: BrowserContext, url: string) {
           (window as any).__SU_ZOOM_STEADY__ = undefined;
         });
         await page.waitForFunction(
-          ({ expectedIds, expectedModels, expectedZoom, drawRadius }) => {
+          ({ expectedIds, expectedModels, expectedZoom, drawRadius, groupModelVersions }) => {
             const report = (window as any).__SU_DEBUG__.report();
             const { streaming, rendering } = report;
             const wanted = JSON.stringify(expectedIds);
+            const nearVersions = streaming.groups?.length
+              ? new Set<string>(
+                  streaming.groups
+                    .filter((g: any) => g.current === 'near')
+                    .flatMap((g: any) => groupModelVersions[g.id] ?? []),
+                )
+              : undefined;
             if (
               Math.abs(rendering.camera.zoom - expectedZoom) > 1e-6 ||
               Math.abs(rendering.streaming.drawRadius - drawRadius) > 1e-4 ||
@@ -341,7 +356,10 @@ async function profile(label: string, context: BrowserContext, url: string) {
               streaming.requested.length ||
               streaming.resources.pending ||
               streaming.resources.httpActive ||
-              rendering.buildings.assets !== expectedModels ||
+              rendering.buildings.assets !== (nearVersions?.size ?? expectedModels) ||
+              streaming.groups?.some(
+                (g: any) => g.current !== g.wanted || g.preparing || g.pending || g.error,
+              ) ||
               Math.abs(rendering.streaming.readyRadius - drawRadius) > 1 ||
               Math.abs(rendering.streaming.shownRadius - drawRadius) > 1
             ) {
@@ -364,7 +382,13 @@ async function profile(label: string, context: BrowserContext, url: string) {
             }
             return performance.now() - previous.at >= 500;
           },
-          { expectedIds, expectedModels: expectedVersions.size, expectedZoom, drawRadius },
+          {
+            expectedIds,
+            expectedModels: expectedVersions.size,
+            expectedZoom,
+            drawRadius,
+            groupModelVersions,
+          },
           { timeout: timeoutMs, polling: 100 },
         );
         // Capture a rendered steady scene, never the last counter from before wheel dispatch.
@@ -375,8 +399,15 @@ async function profile(label: string, context: BrowserContext, url: string) {
         assert.equal(report.physics.bodies, 0);
         assert.equal(report.prediction.worlds, 0);
         assert.deepEqual(report.streaming.graphicsActive.slice().sort(), expectedIds);
-        assert.equal(report.rendering.buildings.assets, expectedVersions.size);
-        zoomPhases.push({ phase, expectedIds, expectedModels: expectedVersions.size, report });
+        const actualVersions = manifest.graphics
+          ? new Set<string>(
+              report.streaming.groups
+                .filter((g: any) => g.current === 'near')
+                .flatMap((g: any) => groupModelVersions[g.id]),
+            )
+          : expectedVersions;
+        assert.equal(report.rendering.buildings.assets, actualVersions.size);
+        zoomPhases.push({ phase, expectedIds, expectedModels: actualVersions.size, report });
       }
       await save();
     }

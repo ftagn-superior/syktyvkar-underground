@@ -7,6 +7,7 @@ const allowed = {
   protocol: ['contracts'],
   'world-release': ['contracts'],
   'terrain-build': ['contracts', 'world-release'],
+  'visual-build': ['contracts', 'terrain-build', 'world-release'],
 };
 let errors = 0;
 async function walk(directory, visit) {
@@ -44,6 +45,7 @@ for (const { name, dependencies, path } of roots) {
           (specifier.startsWith('node:') ||
             internal === 'world-release' ||
             /\/(?:assets|glb)\.js$/.test(specifier))) ||
+        (name === 'visual-build' && /babylon|havok|colyseus|^pg$|http/.test(specifier)) ||
         (name === 'contracts' && !specifier.startsWith('.')) ||
         (name === 'simulation' && /colyseus/.test(specifier));
       if (invalid) {

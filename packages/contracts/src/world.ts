@@ -56,6 +56,29 @@ export function validateEntities(value: unknown): asserts value is EntityDefinit
   }
 }
 /** Validate content at both process boundaries before constructing any physics objects. */
+/** Placement preflight for an already verified release. Full asset/header validation
+ * remains mandatory in validateWorld before the resulting publication is accepted. */
+export function validateWorldBuildingPlacements(
+  world: Pick<
+    WorldDefinition,
+    'buildings' | 'buildingAssets' | 'bounds' | 'entities' | 'initialItems'
+  >,
+): void {
+  const ids = new Set([
+    ...world.entities.map((i) => i.entityId),
+    ...world.initialItems.map((i) => i.seedId),
+  ]);
+  validateBuildingInstances(world.buildings);
+  for (const building of world.buildings) {
+    invariant(!ids.has(building.entityId), `duplicate ID ${building.entityId}`);
+    ids.add(building.entityId);
+    invariant(
+      Object.hasOwn(world.buildingAssets, building.assetId),
+      `missing asset ${building.assetId}`,
+    );
+    validateBuildingBounds(building, world.buildingAssets[building.assetId], world.bounds);
+  }
+}
 export function validateWorld(value: unknown): WorldDefinition {
   invariant(value && typeof value === 'object', 'object required');
   const world = value as WorldDefinition;
@@ -107,16 +130,7 @@ export function validateWorld(value: unknown): WorldDefinition {
     validateBuildingPhysicsAsset(asset);
     invariant(asset.assetId === assetId, 'asset key disagrees');
   }
-  validateBuildingInstances(world.buildings);
-  for (const building of world.buildings) {
-    invariant(!ids.has(building.entityId), `duplicate ID ${building.entityId}`);
-    ids.add(building.entityId);
-    invariant(
-      Object.hasOwn(world.buildingAssets, building.assetId),
-      `missing asset ${building.assetId}`,
-    );
-    validateBuildingBounds(building, world.buildingAssets[building.assetId], world.bounds);
-  }
+  validateWorldBuildingPlacements(world);
   invariant(
     Array.isArray(world.spawnPoints) &&
       world.spawnPoints.length >= 8 &&
@@ -205,7 +219,21 @@ export function validateWorld(value: unknown): WorldDefinition {
 }
 /** Content addressing is stable across object key order and file formatting. */
 export function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (Array.isArray(value)) {
+    // Geometry arrays dominate publication hashes. Native JSON has the same finite
+    // number spelling, without a recursive call/string array per value.
+    let numeric = true;
+    for (let i = 0; i < value.length; i++)
+      if (!Number.isFinite(value[i])) {
+        numeric = false;
+        break;
+      }
+    if (numeric)
+      return 'toJSON' in value
+        ? `[${Array.prototype.join.call(value, ',')}]`
+        : JSON.stringify(value);
+    return `[${value.map(canonicalJson).join(',')}]`;
+  }
   if (value && typeof value === 'object')
     return `{${Object.entries(value)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

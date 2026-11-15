@@ -1,5 +1,5 @@
 {
-  "formatVersion": 5,
+  "formatVersion": 6,
   "worldId": "ring-block",
   "bounds": {
     "min": {
@@ -200,10 +200,7 @@
       }
     }
   ],
-  "cells": [
-    "cells/0_0.json",
-    "cells/expansion-buildings.json"
-  ],
+  "cells": ["cells/0_0.json", "cells/expansion-buildings.json"],
   "assetCatalog": "../../buildings/ring-block/catalog.json",
   "placementPolicy": "placement.json",
   "terrainRelease": "terrain-release.json",
@@ -225,5 +222,6 @@
       }
     }
   ],
-  "cellSize": 125
+  "cellSize": 125,
+  "graphicsPolicy": "two-level"
 }

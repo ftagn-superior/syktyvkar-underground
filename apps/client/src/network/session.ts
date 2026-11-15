@@ -1,4 +1,5 @@
-import { ANIMATION_CATALOG_VERSION, isAnimationCatalogCompatible } from '@su/contracts';
+import { matchingCatalogVersions } from '@su/contracts';
+import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
 import {
   Client,
   CloseCode,
@@ -290,7 +291,7 @@ export class GameSession {
       if (generation !== this.generation) return;
       if (
         info.protocolVersion !== PROTOCOL_VERSION ||
-        !isAnimationCatalogCompatible(info.animationCatalogVersion)
+        !matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions)
       )
         this.versionMismatch();
       const publication = await loadWorldPublication(info, this.verifiedBytes);
@@ -548,7 +549,7 @@ export class GameSession {
     if (generation !== this.generation) return;
     if (
       info.protocolVersion !== PROTOCOL_VERSION ||
-      !isAnimationCatalogCompatible(info.animationCatalogVersion)
+      !matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions)
     )
       this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
@@ -750,7 +751,7 @@ export class GameSession {
       if (generation !== this.generation) return;
       if (
         info.protocolVersion !== PROTOCOL_VERSION ||
-        !isAnimationCatalogCompatible(info.animationCatalogVersion)
+        !matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions)
       )
         this.versionMismatch();
       if (info.mapVersion !== this.info.mapVersion) {
@@ -774,7 +775,7 @@ export class GameSession {
             info.roomId,
             {
               protocolVersion: PROTOCOL_VERSION,
-              animationCatalogVersion: ANIMATION_CATALOG_VERSION,
+              catalogVersions: CLIENT_CATALOG_VERSIONS,
               mapVersion: info.mapVersion,
               simulationConfigHash: info.simulationConfigHash,
               accountMode: this.accountId ? 'account' : 'guest',
@@ -1084,7 +1085,7 @@ export class GameSession {
           const latest = (await (await getResponse('/api/world')).json()) as WorldInfo;
           if (
             latest.protocolVersion === PROTOCOL_VERSION &&
-            isAnimationCatalogCompatible(latest.animationCatalogVersion) &&
+            matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, latest.catalogVersions) &&
             latest.mapVersion !== this.info.mapVersion
           ) {
             await this.changePublication(latest);
@@ -1128,7 +1129,7 @@ export class GameSession {
           if (typeof info.worldEpoch === 'string' && info.worldEpoch !== previous.worldEpoch) {
             this.reloadRequired =
               info.protocolVersion !== PROTOCOL_VERSION ||
-              !isAnimationCatalogCompatible(info.animationCatalogVersion);
+              !matchingCatalogVersions(CLIENT_CATALOG_VERSIONS, info.catalogVersions);
             // Keep the old map identity until preview refresh / join replaces its context.
             // A layout change across restart does not require a new application bundle.
             if (this.reloadRequired || info.mapVersion === previous.mapVersion) this.info = info;

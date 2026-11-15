@@ -19,7 +19,12 @@ if (!process.env.SU_TEST_DATABASE_URL)
 const fixture = await createAccountFixture(process.env.SU_TEST_DATABASE_URL);
 const directory = await mkdtemp(join(tmpdir(), 'su-static-browser-'));
 const city = process.env.SU_STATIC_PLACEMENT_WORLD === 'ring-block';
-const worldDirectory = city ? 'dist/worlds/ring-block' : await buildStaticPlacementWorld(directory);
+const worldDirectory = city
+  ? 'dist/worlds/ring-block'
+  : await buildStaticPlacementWorld(
+      directory,
+      process.env.SU_STATIC_PLACEMENT_LOD === '1' ? 'two-level' : 'detail-only',
+    );
 let app: Awaited<ReturnType<typeof createGameServer>> | undefined;
 let browser: Awaited<ReturnType<typeof launchTestBrowser>> | undefined;
 const errors: string[] = [];

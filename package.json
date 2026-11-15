@@ -97,7 +97,9 @@
     "test:static-placement:browser": "node --import tsx tests/browser-static-placement.ts",
     "test:static-removal:browser": "node --import tsx tests/browser-static-removal.ts",
     "test:static-removal:city": "node --import tsx tests/browser-static-removal-city.ts",
-    "test:world-ui:browser": "node --import tsx tests/browser-world-ui.ts"
+    "test:world-ui:browser": "node --import tsx tests/browser-world-ui.ts",
+    "test:lod:browser": "node --import tsx tests/browser-city-lod.ts",
+    "test:lod:migration": "node --import tsx tests/city-lod-upgrade.ts"
   },
   "devDependencies": {
     "@babylonjs/core": "9.35.0",

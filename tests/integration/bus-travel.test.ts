@@ -5,12 +5,13 @@ import { createGameServer } from '../helpers/game-server.js';
 import type { WorldState } from '../../packages/protocol/src/index.js';
 import ringBlock from '../../content/worlds/ring-block/bus-network/network.json';
 import {
-  busStopNear,
+  busPlatformNear,
   busTripsFrom,
   RESPAWN_COOLDOWN_MS,
   selectBusNetwork,
   validateBusNetwork,
   type ActionResult,
+  type BusPlatform,
   type Vec3,
   type WorldInfo,
 } from '../../packages/contracts/src/index.js';
@@ -25,9 +26,13 @@ async function until(predicate: () => boolean, timeout = 5000): Promise<void> {
 }
 // Сеть передаётся серверу напрямую: собранный выпуск может быть старше этой ветки.
 const network = selectBusNetwork(validateBusNetwork(ringBlock)!);
-// Центральная → Драмтеатр на 19-м: соседние остановки в центре мира.
-const from = network.stops.find((s) => s.id === 'tsentralnaya')!;
-const to = network.stops.find((s) => s.id === 'dramteatr')!;
+// Центральная → Драмтеатр на 19-м: прямая поездка между соседними остановками в центре мира.
+const fromStop = network.stops.find((s) => s.id === 'tsentralnaya')!;
+const fromPlatform = fromStop.platforms[0]!;
+const sampleTrip = busTripsFrom(network, fromPlatform.id).get('dramteatr')![0]!;
+const sguSouth = network.stops
+  .find((s) => s.id === 'sgu')!
+  .platforms.find((p) => p.id === 'osm-2165055372')!;
 
 describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('bus travel in ring-block', () => {
   let app: Awaited<ReturnType<typeof createGameServer>>;
@@ -59,13 +64,11 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('bus travel in ring-block', (
     await until(() => !!room.state?.players?.has(room.sessionId), 20_000);
     return { room, results };
   }
-  /** Ставит игрока на землю у остановки так же, как сервер ставит прибывших. */
-  async function standAt(room: Room<WorldState>, stop: typeof from): Promise<void> {
+  /** Ставит игрока на землю у платформы так же, как сервер ставит прибывших. */
+  async function standAt(room: Room<WorldState>, platform: BusPlatform): Promise<void> {
     const player = room.state.players.get(room.sessionId)!;
-    const center = internals().world.findGroundSpawn(
-      stop.platforms.map(([x, z]) => ({ x, z })),
-      player.entityId,
-    )!;
+    const [x, z] = platform.position;
+    const center = internals().world.findGroundSpawn([{ x, z }], player.entityId)!;
     expect(internals().world.respawnPlayerAtPosition(player.entityId, center)).toBe(true);
     await until(() => Math.hypot(player.x - center.x, player.z - center.z) < 0.5);
   }
@@ -104,60 +107,79 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('bus travel in ring-block', (
     expect(await sticker.text()).toContain('viewBox="0 0 64 64"');
   });
 
-  it('carries a player from the stop to the street beside the destination stop', async () => {
-    expect(busTripsFrom(network, from.id).has(to.id)).toBe(true);
+  it('carries a player from the boarding platform to the exact destination platform side', async () => {
     const { room, results } = await join();
-    await standAt(room, from);
+    await standAt(room, fromPlatform);
     const player = room.state.players.get(room.sessionId)!;
     const revision = player.revision;
     room.send('requestBusTravel', {
       requestId: 1,
       worldEpoch: info.worldEpoch,
-      fromStopId: from.id,
-      toStopId: to.id,
+      fromPlatformId: fromPlatform.id,
+      toPlatformId: sampleTrip.toPlatformId,
+      routeId: sampleTrip.routeId,
+      directionIndex: sampleTrip.directionIndex,
     });
     await until(() => results.length === 1, 15_000);
     expect(results[0]).toMatchObject({ requestId: 1, ok: true });
     expect(results[0]!.retryAfterMs).toBeLessThanOrEqual(RESPAWN_COOLDOWN_MS);
     await until(() => player.revision > revision);
-    expect(busStopNear(network, player, 8)?.stop.id).toBe(to.id);
+    expect(busPlatformNear(network, player, 8)?.platform.id).toBe(sampleTrip.toPlatformId);
   }, 60_000);
 
-  it('refuses rides away from the stop, to unserved stops, too often, and malformed', async () => {
+  it('refuses rides away from platform, wrong direction/platform, too often, and malformed', async () => {
     const { room, results } = await join();
     const problems: string[] = [];
     room.onMessage('problem', ({ code }: { code: string }) => problems.push(code));
-    const send = (requestId: number, fromStopId: string, toStopId: string, extra = {}) =>
+    const send = (
+      requestId: number,
+      fromPlatformId: string,
+      toPlatformId: string,
+      routeId = sampleTrip.routeId,
+      directionIndex = sampleTrip.directionIndex,
+      extra = {},
+    ) =>
       room.send('requestBusTravel', {
         requestId,
         worldEpoch: info.worldEpoch,
-        fromStopId,
-        toStopId,
+        fromPlatformId,
+        toPlatformId,
+        routeId,
+        directionIndex,
         ...extra,
       });
     // Игрок на старте мира, далеко от «Центральной».
-    send(1, from.id, to.id);
+    send(1, fromPlatform.id, sampleTrip.toPlatformId);
     await until(() => results.length === 1, 10_000);
     expect(results[0]).toMatchObject({ ok: false, code: 'NOT_AT_BUS_STOP' });
 
-    await standAt(room, from);
-    const unserved = network.stops.find(
-      (s) => s.id !== from.id && !busTripsFrom(network, from.id).has(s.id),
-    )!;
-    send(2, from.id, unserved.id);
+    // С южной платформы СГУ в сторону Бани №4 без перехода на встречную сторону ехать нельзя.
+    await standAt(room, sguSouth);
+    const wrongPlat = network.stops.find((s) => s.id === 'banya-4')!.platforms[0]!;
+    send(2, sguSouth.id, wrongPlat.id, '17m', 1);
     await until(() => results.length === 2, 10_000);
     expect(results[1]).toMatchObject({ ok: false, code: 'NO_BUS_ROUTE' });
 
-    send(3, from.id, to.id);
+    await standAt(room, fromPlatform);
+    send(3, fromPlatform.id, sampleTrip.toPlatformId);
     await until(() => results.length === 3, 15_000);
     expect(results[2]!.ok).toBe(true);
-    await standAt(room, from);
-    send(4, from.id, to.id);
+    await standAt(room, fromPlatform);
+    send(4, fromPlatform.id, sampleTrip.toPlatformId);
     await until(() => results.length === 4, 10_000);
     expect(results[3]).toMatchObject({ ok: false, code: 'RATE_LIMITED' });
 
-    send(5, from.id, to.id, { extra: true });
-    send(6, 'Центральная', to.id);
+    send(
+      5,
+      fromPlatform.id,
+      sampleTrip.toPlatformId,
+      sampleTrip.routeId,
+      sampleTrip.directionIndex,
+      {
+        extra: true,
+      },
+    );
+    send(6, 'Центральная', sampleTrip.toPlatformId);
     await until(() => problems.filter((c) => c === 'INVALID_INPUT').length === 2);
     expect(results).toHaveLength(4);
   }, 90_000);

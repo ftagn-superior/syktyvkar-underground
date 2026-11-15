@@ -1833,8 +1833,13 @@ export class GameSession {
       remainingMs: Math.max(this.busRequest.remainingMs(), this.respawnRequest.remainingMs()),
     };
   }
-  /** Поездка от остановки, у которой стоит игрок; итог придёт в `onBusTravelResult`. */
-  busTravel(fromStopId: string, toStopId: string): boolean {
+  /** Поездка с конкретной платформы до целевой платформы по выбранному рейсу; итог придёт в `onBusTravelResult`. */
+  busTravel(
+    fromPlatformId: string,
+    toPlatformId: string,
+    routeId: string,
+    directionIndex: number,
+  ): boolean {
     const status = this.busTravelStatus();
     if (
       !this.room ||
@@ -1853,8 +1858,10 @@ export class GameSession {
     this.room.send('requestBusTravel', {
       requestId: this.actionId,
       worldEpoch: this.info.worldEpoch,
-      fromStopId,
-      toStopId,
+      fromPlatformId,
+      toPlatformId,
+      routeId,
+      directionIndex,
     } satisfies BusTravelRequest);
     return true;
   }

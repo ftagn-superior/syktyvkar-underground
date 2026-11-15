@@ -334,18 +334,61 @@ try {
   assert.equal((await controls(first)).view, 'first-person');
   await first.locator('#chat-input').fill('Проверяем первое лицо');
   await first.keyboard.press('Enter');
+  // No canvas click is allowed between closing chat and this assertion.
+  await locked(first, true);
   await second.locator('.player-chat').filter({ hasText: 'Проверяем первое лицо' }).waitFor();
   await first.waitForTimeout(1200);
   await first.keyboard.up('w');
-  await first.locator('#world').click({ position: { x: 400, y: 300 } });
-  await locked(first, true);
   assert.equal(
     Math.hypot((await controls(first)).input.moveX, (await controls(first)).input.moveZ),
     0,
   );
   record(
-    'chat releases capture, neutralizes held movement, delivers speech and resumes only on a canvas click',
+    'chat releases capture, neutralizes held movement and restores it after sending without a canvas click',
   );
+
+  // S-36: exercise each close path from each confirmed starting control mode.
+  for (const mode of ['first-person-active', 'first-person-cursor', 'overview']) {
+    for (const close of ['send', 'escape', 'button', 'escape-button-focus']) {
+      const current = await controls(first);
+      if (mode === 'overview') {
+        if (current.view === 'first-person') await first.keyboard.press('v');
+        await locked(first, false);
+      } else {
+        if (current.view !== 'first-person') await enter(first);
+        if (mode === 'first-person-active' && !(await controls(first)).pointerLocked) {
+          await first.locator('#world').click({ position: { x: 400, y: 300 } });
+          await locked(first, true);
+        }
+        if (mode === 'first-person-cursor' && (await controls(first)).pointerLocked) {
+          await first.keyboard.press('Escape');
+          await locked(first, false);
+        }
+      }
+      await first.keyboard.press('t');
+      await locked(first, false);
+      if (close === 'send') {
+        await first.locator('#chat-input').fill(`S-36 ${mode}`);
+        await first.locator('#chat-send:not([disabled])').waitFor({ timeout: 20_000 });
+        await first.keyboard.press('Enter');
+      } else if (close === 'button') await first.locator('#chat-toggle').click();
+      else {
+        if (close === 'escape-button-focus') await first.locator('#chat-toggle').focus();
+        await first.keyboard.press('Escape');
+      }
+      await first.locator('#chat-console').waitFor({ state: 'hidden' });
+      await locked(first, mode === 'first-person-active');
+      assert.equal((await controls(first)).pointerPending, false);
+      assert.equal(
+        (await controls(first)).view,
+        mode === 'overview' ? 'overview' : 'first-person',
+      );
+      assert.equal(await first.locator('#world:focus').count(), 1);
+    }
+  }
+  record('S-36 preserves all three starting modes for send, Escape and the close button');
+  // Restore the first-person baseline for the existing interruption regressions below.
+  await enter(first);
 
   await first.keyboard.press('h');
   await locked(first, false);

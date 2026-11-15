@@ -18,6 +18,8 @@ function fixture() {
   vi.stubGlobal('HTMLElement', Element);
   const options = {
     eligible: vi.fn(() => true),
+    captureAllowed: vi.fn(() => true),
+    intentChanged: vi.fn(),
     prepare: vi.fn(),
     reset: vi.fn(),
     modeChanged: vi.fn(),
@@ -114,5 +116,129 @@ describe('confirmed first-person capture lifecycle', () => {
     expect(options.modeChanged).not.toHaveBeenCalled();
     lock(true);
     expect(doc.exitPointerLock).toHaveBeenCalledOnce();
+  });
+
+  it('restores through the same controller without preparing or switching the camera', () => {
+    const { input, options, lock, canvas } = fixture();
+    input.request();
+    lock(true);
+    input.suspend();
+    lock(false);
+    options.prepare.mockClear();
+    options.intentChanged.mockClear();
+    input.resume(() => true);
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(2);
+    expect(input.locked).toBe(false);
+    expect(options.prepare).not.toHaveBeenCalled();
+    expect(options.intentChanged).not.toHaveBeenCalled();
+    lock(true);
+    expect(input.locked).toBe(true);
+    expect(options.modeChanged).not.toHaveBeenCalledWith(false);
+    input.dispose();
+  });
+
+  it('waits for release before one resume request and does not auto resume again', () => {
+    const { input, lock, canvas } = fixture();
+    input.request();
+    lock(true);
+    input.suspend();
+    input.resume(() => true);
+    expect(input.requesting).toBe(true);
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(1);
+    lock(false);
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(2);
+    lock(false); // A delayed duplicate release must not settle the new native request.
+    expect(input.requesting).toBe(true);
+    lock(true);
+    lock(true); // Duplicate confirmation must not release a still-owned capture.
+    expect(input.locked).toBe(true);
+    lock(false); // A later native unlock is a new interruption, not a retry.
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(2);
+    expect(input.requesting).toBe(false);
+    input.dispose();
+  });
+
+  it('cancels a queued resume on newer intent before release finishes', () => {
+    const { input, lock, canvas } = fixture();
+    input.request();
+    lock(true);
+    input.suspend();
+    let current = true;
+    input.resume(() => current);
+    current = false;
+    lock(false);
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(1);
+    expect(input.requesting).toBe(false);
+    input.dispose();
+  });
+
+  it('rejects late resume capture after a panel claims input and blocks mouse look', () => {
+    const { input, options, lock, doc } = fixture();
+    input.request();
+    lock(true);
+    input.suspend();
+    lock(false);
+    input.resume(() => true);
+    options.captureAllowed.mockReturnValue(false);
+    lock(true);
+    doc.dispatchEvent(Object.assign(new Event('mousemove'), { movementX: 10, movementY: 5 }));
+    expect(input.locked).toBe(false);
+    expect(options.look).not.toHaveBeenCalled();
+    expect(doc.exitPointerLock).toHaveBeenCalledTimes(2);
+    lock(false);
+    expect(input.requesting).toBe(false);
+    input.dispose();
+  });
+
+  it('serializes a new request after cancelling an unresolved native request', () => {
+    const { input, lock, canvas, doc } = fixture();
+    input.request();
+    lock(true);
+    input.suspend();
+    lock(false);
+    input.resume(() => true);
+    input.suspend();
+    input.resume(() => true);
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(2);
+    lock(true); // Completion of the cancelled request, not of the queued resume.
+    expect(input.locked).toBe(false);
+    expect(doc.exitPointerLock).toHaveBeenCalledTimes(2);
+    lock(false);
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(3);
+    lock(true);
+    expect(input.locked).toBe(true);
+    input.dispose();
+  });
+
+  it('does not reinterpret an Escape consumed by chat as a new interruption', () => {
+    const { input, options, win, lock } = fixture();
+    input.request();
+    lock(true);
+    const event = Object.assign(new Event('keydown', { cancelable: true }), {
+      code: 'Escape',
+    });
+    event.preventDefault();
+    win.dispatchEvent(event);
+    expect(input.locked).toBe(true);
+    expect(options.intentChanged).toHaveBeenCalledTimes(1);
+    input.dispose();
+  });
+
+  it('keeps first person with a free cursor on resume denial and never retries on focus', async () => {
+    const { input, canvas, lock, options, win } = fixture();
+    input.request();
+    lock(true);
+    input.suspend();
+    lock(false);
+    canvas.requestPointerLock.mockRejectedValueOnce(new Error('denied'));
+    input.resume(() => true);
+    await Promise.resolve();
+    expect(input.selected).toBe(true);
+    expect(input.locked).toBe(false);
+    expect(input.requesting).toBe(false);
+    expect(options.notice).toHaveBeenCalledOnce();
+    win.dispatchEvent(new Event('focus'));
+    expect(canvas.requestPointerLock).toHaveBeenCalledTimes(2);
+    input.dispose();
   });
 });

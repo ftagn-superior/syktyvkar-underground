@@ -11,6 +11,7 @@ import { KeyboardInput, isTextInput } from '../input/keyboard';
 import { GamepadInput, type GamepadButtons } from '../input/gamepad';
 import { GamepadNavigation } from '../ui/gamepad-navigation';
 import { FirstPersonInput } from '../input/first-person';
+import { ChatReturnContext } from '../input/chat-return';
 import { dayClockHour, MAX_PLAYERS, NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
 import { firstPersonMovement, gamepadCameraDelta } from '../rendering/camera-controller';
 import { CameraPointerInput } from '../input/camera-pointer';
@@ -23,7 +24,7 @@ import type { RenderQuality } from '../rendering/render-quality';
 import { diagnosticReport, downloadDiagnosticReport } from '../ui/diagnostic-report';
 import { ReactionMenu } from '../ui/reactions';
 import { AnimationMenu } from '../ui/animations';
-import { ChatConsole } from '../ui/chat';
+import { ChatConsole, type ChatCloseReason } from '../ui/chat';
 import { ChatSettings } from '../ui/chat-settings';
 import { StaticPlacement } from '../ui/static-placement';
 import { StaticRemoval } from '../ui/static-removal';
@@ -109,9 +110,12 @@ export function startGame(): void {
   let placementOwner: 'inventory' | 'static' | 'removal' | undefined;
   let help: HelpMenu | undefined;
   let interactions: InteractionSystem | undefined;
+  const chatReturn = new ChatReturnContext();
+  let controlSession: object | undefined;
+  let controlReady = false;
   const worldHud = new WorldHud(
     element,
-    () => panels.closeExcept('players', 'chat'),
+    () => panels.open('players', 'chat'),
     () => canvas.focus({ preventScroll: true }),
   );
   // ?time=14.5 fixes the visible world hour for screenshots and visual tests.
@@ -142,25 +146,62 @@ export function startGame(): void {
     resetCameraInput();
     session.neutral();
   }
-  const panels = new GamePanels({
-    help: () => help?.close(false),
-    players: () => worldHud.closePlayers(),
-    static: () => staticPlacement?.close(),
-    removal: () => staticRemoval?.close(),
-    reactions: () => reactions?.close(false),
-    animations: () => animations?.close(false),
-    chat: () => chat?.close(false),
-    inventory: () => inventory?.close(),
-    diagnostics: () => {
-      diagnostics.hidden = true;
-      diagnosticsToggle.setAttribute('aria-expanded', 'false');
+  const panels = new GamePanels(
+    {
+      help: {
+        close: () => help?.close(false),
+        isOpen: () => !!help?.isOpen,
+      },
+      players: {
+        close: () => worldHud.closePlayers(),
+        isOpen: () => !element('players-panel').hidden,
+      },
+      static: {
+        close: () => staticPlacement?.close(),
+        isOpen: () => placementOwner === 'static',
+      },
+      removal: {
+        close: () => staticRemoval?.close(),
+        isOpen: () => placementOwner === 'removal',
+      },
+      reactions: {
+        close: () => reactions?.close(false),
+        isOpen: () => !element('reactions-panel').hidden,
+      },
+      animations: {
+        close: () => animations?.close(false),
+        isOpen: () => !element('animations-panel').hidden,
+      },
+      chat: {
+        close: () => chat?.close('replace'),
+        isOpen: () => !!chat?.isOpen,
+      },
+      inventory: {
+        close: () => inventory?.close(),
+        isOpen: () => !element('inventory-panel').hidden,
+      },
+      diagnostics: {
+        close: () => {
+          diagnostics.hidden = true;
+          diagnosticsToggle.setAttribute('aria-expanded', 'false');
+        },
+        isOpen: () => !diagnostics.hidden,
+      },
     },
-  });
+    (name) => {
+      if (name !== 'chat') interruptControls();
+    },
+  );
+  function interruptControls(): void {
+    chatReturn.invalidate();
+    firstPerson?.suspend();
+  }
   function closeGamePanels(): void {
     panels.closeExcept();
     view?.showPlacement();
   }
   const inputMode = new GameInputMode(canvas, stick, (mode) => {
+    interruptControls();
     if (mode !== 'desktop') firstPerson?.overview();
     resetGameInput();
     closeGamePanels();
@@ -250,12 +291,38 @@ export function startGame(): void {
     );
   }
   function canControlFirstPerson(): boolean {
+    return !!firstPerson?.locked && firstPersonCaptureAllowed();
+  }
+  function firstPersonCaptureAllowed(): boolean {
     return (
-      !!firstPerson?.locked &&
-      firstPersonEligible() &&
-      !help?.isOpen &&
-      element('chat-console').hidden
+      !disposed && firstPersonEligible() && !panels.hasForeground && element('chat-console').hidden
     );
+  }
+  function syncControlAvailability(): void {
+    const room = session.room;
+    const ready = firstPersonEligible();
+    const interrupted = room !== controlSession || (controlReady && !ready);
+    controlSession = room;
+    controlReady = ready;
+    if (interrupted) interruptControls();
+  }
+  function finishChat(reason: ChatCloseReason): void {
+    if (disposed) {
+      chatReturn.invalidate();
+      return;
+    }
+    const previous = chatReturn.finish(session.room);
+    resetGameInput();
+    if (reason === 'replace' || reason === 'unavailable' || reason === 'dispose') {
+      chatReturn.invalidate();
+      return;
+    }
+    // The later canvas click, not pointerdown/close, owns explicit continuation.
+    if (reason === 'world') chatReturn.invalidate();
+    if (!firstPersonCaptureAllowed()) return;
+    canvas.focus({ preventScroll: true });
+    if (reason !== 'world' && previous?.mode === 'first-person-active')
+      firstPerson?.resume(() => chatReturn.isCurrent(previous, session.room));
   }
   function readMovement(): MoveInput {
     if (inputMode.value === 'gamepad')
@@ -288,6 +355,7 @@ export function startGame(): void {
 
   function updateState(state: ConnectionState, message?: string): void {
     if (disposed) return;
+    syncControlAvailability();
     if (!['playing', 'waiting', 'preparing'].includes(state)) {
       staticPlacement?.close();
       staticRemoval?.close();
@@ -319,7 +387,7 @@ export function startGame(): void {
     if (
       playing &&
       !graphicsLost &&
-      !staticPlacement?.browsing &&
+      !panels.hasForeground &&
       !document.querySelector('.inventory-panel:not([hidden]), .chat-form:not([hidden])')
     ) {
       canvas.focus({ preventScroll: true });
@@ -336,6 +404,7 @@ export function startGame(): void {
     syncPreview();
   }
   const session = new GameSession(updateState, showNotice);
+  session.onControlInterruption = interruptControls;
   const gamepadStatus = document.createElement('p');
   gamepadStatus.id = 'gamepad-status';
   gamepadStatus.className = 'gamepad-status ui-panel';
@@ -511,6 +580,7 @@ export function startGame(): void {
   const accounts = new AccountPanel(
     () => {
       if (session.accountId !== accounts.account?.accountId) {
+        interruptControls();
         staticPlacement?.close();
         staticRemoval?.close();
       }
@@ -523,7 +593,7 @@ export function startGame(): void {
   inventory = new InventoryPanel(
     session,
     canvas,
-    () => panels.closeExcept('inventory', 'chat'),
+    () => panels.open('inventory', 'chat'),
     (placing) => {
       if (placing) {
         staticPlacement?.close();
@@ -548,8 +618,10 @@ export function startGame(): void {
     },
     () => inputMode.value === 'desktop' && !graphicsLost,
   );
-  session.onStaticPlacementOpen = (effect) => {
+  session.onStaticPlacementOpen = (effect, requestId) => {
     if (
+      !chatReturn.acceptCommand(requestId, session.room) ||
+      !firstPersonEligible() ||
       inputMode.value !== 'desktop' ||
       graphicsLost ||
       session.staticPlacementPending ||
@@ -557,7 +629,7 @@ export function startGame(): void {
     )
       return;
     firstPerson?.overview();
-    panels.closeExcept('static');
+    panels.open('static');
     help?.close(false);
     void staticPlacement?.open(effect);
   };
@@ -573,8 +645,10 @@ export function startGame(): void {
     },
     () => inputMode.value === 'desktop' && !graphicsLost,
   );
-  session.onStaticRemovalOpen = (effect) => {
+  session.onStaticRemovalOpen = (effect, requestId) => {
     if (
+      !chatReturn.acceptCommand(requestId, session.room) ||
+      !firstPersonEligible() ||
       inputMode.value !== 'desktop' ||
       graphicsLost ||
       session.staticPlacementPending ||
@@ -582,14 +656,14 @@ export function startGame(): void {
     )
       return;
     firstPerson?.overview();
-    panels.closeExcept('removal');
+    panels.open('removal');
     help?.close(false);
     staticRemoval?.open(effect);
   };
   help = new HelpMenu(
     () => canvas.focus({ preventScroll: true }),
     () => {
-      panels.closeExcept('help', 'chat');
+      panels.open('help', 'chat');
       if (inputMode.value === 'gamepad') resetGameInput();
       if (!firstPerson?.selected && !firstPerson?.requesting) return;
       firstPerson?.suspend();
@@ -645,7 +719,7 @@ export function startGame(): void {
       renderGamePanels();
     },
     () => {
-      panels.closeExcept('reactions', 'chat');
+      panels.open('reactions', 'chat');
       renderGamePanels();
     },
   );
@@ -660,7 +734,7 @@ export function startGame(): void {
       renderGamePanels();
     },
     () => {
-      panels.closeExcept('animations', 'chat');
+      panels.open('animations', 'chat');
       // Opening a catalog must not wait for the periodic HUD refresh to enable shortcuts.
       renderGamePanels();
     },
@@ -676,23 +750,56 @@ export function startGame(): void {
     canvas,
     (text) => {
       if (inputMode.value !== 'desktop' || graphicsLost) return false;
-      const sent = session.sendChat(text);
+      const requestId = session.sendChat(text);
+      if (requestId !== undefined && session.room) chatReturn.sent(requestId, session.room);
       renderChat();
-      return sent;
+      return requestId !== undefined;
     },
-    (open) => {
-      if (open) firstPerson?.suspend();
-      resetGameInput();
-      if (open) panels.closeExcept('chat');
+    {
+      beforeOpen: () => {
+        const mode = canControlFirstPerson()
+          ? 'first-person-active'
+          : firstPerson?.selected
+            ? 'first-person-cursor'
+            : 'overview';
+        if (session.room) chatReturn.begin(mode, session.room);
+        else chatReturn.invalidate();
+        firstPerson?.suspend();
+        resetGameInput();
+        panels.open('chat');
+      },
+      closed: finishChat,
+      canFocus: () =>
+        !disposed &&
+        pageActive &&
+        !document.hidden &&
+        !graphicsLost &&
+        inputMode.value === 'desktop' &&
+        !panels.hasForeground &&
+        session.chatStatus().available,
     },
     chatSettings,
   );
   session.onDayClock = (clock) => view?.setDayClock(clock);
   session.onWeather = (weather) => view?.setWeather(weather);
   session.onChatResult = (result) => {
+    chatReturn.acceptCommand(result.requestId, session.room);
     chat?.complete(result.ok);
     renderChat();
   };
+  // Route chat Escape before other window handlers, including first-person suspension.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.code !== 'Escape' || !chat?.isOpen) return;
+      const target = event.target;
+      const inChat =
+        target instanceof Node &&
+        (element('chat-console').contains(target) || element('chat-toggle').contains(target));
+      if (inChat || !panels.hasForeground) chat.handleEscape(event);
+    },
+    { ...eventOptions, capture: true },
+  );
   const menuSounds = new MenuSounds(
     [
       'help-panel',
@@ -741,6 +848,8 @@ export function startGame(): void {
   );
   firstPerson = new FirstPersonInput(canvas, {
     eligible: firstPersonEligible,
+    captureAllowed: firstPersonCaptureAllowed,
+    intentChanged: () => chatReturn.invalidate(),
     prepare: () => {
       closeGamePanels();
       help?.close(false);
@@ -792,6 +901,7 @@ export function startGame(): void {
     'blur',
     () => {
       pageActive = false;
+      interruptControls();
       syncAudioActivity();
       resetGameInput();
       syncTouchInput();
@@ -811,7 +921,10 @@ export function startGame(): void {
     'visibilitychange',
     () => {
       syncAudioActivity();
-      if (document.hidden) resetGameInput();
+      if (document.hidden) {
+        interruptControls();
+        resetGameInput();
+      }
       syncTouchInput();
     },
     eventOptions,
@@ -883,7 +996,7 @@ export function startGame(): void {
     if (disposed) return;
     loaded = false;
     starting = true;
-    firstPerson?.suspend();
+    interruptControls();
     resetGameInput();
     view?.onFrame(() => {});
     view?.onInputFrame(() => {});
@@ -958,14 +1071,15 @@ export function startGame(): void {
       });
       view.onFrame((now, delta) => {
         try {
-          if (!firstPersonEligible() || help?.isOpen || !element('chat-console').hidden)
-            firstPerson?.suspend();
+          syncControlAvailability();
+          if (!firstPersonCaptureAllowed()) firstPerson?.suspend();
           syncTouchInput();
           const command = readMovement();
           if (command.moveX || command.moveZ) help?.noteMovement();
           const frame = session.frame(now, delta, command);
           syncGamepadReadiness();
           view!.setRenderDeferred(session.state === 'preparing');
+          syncControlAvailability();
           if (!firstPersonEligible()) firstPerson?.suspend();
           if (!frame.ownId && session.state !== 'reconnecting' && session.state !== 'preparing')
             firstPerson?.overview();
@@ -1046,7 +1160,7 @@ export function startGame(): void {
     'click',
     () => {
       if (respawn.disabled || (inputMode.value === 'gamepad' && !gamepadBaseReady())) return;
-      firstPerson?.suspend();
+      interruptControls();
       resetGameInput();
       session.respawn();
       renderRespawn();
@@ -1074,8 +1188,7 @@ export function startGame(): void {
     'click',
     () => {
       if (inputMode.value === 'gamepad') return;
-      firstPerson?.suspend();
-      panels.closeExcept('diagnostics');
+      panels.open('diagnostics');
       diagnostics.hidden = !diagnostics.hidden;
       diagnosticsToggle.setAttribute('aria-expanded', String(!diagnostics.hidden));
       renderMetrics();
@@ -1111,6 +1224,7 @@ export function startGame(): void {
     (event) => {
       event.preventDefault();
       graphicsLost = true;
+      interruptControls();
       interruptGamepad(true);
       closeGamePanels();
       staticPlacement?.close();
@@ -1131,6 +1245,7 @@ export function startGame(): void {
   );
   // Feedback remains alive even when WebGL has stopped producing frames.
   const uiTimer = setInterval(() => {
+    syncControlAvailability();
     audioSettings.refresh();
     syncTouchInput();
     storageStatus.hidden = !session.storageUnavailable;
@@ -1161,6 +1276,7 @@ export function startGame(): void {
     'pagehide',
     () => {
       disposed = true;
+      interruptControls();
       pageEvents.abort();
       clearInterval(uiTimer);
       clearInterval(previewRefreshTimer);

@@ -10,6 +10,10 @@ export class PendingAction {
     return this.requestId !== undefined;
   }
 
+  matches(requestId: number): boolean {
+    return this.requestId === requestId;
+  }
+
   remainingMs(now = performance.now()): number {
     return Math.max(0, this.availableAt - now);
   }

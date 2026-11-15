@@ -1,82 +1,191 @@
 import { describe, expect, it } from 'vitest';
-import { parseChatCommand } from './chat-commands.js';
+import { parseCommandHelpEffect } from '@su/contracts';
+import { commandHelp, parseChatCommand } from './chat-commands.js';
+import { parseCommandLine, tokenize } from './commands/command-line.js';
+
+const admin = (text: string) => parseChatCommand(text, 'admin');
+
+describe('command line', () => {
+  it('splits on whitespace and keeps quoted words together', () => {
+    expect(tokenize('speed  @"Гость 2" --set=2')).toEqual(['speed', '@Гость 2', '--set=2']);
+    expect(tokenize('give ""')).toEqual(['give', '']);
+    expect(() => tokenize('speed @"Гость')).toThrow('кавычка');
+  });
+
+  it('reads long, short, inline and negated flags', () => {
+    const spec = {
+      name: 'demo',
+      category: 'Тест',
+      access: 'admin' as const,
+      summary: 'Демо',
+      args: [{ name: 'x', optional: true, help: 'x' }],
+      flags: {
+        level: {
+          short: 'l',
+          value: { name: 'N', parse: (raw: string) => Number(raw) || undefined },
+          help: 'n',
+        },
+        loud: { negatable: true, help: 'l' },
+      },
+      examples: [],
+    };
+    const parsed = parseCommandLine(spec, ['arg', '-l', '3', '--no-loud'])!;
+    expect(parsed.args).toEqual(['arg']);
+    expect([...parsed.flags]).toEqual([
+      ['level', 3],
+      ['loud', false],
+    ]);
+    expect(parseCommandLine(spec, ['--level=4'])!.flags.get('level')).toBe(4);
+    expect(parseCommandLine(spec, ['--loud', '-h'])).toBeUndefined();
+    for (const [tokens, message] of [
+      [['--level'], 'нужно значение'],
+      [['--level', '--loud'], 'нужно значение'],
+      [['--level', 'x'], 'Неверное значение'],
+      [['--loud=yes'], 'не принимает'],
+      [['--loud', '--loud'], 'дважды'],
+      [['--quiet'], 'Неизвестный флаг'],
+      [['-q'], 'Неизвестный флаг'],
+      [['--no-level'], 'Неизвестный флаг'],
+      [['a', 'b'], 'Лишний аргумент'],
+    ] as const)
+      expect(() => parseCommandLine(spec, tokens)).toThrow(message);
+  });
+});
 
 describe('chat commands', () => {
-  it('opens /vilievna privately and rejects arguments', () => {
-    expect(parseChatCommand('/vilievna')).toEqual({ kind: 'staticRemoval' });
-    for (const text of ['/vilievna bench', '/vilievna all now'])
-      expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
-  });
-  it('leaves ordinary chat alone and keeps /giveme strict', () => {
-    expect(parseChatCommand('Привет!')).toBeUndefined();
-    expect(parseChatCommand('/giveme wooden-crate')).toEqual({
-      kind: 'give',
-      typeId: 'wooden-crate',
-    });
-    for (const text of ['/giveme', '/giveme a b', '/giveme __proto__!'])
-      expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
-    expect(parseChatCommand('/other')).toMatchObject({ kind: 'invalid', code: 'UNKNOWN_COMMAND' });
+  it('leaves ordinary chat alone', () => {
+    expect(admin('Привет!')).toBeUndefined();
   });
 
-  it('parses /time forms', () => {
-    expect(parseChatCommand('/time')).toEqual({ kind: 'time' });
-    expect(parseChatCommand('/time 7')).toEqual({ kind: 'time', action: { kind: 'set', hour: 7 } });
-    expect(parseChatCommand('/time 18:30')).toEqual({
+  it('parses /time flags, combined in a stable order', () => {
+    expect(admin('/time')).toEqual({ kind: 'time', actions: [] });
+    expect(admin('/time --set 7')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 7 }] });
+    expect(admin('/time -s 18:30')).toEqual({
       kind: 'time',
-      action: { kind: 'set', hour: 18.5 },
+      actions: [{ kind: 'set', hour: 18.5 }],
     });
-    expect(parseChatCommand('/time 00:00')).toEqual({
+    expect(admin('/time --set=00:00')).toEqual({
       kind: 'time',
-      action: { kind: 'set', hour: 0 },
+      actions: [{ kind: 'set', hour: 0 }],
+    });
+    expect(admin('/time --set 22 --stop')).toEqual({
+      kind: 'time',
+      actions: [{ kind: 'stop' }, { kind: 'set', hour: 22 }],
+    });
+    expect(admin('/time --start --set 8')).toEqual({
+      kind: 'time',
+      actions: [{ kind: 'set', hour: 8 }, { kind: 'start' }],
     });
     for (const kind of ['stop', 'start', 'reset'] as const)
-      expect(parseChatCommand(`/time ${kind}`)).toEqual({ kind: 'time', action: { kind } });
+      expect(admin(`/time --${kind}`)).toEqual({ kind: 'time', actions: [{ kind }] });
   });
 
-  it('rejects malformed /time arguments', () => {
+  it('rejects malformed /time input, including the old positional forms', () => {
     for (const text of [
-      '/time 24',
-      '/time 12:60',
-      '/time 12:5',
-      '/time -1',
-      '/time 1.5',
-      '/time noon',
-      '/time 12 30',
-      '/time stop now',
-      '/timestop',
+      '/time 7',
+      '/time stop',
+      '/time --set 24',
+      '/time --set 12:60',
+      '/time --set 12:5',
+      '/time --set 1.5',
+      '/time --set noon',
+      '/time --set',
+      '/time --stop --start',
+      '/time --reset --set 5',
+      '/time --stop=1',
     ])
-      expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid' });
-  });
-
-  it('parses /weather and the /clouds shorthand', () => {
-    expect(parseChatCommand('/weather')).toEqual({ kind: 'weather' });
-    for (const kind of ['reset', 'clear'] as const)
-      expect(parseChatCommand(`/weather ${kind}`)).toEqual({ kind: 'weather', action: { kind } });
-    for (const [text, part, enabled] of [
-      ['/weather clouds off', 'clouds', false],
-      ['/weather clouds on', 'clouds', true],
-      ['/weather rain', 'rain', true],
-      ['/weather rain off', 'rain', false],
-      ['/weather snow on', 'snow', true],
-      ['/weather fog', 'fog', true],
-      ['/weather fog off', 'fog', false],
-      ['/clouds off', 'clouds', false],
-      ['/clouds on', 'clouds', true],
-    ] as const)
-      expect(parseChatCommand(text)).toEqual({
-        kind: 'weather',
-        action: { kind: 'set', part, enabled },
+      expect(admin(text)).toMatchObject({
+        kind: 'invalid',
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('/time --help'),
       });
+    expect(admin('/timestop')).toMatchObject({ kind: 'invalid', code: 'UNKNOWN_COMMAND' });
+  });
+
+  it('parses /weather toggles, clear and reset', () => {
+    expect(admin('/weather')).toEqual({ kind: 'weather', actions: [] });
+    expect(admin('/weather --reset')).toEqual({ kind: 'weather', actions: [{ kind: 'reset' }] });
+    expect(admin('/weather --rain --no-clouds --fog')).toEqual({
+      kind: 'weather',
+      actions: [
+        { kind: 'set', part: 'clouds', enabled: false },
+        { kind: 'set', part: 'rain', enabled: true },
+        { kind: 'set', part: 'fog', enabled: true },
+      ],
+    });
+    expect(admin('/weather --snow --clear')).toEqual({
+      kind: 'weather',
+      actions: [{ kind: 'clear' }, { kind: 'set', part: 'snow', enabled: true }],
+    });
+    expect(admin('/weather --snow --no-rain')).toMatchObject({ kind: 'weather' });
     for (const text of [
-      '/weather clouds maybe',
-      '/weather clouds on now',
-      '/weather hail on',
-      '/weather reset now',
-      '/weather clear off',
-      '/weather  rain',
-      '/clouds',
-      '/clouds on off',
+      '/weather rain',
+      '/weather --rain on',
+      '/weather --rain --snow',
+      '/weather --hail',
+      '/weather --reset --fog',
+      '/weather --no-clear',
+      '/clouds off',
     ])
-      expect(parseChatCommand(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
+      expect(admin(text)).toMatchObject({ kind: 'invalid' });
+  });
+
+  it('keeps old names as aliases of /give, /place and /remove', () => {
+    for (const name of ['give', 'giveme'])
+      expect(admin(`/${name} wooden-crate`)).toEqual({ kind: 'give', typeId: 'wooden-crate' });
+    expect(admin('/give --list')).toEqual({ kind: 'giveList' });
+    for (const text of ['/give', '/give a b', '/give __proto__!', '/give crate --list'])
+      expect(admin(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
+    for (const name of ['place', 'motherlode', 'PLACE'])
+      expect(admin(`/${name}`)).toEqual({ kind: 'staticPlacement' });
+    for (const name of ['remove', 'vilievna'])
+      expect(admin(`/${name}`)).toEqual({ kind: 'staticRemoval' });
+    expect(admin('/vilievna bench')).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
+  });
+
+  it('turns --help, /help and /h into a help request for a canonical name', () => {
+    expect(admin('/help')).toEqual({ kind: 'help' });
+    expect(admin('/h')).toEqual({ kind: 'help' });
+    expect(admin('/help /giveme')).toEqual({ kind: 'help', focus: 'give' });
+    expect(admin('/time --help')).toEqual({ kind: 'help', focus: 'time' });
+    expect(admin('/weather --rain -h')).toEqual({ kind: 'help', focus: 'weather' });
+    expect(admin('/help nope')).toMatchObject({ kind: 'invalid', code: 'UNKNOWN_COMMAND' });
+  });
+
+  it('suggests close names and points to /help', () => {
+    expect(admin('/tiem')).toMatchObject({
+      message: 'Неизвестная команда. Возможно, /time? Список: /help.',
+    });
+    expect(admin('/zzzzzz')).toMatchObject({ message: 'Неизвестная команда. Список: /help.' });
+  });
+
+  it('makes admin commands indistinguishable from unknown ones for players', () => {
+    for (const text of ['/time', '/time --stop', '/giveme crate', '/place', '/tiem', '/nope'])
+      expect(parseChatCommand(text, 'player')).toMatchObject({
+        kind: 'invalid',
+        code: 'UNKNOWN_COMMAND',
+        message: 'Неизвестная команда.',
+      });
+    expect(parseChatCommand('/time', 'player')).toMatchObject({ forbidden: true });
+    expect(parseChatCommand('/nope', 'player')).not.toHaveProperty('forbidden');
+    expect(parseChatCommand('/help', 'player')).toEqual({ kind: 'help' });
+    expect(parseChatCommand('/help time', 'player')).toMatchObject({ code: 'UNKNOWN_COMMAND' });
+  });
+
+  it('builds help only from permitted commands and passes contract validation', () => {
+    expect(commandHelp('player')).toBeUndefined();
+    const help = commandHelp('admin', 'time')!;
+    expect(help.commands.map((command) => command.name)).toEqual([
+      'time',
+      'weather',
+      'give',
+      'place',
+      'remove',
+      'help',
+    ]);
+    expect(help.focus).toBe('time');
+    expect(help.commands[0].usage).toBe('time [--set ЧЧ[:ММ]] [--stop] [--start] [--reset]');
+    expect(parseCommandHelpEffect(JSON.parse(JSON.stringify(help)))).toEqual(help);
+    expect(parseCommandHelpEffect({ ...help, focus: 'missing' })).toBeUndefined();
   });
 });

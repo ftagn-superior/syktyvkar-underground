@@ -51,6 +51,8 @@ import {
   RESPAWN_COOLDOWN_MS,
   ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
   normalizeChatText,
+  parseCommandHelpEffect,
+  type CommandHelpEffect,
   DEFAULT_DAY_CLOCK,
   type DayClock,
   TICK_RATE,
@@ -170,6 +172,8 @@ export class GameSession {
   onInventoryChange?: () => void;
   onItemResult?: (result: ItemResult) => void;
   onChatResult?: (result: ActionResult) => void;
+  /** Ответ на `/help`: список доступных команд, уже отфильтрованный сервером. */
+  onCommandHelp?: (help: CommandHelpEffect) => void;
   /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
   dayClock: DayClock = DEFAULT_DAY_CLOCK;
   onDayClock?: (clock: DayClock) => void;
@@ -939,6 +943,8 @@ export class GameSession {
             this.pendingChatCommand ? 0 : ACTIVITY_FLOOD_MAX_COOLDOWN_MS,
           )
         ) {
+          const help = result.ok ? parseCommandHelpEffect(result.effect) : undefined;
+          if (help) this.onCommandHelp?.(help);
           if (result.message) this.onNotice(result.message);
           else if (!result.ok && result.code)
             this.onNotice(

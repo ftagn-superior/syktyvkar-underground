@@ -173,8 +173,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     guest.send('/giveme wooden-crate', 1);
     await until(() => guest.results.length === 1);
     expect(guest.results[0]).toMatchObject({
-      code: 'AUTH_REQUIRED',
-      message: expect.stringContaining('Telegram'),
+      code: 'UNKNOWN_COMMAND',
+      message: 'Неизвестная команда.',
     });
     const owner = await join(await login('invalid-commands'), false);
     owner.send('/giveme wooden-crate', 1);
@@ -210,20 +210,25 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     expect(guest.inventories).toEqual([]);
   });
 
-  it('rejects every slash command for guests and non-admin accounts, including forged privileges', async () => {
+  it('hides every admin command from guests and non-admin accounts, including forged privileges', async () => {
     const ordinary = await join(await login('ordinary-player', false));
     const guest = await join();
     const commands = [
       '/giveme wooden-crate',
+      '/give --list',
       '/motherlode',
+      '/place',
       '/vilievna',
       '/time',
-      '/time 12',
+      '/time --set 12',
       '/weather',
-      '/weather rain on',
-      '/clouds off',
+      '/weather --rain',
+      '/weather --no-clouds',
       '/giveme',
       '/unknown-command',
+      '/help',
+      '/h',
+      '/help time',
     ];
     const before = {
       offset: app.room.state.dayOffsetMs,
@@ -233,10 +238,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       revision: app.room.state.layoutRevision,
       items: app.room.state.items.size,
     };
-    for (const [player, code] of [
-      [ordinary, 'ADMIN_REQUIRED'],
-      [guest, 'AUTH_REQUIRED'],
-    ] as const) {
+    for (const player of [ordinary, guest]) {
       for (const [index, text] of commands.entries()) {
         player.room.send('requestChat', {
           requestId: index + 1,
@@ -246,11 +248,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
           is_admin: true,
         });
         await until(() => player.results.length === index + 1);
-        expect(player.results[index]).toMatchObject({
-          ok: false,
-          code,
-          message: expect.stringContaining('только администраторам'),
-        });
+        // Без команд `/help` честно отвечает «нет доступа», остальное неотличимо от опечатки.
+        expect(player.results[index]).toMatchObject(
+          text === '/help' || text === '/h'
+            ? { ok: false, code: 'ADMIN_REQUIRED', message: 'Нет доступных команд.' }
+            : { ok: false, code: 'UNKNOWN_COMMAND', message: 'Неизвестная команда.' },
+        );
         expect(player.results[index].effect).toBeUndefined();
       }
     }
@@ -295,45 +298,61 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     await until(() => restored.state?.players?.has(restored.sessionId));
     restored.send('requestChat', { requestId: 2, worldEpoch: info.worldEpoch, text: '/time' });
     await until(() => results.length === 1);
-    expect(results[0]).toMatchObject({ ok: false, code: 'ADMIN_REQUIRED' });
+    expect(results[0]).toMatchObject({ ok: false, code: 'UNKNOWN_COMMAND' });
   });
 
-  it('lets an administrator read weather and use the clouds alias', async () => {
+  it('lets an administrator read weather, combine flags and open command help', async () => {
     const owner = await join(await login('weather-admin'));
     owner.send('/weather', 1);
     await until(() => owner.results.length === 1);
     expect(owner.results[0].ok).toBe(true);
-    owner.send('/clouds off', 2);
+    owner.send('/weather --no-clouds --fog', 2);
     await until(() => owner.results.length === 2);
     expect(owner.results[1].ok).toBe(true);
     expect(app.room.state.weatherClouds).toBe(false);
+    expect(app.room.state.weatherFog).toBe(true);
+    owner.send('/weather --help', 3);
+    await until(() => owner.results.length === 3);
+    expect(owner.results[2]).toMatchObject({
+      ok: true,
+      retryAfterMs: 0,
+      effect: { kind: 'commandHelp', focus: 'weather' },
+    });
+    expect(owner.results[2].effect).toMatchObject({
+      commands: expect.arrayContaining([
+        expect.objectContaining({ name: 'give', aliases: ['giveme'] }),
+      ]),
+    });
+    owner.send('/give --list', 4);
+    await until(() => owner.results.length === 4);
+    expect(owner.results[3]).toMatchObject({
+      ok: true,
+      message: expect.stringContaining('wooden-crate'),
+    });
   });
 
   it('lets an administrator set, stop and reset the shared day clock, privately', async () => {
     const guest = await join();
     const owner = await join(await login('timekeeper'));
-    guest.send('/time 12', 1);
+    guest.send('/time --set 12', 1);
     await until(() => guest.results.length === 1);
-    expect(guest.results[0]).toMatchObject({
-      code: 'AUTH_REQUIRED',
-      message: expect.stringContaining('Telegram'),
-    });
+    expect(guest.results[0]).toMatchObject({ code: 'UNKNOWN_COMMAND' });
     expect(app.room.state.dayFrozenHour).toBe(-1);
     expect(app.room.state.dayOffsetMs).toBe(0);
 
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
-      owner.send('/time 18:30', 1);
+      owner.send('/time --set 18:30', 1);
       await until(() => owner.results.length === 1);
       expect(owner.results[0]).toMatchObject({ ok: true, message: 'Время идёт: 18:30.' });
       await until(() => guest.room.state.dayOffsetMs === app.room.state.dayOffsetMs);
       expect(guest.room.state.dayFrozenHour).toBe(-1);
 
-      owner.send('/time stop', 2);
+      owner.send('/time --stop', 2);
       await until(() => owner.results.length === 2);
       expect(owner.results[1]).toMatchObject({ code: 'RATE_LIMITED' });
       vi.setSystemTime(Date.now() + 1000);
-      owner.send('/time stop', 3);
+      owner.send('/time --stop', 3);
       await until(() => owner.results.length === 3);
       expect(owner.results[2]).toMatchObject({ ok: true, message: 'Время остановлено: 18:31.' });
       await until(() => guest.room.state.dayFrozenHour >= 0);
@@ -342,12 +361,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       owner.send('/time', 4);
       await until(() => owner.results.length === 4);
       expect(owner.results[3]).toMatchObject({ ok: true, message: 'Время остановлено: 18:31.' });
-      owner.send('/time 25', 5);
+      owner.send('/time --set 25', 5);
       await until(() => owner.results.length === 5);
       expect(owner.results[4]).toMatchObject({ ok: false, code: 'INVALID_INPUT' });
 
       vi.setSystemTime(Date.now() + 1000);
-      owner.send('/time reset', 6);
+      owner.send('/time --reset', 6);
       await until(() => owner.results.length === 6);
       expect(owner.results[5].ok).toBe(true);
       await until(() => guest.room.state.dayFrozenHour === -1);

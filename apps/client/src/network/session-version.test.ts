@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
 
-// Model already-open v16–v21 bundles, including both incompatible v20 releases.
-// Graphics protocol v22 stops legacy tabs before resource loads or reservation.
+// Model already-open v16–v22 bundles, including both incompatible v20 releases.
+// Command protocol v23 stops legacy tabs before resource loads or reservation.
 const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({
   ...(await original<typeof import('@su/contracts')>()),
@@ -22,8 +22,8 @@ import { GameSession } from './session';
 
 const current: WorldInfo = {
   roomId: 'new-room',
-  worldEpoch: 'city-hlod-22',
-  protocolVersion: 22,
+  worldEpoch: 'commands-23',
+  protocolVersion: 23,
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
   layoutHash: 'b'.repeat(64),
@@ -39,7 +39,7 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(22);
+  expect(actual.PROTOCOL_VERSION).toBe(23);
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -60,8 +60,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe.each([16, 17, 18, 19, 20, 21])(
-  'legacy v%i tab discovering graphics protocol v22',
+describe.each([16, 17, 18, 19, 20, 21, 22])(
+  'legacy v%i tab discovering command protocol v23',
   (version) => {
     beforeEach(() => {
       legacy.protocol = version;

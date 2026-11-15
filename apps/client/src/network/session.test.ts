@@ -1222,4 +1222,106 @@ describe('catalog discovery recovery', () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('requests, caches, rate-limits, and invalidates the command catalog', async () => {
+    const messages = new Map<string, (value: unknown) => void>();
+    let reconnect: (() => void) | undefined;
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      state: { players: new Map(), items: new Map(), serverTick: 0 },
+      onStateChange: vi.fn(),
+      onDrop: vi.fn(),
+      onReconnect: (callback: () => void) => {
+        reconnect = callback;
+      },
+      onLeave: vi.fn(),
+      onError: vi.fn(),
+      onMessage: (name: string, callback: (value: unknown) => void) => messages.set(name, callback),
+      send: vi.fn(),
+      leave: vi.fn(async () => undefined),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    mocks.createPhysics.mockResolvedValueOnce({ ...physics(), syncRemote: vi.fn() });
+    let now = 2_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+
+    const instance = session();
+    const onCatalog = vi.fn();
+    instance.onCommandCatalog = onCatalog;
+    await instance.load();
+    instance.markPrepared();
+    await instance.join();
+
+    // Outside active play state no catalog request is sent.
+    expect(instance.commands()).toBeUndefined();
+    expect(room.send).not.toHaveBeenCalledWith('requestCommands');
+
+    instance.state = 'playing';
+    expect(instance.commands()).toBeUndefined();
+    expect(room.send).toHaveBeenCalledWith('requestCommands');
+
+    // Immediate repeat call is rate-limited to 1/s.
+    now += 500;
+    expect(instance.commands()).toBeUndefined();
+    expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(1);
+
+    // After 1s another request may go out.
+    now += 500;
+    expect(instance.commands()).toBeUndefined();
+    expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(2);
+
+    // Invalid payload is ignored; valid payload populates cache and notifies UI.
+    const receiveCommands = messages.get('commands')!;
+    receiveCommands({ kind: 'invalid' });
+    expect(onCatalog).not.toHaveBeenCalled();
+
+    const helpEntry = {
+      name: 'help',
+      aliases: [],
+      category: 'Справка',
+      summary: 'Показать команды',
+      usage: '/help [команда]',
+      args: [{ name: 'команда', optional: true, help: 'Имя команды' }],
+      flags: [],
+      conflicts: [],
+      examples: ['/help'],
+    };
+    receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });
+    expect(onCatalog).toHaveBeenCalledTimes(1);
+    expect(instance.commands()).toEqual([helpEntry]);
+    now += 2_000;
+    expect(instance.commands()).toEqual([helpEntry]);
+    expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(2);
+
+    // SDK reconnect clears the cached catalog so privileges can refresh.
+    reconnect!();
+    await Promise.resolve();
+    expect(onCatalog).toHaveBeenCalledTimes(2);
+    instance.state = 'playing';
+    expect(instance.commands()).toBeUndefined();
+    expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(3);
+
+    instance.setInputEnabled(true);
+    const actionResult = messages.get('actionResult')!;
+    for (const [index, code] of ['ADMIN_REQUIRED', 'AUTH_REQUIRED', 'UNKNOWN_COMMAND'].entries()) {
+      receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });
+      expect(instance.commands()).toEqual([helpEntry]);
+      const requestId = instance.sendChat('/time 12:00')!;
+      expect(requestId).toBeTypeOf('number');
+      actionResult({ requestId, ok: false, code });
+      now += 2_000;
+      expect(instance.commands()).toBeUndefined();
+      expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(
+        4 + index,
+      );
+    }
+
+    // Re-populate and verify leave/cleanup forgets the catalog.
+    receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });
+    expect(instance.commands()).toEqual([helpEntry]);
+    await instance.leave();
+    expect(instance.commands()).toBeUndefined();
+  });
 });

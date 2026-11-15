@@ -17,6 +17,10 @@ export interface CommandHelpArgument {
   name: string;
   optional?: boolean;
   help: string;
+  /** Значение — `@имя` игрока в сети; имена клиент берёт из своего списка игроков. */
+  player?: boolean;
+  /** Допустимые значения для автодополнения, например ID типов предметов. */
+  choices?: string[];
 }
 export interface CommandHelpEntry {
   name: string;
@@ -27,8 +31,12 @@ export interface CommandHelpEntry {
   usage: string;
   args: CommandHelpArgument[];
   flags: CommandHelpFlag[];
+  /** Группы взаимоисключающих флагов (длинные имена). */
+  conflicts: string[][];
   examples: string[];
 }
+/** Максимум вариантов значения одного аргумента. */
+export const COMMAND_CHOICES_MAX = 256;
 export interface CommandHelpEffect {
   kind: 'commandHelp';
   commands: CommandHelpEntry[];
@@ -63,6 +71,16 @@ export function parseCommandHelpEffect(value: unknown): CommandHelpEffect | unde
       c.args.length > 8 ||
       !Array.isArray(c.flags) ||
       c.flags.length > 16 ||
+      // Сервер до появления поля его не присылал: отсутствие равно пустому списку.
+      !(c.conflicts === undefined || Array.isArray(c.conflicts)) ||
+      (c.conflicts ?? []).length > 32 ||
+      !(c.conflicts ?? []).every(
+        (group) =>
+          Array.isArray(group) &&
+          group.length >= 2 &&
+          group.length <= 16 &&
+          group.every((name) => typeof name === 'string' && NAME.test(name)),
+      ) ||
       !Array.isArray(c.examples) ||
       c.examples.length > 8 ||
       !c.examples.every((example) => text(example, 120))
@@ -71,11 +89,25 @@ export function parseCommandHelpEffect(value: unknown): CommandHelpEffect | unde
     const args: CommandHelpArgument[] = [];
     for (const a of c.args as unknown[]) {
       const arg = a as Record<string, unknown> | null;
-      if (!arg || !text(arg.name, 32) || !text(arg.help, 160)) return;
+      if (
+        !arg ||
+        !text(arg.name, 32) ||
+        !text(arg.help, 160) ||
+        !(arg.player === undefined || typeof arg.player === 'boolean') ||
+        !(
+          arg.choices === undefined ||
+          (Array.isArray(arg.choices) &&
+            arg.choices.length <= COMMAND_CHOICES_MAX &&
+            arg.choices.every((choice) => text(choice, 64)))
+        )
+      )
+        return;
       args.push({
         name: arg.name,
         ...(arg.optional === true ? { optional: true } : {}),
         help: arg.help,
+        ...(arg.player === true ? { player: true } : {}),
+        ...(arg.choices ? { choices: [...(arg.choices as string[])] } : {}),
       });
     }
     const flags: CommandHelpFlag[] = [];
@@ -109,6 +141,7 @@ export function parseCommandHelpEffect(value: unknown): CommandHelpEffect | unde
       usage: c.usage,
       args,
       flags,
+      conflicts: ((c.conflicts ?? []) as string[][]).map((group) => [...group]),
       examples: [...(c.examples as string[])],
     });
   }

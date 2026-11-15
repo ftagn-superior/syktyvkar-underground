@@ -23,6 +23,7 @@ export class CommandHelpPanel {
     chatRow: HTMLElement,
     private readonly insert: (text: string) => void,
     private readonly onOpen: () => void,
+    chatSuggest?: HTMLElement,
   ) {
     const options = { signal: this.controller.signal };
     this.list = panel.querySelector('.command-list')!;
@@ -48,7 +49,8 @@ export class CommandHelpPanel {
           this.isOpen &&
           event.target instanceof Node &&
           !panel.contains(event.target) &&
-          !chatRow.contains(event.target)
+          !chatRow.contains(event.target) &&
+          !chatSuggest?.contains(event.target)
         )
           this.close(false);
       },

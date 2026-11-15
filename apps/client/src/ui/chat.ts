@@ -49,6 +49,8 @@ export class ChatConsole {
   private composing = false;
   /** The current wait is longer than usual because of flooding. */
   private slowed = false;
+  /** Не заменяем строки при обновлении статуса: нажатие мыши может ещё не завершиться. */
+  private renderedSuggestions?: string;
   /** Перебор вариантов по Tab; действует, пока текст поля равен `value`. */
   private cycle?: {
     start: number;
@@ -340,6 +342,7 @@ export class ChatConsole {
     if (!this.suggest) return false;
     const active = this.activeCompletion();
     if (!active || (!active.completion.candidates.length && !active.completion.hint)) {
+      this.renderedSuggestions = undefined;
       this.suggest.hidden = true;
       this.suggest.replaceChildren();
       this.input.setAttribute('aria-expanded', 'false');
@@ -347,6 +350,9 @@ export class ChatConsole {
       return false;
     }
     const { candidates, hint } = active.completion;
+    const rendered = JSON.stringify(active);
+    if (rendered === this.renderedSuggestions) return candidates.length > 0;
+    this.renderedSuggestions = rendered;
     const nodes: HTMLElement[] = [];
     if (candidates.length) {
       const start =

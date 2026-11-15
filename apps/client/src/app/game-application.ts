@@ -928,12 +928,14 @@ export function startGame(): void {
   );
   function renderChat(): void {
     const state = session.chatStatus();
-    if (!state.available || graphicsLost || inputMode.value !== 'desktop')
-      commandHelp?.close(false);
+    const desktop = !graphicsLost && inputMode.value === 'desktop';
+    const keepOpen = desktop && session.state === 'waiting';
+    // Краткая сетевая пауза сохраняет и черновик, и справку, которую читают при вводе.
+    if (!desktop || (!state.available && !keepOpen)) commandHelp?.close(false);
     chat?.update({
       ...state,
-      available: state.available && !graphicsLost && inputMode.value === 'desktop',
-      keepOpen: session.state === 'waiting' && !graphicsLost && inputMode.value === 'desktop',
+      available: state.available && desktop,
+      keepOpen,
     });
   }
   keyboard = new KeyboardInput(

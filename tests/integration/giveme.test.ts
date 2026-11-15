@@ -32,11 +32,19 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     fixture.config.publicOrigin = app.url;
     info = await fetch(app.url + '/api/world').then((r) => r.json());
   }
-  async function login(subject: string, admin = true) {
+  async function login(subject: string, admin = true, name?: string) {
     const { result } = await (admin
       ? loginAdminAccount(app.url, subject, fixture.store)
       : loginAccount(app.url, subject));
-    return responseCookie(result, 'su_session');
+    const cookie = responseCookie(result, 'su_session');
+    if (name) {
+      const account = await fixture.store.authenticate(cookie.split('=')[1]);
+      await fixture.pool.query('UPDATE player_profiles SET display_name=$2 WHERE account_id=$1', [
+        account!.accountId,
+        name,
+      ]);
+    }
+    return cookie;
   }
   async function join(cookie?: string, ready = true) {
     const room = await new Client(
@@ -450,8 +458,8 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
 
   it('filters requestCommands by role and lets admins /give items to other accounts', async () => {
     const guest = await join();
-    const ordinary = await join(await login('ordinary-catalog', false));
-    const admin = await join(await login('admin-catalog'));
+    const ordinary = await join(await login('ordinary-catalog', false, 'Получатель'));
+    const admin = await join(await login('admin-catalog', true, 'Администратор'));
 
     const guestCatalog = (await guest.requestCommands()) as { commands: { name: string }[] };
     expect(guestCatalog.commands.map((c) => c.name)).toEqual(['help']);
@@ -481,5 +489,24 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
     );
     expect(admin.results[1].ok).toBe(true);
     expect(admin.inventories.flatMap((i) => i.slots)).toEqual([]);
+  });
+
+  it('rejects ambiguous /give targets without granting to either account', async () => {
+    const first = await join(await login('duplicate-first', false, 'Тёзка'));
+    const second = await join(await login('duplicate-second', false, 'Тёзка'));
+    const admin = await join(await login('duplicate-admin', true, 'Администратор'));
+    admin.send('/give @Тёзка wooden-crate', 1);
+    await until(() => admin.results.length === 1);
+    expect(admin.results[0]).toMatchObject({
+      ok: false,
+      code: 'INVALID_INPUT',
+      message: 'Под @Тёзка подходят: Тёзка, Тёзка. Уточните имя.',
+    });
+    expect(
+      (await fixture.pool.query('SELECT count(*)::int AS count FROM item_operations')).rows[0]
+        .count,
+    ).toBe(0);
+    expect(first.inventories.flatMap((inventory) => inventory.slots)).toEqual([]);
+    expect(second.inventories.flatMap((inventory) => inventory.slots)).toEqual([]);
   });
 });

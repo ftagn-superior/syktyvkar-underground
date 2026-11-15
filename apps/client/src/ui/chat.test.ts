@@ -107,6 +107,7 @@ function fixture(completion?: ChatCompletionSource) {
     input,
     status,
     suggest,
+    submit,
     canvas,
     send,
     lifecycle,
@@ -117,6 +118,7 @@ function fixture(completion?: ChatCompletionSource) {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+afterEach(() => vi.useRealTimers());
 
 describe('chat interaction lifecycle', () => {
   it.each([
@@ -213,6 +215,23 @@ describe('chat interaction lifecycle', () => {
     chat.dispose();
   });
 
+  it('preserves the draft during a temporary network wait and resumes sending after recovery', () => {
+    const { chat, input, submit, type, key, send, lifecycle } = fixture();
+    chat.open();
+    type('/help');
+    chat.update({ available: false, keepOpen: true, pending: false, remainingMs: 0 });
+    expect(chat.isOpen).toBe(true);
+    expect(input.value).toBe('/help');
+    expect(submit.disabled).toBe(true);
+    key('Enter');
+    expect(send).not.toHaveBeenCalled();
+    expect(lifecycle.closed).not.toHaveBeenCalled();
+    chat.update({ available: true, pending: false, remainingMs: 0 });
+    key('Enter');
+    expect(send).toHaveBeenCalledWith('/help');
+    chat.dispose();
+  });
+
   it('preserves the system-close reason and does not refocus over a newer panel', () => {
     const { chat, input, lifecycle } = fixture();
     chat.open();
@@ -283,6 +302,9 @@ describe('chat interaction lifecycle', () => {
 
     key('Tab', { shiftKey: true });
     expect(input.value).toBe('/time --stop ');
+    input.setSelectionRange(input.value.length - 1);
+    key('Tab');
+    expect(input.value).toBe('/time --stop  ');
 
     type('/speed @');
     expect(suggest.children.map((option) => option.children[0].textContent)).toEqual([
@@ -297,6 +319,53 @@ describe('chat interaction lifecycle', () => {
 
     chat.close('escape');
     expect(suggest.hidden).toBe(true);
+    chat.dispose();
+  });
+
+  it('keeps a held pointer target across status refreshes and still updates changed candidates', () => {
+    vi.useFakeTimers();
+    let players = ['Маша', 'Гость 2'];
+    const { chat, input, suggest, type } = fixture({
+      commands: () => [
+        {
+          name: 'speed',
+          aliases: [],
+          category: 'Игроки',
+          summary: 'Скорость',
+          usage: 'speed',
+          args: [{ name: '@игрок', optional: true, help: 'Кому', player: true }],
+          flags: [],
+          conflicts: [],
+          examples: [],
+        },
+      ],
+      players: () => players,
+    });
+    chat.open();
+    type('/speed @');
+    const option = suggest.children[1];
+    const pointerdown = new Event('pointerdown', { cancelable: true });
+    Object.defineProperty(pointerdown, 'target', { value: option.children[0] });
+    suggest.dispatchEvent(pointerdown);
+    expect(pointerdown.defaultPrevented).toBe(true);
+    const timer = setInterval(
+      () => chat.update({ available: true, pending: false, remainingMs: 0 }),
+      250,
+    );
+    vi.advanceTimersByTime(350);
+    clearInterval(timer);
+    expect(suggest.children[1]).toBe(option);
+    expect(document.activeElement).toBe(input);
+    const click = new Event('click');
+    Object.defineProperty(click, 'target', { value: option.children[0] });
+    suggest.dispatchEvent(click);
+    expect(input.value).toBe('/speed @"Гость 2" ');
+    expect(document.activeElement).toBe(input);
+    type('/speed @');
+    players = ['Маша'];
+    chat.refreshSuggestions();
+    expect(suggest.children).toHaveLength(1);
+    expect(suggest.children[0].children[0].textContent).toBe('@Маша');
     chat.dispose();
   });
 });

@@ -1303,26 +1303,20 @@ describe('catalog discovery recovery', () => {
     expect(instance.commands()).toBeUndefined();
     expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(3);
 
-    // Re-populate, then verify privilege/unknown errors from chat invalidate the catalog.
-    receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });
-    expect(instance.commands()).toEqual([helpEntry]);
-
     instance.setInputEnabled(true);
     const actionResult = messages.get('actionResult')!;
-    const adminReq = instance.sendChat('/time 12:00')!;
-    expect(adminReq).toBeTypeOf('number');
-    actionResult({ requestId: adminReq, ok: false, code: 'ADMIN_REQUIRED' });
-    now += 2_000;
-    expect(instance.commands()).toBeUndefined();
-    expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(4);
-
-    // UNKNOWN_COMMAND also invalidates so re-requested catalog updates UI.
-    receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });
-    const unknownReq = instance.sendChat('/time 12:00')!;
-    actionResult({ requestId: unknownReq, ok: false, code: 'UNKNOWN_COMMAND' });
-    now += 2_000;
-    expect(instance.commands()).toBeUndefined();
-    expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(5);
+    for (const [index, code] of ['ADMIN_REQUIRED', 'AUTH_REQUIRED', 'UNKNOWN_COMMAND'].entries()) {
+      receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });
+      expect(instance.commands()).toEqual([helpEntry]);
+      const requestId = instance.sendChat('/time 12:00')!;
+      expect(requestId).toBeTypeOf('number');
+      actionResult({ requestId, ok: false, code });
+      now += 2_000;
+      expect(instance.commands()).toBeUndefined();
+      expect(room.send.mock.calls.filter(([type]) => type === 'requestCommands')).toHaveLength(
+        4 + index,
+      );
+    }
 
     // Re-populate and verify leave/cleanup forgets the catalog.
     receiveCommands({ kind: 'commandHelp', commands: [helpEntry] });

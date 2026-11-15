@@ -28,6 +28,9 @@ export class AuthoritativeWorld {
   queryPlayerSupports(center: Vec3, sweep: ItemSupportSweep) {
     return this.world.queryPlayerSupports(center, sweep);
   }
+  checkAnimationSpace(playerId: string): boolean {
+    return this.world.checkAnimationSpace(playerId);
+  }
   findDefaultPlayerSpawn(excludeId?: string): Vec3 | undefined {
     return this.world.findDefaultPlayerSpawn(excludeId);
   }

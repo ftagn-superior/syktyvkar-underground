@@ -42,10 +42,46 @@ export function validateAnimationDefinitions(value: unknown): string[] {
     if (!Number.isInteger(entry.cooldownMs) || entry.cooldownMs < 1 || entry.cooldownMs > 30_000)
       fail('cooldownMs must be an integer in 1..30000 milliseconds');
     if (!['upperBody', 'fullBody'].includes(entry.mode)) fail('mode must be upperBody or fullBody');
-    if (entry.rig !== 'humanoid-v1') fail('rig must be humanoid-v1');
-    if (entry.seated !== 'preserve-seat') fail('seated must explicitly be preserve-seat');
+    if (!['humanoid-v1', 'humanoid-v2'].includes(entry.rig))
+      fail('rig must be humanoid-v1 or humanoid-v2');
+    const v2 = entry.rig === 'humanoid-v2';
+    const v2Fields = ['support', 'seatedMessage', 'reducedMotion', 'reducedMotionLabel'];
+    if (!v2 && entry.seated !== 'preserve-seat') fail('seated must explicitly be preserve-seat');
+    if (v2) {
+      if (!['capsule', 'ground'].includes(entry.support))
+        fail('v2 support must be capsule or ground');
+      if (!['preserve-seat', 'variant', 'unavailable'].includes(entry.seated))
+        fail('v2 seated must be preserve-seat, variant or unavailable');
+      if (entry.support === 'ground' && entry.mode !== 'fullBody')
+        fail('ground support requires fullBody mode');
+      if (entry.support === 'ground' && entry.seated === 'preserve-seat')
+        fail('ground support requires an explicit seated variant or unavailable policy');
+      if (!['scaled', 'static'].includes(entry.reducedMotion))
+        fail('v2 reducedMotion must be scaled or static');
+      if (entry.support === 'ground' && entry.reducedMotion !== 'static')
+        fail('ground support requires a static reduced-motion alternative');
+      for (const field of ['seatedMessage', 'reducedMotionLabel']) {
+        const required =
+          field === 'seatedMessage'
+            ? entry.seated !== 'preserve-seat'
+            : entry.reducedMotion === 'static';
+        const text = entry[field];
+        if (
+          (required || text !== undefined) &&
+          (typeof text !== 'string' ||
+            !text.trim() ||
+            text !== text.trim() ||
+            text.length > 160 ||
+            /[\u0000-\u001f\u007f]/.test(text))
+        )
+          fail(`${field} must explain the alternative (trimmed text, 1..160 characters)`);
+        if (!required && text !== undefined)
+          fail(`${field} is incompatible with the selected policy`);
+      }
+    }
     for (const key of Object.keys(entry))
-      if (!fields.includes(key)) fail(`unknown metadata field ${key}`);
+      if (!fields.includes(key) && !(v2 && v2Fields.includes(key)))
+        fail(`unknown metadata field ${key}`);
   }
   return errors;
 }

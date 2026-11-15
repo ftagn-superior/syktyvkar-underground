@@ -56,6 +56,9 @@ import {
   type Vec3,
   normalizeChatText,
   findAvatarSkin,
+  findAnimation,
+  isGroundAnimation,
+  animationSkinSupport,
   DEFAULT_AVATAR_SKIN,
   type ActionResult,
   type ErrorCode,
@@ -827,6 +830,12 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
       }
       const command = session.connected ? input.next() : undefined;
       session.lastInput = command ? readMoveInput(command) : { ...NEUTRAL_INPUT };
+      if (
+        player &&
+        isGroundAnimation(findAnimation(player.animationId)) &&
+        (session.lastInput.moveX !== 0 || session.lastInput.moveZ !== 0)
+      )
+        cancelAnimation(player, this.state.serverTick);
       this.world.setInput(session.entityId, session.lastInput);
     }
     const physicsStart = performance.now();
@@ -837,6 +846,14 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     for (const player of this.state.players.values()) {
       const actual = byId.get(player.entityId);
       updatePlayerActivities(player, actual, this.state.serverTick + 1);
+      const animation = findAnimation(player.animationId);
+      if (
+        isGroundAnimation(animation) &&
+        animation &&
+        animationSkinSupport(animation, player.skinId) !== 'variant' &&
+        !this.world.checkAnimationSpace(player.entityId)
+      )
+        cancelAnimation(player, this.state.serverTick + 1);
       if (actual) {
         applyEntityState(player, actual);
         this.interest.upsert(player);
@@ -1060,6 +1077,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         (request as { animationId?: unknown }).animationId,
         this.state.serverTick,
         code,
+        () => this.world.checkAnimationSpace(session.entityId),
       ),
     });
   }

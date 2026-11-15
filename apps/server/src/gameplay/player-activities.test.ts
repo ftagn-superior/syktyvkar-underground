@@ -175,7 +175,7 @@ describe('authoritative player activities', () => {
     actual.grounded = true;
     player.skinId = 'unsupported';
     expect(activities.animate(player, actual, NEUTRAL_INPUT, 'wave', 61).code).toBe(
-      'ANIMATION_NOT_ALLOWED',
+      'ANIMATION_SKIN_UNSUPPORTED',
     );
   });
 

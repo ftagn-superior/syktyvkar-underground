@@ -223,7 +223,7 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('authoritative cosmetic anima
     player().skinId = 'incompatible';
     request(room, 5);
     await until(() => results.length === 5);
-    expect(results.at(-1)!.code).toBe('ANIMATION_NOT_ALLOWED');
+    expect(results.at(-1)!.code).toBe('ANIMATION_SKIN_UNSUPPORTED');
     player().skinId = 'minifigure';
     const world = internals().world;
     const physics = (world as unknown as { world: PhysicsWorld }).world;

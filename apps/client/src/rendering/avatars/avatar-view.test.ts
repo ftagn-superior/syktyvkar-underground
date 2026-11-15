@@ -42,8 +42,9 @@ describe('avatar visual ownership', () => {
         motionRevision: 0,
         motionEnabled: true,
       };
-      // Seven shared body parts; the wheelchair adds its frame and the spinning wheels.
-      const parts = skinId === 'bear-wheelchair' ? 9 : 7;
+      // Skirts have a separate pelvic pivot; the wheelchair adds frame and wheels.
+      const parts =
+        skinId === 'bear-wheelchair' ? 9 : skinId === 'girl' || skinId === 'komi-girl' ? 8 : 7;
       try {
         const bounds = first.root.getHierarchyBoundingVectors(true);
         expect(bounds.min.y).toBeGreaterThanOrEqual(-0.901);

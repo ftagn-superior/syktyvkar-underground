@@ -62,6 +62,7 @@ import {
   TICK_RATE,
   findReaction,
   findAnimation,
+  animationSkinSupport,
   type AnimationId,
   type AnimationRequest,
   DEFAULT_AVATAR_SKIN,
@@ -1923,6 +1924,7 @@ export class GameSession {
       moving: this.animationMoving || (!!state && isPlayerMoving(state.velocity)),
       paused: this.persistencePaused,
       message: this.animationRequest.message,
+      skinId: resolveAvatarSkinId(player?.skinId),
     };
   }
   animate(animationId: AnimationId): void {
@@ -1930,6 +1932,7 @@ export class GameSession {
     const definition = findAnimation(animationId);
     if (
       !definition ||
+      animationSkinSupport(definition, status.skinId) === 'unavailable' ||
       !status.available ||
       status.pending ||
       status.busy ||

@@ -49,16 +49,7 @@ try {
       method,
       args,
     });
-  if (process.argv.includes('--chunks-only')) {
-    const chunks = await call('buildingChunks');
-    result.buildingChunks = chunks;
-    for (const comparison of chunks.comparisons) {
-      assert.ok(comparison.mergedCalls < comparison.originalCalls / 2, JSON.stringify(comparison));
-      assert.equal(comparison.originalsEnabled, 0);
-      assert.ok(comparison.changed < 0.01, JSON.stringify(comparison));
-    }
-    assert.equal(chunks.restored, true);
-  } else {
+  {
     result.initial = await call('warmup');
     await call('snapshot', 'opaque');
     await page.screenshot({ path: `${output}/opaque.png` });
@@ -167,20 +158,6 @@ try {
         );
       }
       result.extents = extents;
-      const chunks = await call('buildingChunks');
-      for (const comparison of chunks.comparisons) {
-        assert.ok(
-          comparison.mergedCalls < comparison.originalCalls / 2,
-          `distant houses did not reduce draw calls: ${JSON.stringify(comparison)}`,
-        );
-        assert.equal(comparison.originalsEnabled, 0);
-        assert.ok(
-          comparison.changed < 0.01,
-          `merged house appearance changed at hour ${comparison.hour}: ${JSON.stringify(comparison)}`,
-        );
-      }
-      assert.equal(chunks.restored, true, 'near houses must restore individual meshes');
-      result.buildingChunks = chunks;
     }
   }
   result.final = await call('stats');

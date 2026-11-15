@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { access, rename, rm, mkdir } from 'node:fs/promises';
 import {
   MAX_EDITABLE_STATIC_INSTANCES,
@@ -189,7 +190,7 @@ export class LiveStaticPlacement {
     private items: ItemRuntime,
     private world: AuthoritativeWorld,
     private epoch: string,
-    private changed: (operationId: string) => void,
+    private changed: (operationId: string, changedCellIds: readonly string[]) => void,
     private neutral: () => void,
     readonly catalog?: ServerPlacementCatalog,
   ) {
@@ -198,6 +199,21 @@ export class LiveStaticPlacement {
       publications.prepared.release.directory,
       publications.prepared.release.metadata.assetReleaseVersion,
     );
+  }
+  /** Prime the reusable publisher before clients compete for CPU during the first edit. */
+  async initialize() {
+    if (!this.publications.current.manifest.graphics) return;
+    const result = await this.preparation.prepare(
+      this.publications.current.snapshot,
+      randomUUID(),
+      this.epoch,
+    );
+    try {
+      if (result.manifest.mapVersion !== this.publications.current.manifest.mapVersion)
+        throw new Error('Publisher warmup changed the current publication');
+    } finally {
+      await rm(result.stagingDirectory, { recursive: true, force: true });
+    }
   }
   effect(): StaticPlacementEffect | undefined {
     if (
@@ -274,6 +290,7 @@ export class LiveStaticPlacement {
     const ownsSlot = !this.busy;
     if (ownsSlot) this.busy = true;
     let candidate: Publication | undefined;
+    let changedCellIds: string[] = [];
     let applied = false;
     let probe: AuthoritativeWorld | undefined;
     let acceptedInstance: StaticObjectInstance | undefined;
@@ -330,7 +347,7 @@ export class LiveStaticPlacement {
         this.transitionOperationId = request.operationId;
         this.transitionStartedAt = performance.now();
         if (this.metrics) this.metrics.applyMs = performance.now() - started;
-        this.changed(request.operationId);
+        this.changed(request.operationId, changedCellIds);
         this.items.setLayoutPaused(false);
         if (this.metrics) this.metrics.pauseMs = performance.now() - this.metrics.pauseStarted;
         return {
@@ -423,6 +440,7 @@ export class LiveStaticPlacement {
           },
         );
         preparedResult = publication;
+        changedCellIds = publication.changedCellIds;
         if (!publication.geometryDelta) throw new Error('Missing prepared static geometry');
         const definition = applyPreparedLayoutDelta(
           this.publications.prepared.release,

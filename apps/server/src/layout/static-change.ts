@@ -1,5 +1,7 @@
 import {
   canonicalJson,
+  changedWorldGraphicsGroups,
+  validateGraphicsCoverage,
   type StaticObjectInstance,
   type WorldDefinition,
   type WorldManifest,
@@ -55,6 +57,45 @@ export function expectedStaticChange(
   )
     return false;
   const next = candidate.publication.manifest;
+  if (
+    canonicalJson(
+      before.manifest.graphics && {
+        sourceVersion: before.manifest.graphics.sourceVersion,
+        policyVersion: before.manifest.graphics.policyVersion,
+      },
+    ) !==
+    canonicalJson(
+      next.graphics && {
+        sourceVersion: next.graphics.sourceVersion,
+        policyVersion: next.graphics.policyVersion,
+      },
+    )
+  )
+    return false;
+  try {
+    if (before.manifest.graphics)
+      validateGraphicsCoverage(
+        before.definition,
+        before.manifest.grid,
+        before.manifest.graphics.groups,
+      );
+    if (next.graphics) validateGraphicsCoverage(candidate.world, next.grid, next.graphics.groups);
+  } catch {
+    return false;
+  }
+  const affected = new Set(
+    [...(before.manifest.graphics?.groups ?? []), ...(next.graphics?.groups ?? [])]
+      .filter((g) => g.memberIds.some((id) => allowed.has(id)))
+      .map((g) => g.groupId),
+  );
+  if (changedWorldGraphicsGroups(before.manifest, next).some((id) => !affected.has(id)))
+    return false;
+  for (const group of before.manifest.graphics?.groups ?? []) {
+    if (affected.has(group.groupId)) continue;
+    for (const resource of group.far.resources)
+      for (const path of [resource.modelFile, resource.partsFile])
+        if (before.manifest.files[path] !== next.files[path]) return false;
+  }
   const priorSupports = before.manifest.generatedSupports ?? {};
   const nextSupports = next.generatedSupports ?? {};
   for (const id of new Set([...Object.keys(priorSupports), ...Object.keys(nextSupports)])) {

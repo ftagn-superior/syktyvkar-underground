@@ -1,3 +1,4 @@
+import { abortablePreparation } from '../streaming/preparation';
 import { Scene } from '@babylonjs/core/scene';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -26,7 +27,6 @@ import { SpatialIndex } from './spatial-index';
 import { OcclusionFade, orthographicSightRay } from './occlusion';
 import { TreeViews } from './trees';
 import { GlbInstances } from './glb-instances';
-import { BuildingChunks } from './building-chunks';
 import { shadowCasterRadius } from './shadow-range';
 import { applyRadialFog, type RadialState } from './radial-fog';
 import {
@@ -98,12 +98,12 @@ export class BuildingViews {
   private readonly fading = new Set<string>();
   private readonly shadowed = new Set<string>();
   private readonly assets = new Map<string, Asset>();
+  private readonly staging = new Set<Asset>();
   private readonly instances: BuildingView[] = [];
   private disposed = false;
   private prepared = false;
   private readonly trees: TreeViews;
   private readonly glbs: GlbInstances;
-  private readonly chunks: BuildingChunks;
   private lastOcclusionTest = -Infinity;
   private opaque = false;
   private minimumVisibleSize = 0;
@@ -120,7 +120,6 @@ export class BuildingViews {
   ) {
     this.trees = new TreeViews(scene, shadow, radial);
     this.glbs = new GlbInstances(scene, shadow, radial);
-    this.chunks = new BuildingChunks(scene, shadow, radial);
   }
 
   async prepare(
@@ -187,19 +186,46 @@ export class BuildingViews {
             };
             this.cache.set(descriptor.version, record);
             const entry = record;
-            record.promise = record.promise.then((asset) => {
+            record.promise = record.promise.then(async (asset) => {
               if (this.cache.get(descriptor.version) !== entry || this.disposed) {
                 asset.container?.dispose();
                 if (this.assets.get(descriptor.version) === asset)
                   this.assets.delete(descriptor.version);
                 throw new DOMException('Preparation cancelled', 'AbortError');
               }
+              this.staging.add(asset);
               try {
                 if (asset.parts.renderMode === 'thin-instance')
                   this.glbs.prepare(descriptor, asset.parts, asset.container!);
+                if (asset.parts.renderMode === 'thin-instance')
+                  await this.glbs.prepareShaders(descriptor.version, entry.controller.signal);
+                else if (asset.parts.tree)
+                  await abortablePreparation(
+                    this.trees.prepareRecipe(asset.parts.tree, asset),
+                    entry.controller.signal,
+                    () => {},
+                  );
+                else
+                  for (const mesh of asset.container?.meshes ?? [])
+                    if (mesh instanceof Mesh && mesh.geometry) {
+                      mesh.receiveShadows = true;
+                      if (this.radial) applyRadialFog(mesh, this.radial, 0);
+                      if (mesh.material)
+                        await abortablePreparation(
+                          mesh.material.forceCompilationAsync(mesh),
+                          entry.controller.signal,
+                          () => {},
+                        );
+                    }
+                if (this.cache.get(descriptor.version) !== entry || this.disposed)
+                  throw new DOMException('Preparation cancelled', 'AbortError');
               } catch (error) {
+                this.glbs.release(descriptor.version, asset.container);
+                if (asset.parts.tree) this.trees.releaseRecipe(asset.parts.tree, asset);
                 asset.container?.dispose();
                 throw error;
+              } finally {
+                this.staging.delete(asset);
               }
               entry.value = asset;
               this.assets.set(descriptor.version, asset);
@@ -213,7 +239,9 @@ export class BuildingViews {
             entry.controller.abort();
             if (this.cache.get(descriptor.version) === entry) this.cache.delete(descriptor.version);
             if (entry.value) {
-              this.glbs.release(descriptor.version);
+              this.glbs.release(descriptor.version, entry.value.container);
+              if (entry.value.parts.tree)
+                this.trees.releaseRecipe(entry.value.parts.tree, entry.value);
               entry.value.container?.dispose();
               if (this.assets.get(descriptor.version) === entry.value)
                 this.assets.delete(descriptor.version);
@@ -253,7 +281,7 @@ export class BuildingViews {
     const lights = this.assets.get(version)?.parts.lights;
     if (lights && this.nightLights) {
       const owners = this.lit.get(definition.entityId) ?? 0;
-      if (!owners) this.nightLights.addSources(definition, lights);
+      if (!owners) this.nightLights.retainSources(definition, lights);
       this.lit.set(definition.entityId, owners + 1);
     }
     return root;
@@ -295,14 +323,6 @@ export class BuildingViews {
     this.lifecycle.instancesCreated++;
     this.index.add(definition.entityId, { min: plain(view.minimum), max: plain(view.maximum) });
     this.shadowed.add(definition.entityId);
-    this.chunks.add({
-      id: definition.entityId,
-      position: definition.position,
-      meshes: view.meshes,
-      eligible: () =>
-        view.root.isEnabled(false) &&
-        view.groups.every((group) => group.fade.opacity === 1 && !group.fade.blocked),
-    });
     return view.root;
   }
   remove(id: string): void {
@@ -311,7 +331,7 @@ export class BuildingViews {
       if (owners > 1) this.lit.set(id, owners - 1);
       else {
         this.lit.delete(id);
-        this.nightLights?.removeSources(id);
+        this.nightLights?.releaseSources(id);
       }
     }
     if (this.glbs.has(id)) {
@@ -332,7 +352,6 @@ export class BuildingViews {
     this.fading.delete(id);
     this.shadowed.delete(id);
     const instance = entry.view;
-    this.chunks.remove(id);
     this.instances.splice(this.instances.indexOf(instance), 1);
     for (const mesh of instance.meshes) this.shadow.removeShadowCaster(mesh);
     instance.entries.dispose();
@@ -361,12 +380,7 @@ export class BuildingViews {
       )
         continue;
       for (const mesh of view.meshes) {
-        if (
-          !mesh.isVisible ||
-          mesh.visibility <= 0 ||
-          (!mesh.isEnabled() && !this.chunks.isMeshMerged(mesh))
-        )
-          continue;
+        if (!mesh.isVisible || mesh.visibility <= 0 || !mesh.isEnabled()) continue;
         const hit = ray.intersectsMesh(mesh, false);
         if (
           hit.hit &&
@@ -392,7 +406,6 @@ export class BuildingViews {
     for (const view of this.instances) {
       const enabled = view.size >= minimum;
       if (view.root.isEnabled(false) === enabled) continue;
-      this.chunks.touch(view.definition.entityId);
       view.root.setEnabled(enabled);
       changed = true;
     }
@@ -634,7 +647,6 @@ export class BuildingViews {
       const instance = this.references.get(id)?.view;
       if (!instance) continue;
       // A long overview ray can cross a distant cell; restore before changing its alpha.
-      if (this.chunks.isMerged(id)) this.chunks.touch(id);
       const candidates = test
         ? rays.filter(
             (ray) => ray.length > 0 && ray.intersectsBoxMinMax(instance.minimum, instance.maximum),
@@ -668,12 +680,10 @@ export class BuildingViews {
         this.fading.add(id);
       else this.fading.delete(id);
     }
-    this.chunks.update(ownPosition, selected);
   }
 
   private setShadowed(id: string, enabled: boolean): void {
     const view = this.references.get(id)!.view;
-    this.chunks.touch(id);
     if (enabled) this.shadowed.add(id);
     else this.shadowed.delete(id);
     for (const mesh of view.meshes) this.shadow.removeShadowCaster(mesh);
@@ -682,6 +692,14 @@ export class BuildingViews {
     }
   }
 
+  residentMeshes(): Mesh[] {
+    return [...this.assets.values(), ...this.staging].flatMap(
+      (a) => a.container?.meshes.filter((m): m is Mesh => m instanceof Mesh) ?? [],
+    );
+  }
+  hasMembers(ids: string[]): boolean {
+    return ids.every((id) => this.references.has(id) || this.trees.has(id) || this.glbs.has(id));
+  }
   aggregateDiagnostics() {
     const trees = this.trees.aggregateDiagnostics();
     const glbs = this.glbs.aggregateDiagnostics();
@@ -695,7 +713,6 @@ export class BuildingViews {
         ).length + trees.fadedTrees,
       ...trees,
       ...glbs,
-      ...this.chunks.diagnostics(),
     };
   }
   diagnostics() {
@@ -734,20 +751,21 @@ export class BuildingViews {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const id of this.lit.keys()) this.nightLights?.removeSources(id);
+    for (const id of this.lit.keys()) this.nightLights?.releaseSources(id);
     this.lit.clear();
     this.lifecycle.instancesRemoved +=
       this.trees.aggregateDiagnostics().treeInstances +
       this.glbs.aggregateDiagnostics().glbInstances;
     this.trees.dispose();
     this.glbs.dispose();
-    this.chunks.dispose();
     for (const [id, entry] of this.references) {
       entry.count = 1;
       this.remove(id);
     }
     for (const entry of this.cache.values()) entry.controller.abort();
     for (const { container } of this.assets.values()) container?.dispose();
+    for (const asset of this.staging) asset.container?.dispose();
+    this.staging.clear();
     this.assets.clear();
     this.cache.clear();
   }

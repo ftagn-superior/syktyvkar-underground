@@ -1,3 +1,6 @@
+import { abortablePreparation } from './preparation';
+import { GroupGraphics, type FarGroupView } from './groups';
+import type { GraphicsProjection } from './graphics-plan';
 import {
   canonicalJson,
   worldPublicationBaseIdentity,
@@ -8,6 +11,8 @@ import {
   worldCellBounds,
   cellsIntersectingCircle,
   distanceToBoundsXZ,
+  type Bounds,
+  type GraphicsGroup,
   type BuildingInstance,
   type BuildingPhysicsAsset,
   type LocalStaticSet,
@@ -18,29 +23,8 @@ import {
 } from '@su/contracts';
 import { VerifiedResources } from './resources';
 
-/** Detach a cancelled generation even when a model loader finishes after abort. */
-function preparedModels(pending: Promise<() => void>, signal: AbortSignal): Promise<() => void> {
-  return new Promise((resolve, reject) => {
-    let cancelled = signal.aborted;
-    const abort = () => {
-      cancelled = true;
-      reject(new DOMException('Preparation cancelled', 'AbortError'));
-    };
-    if (cancelled) abort();
-    else signal.addEventListener('abort', abort, { once: true });
-    pending.then(
-      (release) => {
-        signal.removeEventListener('abort', abort);
-        if (cancelled) release();
-        else resolve(release);
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', abort);
-        reject(error);
-      },
-    );
-  });
-}
+const preparedModels = (pending: Promise<() => void>, signal: AbortSignal) =>
+  abortablePreparation(pending, signal, (release) => release());
 
 type StaticItem = StaticEntityDefinition | BuildingInstance;
 export interface CellPhysics {
@@ -48,6 +32,17 @@ export interface CellPhysics {
   releaseStatic(id: string): void;
 }
 export interface CellGraphics {
+  recordGraphicsResidency?(): void;
+  setGraphicsManifest?(
+    manifest: WorldManifest,
+    definitions?: () => Iterable<BuildingInstance>,
+  ): void;
+  prepareFarGroup?(
+    group: GraphicsGroup,
+    read: (path: string, signal?: AbortSignal) => Promise<Uint8Array>,
+    signal: AbortSignal,
+  ): Promise<FarGroupView>;
+  projectGraphicsGroup?(bounds: Bounds, groupId?: string): GraphicsProjection;
   activateCell?(cell: WorldCell): () => void;
   prepareCellAssets(
     manifest: WorldManifest,
@@ -117,6 +112,7 @@ export function circularCells(manifest: WorldManifest, center: Vec3, radius: num
 /** Independent graphics/physics pins. Only pump() mutates scenes, between fixed steps. */
 export class CellStreamer {
   private readonly cells = new Map<string, Cell>();
+  private readonly groups: GroupGraphics;
   private critical = new Set<string>();
   private physicsWanted = new Set<string>();
   private graphicsWanted = new Set<string>();
@@ -143,9 +139,20 @@ export class CellStreamer {
     private readonly clock = () => performance.now(),
   ) {
     this.context = Object.freeze({ manifest, resources });
+    this.groups = new GroupGraphics(this.context, graphics, clock);
+    graphics.setGraphicsManifest?.(manifest, () => this.graphicsDefinitions());
   }
   get manifest() {
     return this.context.manifest;
+  }
+  private *graphicsDefinitions(): Iterable<BuildingInstance> {
+    for (const group of this.manifest.graphics?.groups ?? []) {
+      const cell = this.cells.get(group.ownerCellId)?.set?.cell;
+      if (!cell) continue;
+      const members = new Set(group.memberIds);
+      for (const instance of cell.buildings) if (members.has(instance.entityId)) yield instance;
+    }
+    yield* this.groups.definitions();
   }
   get resources() {
     return this.context.resources;
@@ -217,6 +224,7 @@ export class CellStreamer {
     this.pendingTransition = undefined;
     this.transitionPrepared = false;
     transition.controller.abort();
+    this.groups.cancelStage();
     for (const cell of transition.cells?.values() ?? [])
       if (transition.changed.has(cell.id)) {
         const release = cell.releaseModels;
@@ -312,7 +320,10 @@ export class CellStreamer {
               [...loaded.statics, ...loaded.buildings].map((item) => item.entityId),
             );
         }
-        if (old.releaseModels || this.graphicsWanted.has(old.id)) {
+        if ((old.releaseModels || this.graphicsWanted.has(old.id)) && this.groups.enabled) {
+          cell.releaseModels = () => {};
+          cell.graphics = new Set(loaded.statics.map((item) => item.entityId));
+        } else if (old.releaseModels || this.graphicsWanted.has(old.id)) {
           // Already pinned models have parsed/GPU resources even if their raw bytes left
           // the LRU. Retain them directly instead of downloading a changed pack for them.
           const descriptor = manifest.cells.find((entry) => entry.cellId === old.id)!;
@@ -371,6 +382,7 @@ export class CellStreamer {
         signatures.set(item.entityId, signature);
       }
     // This flag is set only after all asynchronous work; the actual scene swap is synchronous.
+    if (this.groups.enabled) await this.groups.stage(transition.context, signal);
     transition.preparationMs = this.clock() - transition.startedAt;
     this.transitionPrepared = true;
   }
@@ -499,6 +511,8 @@ export class CellStreamer {
         }
       this.cells.clear();
       for (const [id, cell] of next) this.cells.set(id, cell);
+      this.graphics.setGraphicsManifest?.(transition.context.manifest);
+      this.groups.adopt();
       this.context = transition.context;
       previous.resources.dispose();
       this.lastTransition = {
@@ -524,6 +538,7 @@ export class CellStreamer {
           this.cleanupErrors++;
         }
       };
+      clean(() => this.groups.dispose());
       for (const cell of [...previousCells, ...this.cells.values(), ...next.values()]) {
         cell.controller.abort();
         clean(() => {
@@ -565,6 +580,7 @@ export class CellStreamer {
     historyCells: Iterable<string> = [],
   ): void {
     if (this.disposed) throw new Error('Cell streamer disposed');
+    this.groups.setPlayers([authoritative, predicted]);
     this.historyRequired = [...new Set(historyCells)];
     this.critical = new Set([
       ...cellNeighborhood(this.manifest, authoritative),
@@ -588,6 +604,8 @@ export class CellStreamer {
       )
         next.add(id);
     this.physicsWanted = next;
+    if ([...this.critical].some((id) => !this.cells.get(id)?.physicsLoaded))
+      this.groups.reservePreparationSlot();
     this.setVisualArea(
       this.visualExplicit ? this.visual!.center : predicted,
       this.visualExplicit ? this.visual!.radius : 500,
@@ -605,6 +623,7 @@ export class CellStreamer {
   setPreview(center: Vec3, drawRadius = 500): void {
     this.critical.clear();
     this.physicsWanted.clear();
+    this.groups.setPlayers([]);
     this.historyRequired = [];
     this.setVisualArea(center, drawRadius);
   }
@@ -619,6 +638,7 @@ export class CellStreamer {
     for (const id of this.graphicsWanted)
       if (cellDistance(this.manifest, id, center) <= this.visual.radius + 300) next.add(id);
     this.graphicsWanted = next;
+    this.groups.plan(center, this.visual.radius, next);
     this.refresh();
   }
   private refresh() {
@@ -672,7 +692,7 @@ export class CellStreamer {
       )
       .sort((a, b) => this.priority(a) - this.priority(b));
     for (const cell of pending) {
-      if (this.preparing >= STREAMING_LIMITS.preparations) break;
+      if (this.preparing + this.groups.preparing >= STREAMING_LIMITS.preparations) break;
       // A stalled background GLB must never occupy every preparation slot on a new plan.
       const background = [...this.cells.values()].filter(
         (candidate) => candidate.loading && !this.critical.has(candidate.id),
@@ -726,6 +746,8 @@ export class CellStreamer {
           if (cell.physicsController === controller) cell.physicsController = undefined;
         }
       }
+      if (this.graphicsWanted.has(cell.id) && !cell.releaseModels && this.groups.enabled)
+        cell.releaseModels = () => {};
       if (this.graphicsWanted.has(cell.id) && !cell.releaseModels) {
         const controller = new AbortController();
         cell.graphicsController = controller;
@@ -797,6 +819,7 @@ export class CellStreamer {
       if (
         !cell.error &&
         this.graphicsWanted.has(cell.id) &&
+        (!building || !this.groups.enabled) &&
         cell.releaseModels &&
         !cell.graphics.has(id)
       ) {
@@ -907,12 +930,19 @@ export class CellStreamer {
       cell.physics.size === cell.set.cell.statics.length + cell.set.cell.buildings.length
     );
   }
+  private graphicsCount(cell: Cell): number {
+    return (
+      (cell.set?.cell.statics.length ?? 0) +
+      (this.groups.enabled ? 0 : (cell.set?.cell.buildings.length ?? 0))
+    );
+  }
   private graphicsReady(cell: Cell): boolean {
     return (
       !!cell.set &&
       !!cell.releaseModels &&
       !cell.error &&
-      cell.graphics.size === cell.set.cell.statics.length + cell.set.cell.buildings.length
+      cell.graphics.size === this.graphicsCount(cell) &&
+      this.groups.readyCell(cell.id)
     );
   }
   /** Spend a bounded share of a frame on preparation while movement is not yet active. */
@@ -934,6 +964,9 @@ export class CellStreamer {
     // Keep distant replacement graphics coherent while unchanged critical areas continue
     // preparing as the character moves. Changed cells are owned exclusively by the stage.
     const start = this.clock();
+    // Prepared groups get a turn before city-wide cell bookkeeping. Cells still
+    // execute their first indivisible operation, so critical physics also progresses.
+    this.groups.pump(start + budgetMs);
     const needsWork = (cell: Cell) => {
       if (cell.operations) return true;
       if (!cell.set) return false;
@@ -947,7 +980,7 @@ export class CellStreamer {
         (!cell.error &&
           this.graphicsWanted.has(cell.id) &&
           !!cell.releaseModels &&
-          cell.graphics.size < count) ||
+          cell.graphics.size < this.graphicsCount(cell)) ||
         (!this.physicsWanted.has(cell.id) &&
           cell.physics.size > 0 &&
           (cell.physicsReleaseAt ?? Infinity) <= start) ||
@@ -963,7 +996,12 @@ export class CellStreamer {
         ? -2e9 + this.priority(cell)
         : this.releaseDue(cell, start)
           ? -1e9 + this.priority(cell)
-          : this.priority(cell);
+          : this.groups.enabled &&
+              this.graphicsWanted.has(cell.id) &&
+              !!cell.releaseModels &&
+              cell.graphics.size < this.graphicsCount(cell)
+            ? -1e8 + this.priority(cell)
+            : this.priority(cell);
     const preparingCritical = this.critical.size > 0 && !this.criticalReady;
     const work = [...this.cells.values()]
       .filter(
@@ -973,7 +1011,9 @@ export class CellStreamer {
           needsWork(cell) &&
           (!preparingCritical || this.critical.has(cell.id) || this.releaseDue(cell, start)),
       )
-      .sort((a, b) => workPriority(a) - workPriority(b));
+      .map((cell) => ({ cell, priority: workPriority(cell) }))
+      .sort((a, b) => a.priority - b.priority)
+      .map(({ cell }) => cell);
     outer: for (const cell of work) {
       if (this.releaseDue(cell, start) && !cell.releasing) {
         // Preempt a suspended background connection after its ownership expired.
@@ -1021,10 +1061,14 @@ export class CellStreamer {
         this.cells.delete(cell.id);
       } else if (cell.controller.signal.aborted && !cell.loading) this.cells.delete(cell.id);
     }
+    this.groups.schedule(
+      Math.max(0, STREAMING_LIMITS.preparations - this.preparing - this.groups.preparing),
+    );
     this.peakPumpMs = Math.max(this.peakPumpMs, this.clock() - start);
     this.refresh();
   }
   retry() {
+    this.groups.retry();
     for (const cell of this.cells.values())
       if (cell.error) {
         cell.error = undefined;
@@ -1036,19 +1080,31 @@ export class CellStreamer {
   /** Background failures are diagnostic only; they cannot freeze a safe local character. */
   get problem(): string | undefined {
     return (
-      this.terminalError ?? [...this.critical].map((id) => this.cells.get(id)?.error).find(Boolean)
+      this.terminalError ??
+      this.groups.playerProblem ??
+      [...this.critical].map((id) => this.cells.get(id)?.error).find(Boolean)
     );
   }
   get backgroundProblem(): string | undefined {
-    return [...this.cells.values()].map((cell) => cell.error).find(Boolean);
+    return this.groups.problem ?? [...this.cells.values()].map((cell) => cell.error).find(Boolean);
   }
   get criticalReady(): boolean {
     return (
       this.critical.size > 0 &&
+      this.groups.playerReady &&
       ![...this.critical].some((id) => this.pendingTransition?.changed.has(id)) &&
       [...this.critical].every((id) => {
         const cell = this.cells.get(id);
-        return !!cell && this.physicsReady(cell) && this.graphicsReady(cell);
+        return (
+          !!cell &&
+          this.physicsReady(cell) &&
+          (this.groups.enabled
+            ? !!cell.set &&
+              !!cell.releaseModels &&
+              !cell.error &&
+              cell.graphics.size === this.graphicsCount(cell)
+            : this.graphicsReady(cell))
+        );
       })
     );
   }
@@ -1057,6 +1113,7 @@ export class CellStreamer {
   }
   get backgroundReady(): boolean {
     return (
+      this.groups.ready &&
       [...this.physicsWanted].every((id) => {
         const cell = this.cells.get(id);
         return !!cell && this.physicsReady(cell);
@@ -1087,6 +1144,11 @@ export class CellStreamer {
       (!this.graphicsWanted.has(cell.id) || this.graphicsReady(cell)) &&
       (this.physicsReady(cell) || this.graphicsReady(cell));
     return {
+      groups: this.groups.diagnostics(),
+      graphicsTimings: {
+        preparationPeakMs: this.groups.peakPreparationMs,
+        swapPeakMs: this.groups.peakSwapMs,
+      },
       failed: this.failed,
       cleanupErrors: this.cleanupErrors,
       lastTransition: this.lastTransition,
@@ -1150,6 +1212,7 @@ export class CellStreamer {
     if (this.disposed) return;
     this.disposed = true;
     this.cancelTransition(new DOMException('Cancelled', 'AbortError'));
+    this.groups.dispose();
     this.critical.clear();
     this.physicsWanted.clear();
     this.graphicsWanted.clear();

@@ -186,7 +186,7 @@ describe('private terrain release', () => {
       a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0;
     const fixed = new Set(metadata.fixedInstanceIds);
     const legacy = {
-      formatVersion: 1,
+      formatVersion: 2,
       assetReleaseVersion: hash(
         jsonBytes({
           worldId: world.worldId,

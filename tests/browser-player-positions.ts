@@ -293,7 +293,7 @@ try {
   await writeFile(
     join(source, 'world.json'),
     JSON.stringify({
-      formatVersion: 5,
+      formatVersion: 6,
       worldId: 'player-position-browser',
       bounds: { min: { x: -32, y: -5, z: -32 }, max: { x: 32, y: 10, z: 32 } },
       simulation: base.simulation,

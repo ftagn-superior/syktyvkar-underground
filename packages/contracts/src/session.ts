@@ -7,8 +7,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// v22 требует явной сверки версий коллекций; старые вкладки должны обновиться.
-export const PROTOCOL_VERSION = 22;
+// v23 combines the v22 LOD/HLOD world contract with required catalog versions.
+// Both earlier v22 graphics-only and catalog-only clients must reload.
+export const PROTOCOL_VERSION = 23;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;

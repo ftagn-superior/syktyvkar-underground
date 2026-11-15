@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
 
-// v22 вводит явную сверку коллекций; прежние вкладки останавливаются до подготовки мира.
+// v23 combines LOD/HLOD and required catalog versions. Both prior v22 contracts
+// stop before resource loads or reservation, along with older releases.
 const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({
   ...(await original<typeof import('@su/contracts')>()),
@@ -21,8 +22,8 @@ import { GameSession } from './session';
 
 const current: WorldInfo = {
   roomId: 'new-room',
-  worldEpoch: 'catalogs-22',
-  protocolVersion: 22,
+  worldEpoch: 'city-hlod-catalogs-23',
+  protocolVersion: 23,
   catalogVersions: { reactions: 'test-reactions' },
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
@@ -39,7 +40,7 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(22);
+  expect(actual.PROTOCOL_VERSION).toBe(23);
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -60,8 +61,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe.each([16, 17, 18, 19, 20, 21])(
-  'legacy v%i tab discovering catalog protocol v22',
+describe.each([16, 17, 18, 19, 20, 21, 22])(
+  'legacy v%i tab discovering graphics and catalog protocol v23',
   (version) => {
     beforeEach(() => {
       legacy.protocol = version;
@@ -96,7 +97,7 @@ describe.each([16, 17, 18, 19, 20, 21])(
 
 describe('catalog changes without a map change', () => {
   beforeEach(() => {
-    legacy.protocol = 22;
+    legacy.protocol = 23;
   });
   it.each([
     undefined,

@@ -1,3 +1,4 @@
+import { abortablePreparation } from '../streaming/preparation';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -31,6 +32,7 @@ import {
 
 type Template = { mesh: Mesh; local: Matrix; part: BuildingPart; key: string };
 type Prepared = {
+  source: AssetContainer;
   descriptor: BuildingAssetManifest;
   templates: Template[];
   materials: Set<Material>;
@@ -171,6 +173,7 @@ export class GlbInstances {
       });
     }
     this.assets.set(descriptor.version, {
+      source: container,
       descriptor,
       templates,
       materials,
@@ -178,9 +181,48 @@ export class GlbInstances {
     });
   }
 
-  release(version: string) {
+  async prepareShaders(version: string, signal: AbortSignal): Promise<void> {
     const asset = this.assets.get(version);
     if (!asset) return;
+    for (const template of asset.templates) {
+      const mesh = template.mesh.clone('glb-shader-preparation', null, true)!;
+      mesh.makeGeometryUnique();
+      mesh.parent = null;
+      mesh.setEnabled(false);
+      mesh.receiveShadows = true;
+      const abort = () => mesh.dispose(false, false);
+      signal.addEventListener('abort', abort, { once: true });
+      try {
+        signal.throwIfAborted();
+        mesh.thinInstanceSetBuffer(
+          'matrix',
+          Float32Array.from(Matrix.Identity().asArray()),
+          16,
+          false,
+        );
+        mesh.thinInstanceSetBuffer(
+          INSTANCE_STATE_ATTRIBUTE,
+          new Float32Array([0, 1, 0, 0]),
+          4,
+          false,
+        );
+        mesh.thinInstanceCount = 1;
+        if (this.radial) applyRadialFog(mesh, this.radial, 0);
+        if (mesh.material)
+          await abortablePreparation(
+            mesh.material.forceCompilationAsync(mesh, { useInstances: true }),
+            signal,
+            () => {},
+          );
+      } finally {
+        signal.removeEventListener('abort', abort);
+        mesh.dispose(false, false);
+      }
+    }
+  }
+  release(version: string, source?: AssetContainer) {
+    const asset = this.assets.get(version);
+    if (!asset || (source && asset.source !== source)) return;
     this.flush();
     if ([...this.instances.values()].some((instance) => instance.asset === asset))
       throw new Error(

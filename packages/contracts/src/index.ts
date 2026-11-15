@@ -18,7 +18,13 @@ export * from './session.js';
 export * from './activity.js';
 export * from './day-clock.js';
 export * from './weather.js';
-export { validateWorld, validateWorldHeader, validateEntities, canonicalJson } from './world.js';
+export {
+  validateWorld,
+  validateWorldBuildingPlacements,
+  validateWorldHeader,
+  validateEntities,
+  canonicalJson,
+} from './world.js';
 export {
   worldNeighborhood,
   createWorldGrid,
@@ -54,3 +60,6 @@ export {
   worldPublicationBaseIdentity,
   changedWorldPublicationCells,
 } from './world-bundle.js';
+
+export * from './graphics-groups.js';
+export { transformWorldPoint } from './world-grid.js';

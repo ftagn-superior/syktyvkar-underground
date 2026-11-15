@@ -1,5 +1,5 @@
 {
-  "formatVersion": 5,
+  "formatVersion": 6,
   "worldId": "terrain-lab",
   "bounds": {
     "min": {
@@ -101,5 +101,6 @@
         "z": -10
       }
     ]
-  }
+  },
+  "graphicsPolicy": "detail-only"
 }

@@ -13,6 +13,25 @@ const at = (entityId: string, x: number): BuildingInstance => ({
 });
 
 describe('night lights', () => {
+  it('keeps one source across overlapping near/far owners and releases the last owner', () => {
+    const engine = new NullEngine(),
+      scene = new Scene(engine),
+      lights = new WorldNightLights(scene);
+    try {
+      const source = [{ position: { x: 0, y: 5, z: 0 }, radius: 12, color: '#ffd49a' }];
+      lights.retainSources(at('lamp', 0), source);
+      lights.retainSources(at('lamp', 0), source);
+      expect(lights.sourceCount).toBe(1);
+      lights.releaseSources('lamp');
+      expect(lights.sourceCount).toBe(1);
+      lights.releaseSources('lamp');
+      expect(lights.sourceCount).toBe(0);
+    } finally {
+      lights.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
   it('gives street lamps a cone of their own height and neon signs none', () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);

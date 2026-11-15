@@ -368,9 +368,10 @@ describe('independent static-object extraction evidence', () => {
         // The placement allowlist is authoring metadata, outside frozen geometry.
         const source = (await readFile(path, 'utf8'))
           .replace(/  "placementPolicy": "placement\.json",\n/, '')
-          .replace(/  "terrainRelease": "terrain-release\.json",\n/, '');
-        expect(JSON.parse(source).formatVersion).toBe(5);
-        expect(sha256(source.replace('"formatVersion": 5', '"formatVersion": 4'))).toBe(hash);
+          .replace(/  "terrainRelease": "terrain-release\.json",\n/, '')
+          .replace(/,\n  "graphicsPolicy": "two-level"/, '');
+        expect(JSON.parse(source).formatVersion).toBe(6);
+        expect(sha256(source.replace('"formatVersion": 6', '"formatVersion": 4'))).toBe(hash);
       } else if (path.endsWith('/asset.json')) {
         // Human-readable cards are outside the historical geometry invariant.
         // Keep checking every pre-existing descriptor field against the frozen bytes.
@@ -395,7 +396,7 @@ describe('independent static-object extraction evidence', () => {
     const old = await oldExtractionWorld();
     const { buildings: _ob, buildingAssets: _oa, ...oldRest } = old;
     const { buildings: _nb, buildingAssets: _na, ...newRest } = release.world;
-    expect(newRest).toEqual({ ...oldRest, formatVersion: 5 });
+    expect(newRest).toEqual({ ...oldRest, formatVersion: 6 });
     expect(release.manifest.grid).toEqual(baseline.grid);
     expect(release.manifest.cells.map(({ cellId, bounds }) => ({ cellId, bounds }))).toEqual(
       baseline.cells.map(({ cellId, bounds }: any) => ({ cellId, bounds })),

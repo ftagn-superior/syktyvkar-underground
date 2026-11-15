@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Worker } from 'node:worker_threads';
 import { afterEach, describe, expect, it } from 'vitest';
-import { placedStaticInstance, STATIC_PLACEMENT_ASSET_ID } from '@su/contracts';
+import {
+  changedWorldPublicationCells,
+  placedStaticInstance,
+  STATIC_PLACEMENT_ASSET_ID,
+} from '@su/contracts';
 import { buildStaticPlacementWorld } from '../../../../tests/helpers/static-placement-world.js';
 import {
   createLayoutPublication,
@@ -117,6 +121,9 @@ describe('background layout publisher', () => {
     });
     expect(accepted.geometryDelta!.buildings.map((i) => i.entityId)).toEqual([owner.entityId]);
     expect(Object.keys(accepted.geometryDelta!.assets)).toHaveLength(0);
+    expect(accepted.changedCellIds).toEqual(
+      changedWorldPublicationCells(before.publication.manifest, accepted.manifest),
+    );
     await rm(accepted.stagingDirectory, { recursive: true, force: true });
   });
   it('terminates timed-out preparation before removing only its owned staging directory', async () => {

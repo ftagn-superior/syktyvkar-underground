@@ -18,6 +18,11 @@ import {
   cellsIntersectingBounds,
   primitiveBounds,
   buildingBounds,
+  validateGraphicsCoverage,
+  validateGroupRenderParts,
+  inspectGroupGlb,
+  GROUP_RENDER_LIMITS,
+  type WorldGraphics,
   type WorldDefinition,
   type WorldGrid,
   type WorldCell,
@@ -53,6 +58,7 @@ export interface WorldPublicationOptions {
   /** Explicit transport opt-in; old authored publications remain byte-identical by default. */
   physicsPacks?: boolean;
   generatedSupports?: WorldManifest['generatedSupports'];
+  graphics?: { graphics: WorldGraphics; payloads: Map<string, Uint8Array> };
 }
 export const hash = (input: string | Uint8Array) =>
   createHash('sha256').update(input).digest('hex');
@@ -213,6 +219,35 @@ export function createWorldPublication(
     if (options.physicsPacks)
       pack(owners, [...new Set(assetIds.map((id) => assets[id].collisionFile))], 'physics');
   }
+  if (options.graphics) {
+    validateGraphicsCoverage(world, grid, options.graphics.graphics.groups);
+    for (const group of options.graphics.graphics.groups) {
+      const stats = { geometryBytes: 0, triangles: 0, drawUnits: 0 };
+      for (const resource of group.far.resources) {
+        const partsBytes = options.graphics.payloads.get(resource.partsFile),
+          model = options.graphics.payloads.get(resource.modelFile);
+        if (!partsBytes || !model) throw new Error('Missing HLOD resources');
+        const parts = validateGroupRenderParts(
+          JSON.parse(new TextDecoder().decode(partsBytes)),
+          group.groupId,
+        );
+        const inspected = inspectGroupGlb(model, parts);
+        for (const key of ['geometryBytes', 'triangles', 'drawUnits'] as const)
+          stats[key] += inspected[key];
+        for (const [path, limit] of [
+          [resource.modelFile, GROUP_RENDER_LIMITS.modelBytes],
+          [resource.partsFile, GROUP_RENDER_LIMITS.partsBytes],
+        ] as const) {
+          const bytes = options.graphics.payloads.get(path);
+          if (!bytes) throw new Error(`Missing HLOD payload: ${path}`);
+          put(path, bytes, limit);
+        }
+      }
+      for (const key of ['geometryBytes', 'triangles', 'drawUnits'] as const)
+        if (stats[key] !== group.far[key])
+          throw new Error(`HLOD statistics mismatch: ${group.groupId}/${key}`);
+    }
+  }
   const manifest: WorldManifest = {
     formatVersion: WORLD_FORMAT_VERSION,
     worldId: world.worldId,
@@ -224,6 +259,7 @@ export function createWorldPublication(
     cells: cellEntries,
     assets,
     files,
+    ...(options.graphics ? { graphics: options.graphics.graphics } : {}),
     ...(options.generatedSupports && Object.keys(options.generatedSupports).length
       ? { generatedSupports: options.generatedSupports }
       : {}),
@@ -279,7 +315,7 @@ export async function pruneWorldPublication(outputDirectory: string) {
       const path = relative ? `${relative}/${entry.name}` : entry.name;
       if (
         !relative &&
-        !['assets', 'cells', 'graphics', 'physics', 'layouts'].includes(entry.name) &&
+        !['assets', 'cells', 'graphics', 'physics', 'layouts', 'hlod'].includes(entry.name) &&
         !/^header\.[a-f0-9]{64}\.json$/.test(entry.name)
       )
         continue;
@@ -305,11 +341,12 @@ export async function pruneWorldPublication(outputDirectory: string) {
 }
 
 export interface AuthoringMetadata {
-  formatVersion: 1;
+  formatVersion: 2;
   assetReleaseVersion: string;
   seedVersion: string;
   fixedInstanceIds: string[];
   terrain?: PrivateTerrainReference;
+  visual?: PrivateTerrainReference;
 }
 
 export interface PrivateTerrainReference {
@@ -331,13 +368,27 @@ export function validatePrivateTerrainReference(value: unknown): PrivateTerrainR
   return ref;
 }
 
+export function validatePrivateVisualReference(value: unknown): PrivateTerrainReference {
+  const ref = value as PrivateTerrainReference;
+  if (
+    !ref ||
+    Object.keys(ref).length !== 2 ||
+    !/^[a-f0-9]{64}$/.test(ref.sha256) ||
+    ref.file !== `private/visual-source.${ref.sha256}.json`
+  )
+    throw new Error('Invalid private visual reference');
+  return ref;
+}
+
 export function authoringMetadata(
   world: WorldDefinition,
   manifest: WorldManifest,
   fixedInstanceIds: string[],
   terrain?: PrivateTerrainReference,
+  visual?: PrivateTerrainReference,
 ): AuthoringMetadata {
   if (terrain) validatePrivateTerrainReference(terrain);
+  if (visual) validatePrivateVisualReference(visual);
   const ids = new Set(fixedInstanceIds);
   if (
     ids.size !== fixedInstanceIds.length ||
@@ -347,7 +398,7 @@ export function authoringMetadata(
   const fixed = world.buildings.filter((b) => ids.has(b.entityId)).sort(byId);
   const seed = world.buildings.filter((b) => !ids.has(b.entityId)).sort(byId);
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     assetReleaseVersion: hash(
       canonicalJson({
         worldId: world.worldId,
@@ -357,11 +408,13 @@ export function authoringMetadata(
         statics: [...world.entities].sort(byId),
         fixed,
         ...(terrain ? { terrain } : {}),
+        ...(visual ? { visual } : {}),
       }),
     ),
     seedVersion: hash(canonicalJson(seed)),
     fixedInstanceIds: [...fixedInstanceIds].sort(),
     ...(terrain ? { terrain } : {}),
+    ...(visual ? { visual } : {}),
   };
 }
 export async function writeAuthoringMetadata(
@@ -370,6 +423,7 @@ export async function writeAuthoringMetadata(
   fixedIds: string[],
   directory: string,
   terrainBytes?: Uint8Array,
+  visualBytes?: Uint8Array,
 ) {
   let terrain: PrivateTerrainReference | undefined;
   if (terrainBytes !== undefined) {
@@ -378,7 +432,16 @@ export async function writeAuthoringMetadata(
     const sha256 = hash(terrainBytes);
     terrain = { file: `private/terrain.${sha256}.json`, sha256 };
   }
-  const metadata = authoringMetadata(world, manifest, fixedIds, terrain);
+  let visual: PrivateTerrainReference | undefined;
+  if (visualBytes) {
+    if (visualBytes.length > GROUP_RENDER_LIMITS.sourceBytes)
+      throw new Error('Private visual byte limit');
+    const sha256 = hash(visualBytes);
+    visual = { file: `private/visual-source.${sha256}.json`, sha256 };
+    await mkdir(resolve(directory, 'private'), { recursive: true });
+    await writeFile(resolve(directory, visual.file), visualBytes);
+  }
+  const metadata = authoringMetadata(world, manifest, fixedIds, terrain, visual);
   if (terrain && terrainBytes) {
     await mkdir(resolve(directory, 'private'), { recursive: true });
     // Write and close the immutable payload before publishing its metadata reference.

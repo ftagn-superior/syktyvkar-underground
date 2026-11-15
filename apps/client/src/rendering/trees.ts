@@ -1,3 +1,4 @@
+import { abortablePreparation } from '../streaming/preparation';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
@@ -161,6 +162,100 @@ export class TreeViews {
     this.shadowed.delete(id);
     tree.batch.trees.delete(tree);
     this.dirty.add(tree.batch);
+  }
+  private warming = new Map<string, { promise: Promise<void>; controller: AbortController }>();
+  private recipeOwners = new Map<string, Set<object>>();
+  prepareRecipe(recipe: TreeRenderRecipe, owner: object): Promise<void> {
+    const palette = `${recipe.crownColor}:${recipe.trunkColor}:${recipe.foliage}`;
+    let owners = this.recipeOwners.get(palette);
+    if (!owners) this.recipeOwners.set(palette, (owners = new Set()));
+    owners.add(owner);
+    let record = this.warming.get(palette),
+      pending = record?.promise;
+    if (!pending) {
+      const controller = new AbortController();
+      pending = (async () => {
+        const batch = this.batch(
+          {
+            entityId: 'shader-preparation',
+            assetId: 'tree',
+            position: { x: -1e9, y: 0, z: -1e9 },
+            rotation: { x: 0, y: 0, z: 0, w: 1 },
+          },
+          recipe,
+          false,
+          false,
+        );
+        this.batches.delete(batch.key);
+        const mesh = batch.mesh;
+        mesh.setEnabled(false);
+        try {
+          mesh.thinInstanceSetBuffer(
+            'matrix',
+            Float32Array.from(Matrix.Identity().asArray()),
+            16,
+            false,
+          );
+          const attributes = [
+            recipe.crowns[0],
+            recipe.crowns[1],
+            recipe.trunk,
+            [0, 1, recipe.trunkBase, 0],
+          ];
+          for (let i = 0; i < TREE_ATTRIBUTES.length; i++)
+            mesh.thinInstanceSetBuffer(
+              TREE_ATTRIBUTES[i],
+              Float32Array.from(attributes[i]),
+              4,
+              false,
+            );
+          mesh.thinInstanceCount = 1;
+          if (mesh.material)
+            await abortablePreparation(
+              mesh.material.forceCompilationAsync(mesh, { useInstances: true }),
+              controller.signal,
+              () => {},
+            );
+        } finally {
+          this.disposeBatch(batch);
+        }
+      })();
+      record = { promise: pending, controller };
+      this.warming.set(palette, record);
+      void pending.catch(() => {
+        if (this.warming.get(palette)?.promise === pending) this.warming.delete(palette);
+      });
+    }
+    return pending;
+  }
+  releaseRecipe(recipe: TreeRenderRecipe, owner: object): void {
+    const palette = `${recipe.crownColor}:${recipe.trunkColor}:${recipe.foliage}`;
+    const owners = this.recipeOwners.get(palette);
+    owners?.delete(owner);
+    if (owners?.size) return;
+    this.recipeOwners.delete(palette);
+    if (
+      [...this.trees.values()].some(
+        (t) => `${t.recipe.crownColor}:${t.recipe.trunkColor}:${t.recipe.foliage}` === palette,
+      )
+    )
+      return;
+    for (const batch of [...this.batches.values(), ...this.idle]) {
+      if (!batch.variant.startsWith(palette + ':')) continue;
+      this.dirty.delete(batch);
+      this.batches.delete(batch.key);
+      this.disposeBatch(batch);
+    }
+    this.warming.get(palette)?.controller.abort();
+    this.warming.delete(palette);
+    this.templates.get(palette)?.dispose(false, false);
+    this.templates.delete(palette);
+    for (const [key, material] of this.materials)
+      if (key.startsWith(palette + ':')) {
+        material.shadowDepthWrapper?.dispose();
+        material.dispose(false, false);
+        this.materials.delete(key);
+      }
   }
   private batch(
     definition: BuildingInstance,
@@ -416,6 +511,9 @@ export class TreeViews {
     }));
   }
   dispose() {
+    for (const record of this.warming.values()) record.controller.abort();
+    this.warming.clear();
+    this.recipeOwners.clear();
     for (const id of this.trees.keys()) this.remove(id, true);
     this.flush();
     for (const batch of this.idle) this.disposeBatch(batch);

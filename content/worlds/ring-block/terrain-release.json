@@ -31936,8 +31936,8 @@
     "extendToWorldBounds": true
   },
   "expected": {
-    "assetReleaseVersion": "5266f97044b713556fd642731e2d2abc868f03d1659edc31dfd40cfcb1e1cb79",
+    "assetReleaseVersion": "8e80d87483c5504f1b7bd6ebfc87b2ad6bea99b6e37873385436cf0228dbaf39",
     "seedVersion": "b76e485b95791cbfd6cac2d1828f07e7d14763c4203f1a296f1fbe80579a754f",
-    "mapVersion": "281abe09f67bbaf26055dd5125da0d37bac2620f53bfd0e17bbdbe226494775a"
+    "mapVersion": "7c5270f4ed11b7751c31a83962140515baa7c07512e896c75c4a2a40441fb62e"
   }
 }

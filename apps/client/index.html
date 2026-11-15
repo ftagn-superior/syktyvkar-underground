@@ -580,6 +580,13 @@
           <p class="catalog-status">Щелчок по команде или примеру вставляет её в чат.</p>
         </section>
         <p id="chat-status" class="chat-status" role="status"></p>
+        <div
+          id="chat-suggest"
+          class="chat-suggest ui-panel"
+          role="listbox"
+          aria-label="Подсказки команд"
+          hidden
+        ></div>
         <div id="chat-row" class="chat-row">
           <button
             id="chat-toggle"
@@ -610,6 +617,10 @@
               placeholder="Enter — отправить"
               aria-label="Сообщение рядом с персонажем"
               aria-describedby="chat-status chat-counter"
+              aria-autocomplete="list"
+              aria-controls="chat-suggest"
+              aria-expanded="false"
+              role="combobox"
               spellcheck="false"
             />
             <span id="chat-counter" class="chat-counter" aria-live="off">0 / 255</span>

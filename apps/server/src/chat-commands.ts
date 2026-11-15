@@ -1,4 +1,5 @@
 import {
+  COMMAND_CHOICES_MAX,
   ITEM_GIVE_COOLDOWN_MS,
   PLAYER_SPEED_PERCENT,
   type CommandHelpEffect,
@@ -21,7 +22,8 @@ import {
 export type { CommandAccess } from './commands/command-line.js';
 
 export type ChatCommand =
-  | { kind: 'give'; typeId: string }
+  /** `target` — имя игрока без `@`, по умолчанию отправитель. */
+  | { kind: 'give'; typeId: string; target?: string }
   | { kind: 'giveList' }
   /** Пустой список действий — только сообщить текущее время. */
   | { kind: 'time'; actions: DayClockAction[] }
@@ -59,6 +61,28 @@ const hour = {
   },
 };
 
+/**
+ * Делит позиционные аргументы на `@игрок` и остальные: порядок между ними свободный, так что
+ * годятся и `/speed @Гость 2`, и `/speed 2 @Гость`. Строка — текст ошибки.
+ */
+function splitTarget(args: readonly string[]): { target?: string; rest: string[] } | string {
+  let target: string | undefined;
+  const rest: string[] = [];
+  for (const arg of args) {
+    if (!arg.startsWith('@')) rest.push(arg);
+    else if (arg.length < 2) return 'Игрока указывают через @: @Имя.';
+    else if (target !== undefined) return `Лишний аргумент «${arg}».`;
+    else target = arg.slice(1);
+  }
+  return { ...(target === undefined ? {} : { target }), rest };
+}
+const PLAYER_ARGUMENT = {
+  name: '@игрок',
+  optional: true,
+  help: 'По умолчанию вы. Имя с пробелами — в кавычках: @"Гость 2"',
+  complete: 'player',
+};
+
 const WEATHER_PARTS: readonly WeatherPart[] = ['clouds', 'rain', 'snow', 'fog'];
 
 const SPEED_RANGE = `от ${PLAYER_SPEED_PERCENT.min / 100} до ${PLAYER_SPEED_PERCENT.max / 100}`;
@@ -82,6 +106,7 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
     category: 'Мир',
     access: 'admin',
     summary: 'Игровое время. Без флагов сообщает текущий час.',
+    args: [{ name: 'ЧЧ[:ММ]', optional: true, help: 'Краткая форма --set' }],
     flags: {
       set: { short: 's', value: hour, help: 'Установить час' },
       stop: { help: 'Остановить часы' },
@@ -94,18 +119,20 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
       ['reset', 'stop'],
       ['reset', 'start'],
     ],
-    examples: [
-      '/time',
-      '/time --set 18:30',
-      '/time --set 22 --stop',
-      '/time --start',
-      '/time --reset',
-    ],
-    build({ flags }) {
+    examples: ['/time', '/time 18:30', '/time --set 22 --stop', '/time --start', '/time --reset'],
+    build({ args, flags }) {
+      let setHour = flags.has('set') ? (flags.get('set') as number) : undefined;
+      if (args[0] !== undefined) {
+        if (flags.has('set')) return 'Час указан дважды.';
+        if (flags.get('reset')) return 'Флаг --reset нельзя указывать вместе с часом.';
+        const parsed = hour.parse(args[0]);
+        if (parsed === undefined) return `Неверный час: «${args[0]}». Ожидается ${hour.name}.`;
+        setHour = parsed;
+      }
       const actions: DayClockAction[] = [];
       // Сначала остановка: тогда `--set` закрепляет ровно указанный час.
       if (flags.get('stop')) actions.push({ kind: 'stop' });
-      if (flags.has('set')) actions.push({ kind: 'set', hour: flags.get('set') as number });
+      if (setHour !== undefined) actions.push({ kind: 'set', hour: setHour });
       if (flags.get('start')) actions.push({ kind: 'start' });
       if (flags.get('reset')) actions.push({ kind: 'reset' });
       return { kind: 'time', actions };
@@ -149,31 +176,37 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
     category: 'Игроки',
     access: 'admin',
     summary: 'Скорость ходьбы и бега игрока. Без флагов сообщает текущую.',
-    args: [
-      {
-        name: '@игрок',
-        optional: true,
-        help: 'По умолчанию вы. Имя с пробелами — в кавычках: @"Гость 2"',
-      },
-    ],
+    args: [PLAYER_ARGUMENT, { name: 'МНОЖИТЕЛЬ', optional: true, help: 'Краткая форма --set' }],
     flags: {
       set: { short: 's', value: speedMultiplier, help: `Множитель ${SPEED_RANGE}` },
       reset: { help: 'Обычная скорость' },
     },
     conflicts: [['set', 'reset']],
-    examples: ['/speed', '/speed --set 2', '/speed @"Гость 2" --set 0.5', '/speed @Гость --reset'],
+    examples: ['/speed', '/speed 2', '/speed @"Гость 2" 0.5', '/speed @Гость --reset'],
     build({ args, flags }) {
-      const [target] = args;
-      if (target !== undefined && (!target.startsWith('@') || target.length < 2))
-        return 'Игрока указывают через @: @Имя.';
-      const percent = flags.has('set')
-        ? (flags.get('set') as number)
-        : flags.get('reset')
-          ? PLAYER_SPEED_PERCENT.normal
-          : undefined;
+      const split = splitTarget(args);
+      if (typeof split === 'string') return split;
+      if (split.rest.length > 1) return `Лишний аргумент «${split.rest[1]}».`;
+      let positional: number | undefined;
+      if (split.rest[0] !== undefined) {
+        if (flags.has('set')) return 'Множитель скорости указан дважды.';
+        if (flags.get('reset')) return 'Флаги --set и --reset нельзя указывать вместе.';
+        positional = speedMultiplier.parse(split.rest[0]);
+        if (positional === undefined)
+          return split.target === undefined
+            ? `Неверное значение «${split.rest[0]}». Ожидается ${speedMultiplier.name}; игрока указывают через @: @Имя.`
+            : `Неверное значение «${split.rest[0]}». Ожидается ${speedMultiplier.name}.`;
+      }
+      const percent =
+        positional ??
+        (flags.has('set')
+          ? (flags.get('set') as number)
+          : flags.get('reset')
+            ? PLAYER_SPEED_PERCENT.normal
+            : undefined);
       return {
         kind: 'speed',
-        ...(target ? { target: target.slice(1) } : {}),
+        ...(split.target === undefined ? {} : { target: split.target }),
         ...(percent === undefined ? {} : { percent }),
       };
     },
@@ -183,17 +216,29 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
     aliases: ['giveme'],
     category: 'Предметы',
     access: 'admin',
-    summary: 'Выдать себе предмет из каталога.',
-    args: [{ name: 'тип', optional: true, help: 'ID типа предмета' }],
+    summary: 'Выдать предмет себе или игроку из каталога.',
+    args: [
+      PLAYER_ARGUMENT,
+      { name: 'тип', optional: true, help: 'ID типа предмета', complete: 'itemTypes' },
+    ],
     flags: { list: { short: 'l', help: 'Показать ID доступных типов' } },
-    examples: ['/give wooden-crate', '/give --list'],
+    examples: ['/give wooden-crate', '/give @Гость wooden-crate', '/give --list'],
     build({ args, flags }) {
-      const [typeId] = args;
+      const split = splitTarget(args);
+      if (typeof split === 'string') return split;
+      if (split.rest.length > 1) return `Лишний аргумент «${split.rest[1]}».`;
+      const [typeId] = split.rest;
       if (flags.get('list'))
-        return typeId ? 'С --list тип предмета не указывают.' : { kind: 'giveList' };
+        return typeId || split.target !== undefined
+          ? 'С --list аргументы не указывают.'
+          : { kind: 'giveList' };
       if (!typeId) return 'Не указан тип предмета.';
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(typeId)) return `Неверный тип предмета «${typeId}».`;
-      return { kind: 'give', typeId };
+      return {
+        kind: 'give',
+        typeId,
+        ...(split.target === undefined ? {} : { target: split.target }),
+      };
     },
   },
   {
@@ -220,7 +265,9 @@ const COMMANDS: readonly ChatCommandDefinition[] = [
     category: 'Справка',
     access: 'player',
     summary: 'Список доступных команд.',
-    args: [{ name: 'команда', optional: true, help: 'Показать одну команду' }],
+    args: [
+      { name: 'команда', optional: true, help: 'Показать одну команду', complete: 'commands' },
+    ],
     examples: ['/help', '/help time', '/time --help'],
     build({ args }) {
       return { kind: 'help', focus: args[0]?.replace(/^\//, '').toLowerCase() };
@@ -297,15 +344,40 @@ export function parseChatCommand(text: string, access: CommandAccess): ChatComma
   }
 }
 
-/** Справка по командам, доступным с этими правами; `/help` в счёт не идёт. */
-export function commandHelp(access: CommandAccess, focus?: string): CommandHelpEffect | undefined {
+export interface CommandHelpContext {
+  itemTypes?: readonly string[];
+}
+
+/**
+ * Список доступных команд с вариантами значений аргументов. Всегда возвращает хотя бы `/help`,
+ * поэтому подходит для автодополнения и для обычного игрока.
+ */
+export function commandCatalog(
+  access: CommandAccess,
+  context: CommandHelpContext = {},
+): CommandHelpEffect {
   const commands = COMMANDS.filter((command) => allowed(command, access));
-  if (!commands.some((command) => command.name !== 'help')) return;
+  const choices: Record<string, readonly string[]> = {
+    commands: commands.map((command) => command.name),
+    ...(context.itemTypes?.length
+      ? { itemTypes: context.itemTypes.slice(0, COMMAND_CHOICES_MAX) }
+      : {}),
+  };
   return {
     kind: 'commandHelp',
-    commands: commands.map(commandHelpEntry),
-    ...(focus ? { focus } : {}),
+    commands: commands.map((command) => commandHelpEntry(command, choices)),
   };
+}
+
+/** Справка по командам, доступным с этими правами; `/help` в счёт не идёт. */
+export function commandHelp(
+  access: CommandAccess,
+  focus?: string,
+  context: CommandHelpContext = {},
+): CommandHelpEffect | undefined {
+  const catalog = commandCatalog(access, context);
+  if (!catalog.commands.some((command) => command.name !== 'help')) return;
+  return { ...catalog, ...(focus ? { focus } : {}) };
 }
 
 export function giveFailureMessage(code: ItemError | undefined): string {

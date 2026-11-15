@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCommandHelpEffect } from '@su/contracts';
-import { commandHelp, parseChatCommand } from './chat-commands.js';
+import { commandCatalog, commandHelp, parseChatCommand } from './chat-commands.js';
 import { parseCommandLine, tokenize } from './commands/command-line.js';
 
 const admin = (text: string) => parseChatCommand(text, 'admin');
@@ -80,9 +80,27 @@ describe('chat commands', () => {
       expect(admin(`/time --${kind}`)).toEqual({ kind: 'time', actions: [{ kind }] });
   });
 
-  it('rejects malformed /time input, including the old positional forms', () => {
+  it('takes the hour as a positional shorthand for --set', () => {
+    expect(admin('/time 7')).toEqual({ kind: 'time', actions: [{ kind: 'set', hour: 7 }] });
+    expect(admin('/time 22:30 --stop')).toEqual({
+      kind: 'time',
+      actions: [{ kind: 'stop' }, { kind: 'set', hour: 22.5 }],
+    });
+    for (const [text, message] of [
+      ['/time 7 --set 8', 'дважды'],
+      ['/time 7 --reset', 'нельзя указывать вместе'],
+      ['/time 7 8', 'Лишний аргумент'],
+      ['/time 25', 'Неверный час'],
+    ] as const)
+      expect(admin(text)).toMatchObject({
+        kind: 'invalid',
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining(message),
+      });
+  });
+
+  it('rejects malformed /time input, including the old word forms', () => {
     for (const text of [
-      '/time 7',
       '/time stop',
       '/time --set 24',
       '/time --set 12:60',
@@ -146,14 +164,20 @@ describe('chat commands', () => {
       percent: 100,
     });
     expect(admin('/speed @Маша')).toEqual({ kind: 'speed', target: 'Маша' });
+    expect(admin('/speed 2')).toEqual({ kind: 'speed', percent: 200 });
+    expect(admin('/speed @Маша 0,5')).toEqual({ kind: 'speed', target: 'Маша', percent: 50 });
+    expect(admin('/speed x1.5 @Маша')).toEqual({ kind: 'speed', target: 'Маша', percent: 150 });
     for (const [text, message] of [
       ['/speed --set 5', 'от 0.1 до 4'],
       ['/speed --set 0.05', 'от 0.1 до 4'],
       ['/speed --set fast', 'Неверное значение'],
       ['/speed --set 2 --reset', 'нельзя указывать вместе'],
+      ['/speed 2 --set 3', 'дважды'],
+      ['/speed 2 --reset', 'нельзя указывать вместе'],
       ['/speed Маша', 'через @'],
       ['/speed @', 'через @'],
       ['/speed @a @b', 'Лишний аргумент'],
+      ['/speed 2 3', 'Лишний аргумент'],
     ] as const)
       expect(admin(text)).toMatchObject({
         kind: 'invalid',
@@ -169,8 +193,26 @@ describe('chat commands', () => {
   it('keeps old names as aliases of /give, /place and /remove', () => {
     for (const name of ['give', 'giveme'])
       expect(admin(`/${name} wooden-crate`)).toEqual({ kind: 'give', typeId: 'wooden-crate' });
+    expect(admin('/give @Маша wooden-crate')).toEqual({
+      kind: 'give',
+      target: 'Маша',
+      typeId: 'wooden-crate',
+    });
+    expect(admin('/give wooden-crate @"Гость 2"')).toEqual({
+      kind: 'give',
+      target: 'Гость 2',
+      typeId: 'wooden-crate',
+    });
     expect(admin('/give --list')).toEqual({ kind: 'giveList' });
-    for (const text of ['/give', '/give a b', '/give __proto__!', '/give crate --list'])
+    for (const text of [
+      '/give',
+      '/give a b',
+      '/give @a @b crate',
+      '/give @',
+      '/give __proto__!',
+      '/give crate --list',
+      '/give @Маша --list',
+    ])
       expect(admin(text)).toMatchObject({ kind: 'invalid', code: 'INVALID_INPUT' });
     for (const name of ['place', 'motherlode', 'PLACE'])
       expect(admin(`/${name}`)).toEqual({ kind: 'staticPlacement' });
@@ -210,7 +252,11 @@ describe('chat commands', () => {
 
   it('builds help only from permitted commands and passes contract validation', () => {
     expect(commandHelp('player')).toBeUndefined();
-    const help = commandHelp('admin', 'time')!;
+    const playerCatalog = commandCatalog('player', { itemTypes: ['wooden-crate'] });
+    expect(playerCatalog.commands.map((command) => command.name)).toEqual(['help']);
+    expect(playerCatalog.commands[0].args[0].choices).toEqual(['help']);
+
+    const help = commandHelp('admin', 'time', { itemTypes: ['lamp', 'wooden-crate'] })!;
     expect(help.commands.map((command) => command.name)).toEqual([
       'time',
       'weather',
@@ -221,8 +267,18 @@ describe('chat commands', () => {
       'help',
     ]);
     expect(help.focus).toBe('time');
-    expect(help.commands[0].usage).toBe('time [--set ЧЧ[:ММ]] [--stop] [--start] [--reset]');
+    expect(help.commands[0].usage).toBe(
+      'time [<ЧЧ[:ММ]>] [--set ЧЧ[:ММ]] [--stop | --start | --reset]',
+    );
+    expect(help.commands[0].conflicts).toContainEqual(['stop', 'start']);
+    expect(help.commands.find((c) => c.name === 'give')?.args).toEqual([
+      expect.objectContaining({ name: '@игрок', player: true }),
+      expect.objectContaining({ name: 'тип', choices: ['lamp', 'wooden-crate'] }),
+    ]);
     expect(parseCommandHelpEffect(JSON.parse(JSON.stringify(help)))).toEqual(help);
+    expect(parseCommandHelpEffect(JSON.parse(JSON.stringify(playerCatalog)))).toEqual(
+      playerCatalog,
+    );
     expect(parseCommandHelpEffect({ ...help, focus: 'missing' })).toBeUndefined();
   });
 });

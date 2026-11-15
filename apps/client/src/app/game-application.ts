@@ -867,7 +867,19 @@ export function startGame(): void {
         session.chatStatus().available,
     },
     chatSettings,
+    element('chat-suggest'),
+    {
+      commands: () => session.commands(),
+      players: () => {
+        const names: string[] = [];
+        session.room?.state?.players?.forEach((player) => {
+          if (player.name) names.push(player.name);
+        });
+        return names;
+      },
+    },
   );
+  session.onCommandCatalog = () => chat?.refreshSuggestions();
   session.onDayClock = (clock) => view?.setDayClock(clock);
   session.onWeather = (weather) => view?.setWeather(weather);
   session.onChatResult = (result) => {
@@ -894,6 +906,7 @@ export function startGame(): void {
     element('chat-row'),
     (text) => chat?.insert(text),
     () => panels.open('commands', 'chat'),
+    element('chat-suggest'),
   );
   session.onCommandHelp = (help, requestId) => {
     if (!chatReturn.acceptCommand(requestId, session.room) || !firstPersonEligible()) return;

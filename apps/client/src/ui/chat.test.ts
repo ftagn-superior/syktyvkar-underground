@@ -1,32 +1,71 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChatConsole } from './chat';
+import type { CommandHelpEntry } from '@su/contracts';
+import { ChatConsole, type ChatCompletionSource } from './chat';
 import { ChatSettings } from './chat-settings';
 
 /** Small DOM surface; capture and real focus policy belong to the browser scenario. */
 class Control extends EventTarget {
   hidden = false;
   disabled = false;
+  readOnly = false;
   value = '';
   textContent = '';
+  id = '';
+  className = '';
+  selectionStart: number | null = null;
   dataset: Record<string, string> = {};
-  setAttribute = vi.fn();
-  setSelectionRange = vi.fn();
+  attributes: Record<string, string> = {};
+  children: Control[] = [];
+  parent?: Control;
+  setAttribute = vi.fn((name: string, value: string) => {
+    this.attributes[name] = value;
+  });
+  removeAttribute = vi.fn((name: string) => {
+    delete this.attributes[name];
+  });
+  setSelectionRange = vi.fn((start: number) => {
+    this.selectionStart = start;
+  });
+  replaceChildren = vi.fn((...nodes: Control[]) => {
+    this.children = nodes;
+    for (const node of nodes) node.parent = this;
+  });
+  append = vi.fn((...nodes: Control[]) => {
+    this.children.push(...nodes);
+    for (const node of nodes) node.parent = this;
+  });
+  closest = vi.fn((selector: string): Control | null => {
+    const className = selector.startsWith('.') ? selector.slice(1) : '';
+    let node: Control | undefined = this;
+    while (node) {
+      if (className && node.className.split(/\s+/).includes(className)) return node;
+      node = node.parent;
+    }
+    return null;
+  });
   focus = vi.fn(() => {
     Object.assign(document, { activeElement: this });
   });
 }
 
-function fixture() {
+function fixture(completion?: ChatCompletionSource) {
   const body = new Control();
-  vi.stubGlobal('document', { activeElement: body, body });
+  vi.stubGlobal('document', {
+    activeElement: body,
+    body,
+    createElement: () => new Control(),
+  });
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
   const toggle = new Control();
   const form = new Control();
   form.hidden = true;
   const input = new Control();
+  const status = new Control();
   const canvas = new Control();
   const submit = new Control();
+  const suggest = new Control();
+  suggest.hidden = true;
   const send = vi.fn(() => true);
   const lifecycle = { beforeOpen: vi.fn(), closed: vi.fn(), canFocus: vi.fn(() => true) };
   const settings = new ChatSettings();
@@ -35,17 +74,20 @@ function fixture() {
     form as unknown as HTMLFormElement,
     new Control() as unknown as HTMLElement,
     input as unknown as HTMLInputElement,
-    new Control() as unknown as HTMLElement,
+    status as unknown as HTMLElement,
     new Control() as unknown as HTMLElement,
     submit as unknown as HTMLButtonElement,
     canvas as unknown as HTMLCanvasElement,
     send,
     lifecycle,
     settings,
+    completion ? (suggest as unknown as HTMLElement) : undefined,
+    completion,
   );
   chat.update({ available: true, pending: false, remainingMs: 0 });
   const type = (text: string) => {
     input.value = text;
+    input.selectionStart = text.length;
     input.dispatchEvent(new Event('input'));
   };
   const key = (code: string, properties = {}) => {
@@ -58,7 +100,20 @@ function fixture() {
     form.dispatchEvent(event);
     return event;
   };
-  return { chat, toggle, form, input, canvas, send, lifecycle, settings, type, key };
+  return {
+    chat,
+    toggle,
+    form,
+    input,
+    status,
+    suggest,
+    canvas,
+    send,
+    lifecycle,
+    settings,
+    type,
+    key,
+  };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -169,6 +224,79 @@ describe('chat interaction lifecycle', () => {
     chat.update({ available: false, pending: false, remainingMs: 0 });
     expect(lifecycle.closed).toHaveBeenCalledOnce();
     expect(lifecycle.closed).toHaveBeenCalledWith('unavailable');
+    chat.dispose();
+  });
+
+  it('cycles command and flag suggestions with Tab / Shift+Tab and refreshes on catalog arrival', () => {
+    let catalog: CommandHelpEntry[] | undefined;
+    const commandsMock = vi.fn(() => catalog);
+    const { chat, input, suggest, status, type, key } = fixture({
+      commands: commandsMock,
+      players: () => ['Маша', 'Гость 2'],
+    });
+    chat.open('/');
+    expect(commandsMock).toHaveBeenCalled();
+    expect(suggest.hidden).toBe(true);
+
+    catalog = [
+      {
+        name: 'time',
+        aliases: [],
+        category: 'Мир',
+        summary: 'Время',
+        usage: 'time',
+        args: [],
+        flags: [
+          { name: 'stop', help: 'Остановить' },
+          { name: 'start', help: 'Запустить' },
+        ],
+        conflicts: [['stop', 'start']],
+        examples: [],
+      },
+      {
+        name: 'speed',
+        aliases: [],
+        category: 'Игроки',
+        summary: 'Скорость',
+        usage: 'speed',
+        args: [{ name: '@игрок', optional: true, help: 'Кому', player: true }],
+        flags: [],
+        conflicts: [],
+        examples: [],
+      },
+    ];
+    chat.refreshSuggestions();
+    expect(suggest.hidden).toBe(false);
+    expect(suggest.children).toHaveLength(2);
+    expect(status.textContent).toContain('Tab');
+
+    type('/time --st');
+    expect(suggest.children).toHaveLength(2);
+    const tab1 = key('Tab');
+    expect(tab1.defaultPrevented).toBe(true);
+    expect(input.value).toBe('/time --stop ');
+    expect(suggest.children[0].attributes['aria-selected']).toBe('true');
+
+    key('Tab');
+    expect(input.value).toBe('/time --start ');
+    expect(suggest.children[1].attributes['aria-selected']).toBe('true');
+
+    key('Tab', { shiftKey: true });
+    expect(input.value).toBe('/time --stop ');
+
+    type('/speed @');
+    expect(suggest.children.map((option) => option.children[0].textContent)).toEqual([
+      '@Маша',
+      '@Гость 2',
+    ]);
+    const option = suggest.children[1].children[0];
+    const click = new Event('click', { bubbles: true });
+    Object.defineProperty(click, 'target', { value: option });
+    suggest.dispatchEvent(click);
+    expect(input.value).toBe('/speed @"Гость 2" ');
+
+    chat.close('escape');
+    expect(suggest.hidden).toBe(true);
     chat.dispose();
   });
 });

@@ -62,6 +62,12 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       send(text: string, requestId: number, worldEpoch = info.worldEpoch) {
         room.send('requestChat', { requestId, worldEpoch, text });
       },
+      async requestCommands() {
+        return await new Promise<unknown>((resolve) => {
+          room.onMessage('commands', (value) => resolve(value));
+          room.send('requestCommands');
+        });
+      },
     };
   }
   async function leaveAll() {
@@ -440,5 +446,40 @@ describe.skipIf(!process.env.SU_TEST_DATABASE_URL)('private item creation throug
       () => observer.room.state.players.get(restored.room.sessionId)?.chatText === 'Вещи остались!',
     );
     expect(observer.inventories).toEqual([]);
+  });
+
+  it('filters requestCommands by role and lets admins /give items to other accounts', async () => {
+    const guest = await join();
+    const ordinary = await join(await login('ordinary-catalog', false));
+    const admin = await join(await login('admin-catalog'));
+
+    const guestCatalog = (await guest.requestCommands()) as { commands: { name: string }[] };
+    expect(guestCatalog.commands.map((c) => c.name)).toEqual(['help']);
+    const ordinaryCatalog = (await ordinary.requestCommands()) as { commands: { name: string }[] };
+    expect(ordinaryCatalog.commands.map((c) => c.name)).toEqual(['help']);
+
+    const adminCatalog = (await admin.requestCommands()) as {
+      commands: { name: string; args: { choices?: string[] }[]; conflicts: string[][] }[];
+    };
+    expect(adminCatalog.commands.map((c) => c.name)).toContain('give');
+    const giveEntry = adminCatalog.commands.find((c) => c.name === 'give')!;
+    expect(giveEntry.args[1].choices).toContain('wooden-crate');
+    expect(adminCatalog.commands.find((c) => c.name === 'time')!.conflicts).toContainEqual([
+      'stop',
+      'start',
+    ]);
+
+    const guestName = app.room.state.players.get(guest.room.sessionId)!.name;
+    admin.send(`/give @"${guestName}" wooden-crate`, 1);
+    await until(() => admin.results.length === 1);
+    expect(admin.results[0]).toMatchObject({ ok: false, code: 'INVALID_INPUT' });
+
+    const ordinaryName = app.room.state.players.get(ordinary.room.sessionId)!.name;
+    admin.send(`/give @"${ordinaryName}" wooden-crate`, 2);
+    await until(
+      () => admin.results.length === 2 && ordinary.inventories.at(-1)?.slots[0]?.items.length === 1,
+    );
+    expect(admin.results[1].ok).toBe(true);
+    expect(admin.inventories.flatMap((i) => i.slots)).toEqual([]);
   });
 });

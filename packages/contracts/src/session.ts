@@ -10,7 +10,8 @@ import type { WorldPublicationInfo } from './static-placement.js';
 
 // v25 adds flag-based chat commands (`/help` sends a `commandHelp` effect) and `/speed`
 // (`PlayerSchema.speedPercent`) on top of v24 bus travel, LOD/HLOD and catalog versions.
-export const PROTOCOL_VERSION = 25;
+// v26 updates bus travel requests to explicit platform/direction selection.
+export const PROTOCOL_VERSION = 26;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;

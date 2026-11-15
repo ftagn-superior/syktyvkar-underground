@@ -20,7 +20,7 @@ import {
 } from '@colyseus/core';
 import {
   BUS_STOP_SERVER_RANGE,
-  busStopNear,
+  busPlatformById,
   busTripsFrom,
   parseBusTravelRequest,
   type BusNetwork,
@@ -996,8 +996,8 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
   }
 
   /**
-   * Быстрая поездка: игрок стоит у остановки `fromStopId`, и автобус с неё идёт до
-   * `toStopId`. Перемещение — тот же план подготовки области, что и возврат на старт,
+   * Быстрая поездка: игрок стоит у `fromPlatformId`, и выбранное направление
+   * маршрута идёт до `toPlatformId`. Перемещение — тот же план подготовки области, что и возврат на старт,
    * с общей перезарядкой; прибытие — на землю у платформы остановки назначения.
    */
   private busTravel(client: Client, request: unknown): void {
@@ -1012,25 +1012,37 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     let { code } = action;
     const network = this.busNetwork;
     const player = this.state.players.get(client.sessionId);
-    const origin = network?.stops.find((stop) => stop.id === parsed.fromStopId);
-    const target = network?.stops.find((stop) => stop.id === parsed.toStopId);
+    const origin = network ? busPlatformById(network, parsed.fromPlatformId) : undefined;
+    const target = network ? busPlatformById(network, parsed.toPlatformId) : undefined;
     let arrival: Vec3 | undefined;
     if (!code && !network) code = 'COMMAND_DISABLED';
     else if (!code && performance.now() - session.lastRespawn < RESPAWN_COOLDOWN_MS)
       code = 'RATE_LIMITED';
-    // Любая платформа этой остановки рядом: соседняя остановка ближе не мешает.
+    // Конкретная платформа посадки рядом: соседняя остановка или встречная сторона не мешают.
     else if (
       !code &&
       (!player ||
         !origin ||
-        !busStopNear({ ...network!, stops: [origin] }, player, BUS_STOP_SERVER_RANGE))
+        Math.hypot(origin.platform.position[0] - player.x, origin.platform.position[1] - player.z) >
+          BUS_STOP_SERVER_RANGE)
     )
       code = 'NOT_AT_BUS_STOP';
-    else if (!code && (!target || !busTripsFrom(network!, parsed.fromStopId).has(target.id)))
+    else if (
+      !code &&
+      (!target ||
+        !busTripsFrom(network!, parsed.fromPlatformId)
+          .get(target.stop.id)
+          ?.some(
+            (trip) =>
+              trip.routeId === parsed.routeId &&
+              trip.directionIndex === parsed.directionIndex &&
+              trip.toPlatformId === parsed.toPlatformId,
+          ))
+    )
       code = 'NO_BUS_ROUTE';
     if (!code) {
       arrival = this.world.findGroundSpawn(
-        [...target!.platforms, target!.position].map(([x, z]) => ({ x, z })),
+        [{ x: target!.platform.position[0], z: target!.platform.position[1] }],
         session.entityId,
       );
       if (!arrival) code = 'SPAWN_UNAVAILABLE';

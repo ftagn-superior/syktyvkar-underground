@@ -299,7 +299,8 @@ export function planBusStopPlacements(input: StopPlacementInput): StopPlacementR
 
   const rows: StopPlacementRow[] = [];
   for (const stop of network.stops)
-    stop.platforms.forEach((platform, index) => {
+    stop.platforms.forEach((platformObj, index) => {
+      const platform = platformObj.position;
       const entityId = stopEntityId(stop.id, index);
       const row: StopPlacementRow = {
         stopId: stop.id,
@@ -337,7 +338,9 @@ export function planBusStopPlacements(input: StopPlacementInput): StopPlacementR
         row.status = 'served';
         return;
       }
-      const legs = stop.routes.flatMap((ref) => routes.get(ref)?.legs ?? []);
+      const legs = stop.routes.flatMap(
+        (ref) => routes.get(ref)?.directions.flatMap((d) => d.legs) ?? [],
+      );
       const path = nearestOnPath(platform, legs);
       if (!path) throw new Error(`Stop ${stop.id} has no bus path`);
       const [tx, tz] = path.direction;

@@ -50,13 +50,13 @@ const stop = (id: string, platform: [number, number], source: 'osm' | 'interpola
   id,
   name: id,
   position: platform,
-  platforms: [platform],
+  platforms: [{ id: `${id}-p1`, position: platform, source }],
   routes: ['1'],
   source,
 });
 // Дорога 8 м вдоль X, автобус по оси на восток. Юг — +Z.
 const network: BusNetwork = {
-  formatVersion: 2,
+  formatVersion: 3,
   stops: [
     stop('curb', [0, 5.5]),
     stop('on-road', [40, 3]),
@@ -74,15 +74,20 @@ const network: BusNetwork = {
       from: 'a',
       to: 'b',
       circular: false,
-      twoWay: true,
-      sequence: ['curb'],
-      legs: [
-        [
-          [
-            [-100, 0],
-            [100, 0],
+      directions: [
+        {
+          towards: 'b',
+          circular: false,
+          sequence: [{ stopId: 'curb', platformId: 'curb-p1' }],
+          legs: [
+            [
+              [
+                [-100, 0],
+                [100, 0],
+              ],
+            ],
           ],
-        ],
+        },
       ],
     },
   ],

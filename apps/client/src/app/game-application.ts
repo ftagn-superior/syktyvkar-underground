@@ -734,7 +734,8 @@ export function startGame(): void {
       if (!response.ok) throw new Error(`Bus map: HTTP ${response.status}`);
       return (await response.json()) as BusMapBackground;
     },
-    travel: (from, to) => session.busTravel(from, to),
+    travel: (fromPlatformId, toPlatformId, routeId, directionIndex) =>
+      session.busTravel(fromPlatformId, toPlatformId, routeId, directionIndex),
     travelStatus: () => session.busTravelStatus(),
     opened: () => {
       firstPerson?.overview();
@@ -745,7 +746,7 @@ export function startGame(): void {
     closed: () => canvas.focus({ preventScroll: true }),
   });
   session.onBusTravelResult = (result) => busMap?.travelResult(result.ok);
-  const busStops = new BusStopSource(busNetwork, (stopId) => busMap?.open(stopId));
+  const busStops = new BusStopSource(busNetwork, (platformId) => busMap?.open(platformId));
   const pickups = new PickupSource(
     session,
     () => view,

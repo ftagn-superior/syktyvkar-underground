@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { BUS_ROUTES_IN_GAME } from '../packages/contracts/src/bus-network.js';
 import { normName, parseT11, type BusNetwork } from '../tools/world-build/src/bus-network.js';
 
 const network = JSON.parse(
@@ -11,45 +12,88 @@ const terrain = JSON.parse(
 
 describe('bus network', () => {
   const stops = new Map(network.stops.map((s) => [s.id, s]));
+  const platforms = new Map(
+    network.stops.flatMap((s) => s.platforms.map((p) => [p.id, { stop: s, platform: p }])),
+  );
   const { west, east, north, south } = terrain.worldBoundsXZ;
   const inWorld = ([x, z]: [number, number], m = 0) =>
     x >= west - m && x <= east + m && z >= north - m && z <= south + m;
 
-  it('has unique stop and route ids', () => {
+  it('has formatVersion 3 and unique stop, platform, and route ids', () => {
+    expect(network.formatVersion).toBe(3);
     expect(stops.size).toBe(network.stops.length);
+    const totalPlatforms = network.stops.reduce((n, s) => n + s.platforms.length, 0);
+    expect(platforms.size).toBe(totalPlatforms);
     expect(new Set(network.routes.map((r) => r.id)).size).toBe(network.routes.length);
   });
 
-  it('keeps every stop inside the world', () => {
-    for (const s of network.stops) expect(inWorld(s.position), s.id).toBe(true);
+  it('keeps every stop and platform inside the world', () => {
+    for (const s of network.stops) {
+      expect(inWorld(s.position), s.id).toBe(true);
+      expect(s.platforms.length, s.id).toBeGreaterThan(0);
+      for (const p of s.platforms) expect(inWorld(p.position), `${s.id}:${p.id}`).toBe(true);
+    }
   });
 
-  it('references only known stops and lists each route on its stops', () => {
+  it('references only known stops and platforms and lists each route on its stops', () => {
     for (const r of network.routes) {
-      const ids = r.sequence.filter((e): e is string => typeof e === 'string');
-      expect(ids.length, r.id).toBeGreaterThan(0);
-      for (const id of ids) {
-        expect(stops.has(id), `${r.id} → ${id}`).toBe(true);
-        expect(stops.get(id)!.routes, `${id} lists ${r.ref}`).toContain(r.ref);
+      expect(r.directions.length, r.id).toBeGreaterThan(0);
+      for (const dir of r.directions) {
+        const refs = dir.sequence.filter(
+          (e): e is { stopId: string; platformId: string } => 'stopId' in e,
+        );
+        expect(refs.length, `${r.id}:${dir.towards}`).toBeGreaterThan(0);
+        for (const ref of refs) {
+          expect(stops.has(ref.stopId), `${r.id} → ${ref.stopId}`).toBe(true);
+          expect(platforms.get(ref.platformId)?.stop.id, `${r.id} → ${ref.platformId}`).toBe(
+            ref.stopId,
+          );
+          expect(stops.get(ref.stopId)!.routes, `${ref.stopId} lists ${r.ref}`).toContain(r.ref);
+        }
       }
     }
   });
 
-  it('has one road leg between each pair of neighbouring stops, near the world', () => {
+  it('has one road leg between each pair of neighbouring stops per direction, near the world', () => {
     for (const r of network.routes) {
-      const ids = r.sequence.filter((e) => typeof e === 'string');
-      expect(r.legs.length, r.id).toBe(ids.length - 1);
-      for (const leg of r.legs)
-        for (const piece of leg) {
-          expect(piece.length, r.id).toBeGreaterThan(1);
-          for (const p of piece) expect(inWorld(p, 301), r.id).toBe(true);
-        }
+      for (const dir of r.directions) {
+        const refs = dir.sequence.filter((e) => 'stopId' in e);
+        expect(dir.legs.length, `${r.id}:${dir.towards}`).toBe(refs.length - 1);
+        for (const leg of dir.legs)
+          for (const piece of leg) {
+            expect(piece.length, r.id).toBeGreaterThan(1);
+            for (const p of piece) expect(inWorld(p, 301), r.id).toBe(true);
+          }
+      }
     }
   });
 
-  it('routes most legs along roads', () => {
-    const legs = network.routes.flatMap((r) => r.legs);
+  it('routes every in-game leg along roads and includes real OSM platforms at key hubs', () => {
+    const legs = network.routes.flatMap((r) => r.directions.flatMap((d) => d.legs));
     expect(legs.filter((l) => l.length > 0).length / legs.length).toBeGreaterThan(0.9);
+
+    const liveRefs = new Set<string>(BUS_ROUTES_IN_GAME);
+    const liveLegs = network.routes
+      .filter((r) => liveRefs.has(r.ref))
+      .flatMap((r) => r.directions.flatMap((d) => d.legs));
+    expect(liveLegs.every((l) => l.length > 0)).toBe(true);
+
+    expect(
+      stops
+        .get('sgu')
+        ?.platforms.map((p) => p.id)
+        .sort(),
+    ).toEqual(['osm-1391361123', 'osm-2165055372']);
+    const tsum = stops.get('tsentralnyy-univermag');
+    expect(tsum?.platforms.map((p) => p.id).sort()).toEqual(['osm-1316147446', 'osm-707556682']);
+    expect(tsum?.platforms.every((p) => p.source === 'osm')).toBe(true);
+    expect(
+      stops
+        .get('muzteatr')
+        ?.platforms.map((p) => p.id)
+        .sort(),
+    ).toEqual(['osm-6533224862', 'osm-707553413']);
+    expect(stops.has('shkola-35-oktyabrskiy')).toBe(true);
   });
 });
 

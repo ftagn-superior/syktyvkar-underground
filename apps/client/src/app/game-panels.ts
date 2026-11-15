@@ -8,6 +8,7 @@ type PanelName =
   | 'commands'
   | 'chat'
   | 'inventory'
+  | 'bus'
   | 'diagnostics';
 
 /** Opening a game panel cancels competing panels and their transient placement state. */

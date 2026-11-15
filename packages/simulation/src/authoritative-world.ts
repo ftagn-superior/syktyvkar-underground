@@ -134,6 +134,39 @@ export class AuthoritativeWorld {
     this.setInput(id, NEUTRAL_INPUT);
     return true;
   }
+  /**
+   * Безопасный центр капсулы на уровне улицы у точек X/Z, например у платформ остановки.
+   * Вертикальный луч проходит сквозь крыши, навесы и кроны; из всех поверхностей, где игрок
+   * помещается (точки и смещения до 3 м вокруг), берётся самая низкая — земля, а не крыша
+   * соседнего дома. Среди мест не выше неё на 0,5 м — ближайшее к первой точке.
+   */
+  findGroundSpawn(points: { x: number; z: number }[], excludeId?: string): Vec3 | undefined {
+    const { min, max } = this.world.definition.bounds;
+    const offsets: [number, number][] = [[0, 0]];
+    for (const radius of [1.5, 3])
+      for (let k = 0; k < 8; k++)
+        offsets.push([radius * Math.cos((k * Math.PI) / 4), radius * Math.sin((k * Math.PI) / 4)]);
+    const found: Vec3[] = [];
+    for (const point of points)
+      for (const [dx, dz] of offsets) {
+        const x = point.x + dx;
+        const z = point.z + dz;
+        if (x <= min.x || x >= max.x || z <= min.z || z >= max.z) continue;
+        let top = max.y;
+        for (let hits = 0; hits < 8; hits++) {
+          const hit = this.world.surfaceRay({ x, y: top, z }, { x, y: min.y, z }, excludeId);
+          if (!hit) break;
+          if (hit.normal.y >= 0.5) {
+            const center = this.world.spawnPosition(hit.point, excludeId);
+            if (this.world.checkPlayerSpawnPosition(center, excludeId).ok) found.push(center);
+          }
+          top = hit.point.y - 0.05;
+        }
+      }
+    if (!found.length) return;
+    const lowest = Math.min(...found.map((p) => p.y));
+    return found.find((p) => p.y <= lowest + 0.5);
+  }
   respawnPlayerAtPosition(id: string, center: Vec3): boolean {
     const character = this.world.characters.get(id);
     if (!character || !this.world.checkPlayerSpawnPosition(center, id).ok) return false;

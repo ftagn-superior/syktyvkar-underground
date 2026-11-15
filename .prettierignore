@@ -4,3 +4,6 @@ output
 pnpm-lock.yaml
 # Трассировка по снимку: одна трасса в строке, сохраняется из предпросмотра кольца
 content/worlds/ring-block/ring-trace.json
+# Автобусная сеть и подложка карты: генерируются `pnpm world:bus:network`, одна строка JSON
+content/worlds/ring-block/bus-network/network.json
+content/worlds/ring-block/bus-network/map.json

@@ -146,6 +146,7 @@ beforeAll(async () => {
     layoutHash: 'b'.repeat(64),
     worldEpoch: 'epoch',
     protocolVersion: PROTOCOL_VERSION,
+    catalogVersions: { reactions: 'test-reactions' },
     mapVersion: manifest.mapVersion,
     simulationConfigHash: manifest.simulationConfigHash,
     manifestUrl: '/worlds/test/manifest.json',

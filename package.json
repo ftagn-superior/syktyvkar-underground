@@ -23,11 +23,15 @@
     "world:ground:ring-verge": "node --import tsx tools/world-build/src/ring-verge.ts",
     "world:ground:streets": "node --import tsx tools/world-build/src/street-pass.ts",
     "world:boxes:expansion": "node --import tsx tools/world-build/src/expansion-boxes.ts",
+    "world:bus:network": "node --import tsx tools/world-build/src/bus-network.ts",
     "world:acceptance": "node --import tsx tests/streaming-fixture.ts",
     "dev": "pnpm world:build && node tools/dev.mjs",
-    "check": "tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",
+    "reactions:check": "node --import tsx tools/reactions/command.ts check",
+    "reactions:add": "node --import tsx tools/reactions/command.ts add",
+    "test:reactions": "vitest run tests/reaction-authoring.test.ts packages/contracts/src/reactions.test.ts apps/client/src/ui/reactions.test.ts apps/client/src/network/session-version.test.ts apps/client/src/presentation/reaction-sounds.test.ts apps/server/src/gameplay/player-activities.test.ts apps/server/src/reactions/release.test.ts",
+    "check": "pnpm reactions:check && tsc --noEmit && node tools/check-boundaries.mjs && node --import tsx tools/world-build/src/catalog-command.ts --sources",
     "test": "vitest run",
-    "build": "pnpm world:build && pnpm check && node tools/build.mjs",
+    "build": "pnpm world:build && pnpm check && node --import tsx tools/build.mjs",
     "start": "node dist/server/main.mjs",
     "load": "node --import tsx tools/load-test/src/index.ts",
     "test:large-map:l0": "pnpm build && node --import tsx tests/large-map-l0.ts",
@@ -115,6 +119,7 @@
     "prettier": "3.10.0",
     "@types/pg": "8.23.1",
     "jose": "6.2.17",
-    "openid-client": "6.8.9"
+    "openid-client": "6.8.9",
+    "saxes": "6.0.0"
   }
 }

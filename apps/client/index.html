@@ -460,7 +460,33 @@
             <span>Реакции</span
             ><small><span data-catalog-shown></span> из <span data-catalog-count></span></small>
           </h2>
+          <div class="reaction-search">
+            <label for="reaction-search">Поиск</label>
+            <div class="reaction-search-row">
+              <input
+                id="reaction-search"
+                class="ui-input"
+                type="search"
+                maxlength="120"
+                autocomplete="off"
+                placeholder="Название, ID или категория"
+                aria-describedby="reaction-keys"
+              />
+              <button
+                id="reaction-search-clear"
+                class="ui-btn"
+                type="button"
+                aria-label="Очистить поиск"
+                hidden
+              >
+                ×
+              </button>
+            </div>
+          </div>
           <div class="filters" role="group" aria-label="Категория реакций"></div>
+          <p id="reaction-keys" class="reaction-keys">
+            1–9 — первые результаты. Enter из поиска — к карточкам.
+          </p>
           <div class="catalog-scroll">
             <div class="catalog-recent" hidden>
               <span class="pop-sub">Недавние</span>
@@ -468,6 +494,9 @@
               <span class="pop-sub">Все</span>
             </div>
             <div class="rgrid reaction-choices" role="group" aria-label="Выбор реакции"></div>
+            <p id="reactions-empty" role="status" hidden>
+              Ничего не найдено. Измените поиск или категорию.
+            </p>
           </div>
           <p id="reactions-status" class="catalog-status" role="status"></p>
           <progress

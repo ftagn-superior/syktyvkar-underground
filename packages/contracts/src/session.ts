@@ -1,4 +1,5 @@
 import type { PlacementCatalogReference } from './placement-catalog.js';
+import type { ContentCatalogVersions } from './content-catalogs.js';
 import type { StaticPlacementEffect } from './static-placement.js';
 import type { StaticRemovalEffect } from './static-removal.js';
 import type { CommandHelpEffect } from './commands.js';
@@ -7,8 +8,9 @@ import type { ItemError } from './items.js';
 import type { Vec3 } from './simulation.js';
 import type { WorldPublicationInfo } from './static-placement.js';
 
-// Консольные команды с флагами: `/help` присылает эффект `commandHelp`.
-export const PROTOCOL_VERSION = 23;
+// v25 adds flag-based chat commands (`/help` sends a `commandHelp` effect) and `/speed`
+// (`PlayerSchema.speedPercent`) on top of v24 bus travel, LOD/HLOD and catalog versions.
+export const PROTOCOL_VERSION = 25;
 export const PATCH_RATE = 20;
 export const MAX_PLAYERS = 8;
 export const INTEREST_RADII = { enter: 500, leave: 800 } as const;
@@ -18,6 +20,7 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
+  catalogVersions: ContentCatalogVersions;
   placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;
   layoutRevision: number;
@@ -47,7 +50,9 @@ export type ErrorCode =
   | 'RATE_LIMITED'
   | 'STALE_WORLD'
   | 'ALREADY_PROCESSED'
-  | 'PLAN_REPLACED';
+  | 'PLAN_REPLACED'
+  | 'NOT_AT_BUS_STOP'
+  | 'NO_BUS_ROUTE';
 export interface ActionResult {
   requestId: number;
   ok: boolean;

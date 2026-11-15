@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { WorldInfo } from '@su/contracts';
 
-// Model already-open v16–v22 bundles, including both incompatible v20 releases.
-// Command protocol v23 stops legacy tabs before resource loads or reservation.
+// v25 adds chat commands and /speed on top of v24 bus travel, LOD/HLOD and catalogs.
+// Earlier releases stop before resource loads or reservation.
 const { reserve, legacy } = vi.hoisted(() => ({ reserve: vi.fn(), legacy: { protocol: 16 } }));
 vi.mock('@su/contracts', async (original) => ({
   ...(await original<typeof import('@su/contracts')>()),
@@ -22,8 +22,9 @@ import { GameSession } from './session';
 
 const current: WorldInfo = {
   roomId: 'new-room',
-  worldEpoch: 'commands-23',
-  protocolVersion: 23,
+  worldEpoch: 'commands-speed-25',
+  protocolVersion: 25,
+  catalogVersions: { reactions: 'test-reactions' },
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 2,
   layoutHash: 'b'.repeat(64),
@@ -39,7 +40,7 @@ let onNotice: Mock<(message: string) => void>;
 let fetchWorld: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('@su/contracts')>('@su/contracts');
-  expect(actual.PROTOCOL_VERSION).toBe(23);
+  expect(actual.PROTOCOL_VERSION).toBe(25);
   reserve.mockClear();
   vi.stubGlobal('location', new URL('http://localhost/'));
   vi.stubGlobal('document', { hidden: false });
@@ -60,8 +61,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe.each([16, 17, 18, 19, 20, 21, 22])(
-  'legacy v%i tab discovering command protocol v23',
+describe.each([16, 17, 18, 19, 20, 21, 22, 23, 24])(
+  'legacy v%i tab discovering command protocol v25',
   (version) => {
     beforeEach(() => {
       legacy.protocol = version;
@@ -93,3 +94,35 @@ describe.each([16, 17, 18, 19, 20, 21, 22])(
     });
   },
 );
+
+describe('catalog changes without a map change', () => {
+  beforeEach(() => {
+    legacy.protocol = 24;
+  });
+  it.each([
+    undefined,
+    {},
+    { reactions: 'previous-release' },
+    { reactions: 'test-reactions', animations: 'other-release' },
+  ])(
+    'requires reload for incompatible catalogs %j before resource download',
+    async (catalogVersions) => {
+      fetchWorld.mockImplementation(async () => Response.json({ ...current, catalogVersions }));
+      await expect(instance.load()).rejects.toThrow('VERSION_MISMATCH');
+      expect(instance.reloadRequired).toBe(true);
+      expect(fetchWorld).toHaveBeenCalledTimes(1);
+      expect(reserve).not.toHaveBeenCalled();
+    },
+  );
+  it('requires reload during recovery when only the catalog changed', async () => {
+    instance.info = { ...current, worldEpoch: 'previous-process' };
+    instance.state = 'reconnecting';
+    fetchWorld.mockImplementation(async () =>
+      Response.json({ ...current, catalogVersions: { reactions: 'new-release' } }),
+    );
+    (instance as unknown as { beginRecoveryCheck(): void }).beginRecoveryCheck();
+    await vi.waitFor(() => expect(instance.state).toBe('ready'));
+    expect(instance.reloadRequired).toBe(true);
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Перезагрузите страницу'));
+  });
+});

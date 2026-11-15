@@ -71,6 +71,8 @@ pnpm build
 
 ## Подсистемы
 
+Автобусы: правила поездок, пересадки, разбор запроса и данные игры — `packages/contracts/src/bus-network.test.ts`; сеть и разбор «Транспорт 11» — `tests/bus-network.test.ts`; точка прибытия на уровне улицы — `packages/simulation/src/ground-spawn.test.ts`. Сквозная поездка на сервере `ring-block` (остановка, отказы `NOT_AT_BUS_STOP`/`NO_BUS_ROUTE`/`RATE_LIMITED`, неверный запрос) — `tests/integration/bus-travel.test.ts`, требует `SU_TEST_DATABASE_URL` с правом `CREATE SCHEMA` и собранный `dist/worlds/ring-block`.
+
 Файловые патчи размещений проверяются в `packages/contracts/src/world-layout-patch.test.ts` (офлайн diff, формат и конфликты) и `tests/integration/static-layout.test.ts` (настоящие CLI export/patch/check/apply, сохранность предметов, аудит, откат SQL-сбоя и блокировка работающего мира). Второй набор требует `SU_TEST_DATABASE_URL`.
 
 | Проверка                                                                                                        | Команда                                                                                   |
@@ -87,7 +89,7 @@ pnpm build
 | GLB, независимая прозрачность, свободный поворот клавишами и мышью, движение с произвольных ракурсов и коллизии | `pnpm test:buildings:browser`                                                             |
 | Повреждённый кеш и неверные ресурсы                                                                             | `pnpm test:assets:browser`                                                                |
 | Скины, походка, возврат и переподключение                                                                       | `pnpm test:avatars:browser`                                                               |
-| Реакции, выбираемые анимации, чат                                                                               | `pnpm test:reactions:browser`, `pnpm test:animations:browser`, `pnpm test:chat:browser`   |
+| Реакции: авторинг, правила и UI; выбираемые анимации, чат                                                       | `pnpm test:reactions`, затем `pnpm test:reactions:browser` с тестовым `SU_TEST_DATABASE_URL` после сборки — [инструкция](reactions.md); `pnpm test:animations:browser`, `pnpm test:chat:browser` |
 | Общие часы `/time`, темы, список игроков и совместимость панелей                                                | `pnpm test:world-ui:browser`                                                              |
 | Перезапуск и восстановление                                                                                     | `pnpm test:restart:browser`                                                               |
 | Город, подготовка, камера 30× и выход в просмотр                                                                | `pnpm test:dynamic-map:browser`                                                           |

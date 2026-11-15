@@ -59,13 +59,24 @@ const previewCenter =
     ? { x: 0, y: 0, z: 0 }
     : { ...header.spawnPoints[0], y: 0 };
 const worldPath = '/worlds/profile/';
+const protocolVersion = Number(process.env.SU_PROFILE_PROTOCOL_VERSION ?? PROTOCOL_VERSION);
 const info: WorldInfo = {
   assetReleaseVersion: 'a'.repeat(64),
   layoutRevision: 1,
   layoutHash: 'b'.repeat(64),
   roomId: 'loading-profile',
   worldEpoch: 'loading-profile',
-  protocolVersion: Number(process.env.SU_PROFILE_PROTOCOL_VERSION ?? PROTOCOL_VERSION),
+  protocolVersion,
+  // Only explicit legacy measurement fixtures can omit the v24 catalog manifest.
+  // A current bundle with a missing release must fail rather than bypass its gate.
+  catalogVersions:
+    protocolVersion < 24
+      ? {}
+      : {
+          reactions: JSON.parse(
+            await readFile(join(clientDirectory, 'reaction-release.json'), 'utf8'),
+          ).version,
+        },
   mapVersion: manifest.mapVersion,
   simulationConfigHash: manifest.simulationConfigHash,
   manifestUrl: `${worldPath}manifest.json`,

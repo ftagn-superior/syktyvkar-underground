@@ -6,12 +6,21 @@ import { WorldHud } from './world-hud';
 import { HelpMenu } from '../ui/help';
 import { InteractionSystem } from '../interaction/prompt';
 import { PickupSource } from '../interaction/pickups';
+import { BusStopSource } from '../interaction/bus-stops';
+import { BusMapPanel, type BusMapBackground } from '../ui/bus-map';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { KeyboardInput, isTextInput } from '../input/keyboard';
 import { GamepadInput, type GamepadButtons } from '../input/gamepad';
 import { GamepadNavigation } from '../ui/gamepad-navigation';
 import { FirstPersonInput } from '../input/first-person';
-import { dayClockHour, MAX_PLAYERS, NEUTRAL_INPUT, type MoveInput } from '@su/contracts';
+import {
+  validateBusNetwork,
+  dayClockHour,
+  MAX_PLAYERS,
+  NEUTRAL_INPUT,
+  type BusNetwork,
+  type MoveInput,
+} from '@su/contracts';
 import { firstPersonMovement, gamepadCameraDelta } from '../rendering/camera-controller';
 import { CameraPointerInput } from '../input/camera-pointer';
 import { GameInputMode } from '../input/mode';
@@ -111,6 +120,27 @@ export function startGame(): void {
   let placementOwner: 'inventory' | 'static' | 'removal' | undefined;
   let help: HelpMenu | undefined;
   let interactions: InteractionSystem | undefined;
+  let busMap: BusMapPanel | undefined;
+  let busNetworkCache: { worldId: string; network?: BusNetwork } | undefined;
+  /**
+   * Сеть автобусов текущего мира с сервера (`/api/bus-network`), один запрос на мир.
+   * Пока ответа нет или в мире нет автобусов, подсказок у остановок нет.
+   */
+  function busNetwork(): BusNetwork | undefined {
+    const worldId = loaded ? session.definition?.worldId : undefined;
+    if (!worldId) return;
+    if (busNetworkCache?.worldId !== worldId) {
+      const entry: { worldId: string; network?: BusNetwork } = { worldId };
+      busNetworkCache = entry;
+      void fetch('/api/bus-network')
+        .then((response) => (response.ok ? response.json() : undefined))
+        .then((value) => {
+          if (value !== undefined) entry.network = validateBusNetwork(value);
+        })
+        .catch(() => undefined);
+    }
+    return busNetworkCache.network;
+  }
   const worldHud = new WorldHud(
     element,
     () => panels.closeExcept('players', 'chat'),
@@ -154,6 +184,7 @@ export function startGame(): void {
     commands: () => commandHelp?.close(false),
     chat: () => chat?.close(false),
     inventory: () => inventory?.close(),
+    bus: () => busMap?.close(),
     diagnostics: () => {
       diagnostics.hidden = true;
       diagnosticsToggle.setAttribute('aria-expanded', 'false');
@@ -230,6 +261,7 @@ export function startGame(): void {
     touch?.setEnabled(canTouch());
   }
   function renderGamePanels(): void {
+    if (session.state !== 'playing' || graphicsLost) busMap?.close();
     const available = overviewPanelsAvailable();
     const reaction = session.reactionStatus();
     const animation = session.animationStatus();
@@ -605,6 +637,29 @@ export function startGame(): void {
   help.onGamepadContinue = () => {
     if (gamepadBaseReady()) gamepadResumeRequired = false;
   };
+  busMap = new BusMapPanel({
+    network: busNetwork,
+    bounds: () => {
+      const { min, max } = session.definition.bounds;
+      return { minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z };
+    },
+    loadBackground: async () => {
+      const response = await fetch('/api/bus-map');
+      if (!response.ok) throw new Error(`Bus map: HTTP ${response.status}`);
+      return (await response.json()) as BusMapBackground;
+    },
+    travel: (from, to) => session.busTravel(from, to),
+    travelStatus: () => session.busTravelStatus(),
+    opened: () => {
+      firstPerson?.overview();
+      panels.closeExcept('bus');
+      help?.close(false);
+      resetGameInput();
+    },
+    closed: () => canvas.focus({ preventScroll: true }),
+  });
+  session.onBusTravelResult = (result) => busMap?.travelResult(result.ok);
+  const busStops = new BusStopSource(busNetwork, (stopId) => busMap?.open(stopId));
   const pickups = new PickupSource(
     session,
     () => view,
@@ -617,13 +672,22 @@ export function startGame(): void {
       const self = room?.state.players.get(room.sessionId);
       return self ? { x: self.x, y: self.y, z: self.z } : undefined;
     },
-    candidates: () => pickups.candidates(),
+    // Подбор — только для вошедших игроков; остановки доступны и гостям.
+    candidates: () => {
+      const room = session.room;
+      const self = room?.state.players.get(room.sessionId);
+      const player = self ? { x: self.x, y: self.y, z: self.z } : undefined;
+      const stops = busStops.candidates(player);
+      return inventory?.canCollect ? [...pickups.candidates(), ...stops] : stops;
+    },
     project: (anchor, out) => (view ? view.project(anchor, out) : (out.visible = false)),
     enabled: () =>
       loaded &&
       !graphicsLost &&
-      (!placementOwner || placementOwner === 'inventory') &&
-      !!inventory?.canCollect,
+      !busMap?.visible &&
+      session.state === 'playing' &&
+      // Во время размещения из рюкзака подсказки скрыты, как и прежде.
+      !placementOwner,
     // Touch players use the contextual prompt; hardware keys belong to desktop input.
     keys: () => inputMode.value === 'desktop',
   });
@@ -743,7 +807,7 @@ export function startGame(): void {
         if (axis === 'y') staticPlacement?.rotate(direction);
       } else if (placementOwner !== 'removal') inventory?.rotatePlacement(axis, direction);
     },
-    () => staticPlacement?.browsing ?? false,
+    () => (staticPlacement?.browsing ?? false) || !!busMap?.visible,
   );
   cameraPointer = new CameraPointerInput(
     canvas,
@@ -1206,6 +1270,7 @@ export function startGame(): void {
       commandHelp?.dispose();
       chat?.dispose();
       inventory?.dispose();
+      busMap?.dispose();
       menuSounds.dispose();
       audioSettings.dispose();
       audioInputs.abort();

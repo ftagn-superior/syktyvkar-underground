@@ -1,0 +1,418 @@
+/*
+ * Карта автобусов: модальная панель поверх мира. Цвета маршрутов — свои токены
+ * (без «брусники»: красный только у главного действия), остальное — общие токены темы.
+ */
+:root {
+  --bus-l0: #2e6fa8;
+  --bus-l1: #2f7d55;
+  --bus-l2: #7b4ea3;
+  --bus-l3: #138a8f;
+  --bus-l4: #9a5230;
+  --bus-l5: #c95c9a;
+  --bus-l6: #66721f;
+  --bus-l7: #33467f;
+  --bus-l8: #c27a14;
+  --bus-l9: #5f6f7a;
+  --bus-ground: #ebe3d1;
+  --bus-bld: #d6cab1;
+  --bus-bld-ln: #c2b497;
+  --bus-road: #fbf7ee;
+  --bus-road-ln: #cdbf9f;
+}
+:root[data-ui-theme='night'] {
+  --bus-l0: #6aa8e6;
+  --bus-l1: #52bd88;
+  --bus-l2: #b38de2;
+  --bus-l3: #3cc4c4;
+  --bus-l4: #d8946a;
+  --bus-l5: #ee86b8;
+  --bus-l6: #b1c058;
+  --bus-l7: #93a6ec;
+  --bus-l8: #f0b44a;
+  --bus-l9: #a9b6c2;
+  --bus-ground: #1b2444;
+  --bus-bld: #2a355e;
+  --bus-bld-ln: #34407a;
+  --bus-road: #3d4975;
+  --bus-road-ln: #29335a;
+}
+
+.bus-map-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: max(12px, 2vh) max(12px, 2vw);
+  background: color-mix(in srgb, var(--hard) 55%, transparent);
+  box-sizing: border-box;
+  font-size: var(--hud-size);
+}
+.bus-map-backdrop[hidden] {
+  display: none;
+}
+.bus-map {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  height: min(780px, 94dvh);
+  overflow: hidden;
+  animation: ui-pop 0.3s var(--spring) both;
+}
+.bus-map-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.7em 0.9em 0.7em 0.8em;
+  border-bottom: 2px solid var(--ln);
+}
+.bus-map-sign {
+  display: grid;
+  place-items: center;
+  width: 2.7em;
+  height: 2.7em;
+  flex: none;
+  border: 2px solid var(--ln);
+  border-radius: 0.7em;
+  background: var(--pri);
+  color: var(--pri-ink);
+  box-shadow: 0 0.18em 0 var(--hard);
+}
+.bus-map-sign svg {
+  width: 1.6em;
+  height: 1.6em;
+}
+.bus-map-head h2 {
+  margin: 0;
+  font-size: 1.55em;
+  line-height: 1.05;
+}
+.bus-map-head small {
+  display: block;
+  margin-top: 0.15em;
+  color: var(--mut);
+  font-weight: 500;
+  font-size: 0.88em;
+}
+.bus-map-close {
+  margin-left: auto;
+  flex: none;
+}
+.bus-map-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22em;
+}
+.bus-map-view {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bus-ground);
+  border-right: 2px solid var(--ln);
+}
+.bus-map-view > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bus-map-view > svg.drag {
+  cursor: grabbing;
+}
+.bus-map-zoom {
+  position: absolute;
+  right: 0.8em;
+  bottom: 0.8em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+.bus-map-zoom .ui-btn {
+  font-weight: 800;
+  font-size: 1.1em;
+}
+.bus-map-side {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0.9em 1em 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9em;
+}
+
+/* слои карты */
+.bus-map-bld {
+  fill: var(--bus-bld);
+  stroke: var(--bus-bld-ln);
+  stroke-width: 0.8;
+}
+.bus-map-road-case,
+.bus-map-road {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bus-map-road-case {
+  stroke: var(--bus-road-ln);
+}
+.bus-map-road {
+  stroke: var(--bus-road);
+}
+.bus-map-outside {
+  fill: var(--p2);
+  opacity: 0.55;
+}
+.bus-map-edge {
+  fill: none;
+  stroke: var(--ln);
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+}
+.bus-map-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.bus-map-line.on {
+  opacity: 1;
+}
+.all .bus-map-line:not(.on) {
+  opacity: 0.14;
+}
+.bus-map-stop {
+  cursor: pointer;
+}
+.bus-map-stop .hit {
+  fill: transparent;
+}
+.bus-map-stop .dot {
+  fill: var(--p);
+  stroke: var(--ln);
+  transition: opacity 0.2s;
+}
+.bus-map-stop text {
+  font-weight: 700;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--p);
+  stroke-linejoin: round;
+  transition: opacity 0.2s;
+}
+.bus-map-stop.far .dot,
+.bus-map-stop.far text {
+  opacity: 0.35;
+}
+.bus-map-stop.approx .dot {
+  stroke: var(--amber);
+}
+.bus-map-stop.target .dot {
+  fill: var(--amber);
+  stroke: var(--ln);
+}
+.bus-map-stop.here .dot {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+.bus-map-stop:focus,
+.bus-map-stop:focus-visible {
+  outline: none;
+}
+.bus-map-stop:focus-visible .dot {
+  stroke: var(--amber);
+}
+.bus-map-ring {
+  fill: none;
+  stroke: var(--amber);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bus-map-ring {
+    animation: bus-pulse 1.6s ease-out infinite;
+  }
+}
+@keyframes bus-pulse {
+  from {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* боковая колонка */
+.bus-eyebrow {
+  font-size: 0.72em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+.bus-here h3 {
+  margin: 0.1em 0 0;
+  font-size: 1.5em;
+  line-height: 1.1;
+}
+.bus-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+.bus-chips[hidden] {
+  display: none;
+}
+.bus-chip {
+  min-width: 2.3em;
+  padding: 0.4em 0.45em;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95em;
+  line-height: 1;
+  color: #fff;
+  background: var(--c);
+  text-align: center;
+}
+.ui-btn.bus-chip[aria-pressed='true'] {
+  background: var(--c);
+  color: #fff;
+  outline: 3px solid var(--amber);
+  outline-offset: 1px;
+}
+.bus-chip.sm {
+  display: inline-block;
+  min-width: 2.1em;
+  padding: 0.28em 0.35em;
+  font-size: 0.8em;
+  border: 1.5px solid var(--ln);
+  border-radius: 0.4em;
+}
+.bus-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65em;
+  padding: 0.8em;
+  border: 2px solid var(--ln);
+  border-radius: 0.8em;
+}
+.bus-card h3 {
+  margin: 0;
+  font-size: 1.15em;
+  line-height: 1.2;
+}
+.bus-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65em;
+}
+.bus-opt p {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.9em;
+  line-height: 1.35;
+}
+.bus-mut {
+  color: var(--mut);
+  font-weight: 500;
+}
+.bus-flag {
+  margin-top: 0.2em;
+  font-size: 0.8em;
+  color: var(--mut);
+}
+.bus-go {
+  padding: 0.75em 2.2em 0.75em 1em;
+  font-size: 1.05em;
+}
+.bus-dest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  margin: 0.3em 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bus-dest button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 0.5em;
+  border: 0;
+  border-radius: 0.5em;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.93em;
+  text-align: left;
+  cursor: pointer;
+}
+.bus-dest button:hover,
+.bus-dest button:focus-visible {
+  background: var(--p2);
+}
+.bus-dest .bus-chips {
+  margin-left: auto;
+  flex-wrap: nowrap;
+  gap: 0.2em;
+}
+.bus-more {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5em;
+  font-size: 0.88em;
+  font-weight: 700;
+}
+.bus-more > span:last-child {
+  transition: transform 0.3s var(--spring);
+}
+.bus-more[aria-expanded='true'] > span:last-child {
+  transform: rotate(90deg);
+}
+.bus-note {
+  margin: 0;
+  font-size: 0.83em;
+  line-height: 1.45;
+  color: var(--mut);
+  font-weight: 500;
+}
+.bus-note b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.bus-credit {
+  font-size: 0.75em;
+}
+
+@media (max-width: 760px) {
+  .bus-map {
+    height: 96dvh;
+  }
+  .bus-map-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  .bus-map-view {
+    border-right: 0;
+    border-bottom: 2px solid var(--ln);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bus-map,
+  .bus-map-line,
+  .bus-map-ring {
+    animation: none;
+    transition: none;
+  }
+}

@@ -909,7 +909,20 @@ export function startGame(): void {
     element('chat-suggest'),
   );
   session.onCommandHelp = (help, requestId) => {
-    if (!chatReturn.acceptCommand(requestId, session.room) || !firstPersonEligible()) return;
+    const room = session.room;
+    // Ответ со справкой можно читать и во время ожидания сети: управление персонажем ему не нужно.
+    if (
+      !chatReturn.acceptCommand(requestId, room) ||
+      !loaded ||
+      graphicsLost ||
+      !pageActive ||
+      document.hidden ||
+      inputMode.value !== 'desktop' ||
+      placementOwner ||
+      !['playing', 'waiting'].includes(session.state) ||
+      !room?.state.players.has(room.sessionId)
+    )
+      return;
     commandHelp?.show(help);
   };
   const menuSounds = new MenuSounds(

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 5,
+  "formatVersion": 6,
   "worldId": "streaming-lab",
   "bounds": {
     "min": {
@@ -345,5 +345,6 @@
         "w": 1
       }
     }
-  ]
+  ],
+  "graphicsPolicy": "two-level"
 }

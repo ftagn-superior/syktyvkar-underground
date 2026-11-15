@@ -7,6 +7,7 @@ import { buildWorld } from '../tools/world-build/src/index.js';
 import { createAccountFixture } from './helpers/account-fixture.js';
 import { createGameServer } from './helpers/game-server.js';
 import { launchTestBrowser } from './helpers/browser.js';
+import { waitForCamera } from './helpers/camera.js';
 
 if (!process.env.SU_TEST_DATABASE_URL)
   throw new Error('Set SU_TEST_DATABASE_URL to a test database.');
@@ -244,7 +245,7 @@ try {
     'vertical movement does not rotate',
   );
   await fingers.move(2, 200, 450); // capture retains ownership across the midpoint
-  await page.waitForTimeout(400);
+  await waitForCamera(page);
   const afterTurn = await rendering(page);
   assert.ok(Math.abs(angleDelta(afterTurn.camera.azimuth, beforeTurn.camera.azimuth) - 0.5) < 0.01);
   const input = (await controls(page)).input;

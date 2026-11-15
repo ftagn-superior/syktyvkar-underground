@@ -1,3 +1,11 @@
+import {
+  VisualGroupBuilder,
+  visualTemplate,
+  type VisualSource,
+  type VisualTemplate,
+} from '@su/visual-build';
+import { silhouette } from './visual-source.js';
+import { mergeParts } from './merge.js';
 import { copyFile, readFile, rm, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, sep } from 'node:path';
@@ -8,6 +16,7 @@ import {
   BUS_NETWORK_FILE,
   validateBusNetwork,
   WORLD_FORMAT_VERSION,
+  GRAPHICS_POLICY_VERSION,
   type WorldManifest,
   validateWorld,
   validateWorldCell,
@@ -101,7 +110,12 @@ function sourceFile(directory: string, path: unknown): string {
   return absolute;
 }
 
-async function compileAsset(assetId: string, descriptorPath: string, groundRecipe?: GroundRecipe) {
+async function compileAsset(
+  assetId: string,
+  descriptorPath: string,
+  groundRecipe?: GroundRecipe,
+  visuals?: Map<string, VisualTemplate>,
+) {
   const descriptor = await readJson(descriptorPath);
   if (descriptor.formatVersion !== 1 || (!groundRecipe && descriptor.assetId !== assetId))
     throw new Error(`Invalid asset descriptor: ${assetId}`);
@@ -119,7 +133,20 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
     : undefined;
   if (generator) {
     const recipe = groundRecipe ?? (await readJson(sourceFile(directory, descriptor.source.file)));
-    const generated = generator(assetId, recipe);
+    const raw = generator(assetId, { ...recipe, merge: false });
+    const generated = { ...raw, parts: recipe.merge ? mergeParts(raw.parts) : raw.parts };
+    if (visuals) {
+      visuals.set(
+        assetId,
+        silhouette(
+          assetId,
+          kind,
+          { ...recipe, merge: false },
+          raw.parts,
+          'lights' in raw ? (raw.lights as StaticLightSource[]) : [],
+        ),
+      );
+    }
     physics = generated.physics;
     if ('lights' in generated) lights = generated.lights as StaticLightSource[] | undefined;
     glow = generated.parts.some((part) => part.glow);
@@ -141,6 +168,7 @@ async function compileAsset(assetId: string, descriptorPath: string, groundRecip
       };
     } else model = encodeStaticGlb(generated.parts);
   } else if (descriptor.source?.kind === 'glb') {
+    if (visuals) throw new Error(`Imported GLB requires an explicit HLOD silhouette: ${assetId}`);
     model = await readFile(sourceFile(directory, descriptor.source.file));
     physics = validateBuildingPhysicsAsset(
       await readJson(sourceFile(directory, descriptor.source.collisionFile)),
@@ -178,6 +206,7 @@ async function compileBytes(
 }
 
 export interface BuildWorldOptions {
+  graphicsPolicy?: WorldSource['graphicsPolicy'];
   /** Explicit historical flat build or separately authored terrain candidate. */
   terrainRelease?: false;
   /** Opt in only for a new authored transport release. */
@@ -217,6 +246,9 @@ export async function buildWorld(
     throw new Error(
       `World source must use formatVersion ${WORLD_FORMAT_VERSION}, cells, itemCatalog and assetCatalog`,
     );
+  const buildGraphics = (options.graphicsPolicy ?? authored.graphicsPolicy) === 'two-level';
+  if (authored.worldId === 'ring-block' && !buildGraphics)
+    throw new Error('ring-block requires full graphics coverage');
   const sourceDirectory = dirname(resolve(source));
   let canonicalTerrain: Awaited<ReturnType<typeof readTerrainReleaseSource>> | undefined;
   if (authored.terrainRelease !== undefined && options.terrainRelease !== false) {
@@ -325,12 +357,18 @@ export async function buildWorld(
     if (!Object.hasOwn(modelSources.models, rule.assetId))
       throw new Error(`Unknown terrain support asset: ${rule.assetId}`);
   }
+  const visualTemplates = new Map<string, VisualTemplate>();
   const buildings: WorldDefinition['buildings'] = [];
   const fixedInstanceIds: string[] = [...(terrain?.fixed ?? [])];
   const compiled = new Map<string, Awaited<ReturnType<typeof compileAsset>>>();
   let privateTerrain: TerrainPrivateData | undefined = terrain?.privateData;
-  for (const [id, asset] of terrain?.assets ?? [])
+  for (const [id, asset] of terrain?.assets ?? []) {
     compiled.set(id, await compileBytes(id, encodeStaticGlb(asset.parts), asset.physics));
+    visualTemplates.set(
+      id,
+      visualTemplate(id.startsWith('terrain-') ? 'ground' : 'support', asset.parts),
+    );
+  }
   for (const instance of [...merged.buildings, ...(terrain?.buildings ?? [])]) {
     if (terrain?.assets.has(instance.assetId)) {
       buildings.push(instance);
@@ -346,7 +384,15 @@ export async function buildWorld(
           : instance,
       );
       if (!compiled.has(instance.assetId))
-        compiled.set(instance.assetId, await compileAsset(instance.assetId, descriptorPath));
+        compiled.set(
+          instance.assetId,
+          await compileAsset(
+            instance.assetId,
+            descriptorPath,
+            undefined,
+            buildGraphics ? visualTemplates : undefined,
+          ),
+        );
       continue;
     }
     // Ground alone is partitioned; all city building identities and source refs stay intact.
@@ -437,7 +483,7 @@ export async function buildWorld(
           merge: recipe.merge === true,
           worldBounds: base.bounds,
         });
-        for (const { suffix, asset } of tiles) {
+        for (const { suffix, asset, visual } of tiles) {
           const id = assetId + suffix;
           const entityId = `${instance.entityId}-${cellId}${suffix}`;
           if (compiled.has(id) || Object.hasOwn(modelSources.models, id))
@@ -451,6 +497,7 @@ export async function buildWorld(
           });
           fixedInstanceIds.push(entityId);
           compiled.set(id, asset);
+          visualTemplates.set(id, visual);
           runtimeAssetIds[instance.assetId].push(id);
         }
       }
@@ -472,7 +519,15 @@ export async function buildWorld(
       };
       fixedInstanceIds.push(`${instance.entityId}-${cellId}`);
       buildings.push({ ...instance, entityId: `${instance.entityId}-${cellId}`, assetId });
-      compiled.set(assetId, await compileAsset(assetId, descriptorPath, tile));
+      compiled.set(
+        assetId,
+        await compileAsset(
+          assetId,
+          descriptorPath,
+          tile,
+          buildGraphics ? visualTemplates : undefined,
+        ),
+      );
       if (!runtimeAssetIds[instance.assetId].includes(assetId))
         runtimeAssetIds[instance.assetId].push(assetId);
     }
@@ -491,7 +546,11 @@ export async function buildWorld(
   for (const [assetId, { path, descriptor }] of Object.entries(modelSources.models)) {
     if (descriptor.source.kind !== 'ground') {
       runtimeAssetIds[assetId] = [assetId];
-      if (!compiled.has(assetId)) compiled.set(assetId, await compileAsset(assetId, path));
+      if (!compiled.has(assetId))
+        compiled.set(
+          assetId,
+          await compileAsset(assetId, path, undefined, buildGraphics ? visualTemplates : undefined),
+        );
     }
   }
   for (const rule of supportRules ?? [])
@@ -503,7 +562,19 @@ export async function buildWorld(
     buildings,
     buildingAssets: Object.fromEntries([...compiled].map(([id, asset]) => [id, asset.physics])),
   });
+  const visualSource: VisualSource = {
+    formatVersion: 1,
+    policyVersion: GRAPHICS_POLICY_VERSION,
+    worldId: world.worldId,
+    templates: Object.fromEntries(visualTemplates),
+  };
+  const visualBytes = buildGraphics ? jsonBytes(visualSource) : undefined,
+    visualHash = visualBytes ? hash(visualBytes) : undefined;
+  const graphics = buildGraphics
+    ? new VisualGroupBuilder().build(world, grid, visualSource, visualHash)
+    : undefined;
   const publication = createWorldPublication(world, grid, Object.fromEntries(compiled), {
+    graphics,
     physicsPacks: options.physicsPacks,
   });
   const terrainBytes = privateTerrain ? jsonBytes(privateTerrain) : undefined;
@@ -513,6 +584,9 @@ export async function buildWorld(
     publication.manifest,
     fixedInstanceIds,
     terrainHash ? { file: `private/terrain.${terrainHash}.json`, sha256: terrainHash } : undefined,
+    visualHash
+      ? { file: `private/visual-source.${visualHash}.json`, sha256: visualHash }
+      : undefined,
   );
   if (canonicalTerrain)
     assertTerrainReleaseIdentity(
@@ -555,6 +629,7 @@ export async function buildWorld(
     fixedInstanceIds,
     outputDirectory,
     terrainBytes,
+    visualBytes,
   );
   await writeBusFiles(sourceDirectory, outputDirectory);
   await writeWorldModelCatalog(

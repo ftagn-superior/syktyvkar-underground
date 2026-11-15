@@ -8,17 +8,6 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Material } from '@babylonjs/core/Materials/material';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
-import { BuildingChunks } from '../../apps/client/src/rendering/building-chunks';
-import {
-  WorldNightLights,
-  GLOW_ATTRIBUTE,
-} from '../../apps/client/src/rendering/environment/night-lights';
-import {
-  registerWallSurface,
-  SURFACE_ATTRIBUTE,
-} from '../../apps/client/src/rendering/environment/wall-surface';
-import { SURFACE_KIND } from '../../packages/contracts/src/index';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { WorldLighting } from '../../apps/client/src/rendering/environment/lighting';
 
@@ -156,153 +145,12 @@ async function markShadowMask() {
   return shadowMask.length;
 }
 
-async function buildingChunks() {
-  const chunkScene = new Scene(engine);
-  const focus = new Vector3(280, 0, 0);
-  const chunkCamera = new ArcRotateCamera('chunks', -Math.PI / 2.5, 0.9, 100, focus, chunkScene);
-  chunkCamera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA;
-  chunkCamera.orthoLeft = -45;
-  chunkCamera.orthoRight = 45;
-  chunkCamera.orthoTop = 33.75;
-  chunkCamera.orthoBottom = -33.75;
-  chunkCamera.minZ = 0.1;
-  const chunkLighting = new WorldLighting(chunkScene, chunkCamera);
-  const night = new WorldNightLights(chunkScene);
-  registerWallSurface(chunkScene);
-  chunkLighting.follow(focus);
-  const chunks = new BuildingChunks(chunkScene, chunkLighting.staticShadow);
-  const floor = MeshBuilder.CreateGround('chunks-ground', { width: 300, height: 300 }, chunkScene);
-  floor.position.x = focus.x;
-  floor.receiveShadows = true;
-  const floorMaterial = new PBRMaterial('chunks-ground', chunkScene);
-  floorMaterial.albedoColor.set(0.2, 0.25, 0.2);
-  floorMaterial.metallic = 0;
-  floorMaterial.roughness = 0.9;
-  floor.material = floorMaterial;
-  const chunkAvatar = MeshBuilder.CreateSphere('chunks-avatar', { diameter: 1 }, chunkScene);
-  chunkAvatar.position.set(focus.x + 35, 0.5, 12);
-  chunkAvatar.material = floorMaterial;
-  chunkLighting.shadow.addShadowCaster(chunkAvatar);
-  const originals = [];
-  for (let house = 0; house < 3; house++) {
-    const x = 254 + house * 24;
-    const meshes = [];
-    for (let part = 0; part < 5; part++) {
-      const window = part > 0;
-      const mesh = MeshBuilder.CreateBox(
-        `house-${house}-${part}`,
-        window ? { width: 2.1, height: 2.4, depth: 0.12 } : { width: 16, height: 10, depth: 10 },
-        chunkScene,
-      );
-      mesh.position.set(
-        x + (window ? (part % 2 ? -4 : 4) : 0),
-        window ? (part < 3 ? 3 : 7) : 5,
-        window ? -5.08 : 0,
-      );
-      mesh.receiveShadows = true;
-      const paint = new PBRMaterial(`house-paint-${house}-${part}`, chunkScene);
-      paint.albedoColor = window
-        ? new Color3(0.12, 0.16, 0.2)
-        : new Color3(0.35 + house * 0.12, 0.22 + house * 0.08, 0.16);
-      paint.metallic = 0;
-      paint.roughness = 0.9;
-      paint.transparencyMode = Material.MATERIAL_OPAQUE;
-      mesh.material = paint;
-      mesh.removeVerticesData(VertexBuffer.UVKind);
-      const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
-      const colors = [],
-        surface = [],
-        glow = [];
-      for (let v = 0; v < mesh.getTotalVertices(); v++) {
-        const shade = 0.8 + (v % 4) * 0.04;
-        colors.push(shade, shade, shade, 1);
-        surface.push(
-          (window ? 0 : SURFACE_KIND.brick * 1000) + positions[v * 3] + 8.5,
-          positions[v * 3 + 1] + 5,
-        );
-        glow.push(window ? 1 : 0, part * 7 + house);
-      }
-      mesh.setVerticesData(VertexBuffer.ColorKind, colors, false, 4);
-      mesh.setVerticesData(SURFACE_ATTRIBUTE, surface, false, 2);
-      mesh.setVerticesData(GLOW_ATTRIBUTE, glow, false, 2);
-      mesh.freezeWorldMatrix();
-      chunkLighting.staticShadow.addShadowCaster(mesh);
-      meshes.push(mesh);
-      originals.push(mesh);
-    }
-    chunks.add({ id: `house-${house}`, position: { x, z: 0 }, meshes, eligible: () => true });
-  }
-  let calls = 0;
-  let chunkCenter = focus;
-  const renderChunks = async (count = 20) => {
-    for (let i = 0; i < count; i++) {
-      chunks.update(chunkCenter);
-      engine.beginFrame();
-      const before = engine._drawCalls.current;
-      chunkScene.render();
-      calls = engine._drawCalls.current - before;
-      engine.endFrame();
-      const error = gl.getError();
-      if (error !== gl.NO_ERROR && !gpuErrors.includes(error)) gpuErrors.push(error);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    }
-  };
-  const comparison = (before: Uint8Array, after: Uint8Array) => {
-    let changed = 0,
-      sum = 0;
-    for (let i = 0; i < before.length; i += 4) {
-      let difference = 0;
-      for (let c = 0; c < 3; c++)
-        difference = Math.max(difference, Math.abs(before[i + c] - after[i + c]));
-      changed += Number(difference > 8);
-      sum += difference;
-    }
-    return { changed: changed / (before.length / 4), mean: sum / (before.length / 4) };
-  };
-  const result = [];
-  try {
-    for (const hour of [12, 21, 1]) {
-      chunkCenter = focus;
-      chunks.update(focus);
-      chunkLighting.setTimeOfDay(hour);
-      night.update(hour, 17, focus);
-      await renderChunks();
-      const reference = await pixels();
-      const originalCalls = calls;
-      chunkCenter = Vector3.Zero();
-      for (let i = 0; i < 50; i++) chunks.update(Vector3.Zero());
-      await renderChunks();
-      result.push({
-        hour,
-        originalCalls,
-        mergedCalls: calls,
-        ...comparison(reference, await pixels()),
-        diagnostics: chunks.diagnostics(),
-        originalsEnabled: originals.filter((m) => m.isEnabled()).length,
-      });
-    }
-    chunkCenter = focus;
-    chunks.update(focus);
-    await renderChunks();
-    return {
-      comparisons: result,
-      restored: originals.every((m) => m.isEnabled()),
-      gpuErrors: [...gpuErrors],
-    };
-  } finally {
-    chunks.dispose();
-    chunkLighting.dispose();
-    chunkScene.dispose();
-  }
-}
-
 (window as any).__RENDER_OPTIMIZATIONS__ = {
   frames,
   stats,
   snapshot,
   compare,
   markShadowMask,
-  buildingChunks,
   async warmup() {
     // Establish a complete reference after material compilation.
     await frames(30);

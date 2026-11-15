@@ -53,7 +53,7 @@ const base = {
 delete base.entities;
 const hash = 'a'.repeat(64);
 const manifest: WorldManifest = {
-  formatVersion: 5,
+  formatVersion: 6,
   worldId: base.worldId,
   mapVersion: hash,
   simulationConfigHash: hash,

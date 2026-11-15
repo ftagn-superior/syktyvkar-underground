@@ -101,6 +101,7 @@ export function encodeStaticGlb(parts: StaticMeshPart[]): Uint8Array {
                   ),
                 }
               : {}),
+            ...(part.glowOrigin ? { TEXCOORD_2: accessor(part.glowOrigin, 'VEC2') } : {}),
             ...(part.surface ? { TEXCOORD_1: accessor(surfaceOf(part)!, 'VEC2') } : {}),
           },
           indices: accessor(part.indices, 'SCALAR', true),

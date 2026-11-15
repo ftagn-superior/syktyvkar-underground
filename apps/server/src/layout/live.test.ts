@@ -118,7 +118,7 @@ describe('live layout phases', () => {
     await expect(result).resolves.toMatchObject({ ok: true, layoutRevision: 2 });
     await expect(duplicate).resolves.toEqual(await result);
     expect(create).toHaveBeenCalledOnce();
-    expect(changed).toHaveBeenCalledWith(request.operationId);
+    expect(changed).toHaveBeenCalledWith(request.operationId, expect.any(Array));
     expect(flush).toHaveBeenCalledOnce();
     expect(items.layoutPaused).toBe(false);
     expect(live.busy).toBe(true);

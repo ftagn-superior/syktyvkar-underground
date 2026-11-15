@@ -11,7 +11,7 @@ const output = process.env.SU_PROFILE_OUTPUT ?? 'output/playwright/render-profil
 const qualities = (process.env.SU_PROFILE_QUALITIES ?? 'standard,economy').split(',');
 assert.ok(qualities.every((value) => value === 'standard' || value === 'economy'));
 const warmupMs = Number(process.env.SU_PROFILE_WARMUP_MS ?? 10_000);
-const sampleMs = Number(process.env.SU_PROFILE_SAMPLE_MS ?? 15_000);
+const sampleMs = Number(process.env.SU_PROFILE_SAMPLE_MS ?? 30_000);
 assert.ok(Number.isFinite(warmupMs) && warmupMs >= 1000);
 assert.ok(Number.isFinite(sampleMs) && sampleMs >= 1000);
 const hour = Number(process.env.SU_PROFILE_HOUR ?? 10);
@@ -50,6 +50,9 @@ try {
     await page.waitForTimeout(warmupMs);
     const sampleStartCells = await page.evaluate(() =>
       [...(window as any).__SU_DEBUG__.snapshot().streaming.graphicsActive].sort(),
+    );
+    const sampleStartGroups = await page.evaluate(
+      () => (window as any).__SU_DEBUG__.report().streaming.groups,
     );
     // Raw browser code avoids tsx's function-name helper leaking into the page.
     // sampleMs is validated as a finite positive number above.
@@ -95,6 +98,14 @@ try {
       };
     });
     assert.equal(details.backgroundReady, true, 'required static cells remain ready');
+    const sampleEndGroups = await page.evaluate(
+      () => (window as any).__SU_DEBUG__.report().streaming.groups,
+    );
+    assert.deepEqual(
+      sampleEndGroups?.map((g: any) => [g.id, g.current, g.version]),
+      sampleStartGroups?.map((g: any) => [g.id, g.current, g.version]),
+      'selected group levels are stable during sampling',
+    );
     assert.deepEqual(
       details.loadedCells,
       sampleStartCells,
@@ -119,6 +130,7 @@ try {
         max: sorted.at(-1),
       },
       ...details,
+      groups: sampleEndGroups,
       samplesMs: timing.samples,
     });
     console.log(JSON.stringify({ quality, ...profiles.at(-1)?.frameMs, samples: sorted.length }));

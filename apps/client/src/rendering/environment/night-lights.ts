@@ -425,6 +425,19 @@ export class WorldNightLights {
     this.scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
   }
 
+  private sourceOwners = new Map<string, number>();
+  retainSources(instance: BuildingInstance, lights: readonly StaticLightSource[]): void {
+    this.sourceOwners.set(instance.entityId, (this.sourceOwners.get(instance.entityId) ?? 0) + 1);
+    this.addSources(instance, lights);
+  }
+  releaseSources(id: string): void {
+    const count = (this.sourceOwners.get(id) ?? 1) - 1;
+    if (count > 0) this.sourceOwners.set(id, count);
+    else {
+      this.sourceOwners.delete(id);
+      this.removeSources(id);
+    }
+  }
   /** Регистрирует фонари экземпляра в мировых координатах. */
   addSources(instance: BuildingInstance, lights: readonly StaticLightSource[]): void {
     const { position, rotation } = instance;
@@ -524,5 +537,6 @@ export class WorldNightLights {
   dispose(): void {
     states.delete(this.scene);
     this.sources.clear();
+    this.sourceOwners.clear();
   }
 }

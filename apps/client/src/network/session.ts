@@ -58,6 +58,7 @@ import {
   type CommandHelpEffect,
   type CommandHelpEntry,
   DEFAULT_DAY_CLOCK,
+  dayClockHour,
   type DayClock,
   TICK_RATE,
   findReaction,
@@ -188,11 +189,22 @@ export class GameSession {
   private commandCatalogRequestedAt = -Infinity;
   /** Ответ на поездку на автобусе: ok — сервер готовит прибытие, иначе код отказа. */
   onBusTravelResult?: (result: ActionResult) => void;
-  /** Игровые часы комнаты; вне комнаты идут по настенному времени. */
+  /** Игровые часы комнаты; вне комнаты синхронизируются по `/api/world` без локального `Date.now()`. */
   dayClock: DayClock = DEFAULT_DAY_CLOCK;
   onDayClock?: (clock: DayClock) => void;
   weather: WorldWeather = DEFAULT_WEATHER;
-  onWeather?: (weather: WorldWeather) => void;
+  onWeather?: (weather: WorldWeather, snap: boolean) => void;
+  private hasAuthoritativeWorldState = false;
+  private weatherSnapPending = true;
+  private worldInfoAnchor?: {
+    worldEpoch: string;
+    startPhaseMs: number;
+    elapsedMs: number;
+    loadedAtPerfMs: number;
+  };
+  private readonly worldInfoSamples = new WeakMap<WorldInfo, { sequence: number; at: number }>();
+  private worldInfoSequence = 0;
+  private acceptedWorldInfoSequence = 0;
   onSpawn?: () => void;
   onActionFeedback?: (cue: 'click' | 'error') => void;
   private readonly worldSounds = new WorldSoundEvents();
@@ -312,7 +324,7 @@ export class GameSession {
     this.cancelPhysicsPreparation();
     this.setState('loading');
     try {
-      const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+      const info = await this.readWorldInfo();
       if (generation !== this.generation) return;
       if (!this.compatibleVersion(info)) this.versionMismatch();
       const publication = await loadWorldPublication(info, this.verifiedBytes);
@@ -327,7 +339,7 @@ export class GameSession {
       this.manifestUrl = publication.url;
       this.definition = publication.definition;
       this.resources = publication.resources;
-      this.info = info;
+      this.applyWorldInfo(info);
       this.physics?.dispose();
       this.physics = undefined;
     } catch (error) {
@@ -400,6 +412,9 @@ export class GameSession {
       this.definition = publication.definition;
       this.resources = publication.resources;
       this.info = { ...this.info, ...info };
+      if ('dayStartPhaseMs' in info || 'serverElapsedMs' in info) {
+        this.synchronizeWorldTime(info as WorldInfo);
+      }
       if (playing) await this.preparePhysics(generation);
       if (generation !== this.generation) return;
       this.ensureStreamer();
@@ -566,11 +581,11 @@ export class GameSession {
     )
       return;
     const generation = this.generation;
-    const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+    const info = await this.readWorldInfo();
     if (generation !== this.generation) return;
     if (!this.compatibleVersion(info)) this.versionMismatch();
     if (info.mapVersion !== this.info.mapVersion) await this.changePublication(info);
-    else this.info = info;
+    else this.applyWorldInfo(info);
   }
   readStaticAsset(path: string, signal?: AbortSignal) {
     return this.resources!.read(path, signal);
@@ -764,7 +779,7 @@ export class GameSession {
     let generation = ++this.generation;
     this.setState(restore ? 'reconnecting' : 'connecting');
     try {
-      const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+      const info = await this.readWorldInfo();
       if (generation !== this.generation) return;
       if (!this.compatibleVersion(info)) this.versionMismatch();
       if (info.mapVersion !== this.info.mapVersion) {
@@ -772,7 +787,7 @@ export class GameSession {
         generation = this.generation;
         this.setState(restore ? 'reconnecting' : 'connecting');
       }
-      this.info = info;
+      this.applyWorldInfo(info);
       // Advisory preflight improves feedback; the server still reserves atomically.
       if (!restore && !info.available) throw new Error('WORLD_FULL');
       await this.preparePhysics(generation);
@@ -802,11 +817,14 @@ export class GameSession {
         return;
       }
       this.room = room;
+      this.hasAuthoritativeWorldState = false;
+      this.weatherSnapPending = true;
       this.forgetCommandCatalog();
       this.preparationConfirmed = false;
       this.terminalNotice = undefined;
       this.ensureStreamer();
-      room.reconnection.minUptime = 0;
+      // SDK compares Date.now() with join time: even a zero gate rejects a backward clock jump.
+      room.reconnection.minUptime = Number.NEGATIVE_INFINITY;
       room.reconnection.maxRetries = 30;
       room.reconnection.minDelay = 300;
       room.reconnection.maxDelay = 1500;
@@ -834,6 +852,7 @@ export class GameSession {
         this.waitingResync = false;
         this.lastAck = 0;
         this.lastAckAt = performance.now();
+        this.weatherSnapPending = true;
         this.pausePrediction();
         this.clearEntityTracking();
         this.setState('connecting');
@@ -1128,7 +1147,7 @@ export class GameSession {
       if (generation !== this.generation) return;
       if (!retried && error instanceof Error && error.message.includes('VERSION_MISMATCH')) {
         try {
-          const latest = (await (await getResponse('/api/world')).json()) as WorldInfo;
+          const latest = await this.readWorldInfo();
           if (!this.compatibleVersion(latest)) this.reloadRequired = true;
           if (this.compatibleVersion(latest) && latest.mapVersion !== this.info.mapVersion) {
             await this.changePublication(latest);
@@ -1241,15 +1260,28 @@ export class GameSession {
       if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
         this.onNotice(messages.STORAGE_UNAVAILABLE);
     }
+    const snapWeather = this.weatherSnapPending;
+    this.hasAuthoritativeWorldState = true;
+    this.weatherSnapPending = false;
     this.setDayClock({
       offsetMs: room.state.dayOffsetMs,
       frozenHour: room.state.dayFrozenHour,
     });
-    this.setWeather({
-      clouds: room.state.weatherClouds,
-      precipitation: precipitationFromCode(room.state.weatherPrecipitation),
-      fog: room.state.weatherFog,
-    });
+    // Retain the latest room sample when recovery temporarily removes the SDK room.
+    this.worldInfoAnchor = {
+      worldEpoch: room.state.worldEpoch,
+      startPhaseMs: room.state.dayStartPhaseMs,
+      elapsedMs: room.clock.renderNow(),
+      loadedAtPerfMs: performance.now(),
+    };
+    this.setWeather(
+      {
+        clouds: room.state.weatherClouds,
+        precipitation: precipitationFromCode(room.state.weatherPrecipitation),
+        fog: room.state.weatherFog,
+      },
+      snapWeather,
+    );
     const self = room.state.players.get(room.sessionId);
     this.physics?.syncRemote(toLocalSimulationSnapshot(room.state), self?.entityId ?? '');
     const previousRevision = self && this.revisions.get(self.entityId);
@@ -1274,22 +1306,85 @@ export class GameSession {
     for (const player of room.state.players?.values() ?? []) this.attach(player);
     for (const item of room.state.items.values()) this.attach(item);
   }
+  /** Единый источник времени игровых суток для неба и HUD; не зависит от `Date.now()` клиента. */
+  worldTimeMs(perfNow = performance.now()): number {
+    const roomClock = this.room?.clock;
+    if (this.hasAuthoritativeWorldState && this.room && roomClock) {
+      const hasSample =
+        typeof roomClock.lastServerTime === 'function' ? roomClock.lastServerTime() > 0 : true;
+      if (hasSample) {
+        const startPhaseMs =
+          this.room.state?.dayStartPhaseMs ?? this.worldInfoAnchor?.startPhaseMs ?? 0;
+        const elapsedMs =
+          typeof roomClock.renderNow === 'function' ? roomClock.renderNow() : roomClock.serverNow();
+        return startPhaseMs + elapsedMs;
+      }
+    }
+    if (this.worldInfoAnchor) {
+      return (
+        this.worldInfoAnchor.startPhaseMs +
+        this.worldInfoAnchor.elapsedMs +
+        Math.max(0, perfNow - this.worldInfoAnchor.loadedAtPerfMs)
+      );
+    }
+    return Math.max(0, perfNow);
+  }
+  currentHour(perfNow = performance.now()): number {
+    return dayClockHour(this.dayClock, this.worldTimeMs(perfNow));
+  }
+  private applyWorldInfo(info: WorldInfo): void {
+    const sample = this.worldInfoSamples.get(info);
+    if (sample && sample.sequence < this.acceptedWorldInfoSequence) return;
+    if (sample) this.acceptedWorldInfoSequence = sample.sequence;
+    this.info = info;
+    this.synchronizeWorldTime(info);
+  }
+  private async readWorldInfo(): Promise<WorldInfo> {
+    const sequence = ++this.worldInfoSequence;
+    const started = performance.now();
+    const info = (await (await getResponse('/api/world')).json()) as WorldInfo;
+    // Anchor at receipt, before any manifest/physics loading; half the RTT estimates transit.
+    this.worldInfoSamples.set(info, { sequence, at: (started + performance.now()) / 2 });
+    return info;
+  }
+  private synchronizeWorldTime(info: WorldInfo): void {
+    const previous = this.worldInfoAnchor;
+    const sample = this.worldInfoSamples.get(info);
+    // An HTTP response cannot override a live snapshot, nor revive an older discovery sample.
+    if (
+      this.hasAuthoritativeWorldState ||
+      (sample && sample.sequence < this.acceptedWorldInfoSequence) ||
+      (previous?.worldEpoch === info.worldEpoch && (info.serverElapsedMs ?? 0) < previous.elapsedMs)
+    )
+      return;
+    if (sample) this.acceptedWorldInfoSequence = sample.sequence;
+    this.worldInfoAnchor = {
+      worldEpoch: info.worldEpoch,
+      startPhaseMs: info.dayStartPhaseMs ?? 0,
+      elapsedMs: info.serverElapsedMs ?? 0,
+      loadedAtPerfMs: sample?.at ?? performance.now(),
+    };
+    if (!this.hasAuthoritativeWorldState && info.dayClock) {
+      this.setDayClock(info.dayClock);
+    }
+  }
   private setDayClock(clock: DayClock): void {
     if (clock.offsetMs === this.dayClock.offsetMs && clock.frozenHour === this.dayClock.frozenHour)
       return;
     this.dayClock = clock;
     this.onDayClock?.(clock);
   }
-  private setWeather(weather: WorldWeather): void {
+  private setWeather(weather: WorldWeather, snap = false): void {
     const current = this.weather;
     if (
+      !snap &&
       weather.clouds === current.clouds &&
       weather.precipitation === current.precipitation &&
       weather.fog === current.fog
     )
       return;
     this.weather = weather;
-    this.onWeather?.(weather);
+    this.onWeather?.(weather, snap);
   }
   private clearEntityTracking(): void {
     for (const entity of this.trackedEntities.values()) this.predictor?.detach(entity);
@@ -2003,12 +2098,14 @@ export class GameSession {
     if (had) this.onCommandCatalog?.();
   }
 
-  chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
+  chatStatus(): { pending: boolean; remainingMs: number; available: boolean; keepOpen: boolean } {
     return {
       pending: this.chatRequest.pending,
       remainingMs: this.chatRequest.remainingMs(),
       available:
         this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused,
+      // Prediction can stall one frame before the connection state becomes `waiting`.
+      keepOpen: this.state === 'waiting' || (this.state === 'playing' && this.stalled),
     };
   }
 
@@ -2109,8 +2206,11 @@ export class GameSession {
     this.snapshotWait?.resolve();
     this.snapshotWait = undefined;
     this.persistencePaused = false;
-    this.setDayClock(DEFAULT_DAY_CLOCK);
-    this.setWeather(DEFAULT_WEATHER);
+    this.hasAuthoritativeWorldState = false;
+    this.weatherSnapPending = true;
+    if (!preserveRecovery) {
+      this.setWeather(DEFAULT_WEATHER, true);
+    }
     this.onInventoryChange?.();
     this.respawnRequest.reset();
     this.busRequest.reset();
@@ -2189,6 +2289,10 @@ export class GameSession {
     const self = room?.state?.players?.get(room.sessionId);
     return {
       connection: this.state,
+      worldTimeMs: this.worldTimeMs(),
+      worldHour: this.currentHour(),
+      dayClock: this.dayClock,
+      weather: this.weather,
       worldEpoch: room?.state?.worldEpoch ?? this.info?.worldEpoch,
       sessionId: room?.sessionId,
       playerCount: this.playerCount,

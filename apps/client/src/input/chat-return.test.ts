@@ -56,4 +56,33 @@ describe('chat control return context', () => {
     context.sent(4, session);
     expect(context.acceptCommand(4, {})).toBe(false);
   });
+
+  it('keeps an in-flight UI reply through network waiting without restoring controls', () => {
+    const context = new ChatReturnContext();
+    const session = {};
+    context.begin('first-person-active', session);
+    const previous = context.finish(session)!;
+    context.sent(1, session);
+    context.pauseControls();
+    expect(context.isCurrent(previous, session)).toBe(false);
+    expect(context.finish(session)).toBeUndefined();
+    expect(context.acceptCommand(1, session)).toBe(true);
+    expect(context.acceptCommand(1, session)).toBe(false);
+  });
+
+  it('still cancels a paused UI reply on newer intent or a replaced room', () => {
+    const context = new ChatReturnContext();
+    const session = {};
+    context.sent(1, session);
+    context.pauseControls();
+    context.invalidate();
+    expect(context.acceptCommand(1, session)).toBe(false);
+    context.sent(2, session);
+    context.pauseControls();
+    context.begin('overview', session);
+    expect(context.acceptCommand(2, session)).toBe(false);
+    context.sent(3, session);
+    context.pauseControls();
+    expect(context.acceptCommand(3, {})).toBe(false);
+  });
 });

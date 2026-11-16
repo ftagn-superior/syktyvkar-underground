@@ -169,6 +169,7 @@ export class WorldView {
   };
   private frameHook?: (now: number, delta: number) => void;
   private cameraFrameHook?: (now: number, delta: number) => void;
+  private worldTimeSource: () => number = () => performance.now();
   private renderDeferred = false;
   private deferredFrames = 0;
   private lastFrame = performance.now();
@@ -326,14 +327,18 @@ export class WorldView {
         this.deferredFrames++;
         return;
       }
-      this.environment.update({
-        target: this.ownPosition ?? this.target,
-        // On foot the cloud shadows remain, while the overhead layer is hidden.
-        zoom: this.firstPerson ? 0 : this.zoom,
-        visible: this.radial,
-        camera: this.firstPerson ? this.eyeCamera : this.camera,
-        firstPerson: this.firstPerson,
-      });
+      this.environment.update(
+        {
+          target: this.ownPosition ?? this.target,
+          // On foot the cloud shadows remain, while the overhead layer is hidden.
+          zoom: this.firstPerson ? 0 : this.zoom,
+          visible: this.radial,
+          camera: this.firstPerson ? this.eyeCamera : this.camera,
+          firstPerson: this.firstPerson,
+        },
+        this.worldTimeSource(),
+        delta,
+      );
 
       const desiredRadius = this.firstPerson
         ? Math.min(FIRST_PERSON.radius, this.streamingRadius)
@@ -395,13 +400,18 @@ export class WorldView {
   get hour(): number {
     return this.environment.hour;
   }
+  /** Подключает единый источник серверно-синхронизированного времени игровых суток. */
+  setWorldTimeSource(source: () => number): void {
+    this.worldTimeSource = source;
+    this.environment.setWorldTimeSource(source);
+  }
   /** Часы комнаты, которыми управляет `/time`; закреплённый `setTimeOfDay` час важнее. */
   setDayClock(clock: DayClock): void {
     this.environment.setDayClock(clock);
   }
   /** Погода комнаты, которой управляет `/weather`. */
-  setWeather(weather: WorldWeather): void {
-    this.environment.setWeather(weather);
+  setWeather(weather: WorldWeather, snap?: boolean): void {
+    this.environment.setWeather(weather, snap);
   }
   /** Локальная погода для снимков (`?weather=`), важнее погоды комнаты. */
   setWeatherOverride(weather?: WorldWeather): void {
@@ -808,6 +818,7 @@ export class WorldView {
       hardwareScaling: this.engine.getHardwareScalingLevel(),
       shadows: this.scene.shadowsEnabled,
       hour: this.environment.hour,
+      weather: { ...this.environment.weatherAmounts },
       nightLampSources: this.environment.nightLights.sourceCount,
       bloom: this.environment.bloomDiagnostics(),
       lights: this.scene.lights.map((light) => ({

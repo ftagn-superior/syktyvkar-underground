@@ -477,6 +477,7 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   font-size: 0.85em;
   font-weight: 500;
   color: var(--mut);
+  transition: color var(--theme-ease);
 }
 .place-pill .place-status[data-state='ready'] {
   color: var(--taiga);
@@ -538,6 +539,10 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   background: var(--p-veil);
   color: var(--ink);
   overflow-wrap: anywhere;
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    opacity 0.2s ease;
 }
 .chat-line:nth-last-child(4) {
   opacity: 0.55;
@@ -560,6 +565,10 @@ body[data-input-mode='touch'] [data-touch-hidden] {
   display: flex;
   align-items: center;
   gap: 0.45em;
+  transition:
+    background-color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
 }
 .chat-row[data-open='true'] {
   padding: 0.45em 0.5em;
@@ -1156,6 +1165,9 @@ body[data-scene='lobby'] .su-prompts {
   pointer-events: none;
   transform: translate(-50%, -100%);
   will-change: transform;
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease);
 }
 .player-label {
   padding-left: 6px;
@@ -1186,6 +1198,34 @@ body[data-scene='lobby'] .su-prompts {
   white-space: pre-wrap;
   pointer-events: none;
   will-change: transform;
+}
+
+/* These elements own theme colors instead of inheriting their panel's interpolation. */
+.help-note,
+.setting-label,
+.chat-counter,
+.chat-suggest-option span,
+.chat-suggest-hint span,
+.command-aliases,
+.command-usage,
+.command-flags dd,
+.reaction-keys,
+.player-label .note {
+  transition: color var(--theme-ease);
+}
+.command-entry,
+.chat-status,
+.chat-send,
+.player-chat {
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
+}
+.keys > div,
+.audio-settings {
+  transition: border-color var(--theme-ease);
 }
 .player-reaction {
   position: fixed;

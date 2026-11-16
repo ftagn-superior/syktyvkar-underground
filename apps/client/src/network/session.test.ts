@@ -10,6 +10,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   PROTOCOL_VERSION,
+  precipitationCode,
+  applyDayClockAction,
+  DEFAULT_WEATHER,
+  DEFAULT_DAY_CLOCK,
   canonicalJson,
   placementCatalogIdentity,
   type PlacementCatalog,
@@ -197,6 +201,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   for (const instance of sessions.splice(0)) instance.dispose();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -1323,5 +1328,257 @@ describe('catalog discovery recovery', () => {
     expect(instance.commands()).toEqual([helpEntry]);
     await instance.leave();
     expect(instance.commands()).toBeUndefined();
+  });
+  it('keeps discovery sample age through a slow publication load', async () => {
+    let now = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(url), location.href).pathname === '/api/world')
+        return Promise.resolve(
+          Response.json({ ...info, dayStartPhaseMs: 400_000, serverElapsedMs: 20_000 }),
+        );
+      now = 6000;
+      return originalFetch(url, init);
+    });
+    const instance = session();
+    await instance.load();
+    expect(instance.worldTimeMs()).toBe(425_000);
+  });
+
+  it.each(['epoch', 'previous-process'])(
+    'ignores a late discovery response from %s',
+    async (oldEpoch) => {
+      vi.spyOn(performance, 'now').mockReturnValue(1000);
+      const instance = session();
+      await instance.load();
+      instance.markPrepared();
+      const delayed = deferred<Response>();
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockReturnValueOnce(delayed.promise)
+          .mockResolvedValueOnce(
+            Response.json({
+              ...info,
+              dayStartPhaseMs: 400_000,
+              serverElapsedMs: 20_000,
+              dayClock: { offsetMs: 0, frozenHour: 17 },
+            }),
+          ),
+      );
+      const first = instance.refreshPublication();
+      await instance.refreshPublication();
+      delayed.resolve(
+        Response.json({
+          ...info,
+          worldEpoch: oldEpoch,
+          dayStartPhaseMs: 400_000,
+          serverElapsedMs: 10_000,
+          dayClock: { offsetMs: 0, frozenHour: 5 },
+        }),
+      );
+      await first;
+      expect(instance.worldTimeMs()).toBe(420_000);
+      expect(instance.currentHour()).toBe(17);
+      expect(instance.info.worldEpoch).toBe(info.worldEpoch);
+    },
+  );
+
+  it('keeps discovery time until a full room snapshot supplies its phase', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) =>
+      new URL(String(url), location.href).pathname === '/api/world'
+        ? Promise.resolve(
+            Response.json({ ...info, dayStartPhaseMs: 400_000, serverElapsedMs: 20_000 }),
+          )
+        : originalFetch(url, init),
+    );
+    const instance = session();
+    await instance.load();
+    const beforeJoin = instance.worldTimeMs();
+    instance.room = {
+      state: { dayStartPhaseMs: 0 },
+      clock: { lastServerTime: () => 100, renderNow: () => 100 },
+    } as unknown as NonNullable<GameSession['room']>;
+    expect(beforeJoin).toBe(420_000);
+    expect(instance.worldTimeMs()).toBe(beforeJoin);
+    instance.room = undefined;
+  });
+
+  it('uses the replicated room clock instead of client Date.now() for world time and hour', async () => {
+    let stateChange: (() => void) | undefined;
+    const dayStartPhaseMs = 450_000;
+    const serverElapsedMs = 30_000;
+    const serverClock = applyDayClockAction(
+      DEFAULT_DAY_CLOCK,
+      { kind: 'set', hour: 17 },
+      dayStartPhaseMs + serverElapsedMs,
+    );
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      clock: {
+        renderNow: () => serverElapsedMs,
+        serverNow: () => serverElapsedMs,
+        lastServerTime: () => serverElapsedMs,
+      },
+      state: {
+        worldEpoch: info.worldEpoch,
+        layoutRevision: info.layoutRevision,
+        players: new Map(),
+        items: new Map(),
+        serverTick: 1,
+        dayStartPhaseMs,
+        dayOffsetMs: serverClock.offsetMs,
+        dayFrozenHour: serverClock.frozenHour,
+        weatherClouds: DEFAULT_WEATHER.clouds,
+        weatherPrecipitation: precipitationCode(DEFAULT_WEATHER.precipitation),
+        weatherFog: DEFAULT_WEATHER.fog,
+      },
+      leave: vi.fn(),
+      onStateChange: (callback: () => void) => {
+        stateChange = callback;
+      },
+      onDrop: vi.fn(),
+      onReconnect: vi.fn(),
+      onLeave: vi.fn(),
+      onError: vi.fn(),
+      onMessage: vi.fn(),
+      send: vi.fn(),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    mocks.createPhysics.mockResolvedValueOnce({ ...physics(), syncRemote: vi.fn() });
+    const instance = session();
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // Shift client Date.now() by +3 hours (180 real minutes -> +12 game hours mod 24).
+      vi.setSystemTime(Date.now() + 3 * 60 * 60 * 1000);
+      const previousFetch = fetch;
+      vi.stubGlobal('fetch', (url: string | URL | Request, init?: RequestInit) => {
+        const path = new URL(String(url), location.href).pathname;
+        if (path === '/api/world') {
+          return Promise.resolve(
+            Response.json({
+              ...info,
+              dayStartPhaseMs,
+              serverElapsedMs,
+              dayClock: serverClock,
+            }),
+          );
+        }
+        return previousFetch(url, init);
+      });
+      await instance.load();
+      expect(instance.currentHour()).toBeCloseTo(17, 2);
+
+      instance.markPrepared();
+      await instance.join();
+      stateChange!();
+      expect(instance.worldTimeMs()).toBe(dayStartPhaseMs + serverElapsedMs);
+      expect(instance.currentHour()).toBeCloseTo(17, 4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('snaps weather on initial room join and reconnect while smoothing live updates', async () => {
+    let stateChange: (() => void) | undefined;
+    let drop: (() => void) | undefined;
+    let reconnect: (() => void) | undefined;
+    let leave: ((code: number) => void) | undefined;
+    const state = {
+      worldEpoch: info.worldEpoch,
+      layoutRevision: info.layoutRevision,
+      players: new Map(),
+      items: new Map(),
+      serverTick: 1,
+      dayStartPhaseMs: 120_000,
+      dayOffsetMs: 360_000,
+      dayFrozenHour: 22,
+      weatherClouds: true,
+      weatherPrecipitation: precipitationCode('rain'),
+      weatherFog: false,
+    };
+    const room = {
+      sessionId: 'self',
+      reconnectionToken: 'token',
+      reconnection: {},
+      clock: {
+        renderNow: () => 5000,
+        serverNow: () => 5000,
+        lastServerTime: () => 5000,
+      },
+      state,
+      leave: vi.fn(),
+      onStateChange: (callback: () => void) => {
+        stateChange = callback;
+      },
+      onDrop: (callback: () => void) => {
+        drop = callback;
+      },
+      onReconnect: (callback: () => void) => {
+        reconnect = callback;
+      },
+      onLeave: (callback: (code: number) => void) => {
+        leave = callback;
+      },
+      onError: vi.fn(),
+      onMessage: vi.fn(),
+      send: vi.fn(),
+    };
+    mocks.reserve.mockResolvedValueOnce(room);
+    mocks.createPhysics.mockResolvedValueOnce({ ...physics(), syncRemote: vi.fn() });
+    const instance = session();
+    const weatherEvents: Array<{ weather: typeof DEFAULT_WEATHER; snap: boolean }> = [];
+    instance.onWeather = (weather, snap) => weatherEvents.push({ weather, snap });
+
+    await instance.load();
+    instance.markPrepared();
+    await instance.join();
+
+    // First authoritative state snaps immediately to active room weather.
+    stateChange!();
+    expect(weatherEvents).toEqual([
+      { weather: { clouds: true, precipitation: 'rain', fog: false }, snap: true },
+    ]);
+
+    // Subsequent in-world weather command transitions smoothly (snap = false).
+    state.weatherPrecipitation = precipitationCode('snow');
+    state.weatherFog = true;
+    stateChange!();
+    expect(weatherEvents.at(-1)).toEqual({
+      weather: { clouds: true, precipitation: 'snow', fog: true },
+      snap: false,
+    });
+
+    // Transient drop + SDK reconnect preserves state and snaps fresh room weather on arrival.
+    drop!();
+    reconnect!();
+    state.weatherClouds = false;
+    state.weatherPrecipitation = precipitationCode('none');
+    stateChange!();
+    expect(weatherEvents.at(-1)).toEqual({
+      weather: { clouds: false, precipitation: 'none', fog: true },
+      snap: true,
+    });
+
+    // Unplanned leave while recovering keeps last dayClock/weather rather than clearing to lobby.
+    const countBeforeRecoveryLeave = weatherEvents.length;
+    drop!();
+    leave!(1006);
+    expect(instance.state).toBe('reconnecting');
+    expect(instance.weather).toEqual({ clouds: false, precipitation: 'none', fog: true });
+    expect(instance.dayClock).toEqual({ offsetMs: 360_000, frozenHour: 22 });
+    expect(weatherEvents).toHaveLength(countBeforeRecoveryLeave);
+    const beforeFallback = instance.worldTimeMs();
+    expect(beforeFallback).toBeGreaterThanOrEqual(125_000);
+    await instance.leave();
+    expect(instance.currentHour()).toBe(22);
+    expect(instance.worldTimeMs()).toBeGreaterThanOrEqual(beforeFallback);
   });
 });

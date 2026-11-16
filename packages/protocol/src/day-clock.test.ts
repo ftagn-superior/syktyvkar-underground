@@ -36,7 +36,8 @@ describe('shared day clock wire', () => {
     const decoder = new Decoder(target);
     const now = 1_800_000_123_456;
     expect(source.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(PROTOCOL_VERSION).toBe(26);
+    expect(PROTOCOL_VERSION).toBe(27);
+    source.dayStartPhaseMs = 456_789;
     for (const clock of [
       applyDayClockAction(DEFAULT_DAY_CLOCK, { kind: 'set', hour: 18.5 }, now),
       { offsetMs: 1234, frozenHour: 0 },
@@ -47,6 +48,7 @@ describe('shared day clock wire', () => {
       source.dayFrozenHour = clock.frozenHour;
       decoder.decode(encoder.encode());
       encoder.discardChanges();
+      expect(target.dayStartPhaseMs).toBe(456_789);
       expect(target.dayOffsetMs).toBe(clock.offsetMs);
       expect(target.dayFrozenHour).toBeCloseTo(clock.frozenHour, 5);
       expect(

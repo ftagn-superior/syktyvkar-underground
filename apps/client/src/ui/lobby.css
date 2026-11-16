@@ -4,6 +4,9 @@
  */
 body[data-scene='lobby']:not(.world-ready) {
   background: linear-gradient(#a9cfe6 0 62%, #a4b94a 62%);
+  transition:
+    background-color var(--theme-ease),
+    color var(--theme-ease);
 }
 :root[data-ui-theme='night'] body[data-scene='lobby']:not(.world-ready) {
   background: linear-gradient(#131a36 0 62%, #263a34 62%);
@@ -31,6 +34,7 @@ body[data-scene='lobby']:not(.world-ready) {
   overflow-y: auto;
   font-size: clamp(13px, 1.05vw, 15px);
   color: var(--ink);
+  transition: color var(--theme-ease);
 }
 body:not(.world-ready) .lobby::before {
   content: '';
@@ -42,6 +46,7 @@ body:not(.world-ready) .lobby::before {
   -webkit-mask: var(--orn) repeat center / 64px 40px;
   mask: var(--orn) repeat center / 64px 40px;
   pointer-events: none;
+  transition: background-color var(--theme-ease);
 }
 
 /* ---------- шапка ---------- */
@@ -285,7 +290,9 @@ body:not(.world-ready) .lobby::before {
   cursor: pointer;
   transition:
     transform 0.28s var(--spring),
-    border-radius 0.4s var(--spring);
+    border-radius 0.4s var(--spring),
+    border-color var(--theme-ease),
+    box-shadow var(--theme-ease);
 }
 .dot:hover {
   transform: translateY(-0.08em);

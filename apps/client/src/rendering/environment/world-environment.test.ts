@@ -3,7 +3,7 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { DEFAULT_DAY_CLOCK, dayClockHour } from '@su/contracts';
+import { DEFAULT_DAY_CLOCK, DEFAULT_WEATHER, dayClockHour } from '@su/contracts';
 import { WorldEnvironment } from './world-environment';
 
 describe('world environment', () => {
@@ -86,6 +86,20 @@ describe('world environment', () => {
       environment.setWeatherOverride(undefined);
       environment.update(frame, epochMs + 1032);
       expect(environment.weatherAmounts.snow).toBe(1);
+
+      // Explicit snap overrides earlier lobby settlement; explicit smooth stays gradual.
+      environment.setWeather(DEFAULT_WEATHER, true);
+      environment.update(frame, epochMs + 1048, 0.016);
+      expect(environment.weatherAmounts.snow).toBe(0);
+      environment.setWeather({ clouds: true, precipitation: 'rain', fog: true }, true);
+      environment.update(frame, epochMs + 1064, 0.016);
+      expect(environment.weatherAmounts.rain).toBe(1);
+      expect(environment.weatherAmounts.fog).toBe(1);
+
+      // WeatherMix advances by explicit monotonic deltaSeconds even if worldTimeMs jumps.
+      environment.setWeather(DEFAULT_WEATHER, false);
+      environment.update(frame, epochMs + 120_000, 0.016);
+      expect(environment.weatherAmounts.rain).toBeGreaterThan(0.9);
     } finally {
       environment.dispose();
       expect(scene.getMeshByName('precipitation-rain')).toBeNull();

@@ -37,6 +37,7 @@ import {
   type ItemState,
   ITEM_GIVE_COOLDOWN_MS,
   MAX_INPUT_QUEUE,
+  DAY_LENGTH_MS,
   PATCH_RATE,
   PLAYER_COLORS,
   PROFILE_COLORS,
@@ -195,6 +196,9 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     this.accounts = options.accounts;
     this.itemCreationEnabled = options.itemCreationEnabled ?? true;
     this.state.worldEpoch = options.ownership?.epoch ?? randomUUID();
+    this.state.dayStartPhaseMs = Math.floor(
+      ((Date.now() % DAY_LENGTH_MS) + DAY_LENGTH_MS) % DAY_LENGTH_MS,
+    );
     this.state.protocolVersion = PROTOCOL_VERSION;
     this.state.layoutRevision = options.layouts?.current.snapshot.revision ?? 1;
     this.state.mapVersion = options.manifest.mapVersion;
@@ -285,6 +289,11 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
         if (session.auth && session.auth.expiresAt <= Date.now())
           this.revokeAuthSession(session.auth.authSessionId);
     }, 1000);
+  }
+
+  /** Единое время игровых суток (мс) на базе монотонных серверных часов комнаты. */
+  worldTimeMs(): number {
+    return this.state.dayStartPhaseMs + this.clock.elapsedTime;
   }
 
   async onAuth(
@@ -1222,7 +1231,7 @@ export class WorldRoom extends Room<{ state: WorldState; input: MoveInputSchema 
     if (command.kind === 'time')
       return this.finishAction(client, session, {
         requestId,
-        ...this.dayClock.command(command.actions, Date.now()),
+        ...this.dayClock.command(command.actions, this.worldTimeMs()),
       });
     if (command.kind === 'weather')
       return this.finishAction(client, session, {

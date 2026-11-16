@@ -16,7 +16,6 @@ import { FirstPersonInput } from '../input/first-person';
 import { ChatReturnContext } from '../input/chat-return';
 import {
   validateBusNetwork,
-  dayClockHour,
   MAX_PLAYERS,
   NEUTRAL_INPUT,
   type BusNetwork,
@@ -236,6 +235,10 @@ export function startGame(): void {
     chatReturn.invalidate();
     firstPerson?.suspend();
   }
+  function pauseControls(): void {
+    chatReturn.pauseControls();
+    firstPerson?.suspend();
+  }
   function closeGamePanels(): void {
     panels.closeExcept();
     view?.showPlacement();
@@ -345,10 +348,10 @@ export function startGame(): void {
   function syncControlAvailability(): void {
     const room = session.room;
     const ready = firstPersonEligible();
-    const interrupted = room !== controlSession || (controlReady && !ready);
+    if (room !== controlSession) interruptControls();
+    else if (controlReady && !ready) pauseControls();
     controlSession = room;
     controlReady = ready;
-    if (interrupted) interruptControls();
   }
   function finishChat(reason: ChatCloseReason): void {
     if (disposed) {
@@ -451,7 +454,7 @@ export function startGame(): void {
     syncPreview();
   }
   const session = new GameSession(updateState, showNotice);
-  session.onControlInterruption = interruptControls;
+  session.onControlInterruption = pauseControls;
   const gamepadStatus = document.createElement('p');
   gamepadStatus.id = 'gamepad-status';
   gamepadStatus.className = 'gamepad-status ui-panel';
@@ -882,7 +885,7 @@ export function startGame(): void {
   );
   session.onCommandCatalog = () => chat?.refreshSuggestions();
   session.onDayClock = (clock) => view?.setDayClock(clock);
-  session.onWeather = (weather) => view?.setWeather(weather);
+  session.onWeather = (weather, snap) => view?.setWeather(weather, snap);
   session.onChatResult = (result) => {
     chatReturn.acceptCommand(result.requestId, session.room);
     chat?.complete(result.ok);
@@ -943,7 +946,7 @@ export function startGame(): void {
   function renderChat(): void {
     const state = session.chatStatus();
     const desktop = !graphicsLost && inputMode.value === 'desktop';
-    const keepOpen = desktop && session.state === 'waiting';
+    const keepOpen = desktop && state.keepOpen;
     // Краткая сетевая пауза сохраняет и черновик, и справку, которую читают при вводе.
     if (!desktop || (!state.available && !keepOpen)) commandHelp?.close(false);
     chat?.update({
@@ -1075,9 +1078,7 @@ export function startGame(): void {
     );
   }
   function renderWorldHud(): void {
-    const hour =
-      view?.hour ??
-      (Number.isFinite(fixedHour) ? fixedHour : dayClockHour(session.dayClock, Date.now()));
+    const hour = Number.isFinite(fixedHour) ? fixedHour : session.currentHour();
     const room = session.room;
     worldHud.update(hour, session.occupancy, room?.state?.players ?? [], room?.sessionId);
   }
@@ -1162,8 +1163,9 @@ export function startGame(): void {
       if (disposed) return;
       view = new WorldView(canvas, element('labels'), session.definition, quality);
       view.setAudio(audio);
+      view.setWorldTimeSource(() => session.worldTimeMs());
       view.setDayClock(session.dayClock);
-      view.setWeather(session.weather);
+      view.setWeather(session.weather, true);
       if (weatherOverride) view.setWeatherOverride(weatherOverride);
       if (Number.isFinite(fixedHour)) view.setTimeOfDay(fixedHour);
       view.setTouchMode(inputMode.value === 'touch');

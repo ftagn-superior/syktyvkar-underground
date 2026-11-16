@@ -246,7 +246,8 @@ export class GroupGraphics {
           else s.pending = p;
         })
         .catch((e) => {
-          if (!controller.signal.aborted && generation === this.generation) s.error = String(e);
+          if (!controller.signal.aborted && generation === this.generation && s.wanted === level)
+            s.error = String(e);
         })
         .finally(() => {
           if (s.controller === controller) {

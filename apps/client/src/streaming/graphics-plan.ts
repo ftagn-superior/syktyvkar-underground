@@ -32,6 +32,8 @@ export interface GraphicsProjection {
   visible: boolean;
   nearPlane: boolean;
   pinned?: boolean;
+  /** Keep an already-loaded near view active when turning inside the first-person ring. */
+  retainNear?: boolean;
 }
 /** Forward distance to a complete AABB; input direction is normalized. */
 export function rayBoundsDistance(
@@ -70,7 +72,7 @@ export function graphicsLevel(
     players.some((p) => distanceToBoundsXZ(p, bounds) <= GRAPHICS_LOD_POLICY.playerRadius)
   )
     return 'near';
-  if (!projection.visible) return 'far';
+  if (!projection.visible) return projection.retainNear && previous === 'near' ? 'near' : 'far';
   if (projection.nearPlane || projection.pixels > GRAPHICS_LOD_POLICY.promotePixels) return 'near';
   if (projection.pixels < GRAPHICS_LOD_POLICY.demotePixels) return 'far';
   return previous ?? 'far';

@@ -237,6 +237,34 @@ describe('group streaming lifecycle', () => {
     }
   });
 
+  it('does not block a near upgrade when a retained speculative far preparation fails', async () => {
+    const f = fixture();
+    let rejectFar: ((reason: Error) => void) | undefined;
+    f.holdFar(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectFar = reject;
+        }),
+    );
+    try {
+      for (let i = 0; i < 30 && !rejectFar; i++) {
+        f.stream.pump(100);
+        await tick();
+      }
+      expect(rejectFar).toBeDefined();
+      f.zoom(400);
+      f.replan();
+      expect(f.stream.diagnostics().groups.some((group) => group.wanted === 'near')).toBe(true);
+      rejectFar!(new Error('far failed'));
+      await tick();
+      await ready(f.stream);
+      expect([...f.live].sort()).toEqual(['east', 'west']);
+      expect(f.stream.diagnostics().groups.every((group) => !group.error)).toBe(true);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
   it('connects far protected graphics without draining unrelated background physics first', async () => {
     const f = fixture(1000, undefined, 100);
     f.clockTax(0.2);

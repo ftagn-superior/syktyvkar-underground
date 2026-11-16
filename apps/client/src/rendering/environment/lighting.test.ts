@@ -497,7 +497,7 @@ describe('world lighting ownership', () => {
     try {
       const caster = MeshBuilder.CreateBox('caster', {}, scene);
       lighting.shadow.addShadowCaster(caster);
-      const shadowMap = lighting.shadow.getShadowMap();
+      const shadow = lighting.shadow;
       const sun = lighting.shadow.getLight();
       const direction = sun.direction.clone();
       const lights = [...scene.lights];
@@ -524,7 +524,8 @@ describe('world lighting ownership', () => {
           expect(pipelines).toHaveLength(1);
           expect(pipelines[0].cameras).toEqual([camera, eyeCamera]);
         }
-        expect(lighting.shadow.getShadowMap()).toBe(shadowMap);
+        expect(lighting.shadow).toBe(shadow);
+        const shadowMap = lighting.shadow.getShadowMap();
         expect(shadowMap?.renderList).toHaveLength(1);
         expect(shadowMap?.renderList?.[0]).toBe(caster);
       }

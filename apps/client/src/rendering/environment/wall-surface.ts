@@ -126,7 +126,7 @@ const PATTERN = `
     }
     if (kind == ${K.metal}.0) {
       float sheet = suWallSeam(p.x, 1.05, 0.02, fw.x);
-      float waveFade = smoothstep(0.01, 0.06, f);
+      float waveFade = 1.0 - smoothstep(0.01, 0.06, f);
       float wave = waveFade > 0.0 ? 0.88 + 0.24 * (0.5 + 0.5 * sin(p.x * 41.89)) : 1.0;
       return base * mix(1.0, wave, waveFade) * (1.0 - 0.35 * sheet);
     }

@@ -666,6 +666,7 @@ export class WorldView {
       visible,
       nearPlane,
       pinned,
+      retainNear: this.firstPerson && withinFog,
     };
   }
   prepareFarGroup(

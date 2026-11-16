@@ -101,6 +101,12 @@ describe('camera coverage for graphical streaming', () => {
       expect(f.view.isGraphicsVisible(behind)).toBe(false);
       expect(f.view.isGraphicsVisible(behind, 125)).toBe(true);
       expect(f.view.isGraphicsVisible(bounds(400), 125)).toBe(false);
+      const behindProjection = f.view.projectGraphicsGroup(behind);
+      expect(behindProjection.visible).toBe(false);
+      expect(behindProjection.retainNear).toBe(true);
+      expect(graphicsLevel(behind, behindProjection, [], 'near')).toBe('near');
+      expect(graphicsLevel(behind, behindProjection, [], 'far')).toBe('far');
+      expect(f.view.projectGraphicsGroup(bounds(400)).retainNear).toBe(false);
     } finally {
       f.dispose();
     }

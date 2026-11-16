@@ -74,7 +74,11 @@ function volumeWorldXZ(world: Matrix, volumes: MeshVolume[]) {
           if (point.z > maxZ) maxZ = point.z;
         }
   }
-  return { minX, maxX, minZ, maxZ };
+  // Matrix products are float32, whereas the narrow phase applies the inverse
+  // transforms separately. Roundoff must only add broad-phase candidates, never
+  // remove a solid at a world/grid boundary. Exact mesh/tolerance checks stay unchanged.
+  const padding = 1e-5 * Math.max(1, Math.abs(minX), Math.abs(maxX), Math.abs(minZ), Math.abs(maxZ));
+  return { minX: minX - padding, maxX: maxX + padding, minZ: minZ - padding, maxZ: maxZ + padding };
 }
 
 /** Static physics resources belong to one world; instances share their asset's native shape. */

@@ -126,17 +126,19 @@ export class GroupGraphics {
         s = { group };
         this.states.set(group.groupId, s);
       }
-      if (level !== s.wanted) {
-        const keepFar =
-          !pinned &&
-          level === 'near' &&
-          !s.current &&
-          !!s.controller &&
-          s.preparingLevel === 'far';
+      if (level !== s.wanted || (pinned && level === 'near' && s.preparingLevel === 'far')) {
+        // Preserve useful work through a turn, including a completed far result
+        // awaiting activation. A new player/editor pin must still preempt a stalled far load.
+        const keepFar = !pinned && level === 'near' && !s.current;
+        const keepPreparing =
+          level !== undefined &&
+          (s.preparingLevel === level || (keepFar && s.preparingLevel === 'far'));
         s.wanted = level;
-        if (!keepFar) {
+        if (!keepPreparing) {
           s.controller?.abort();
           s.preparingLevel = undefined;
+        }
+        if (s.pending?.level !== level && !(keepFar && s.pending?.level === 'far')) {
           s.pending?.release();
           s.pending = undefined;
         }
@@ -177,19 +179,18 @@ export class GroupGraphics {
               this.graphics,
             )
           : false));
+    // The projection also supplies editor pins outside the preload area. Compute it
+    // once: a wanted, unpinned group used to project all eight corners twice.
+    const projection: GraphicsProjection = this.graphics.projectGraphicsGroup?.(
+      group.bounds,
+      group.groupId,
+    ) ?? { pixels: Infinity, visible: true, nearPlane: false };
     const pinned =
       this.players.some(
         (p) => distanceToBoundsXZ(p, group.bounds) <= GRAPHICS_LOD_POLICY.playerRadius,
       ) ||
-      (!!this.graphics.projectGraphicsGroup?.(group.bounds, group.groupId).pinned);
+      !!projection.pinned;
     const wanted = pinned || preload || retained;
-    const projection: GraphicsProjection = wanted
-      ? (this.graphics.projectGraphicsGroup?.(group.bounds, group.groupId) ?? {
-          pixels: Infinity,
-          visible: true,
-          nearPlane: false,
-        })
-      : { pixels: 0, visible, nearPlane: false, pinned };
     return {
       visible,
       preload,

@@ -245,6 +245,7 @@ export class WorldLighting {
     sun.shadowMinZ = 0;
     sun.shadowMaxZ = SUN_DISTANCE * 2;
     this.shadowsAllocated = renderQualitySettings(initialQuality).shadows;
+    this.scene.shadowsEnabled = this.shadowsAllocated;
     const initialMapSize = this.shadowsAllocated ? SHADOW_MAP_SIZE : 1;
     // The default generator is the cache. All receivers use the composed generator,
     // which is registered once after the cache and rendered after it within the frame.
@@ -420,11 +421,21 @@ export class WorldLighting {
   /** Standard adds HDR and MSAA; economy retains the same tone curve in its materials. */
   setQuality(quality: RenderQuality): void {
     const settings = renderQualitySettings(quality);
-    if (settings.shadows && !this.shadowsAllocated) {
-      this.shadowsAllocated = true;
-      this.staticShadow.mapSize = SHADOW_MAP_SIZE;
-      this.shadow.mapSize = SHADOW_MAP_SIZE;
-      this.attachShadowTargets();
+    if (settings.shadows !== this.shadowsAllocated) {
+      // Keep generator/caster identities, but release the actual large targets on
+      // downgrade. Resizing recreates RTTs and drops their map-specific observers.
+      this.heldDepth?.dispose();
+      this.heldDepth = undefined;
+      this.heldProjection = undefined;
+      this.pendingProjection = undefined;
+      this.incompleteRefreshes = 0;
+      const size = settings.shadows ? SHADOW_MAP_SIZE : 1;
+      for (const shadow of [this.staticShadow, this.shadow]) {
+        shadow.mapSize = size;
+        shadow.resetProjection();
+      }
+      this.shadowsAllocated = settings.shadows;
+      if (settings.shadows) this.attachShadowTargets();
     }
     this.scene.shadowsEnabled = settings.shadows;
     // Disabled shadows skip the map entirely; draw it afresh when they return.

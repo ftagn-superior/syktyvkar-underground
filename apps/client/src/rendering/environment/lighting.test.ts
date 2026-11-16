@@ -11,6 +11,38 @@ import { WorldLighting } from './lighting';
 import { shadowCasterRadius } from '../shadow-range';
 
 describe('static shadow cache', () => {
+  it('reclaims large maps on downgrade and reconnects caching once on every upgrade', () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
+    const lighting = new WorldLighting(scene, camera, [], 'economy');
+    try {
+      const caster = MeshBuilder.CreateBox('house', {}, scene);
+      lighting.staticShadow.addShadowCaster(caster);
+      expect(scene.shadowsEnabled).toBe(false);
+      expect(lighting.staticShadow.mapSize).toBe(1);
+      for (let cycle = 0; cycle < 3; cycle++) {
+        lighting.setQuality('standard');
+        const map = lighting.staticShadow.getShadowMap()!;
+        expect(lighting.staticShadow.mapSize).toBe(2048);
+        expect(lighting.shadow.mapSize).toBe(2048);
+        expect(map.renderList).toContain(caster);
+        for (let i = 0; i < 3; i++) scene.render();
+        expect(lighting.staticShadow.refreshes).toBe(cycle + 1);
+        lighting.setQuality('economy');
+        expect(lighting.staticShadow.mapSize).toBe(1);
+        expect(lighting.shadow.mapSize).toBe(1);
+        expect(map.getInternalTexture()).toBeNull();
+        for (let i = 0; i < 3; i++) scene.render();
+        expect(lighting.staticShadow.refreshes).toBe(cycle + 1);
+      }
+    } finally {
+      lighting.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   const fixture = () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);

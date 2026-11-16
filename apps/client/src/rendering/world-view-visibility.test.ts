@@ -6,6 +6,7 @@ import { Camera } from '@babylonjs/core/Cameras/camera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Bounds } from '@su/contracts';
 import { WorldView } from './world-view';
+import { graphicsLevel } from '../streaming/graphics-plan';
 
 const bounds = (x: number, y = 0, z = 0): Bounds => ({
   min: { x, y: y - 1, z: z - 1 },
@@ -34,6 +35,7 @@ function fixture() {
     eyeCamera,
     canvas,
     scene,
+    target: Vector3.Zero(),
     firstPerson: false,
     lastFrame: 1,
     graphicsBoxes: new WeakMap(),
@@ -55,6 +57,55 @@ function fixture() {
 }
 
 describe('camera coverage for graphical streaming', () => {
+  it('does not force near LOD when an orthographic group crosses the camera near plane', () => {
+    const f = fixture();
+    try {
+      const crossing: Bounds = {
+        min: { x: -0.5, y: -1, z: 9 },
+        max: { x: 0.5, y: 1, z: 11 },
+      };
+      const projection = f.view.projectGraphicsGroup(crossing);
+      expect(projection.visible).toBe(true);
+      expect(projection.nearPlane).toBe(false);
+      expect(projection.pixels).toBeGreaterThan(0);
+      expect(projection.pixels).toBeLessThan(240);
+      expect(graphicsLevel(crossing, projection, [], 'near')).toBe('far');
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('keeps perspective near-plane crossings conservative without projecting behind the eye', () => {
+    const f = fixture();
+    try {
+      f.perspective(true);
+      const crossing: Bounds = {
+        min: { x: -1, y: -1, z: 9 },
+        max: { x: 1, y: 1, z: 11 },
+      };
+      const projection = f.view.projectGraphicsGroup(crossing);
+      expect(projection.visible).toBe(true);
+      expect(projection.nearPlane).toBe(true);
+      expect(Number.isFinite(projection.pixels)).toBe(true);
+      expect(graphicsLevel(crossing, projection, [], 'far')).toBe('near');
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('preloads the first-person ring behind the eye while respecting its distance limit', () => {
+    const f = fixture();
+    try {
+      f.perspective(true);
+      const behind = bounds(0, 0, 40);
+      expect(f.view.isGraphicsVisible(behind)).toBe(false);
+      expect(f.view.isGraphicsVisible(behind, 125)).toBe(true);
+      expect(f.view.isGraphicsVisible(bounds(400), 125)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
   it('uses complete bounds and fixed world X/Z guards without inflating the vertical extent', () => {
     const f = fixture();
     try {

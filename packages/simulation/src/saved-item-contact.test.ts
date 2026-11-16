@@ -67,6 +67,55 @@ const itemAt = (position: Vec3, typeId = 'wooden-crate', rotation = identity) =>
   initialItemState({ seedId: 'saved', typeId, position, rotation });
 
 describe('saved dynamic contact with closed mesh volumes', () => {
+  it('retains transformed grid candidates across boundaries, ownership, ignore and transfer', async () => {
+    const world = await meshWorld([]);
+    const source = new BuildingColliders(world.scene);
+    const target = new BuildingColliders(world.scene);
+    try {
+      for (const boundary of [-64, -32, 0, 32, 64]) {
+        const rotation = Quaternion.FromEulerAngles(0, Math.PI / 4, 0);
+        const collider = meshBox({ x: -2, y: -2, z: -2 }, { x: 2, y: 2, z: 2 });
+        collider.position = { x: 3, y: 0, z: -1 };
+        const instance = {
+          entityId: 'grid-body',
+          assetId: 'grid-asset',
+          position: { x: boundary, y: 0, z: -boundary },
+          rotation: { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
+        };
+        const asset = {
+          assetId: instance.assetId,
+          bounds: { min: { x: -5, y: -2, z: -5 }, max: { x: 5, y: 2, z: 5 } },
+          colliders: [collider],
+        };
+        const point = new Vector3(3, 0, -1)
+          .applyRotationQuaternion(rotation)
+          .add(new Vector3(boundary, 0, -boundary));
+        source.add(instance, asset);
+        source.add(instance, asset);
+        source.remove(instance.entityId);
+        expect(source.contains(point)).toBe(true);
+        const nearSurface = new Vector3(5 - 0.00003, 0, -1)
+          .applyRotationQuaternion(rotation)
+          .add(new Vector3(boundary, 0, -boundary));
+        expect(source.contains(nearSurface)).toBe(true);
+        expect(source.contains(nearSurface, 0.01)).toBe(false);
+        expect(source.without(new Set([instance.entityId]), () => source.contains(point))).toBe(false);
+        expect(source.contains(point)).toBe(true);
+        source.suspend();
+        source.transferTo(target);
+        expect(source.contains(point)).toBe(false);
+        expect(target.contains(point)).toBe(true);
+        expect(target.contains(nearSurface, 0.01)).toBe(false);
+        target.remove(instance.entityId);
+        expect(target.contains(point)).toBe(false);
+      }
+    } finally {
+      source.dispose();
+      target.dispose();
+      world.dispose();
+    }
+  });
+
   it('accepts shallow saved contact unchanged while retaining strict placement and deep rejection', async () => {
     const world = await meshWorld([meshBox({ x: -10, y: -2, z: -10 }, { x: 10, y: 0, z: 10 })]);
     try {

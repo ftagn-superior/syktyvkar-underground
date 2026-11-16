@@ -169,6 +169,74 @@ function fixture(radius = 1000, eastX?: number, backgroundBodies = 0, camera?: C
   };
 }
 describe('group streaming lifecycle', () => {
+  it('queries each group projection once per visual plan, including editor pin discovery', () => {
+    const f = fixture();
+    const calls = new Map<string, number>();
+    const project = f.graphics.projectGraphicsGroup!;
+    f.graphics.projectGraphicsGroup = (bounds, id) => {
+      calls.set(id!, (calls.get(id!) ?? 0) + 1);
+      return project(bounds, id);
+    };
+    try {
+      f.replan();
+      expect(calls.size).toBe(f.publication.manifest.graphics!.groups.length);
+      expect([...calls.values()].every((count) => count === 1)).toBe(true);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('publishes an already prepared far fallback before preparing its near replacement', async () => {
+    const f = fixture();
+    try {
+      // Let preparation complete without another pump activating the result.
+      for (let i = 0; i < 100; i++) {
+        if (f.stream.diagnostics().groups.some((group) => group.pending === 'far')) break;
+        f.stream.pump(100);
+        await tick();
+      }
+      expect(f.stream.diagnostics().groups.some((group) => group.pending === 'far')).toBe(true);
+      f.zoom(400);
+      f.replan();
+      expect(f.stream.diagnostics().groups.some((group) => group.pending === 'far')).toBe(true);
+      f.stream.pump(100);
+      expect(f.far.size).toBeGreaterThan(0);
+      await ready(f.stream);
+      expect([...f.live].sort()).toEqual(['east', 'west']);
+      expect(f.far.size).toBe(0);
+    } finally {
+      f.stream.dispose();
+    }
+  });
+
+  it('preempts a retained far load when the unchanged near request gains a player pin', async () => {
+    const f = fixture();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    f.holdFar(() => held);
+    try {
+      for (let i = 0; i < 30; i++) {
+        f.stream.pump(100);
+        await tick();
+      }
+      f.zoom(400);
+      f.replan();
+      expect(f.stream.diagnostics().groups.some((group) => group.wanted === 'near')).toBe(true);
+      // wanted remains near, but the occupied area now requires near readiness.
+      f.stream.setArea({ x: 0, y: 0, z: 0 });
+      for (let i = 0; i < 300 && !f.stream.criticalReady; i++) {
+        f.stream.pump(100);
+        await tick();
+      }
+      expect(f.stream.criticalReady).toBe(true);
+      expect(f.live.has('east')).toBe(true);
+    } finally {
+      f.stream.dispose();
+      release();
+      await tick();
+    }
+  });
+
   it('connects far protected graphics without draining unrelated background physics first', async () => {
     const f = fixture(1000, undefined, 100);
     f.clockTax(0.2);

@@ -346,15 +346,19 @@ export class WorldView {
         : this.streamingRadius;
       this.radial.radius =
         desiredRadius < this.radial.radius
-          ? Math.max(
-              desiredRadius,
-              this.radial.radius - (Math.max(1, this.radial.radius) * delta) / 0.3,
-            )
+          ? desiredRadius
           : Math.min(
               desiredRadius,
               this.radial.radius + (Math.max(1, desiredRadius) * delta) / 0.3,
             );
       this.dynamicRadial.radius = this.firstPerson ? this.radial.radius : 500;
+      // Caster membership follows camera coverage, not readiness/fog animation. Only
+      // resident objects are candidates; a temporary loading gap must not rebuild their batches.
+      const shadowRadius = this.firstPerson
+        ? FIRST_PERSON.radius
+        : Number.isFinite(this.streamingRadius)
+          ? this.graphicalArea().drawRadius
+          : Infinity;
       this.buildings.update(
         this.ownPosition,
         active.globalPosition,
@@ -363,11 +367,11 @@ export class WorldView {
         now,
         delta,
         this.ownPosition ?? this.target,
-        desiredRadius,
+        shadowRadius,
         this.firstPerson,
       );
-      this.farGroups.updateShadows(this.ownPosition ?? this.target, desiredRadius);
-      this.statics.updateShadows(this.ownPosition ?? this.target, desiredRadius);
+      this.farGroups.updateShadows(this.ownPosition ?? this.target, shadowRadius);
+      this.statics.updateShadows(this.ownPosition ?? this.target, shadowRadius);
       const center = this.ownPosition ?? this.target;
       this.radial.center = this.dynamicRadial.center = center;
       this.radial.time = this.dynamicRadial.time = now;
@@ -572,7 +576,11 @@ export class WorldView {
     if (visible) {
       const m = frame.view.m;
       for (const point of box.boundingBox.vectorsWorld) {
-        const behind = point.x * m[2] + point.y * m[6] + point.z * m[10] + m[14] > -camera.minZ;
+        // Orthographic projection has no perspective divide: clipping one corner
+        // must not pin a city-wide group to near LOD at every zoom level.
+        const behind =
+          camera.mode === Camera.PERSPECTIVE_CAMERA &&
+          point.x * m[2] + point.y * m[6] + point.z * m[10] + m[14] > -camera.minZ;
         if (behind) {
           nearPlane = true;
           continue;
@@ -652,7 +660,9 @@ export class WorldView {
         box.boundingBox.maximumWorld,
       );
     return {
-      pixels: maxX > minX ? Math.max(((maxX - minX) * width) / 2, ((maxY - minY) * height) / 2) : 0,
+      pixels: Number.isFinite(minX)
+        ? Math.max(((maxX - minX) * width) / 2, ((maxY - minY) * height) / 2)
+        : 0,
       visible,
       nearPlane,
       pinned,

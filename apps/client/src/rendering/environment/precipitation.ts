@@ -204,6 +204,8 @@ export class PrecipitationLayer {
   private readonly shape = new Vector4();
   private readonly eye = new Vector4();
   private readonly tint = new Color4();
+  private readonly minimum = new Vector3();
+  private readonly maximum = new Vector3();
 
   constructor(
     private readonly scene: Scene,
@@ -291,6 +293,20 @@ export class PrecipitationLayer {
       frame.overhead ? style.length * scale : style.eyeLength,
       frame.overhead ? style.width * scale : style.eyeWidth,
     );
+    // Vertex positions are random seeds, not world coordinates. In economy the
+    // submesh is non-global and uses its own bounds for culling and transparent sorting.
+    // Include the full shader volume and the largest billboard displacement.
+    const padding = this.shape.z + this.shape.w;
+    const half = this.volume.w / 2 + padding;
+    this.minimum.set(this.volume.x - half, this.volume.y - padding, this.volume.z - half);
+    this.maximum.set(
+      this.volume.x + half,
+      this.volume.y + this.motion.z + padding,
+      this.volume.z + half,
+    );
+    const bounds = this.mesh.getBoundingInfo();
+    bounds.reConstruct(this.minimum, this.maximum, this.mesh.getWorldMatrix());
+    this.mesh.subMeshes?.[0]?.setBoundingInfo(bounds);
     const [r, g, b] = frame.color;
     this.tint.set(r, g, b, style.alpha * (1 - 0.7 * frame.fog));
     material

@@ -7,12 +7,17 @@ export type ChatReturn = ControlIntent & { readonly mode: ChatReturnMode };
 export class ChatReturnContext {
   private revision = 0;
   private chat?: ChatReturn;
-  private command?: ControlIntent & { requestId: number };
+  private command?: { requestId: number; session: object };
 
   invalidate(): void {
+    this.pauseControls();
+    this.command = undefined;
+  }
+
+  /** Network waiting stops control restoration without cancelling a pending UI reply. */
+  pauseControls(): void {
     this.revision++;
     this.chat = undefined;
-    this.command = undefined;
   }
 
   begin(mode: ChatReturnMode, session: object): void {
@@ -31,7 +36,7 @@ export class ChatReturnContext {
   }
 
   sent(requestId: number, session: object): void {
-    this.command = { requestId, session, revision: this.revision };
+    this.command = { requestId, session };
   }
 
   /** Consume only the matching result; an old reply cannot cancel a newer command. */
@@ -39,6 +44,6 @@ export class ChatReturnContext {
     const command = this.command;
     if (!command || command.requestId !== requestId) return false;
     this.command = undefined;
-    return this.isCurrent(command, session);
+    return command.session === session;
   }
 }

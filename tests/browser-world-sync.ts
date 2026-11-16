@@ -272,6 +272,67 @@ try {
     '24h positional/--set/-s commands, minute precision and conflicts; guest denial preserves server authority; S-48 help remains available',
   );
 
+  // Hold the actual ordered server byte stream until prediction has to wait. A successful
+  // /help reply must survive that pause, but must not undo a newer explicit panel choice.
+  await owner.locator('#commands-panel .pop-close').click();
+  const ownerId = (await state(owner)).sessionId;
+  const transport = (app.room.clients.getById(ownerId)! as WebSocketClient).ref;
+  const wire = (transport as unknown as { _socket: import('node:net').Socket })._socket;
+  const pausedReplies: unknown[] = [];
+  for (const cancel of [false, true]) {
+    await openChat(owner);
+    await owner.locator('#chat-input').fill('/help time');
+    wire.cork();
+    try {
+      await owner.locator('#chat-send:not([disabled])').click();
+      await owner.waitForFunction(() => {
+        const snapshot = (window as any).__SU_DEBUG__.snapshot();
+        return snapshot.stalled && snapshot.connection === 'waiting';
+      });
+      const before = await state(owner);
+      assert.equal(before.chat.pending, true);
+      assert.equal(await owner.locator('#chat-console').isVisible(), true);
+      assert.equal(await owner.locator('#chat-input').getAttribute('readonly'), '');
+      await delay(750);
+      const after = await state(owner);
+      assert.ok(after.worldTimeMs - before.worldTimeMs >= 700, 'clock advances while waiting');
+      if (cancel) await owner.locator('#help-toggle').click();
+      pausedReplies.push({
+        cancel,
+        connection: before.connection,
+        pending: before.chat.pending,
+        before: before.worldTimeMs,
+        after: after.worldTimeMs,
+      });
+    } finally {
+      wire.uncork();
+    }
+    await owner.waitForFunction(() => {
+      const snapshot = (window as any).__SU_DEBUG__.snapshot();
+      return (
+        snapshot.connection === 'playing' &&
+        !snapshot.stalled &&
+        (document.querySelector('#chat-input') as HTMLInputElement).value === ''
+      );
+    });
+    if (cancel) {
+      assert.equal(await owner.locator('#commands-panel').isVisible(), false);
+      assert.equal(await owner.locator('#help-panel').isVisible(), true);
+      await owner.locator('#help-close').click();
+    } else {
+      await owner.locator('#commands-panel').waitFor();
+      assert.match(await owner.locator('#commands-panel').innerText(), /ЧЧ\[:ММ\]/);
+      await owner.screenshot({ path: `${output}/waiting-help.png` });
+      await owner.locator('#commands-panel .pop-close').click();
+    }
+  }
+  measurements.waitingReplies = pausedReplies;
+  await command(owner, '/help time');
+  await owner.locator('#commands-panel').waitFor();
+  checks.push(
+    'ordered network stalls preserve world time and pending /help, while a newer panel choice still cancels the reply',
+  );
+
   await command(owner, '/time 23');
   await delay(800);
   const selectors = [

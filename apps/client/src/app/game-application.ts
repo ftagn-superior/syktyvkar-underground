@@ -235,6 +235,10 @@ export function startGame(): void {
     chatReturn.invalidate();
     firstPerson?.suspend();
   }
+  function pauseControls(): void {
+    chatReturn.pauseControls();
+    firstPerson?.suspend();
+  }
   function closeGamePanels(): void {
     panels.closeExcept();
     view?.showPlacement();
@@ -344,10 +348,10 @@ export function startGame(): void {
   function syncControlAvailability(): void {
     const room = session.room;
     const ready = firstPersonEligible();
-    const interrupted = room !== controlSession || (controlReady && !ready);
+    if (room !== controlSession) interruptControls();
+    else if (controlReady && !ready) pauseControls();
     controlSession = room;
     controlReady = ready;
-    if (interrupted) interruptControls();
   }
   function finishChat(reason: ChatCloseReason): void {
     if (disposed) {
@@ -450,7 +454,7 @@ export function startGame(): void {
     syncPreview();
   }
   const session = new GameSession(updateState, showNotice);
-  session.onControlInterruption = interruptControls;
+  session.onControlInterruption = pauseControls;
   const gamepadStatus = document.createElement('p');
   gamepadStatus.id = 'gamepad-status';
   gamepadStatus.className = 'gamepad-status ui-panel';
@@ -942,7 +946,7 @@ export function startGame(): void {
   function renderChat(): void {
     const state = session.chatStatus();
     const desktop = !graphicsLost && inputMode.value === 'desktop';
-    const keepOpen = desktop && session.state === 'waiting';
+    const keepOpen = desktop && state.keepOpen;
     // Краткая сетевая пауза сохраняет и черновик, и справку, которую читают при вводе.
     if (!desktop || (!state.available && !keepOpen)) commandHelp?.close(false);
     chat?.update({

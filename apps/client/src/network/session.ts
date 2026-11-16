@@ -2098,12 +2098,14 @@ export class GameSession {
     if (had) this.onCommandCatalog?.();
   }
 
-  chatStatus(): { pending: boolean; remainingMs: number; available: boolean } {
+  chatStatus(): { pending: boolean; remainingMs: number; available: boolean; keepOpen: boolean } {
     return {
       pending: this.chatRequest.pending,
       remainingMs: this.chatRequest.remainingMs(),
       available:
         this.state === 'playing' && this.inputEnabled && !this.stalled && !this.persistencePaused,
+      // Prediction can stall one frame before the connection state becomes `waiting`.
+      keepOpen: this.state === 'waiting' || (this.state === 'playing' && this.stalled),
     };
   }
 

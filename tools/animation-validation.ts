@@ -44,6 +44,36 @@ export function validateAnimationClips(
       fail('missing clip registration');
       continue;
     }
+    if (clip.prop) {
+      const prop = clip.prop;
+      const vector = (values: readonly number[] | undefined, limit: number, positive = false) =>
+        Array.isArray(values) &&
+        values.length === 3 &&
+        values.every(
+          (value) => Number.isFinite(value) && Math.abs(value) <= limit && (!positive || value > 0),
+        );
+      if (
+        !['right-hand', 'body'].includes(prop.anchor) ||
+        (prop.rotation !== undefined && !vector(prop.rotation, Math.PI)) ||
+        !Array.isArray(prop.parts) ||
+        prop.parts.length < 1 ||
+        prop.parts.length > 16 ||
+        prop.parts.some((part) => {
+          return (
+            !part ||
+            !['box', 'cylinder'].includes(part.shape) ||
+            !vector(part.size, 1, true) ||
+            !vector(part.position, 1) ||
+            (part.rotation !== undefined && !vector(part.rotation, Math.PI)) ||
+            !/^#[a-f\d]{6}$/i.test(part.color) ||
+            (part.shape === 'cylinder' && part.size[0] !== part.size[2])
+          );
+        })
+      )
+        fail(
+          'prop must have a supported anchor and 1..16 bounded box/cylinder parts with hex colors',
+        );
+    }
     if (clip.rig !== entry.rig) fail(`clip rig ${clip.rig} does not match metadata ${entry.rig}`);
     if (!Number.isFinite(clip.periodMs) || clip.periodMs < 100 || clip.periodMs > 60_000) {
       fail('periodMs must be finite and in 100..60000 milliseconds');

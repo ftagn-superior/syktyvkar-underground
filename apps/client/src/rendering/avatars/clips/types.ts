@@ -1,6 +1,20 @@
 import type { AvatarPose } from '../locomotion';
 import type { AnimationRig } from '@su/contracts';
 
+/** Cosmetic geometry only. Dimensions/positions are fractions of character height. */
+export interface AnimationProp {
+  anchor: 'right-hand' | 'body';
+  /** Assembly orientation around the attachment, radians. */
+  rotation?: readonly [number, number, number];
+  parts: readonly {
+    shape: 'box' | 'cylinder';
+    size: readonly [number, number, number];
+    position: readonly [number, number, number];
+    rotation?: readonly [number, number, number];
+    color: string;
+  }[];
+}
+
 export interface AnimationSampler {
   mask: readonly (keyof AvatarPose)[];
   sample(pose: AvatarPose, elapsedMs: number, reducedMotion: boolean): void;
@@ -9,6 +23,8 @@ export interface AnimationClip extends AnimationSampler {
   rig: AnimationRig;
   /** Period of the complete pose, milliseconds. Sampling uses absolute elapsed time. */
   periodMs: number;
+  /** Owned by the avatar view; never a physical item or inventory entry. */
+  prop?: AnimationProp;
   /** Explicit preserve-seat alternative. Required iff metadata says seated=variant. */
   seated?: AnimationSampler;
 }

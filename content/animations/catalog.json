@@ -133,5 +133,84 @@
     "mode": "upperBody",
     "rig": "humanoid-v1",
     "seated": "preserve-seat"
+  },
+  {
+    "id": "smoke-cigarette",
+    "label": "Курить сигарету",
+    "category": "Отдых",
+    "cooldownMs": 2000,
+    "mode": "upperBody",
+    "rig": "humanoid-v1",
+    "seated": "preserve-seat"
+  },
+  {
+    "id": "drink-beer",
+    "label": "Пить пиво",
+    "category": "Отдых",
+    "cooldownMs": 2000,
+    "mode": "upperBody",
+    "rig": "humanoid-v1",
+    "seated": "preserve-seat"
+  },
+  {
+    "id": "use-laptop",
+    "label": "Работать за ноутбуком",
+    "category": "Занятия",
+    "cooldownMs": 1500,
+    "mode": "fullBody",
+    "rig": "humanoid-v1",
+    "seated": "preserve-seat"
+  },
+  {
+    "id": "sit",
+    "label": "Сидеть",
+    "category": "Отдых",
+    "cooldownMs": 1500,
+    "mode": "fullBody",
+    "rig": "humanoid-v2",
+    "seated": "variant",
+    "support": "ground",
+    "seatedMessage": "Расслабленная посадка в коляске: руки согнуты, коляска сохраняет опору.",
+    "reducedMotion": "static",
+    "reducedMotionLabel": "Статичное сидение без покачивания."
+  },
+  {
+    "id": "lie-down",
+    "label": "Лежать",
+    "category": "Отдых",
+    "cooldownMs": 1500,
+    "mode": "fullBody",
+    "rig": "humanoid-v2",
+    "seated": "unavailable",
+    "support": "ground",
+    "seatedMessage": "Лежание недоступно в коляске. Выберите другой скин.",
+    "reducedMotion": "static",
+    "reducedMotionLabel": "Статичное лежание на спине."
+  },
+  {
+    "id": "lie-on-side",
+    "label": "Лежать на боку",
+    "category": "Отдых",
+    "cooldownMs": 1500,
+    "mode": "fullBody",
+    "rig": "humanoid-v2",
+    "seated": "unavailable",
+    "support": "ground",
+    "seatedMessage": "Лежание на боку недоступно в коляске. Выберите другой скин.",
+    "reducedMotion": "static",
+    "reducedMotionLabel": "Статичное лежание на боку."
+  },
+  {
+    "id": "cartwheel",
+    "label": "Сделать колесо",
+    "category": "Разминка",
+    "mode": "fullBody",
+    "cooldownMs": 3000,
+    "rig": "humanoid-v2",
+    "seated": "unavailable",
+    "support": "ground",
+    "reducedMotion": "static",
+    "seatedMessage": "Колесо недоступно в коляске. Выберите другой скин.",
+    "reducedMotionLabel": "Уменьшенное движение: подготовка к колесу без вращения."
   }
 ]

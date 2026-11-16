@@ -6,7 +6,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
-import { ANIMATIONS, AVATAR_SKINS } from '@su/contracts';
+import { ANIMATIONS, AVATAR_SKINS, animationSkinSupport } from '@su/contracts';
 import { AvatarView } from './avatar-view';
 import type { DisplayPlayer } from '../../presentation/display-state';
 
@@ -60,7 +60,11 @@ describe('all catalog clips on actual skin rigs', () => {
               player.animation!.displayTick = ms * 0.06;
               player.animation!.displayTimeMs = ms;
               avatar.update(player, 1 / 60, true, reduced);
-              expect(avatar.diagnostics().animation.reason).toBe('playing');
+              expect(avatar.diagnostics().animation.reason).toBe(
+                animationSkinSupport(definition, skin.id) === 'unavailable'
+                  ? 'unsupported-skin'
+                  : 'playing',
+              );
               expect(root.position.asArray()).toEqual([3, 0.9, 4]);
               for (const node of scene.transformNodes)
                 expect(Array.from(node.computeWorldMatrix(true).m).every(Number.isFinite)).toBe(

@@ -61,6 +61,30 @@ describe('animation content pipeline', () => {
   it('validates the real registry, channel assignment and reduced motion', () => {
     expect(validateAnimationClips(ANIMATIONS, ANIMATION_CLIPS)).toEqual([]);
   });
+  it('rejects malformed cosmetic geometry before publishing the catalog', () => {
+    const valid = ANIMATION_CLIPS['smoke-cigarette'].prop!;
+    for (const prop of [
+      { ...valid, anchor: 'world' },
+      { ...valid, rotation: [0, Infinity, 0] },
+      { ...valid, parts: [] },
+      { ...valid, parts: Array(17).fill(valid.parts[0]) },
+      ...[
+        { shape: 'item' },
+        { color: 'red' },
+        { size: [0, 0.1, 0.1] },
+        { position: [0, NaN, 0] },
+        { rotation: [0, 4, 0] },
+        { size: [0.01, 0.1, 0.02] },
+      ].map((patch) => ({ ...valid, parts: [{ ...valid.parts[0], ...patch }] })),
+    ]) {
+      expect(
+        validateAnimationClips(ANIMATIONS, {
+          ...ANIMATION_CLIPS,
+          'smoke-cigarette': { ...ANIMATION_CLIPS['smoke-cigarette'], prop },
+        } as typeof ANIMATION_CLIPS).join(),
+      ).toContain('animation smoke-cigarette: prop');
+    }
+  });
   it.each([
     [{ id: '' }, 'id must'],
     [{ id: '../escape' }, 'id must'],
@@ -166,6 +190,8 @@ describe('animation content pipeline', () => {
         expect(await readdir(join(root, 'content/animations'))).not.toContain('.authoring.lock');
       });
     },
+    // Each transaction revalidates the complete catalog's ground geometry on every skin.
+    60_000,
   );
   it.each(['variant', 'unavailable'])(
     'generates a complete v2 ground clip with %s wheelchair policy and fingerprints rig sources',
@@ -244,6 +270,8 @@ describe('animation content pipeline', () => {
         expect(await readFile(index, 'utf8')).toBe(published);
       });
     },
+    // Repeated full-catalog skin/vertex checks now include the four released ground clips.
+    60_000,
   );
   it('rejects bad arguments without creating files; detects stale indexes and edited clip code', async () => {
     await fixture(async (root) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CharacterAnimator, type AvatarMotion } from './character-animator';
 import { ANIMATION_CLIPS } from './animation-clips';
-import { ANIMATIONS, type AnimationId } from '@su/contracts';
+import { ANIMATIONS, isGroundAnimation, type AnimationId } from '@su/contracts';
 import { restingPose, type AvatarPose } from './locomotion';
 
 function frame(): AvatarMotion {
@@ -135,7 +135,13 @@ describe('character animation from displayed motion', () => {
         clip.sample(pose, ms, reduced);
         for (const joint of Object.keys(pose) as (keyof AvatarPose)[]) {
           expect(Number.isFinite(pose[joint])).toBe(true);
-          expect(Math.abs(pose[joint])).toBeLessThanOrEqual(joint === 'lift' ? 0.1 : Math.PI);
+          const limit =
+            joint === 'lift'
+              ? 0.1
+              : ['rootPitch', 'rootYaw', 'rootRoll'].includes(joint)
+                ? Math.PI * 2
+                : Math.PI;
+          expect(Math.abs(pose[joint])).toBeLessThanOrEqual(limit);
           if (!clip.mask.includes(joint)) expect(pose[joint]).toBe(restingPose()[joint]);
         }
         if (reduced) {
@@ -170,7 +176,7 @@ describe('character animation from displayed motion', () => {
     expect(poses[0]).toEqual(poses[1]);
     expect(poses[1]).toEqual(poses[2]);
   });
-  it.each(ANIMATIONS.map((entry) => entry.id))(
+  it.each(ANIMATIONS.filter((entry) => !isGroundAnimation(entry)).map((entry) => entry.id))(
     'cycles %s indefinitely until a movement deadline, with falling priority',
     (id) => {
       const animator = new CharacterAnimator(4, 14),
@@ -199,6 +205,31 @@ describe('character animation from displayed motion', () => {
       input.animation.displayTick = 911;
       animator.update(input, 1 / 60, true);
       expect(animator.diagnostics().animation.reason).toBe('expired');
+    },
+  );
+  it.each(ANIMATIONS.filter(isGroundAnimation))(
+    'holds $id at rest and immediately restores locomotion on ground cancellation',
+    (entry) => {
+      const animator = new CharacterAnimator(4, 14),
+        input = frame();
+      input.animation = { ...playback(entry.id, 600), endsAtTick: 0 };
+      animator.update(input, 1 / 60, true, true);
+      const held = { ...animator.pose };
+      input.animation.displayTick = 1260;
+      animator.update(input, 1 / 60, true, true);
+      expect(animator.pose).toEqual(held);
+      expect(animator.diagnostics().animation.reason).toBe('playing');
+      expect(animator.supportWeight).toBe(1);
+      input.velocity.x = 4;
+      animator.update(input, 1 / 60, true);
+      expect(animator.diagnostics().animation.reason).toBe('moving');
+      expect(animator.diagnostics().animation.weight).toBe(0);
+      expect(animator.supportWeight).toBe(0);
+      expect(animator.pose.rootRoll).toBe(0);
+      expect(animator.pose.rootPitch).toBe(0);
+      input.grounded = false;
+      animator.update(input, 1 / 60, true);
+      expect(animator.supportWeight).toBe(0);
     },
   );
   it('fades cancellation into the current base and allows another clip during the fade', () => {

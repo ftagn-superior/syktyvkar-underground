@@ -325,7 +325,7 @@ export class InventoryPanel {
           ? 'Ожидаем подтверждение сервера…'
           : !this.groups.length
             ? this.placementAllowed
-              ? 'Пусто. Подойдите к предмету и нажмите Z.'
+              ? 'Пусто. Подойдите к предмету и нажмите пробел.'
               : 'Пусто. Подойдите к предмету и коснитесь подсказки.'
             : this.placementAllowed
               ? ''

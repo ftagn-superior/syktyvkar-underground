@@ -12,9 +12,9 @@ export type InteractionKind = 'pickup' | 'vault' | (string & {});
 export interface Interactable {
   id: string;
   kind: InteractionKind;
-  /** KeyboardEvent.code, e.g. 'KeyZ', 'Space'. */
+  /** KeyboardEvent.code, e.g. 'Space'. */
   key: string;
-  /** Text on the key cap, e.g. 'Z', 'Пробел'. */
+  /** Text on the key cap, e.g. 'Пробел'. */
   keyLabel: string;
   action: string;
   objectName: string;
@@ -32,12 +32,12 @@ export interface Interactable {
 
 /** Defaults shared by every interactable of a kind. */
 export const INTERACTION_KINDS = {
-  pickup: { key: 'KeyZ', keyLabel: 'Z', action: 'Подобрать', priority: 2, range: 3 },
+  pickup: { key: 'Space', keyLabel: 'Пробел', action: 'Подобрать', priority: 2, range: 3 },
   vault: { key: 'Space', keyLabel: 'Пробел', action: 'Перепрыгнуть', priority: 1, range: 3 },
   // Предмет на остановке важнее: подобрать его можно только вблизи.
   bus: {
-    key: 'KeyZ',
-    keyLabel: 'Z',
+    key: 'Space',
+    keyLabel: 'Пробел',
     action: 'Автобусы',
     priority: 1,
     range: BUS_STOP_PROMPT_RANGE,

@@ -774,7 +774,11 @@ export function startGame(): void {
     enabled: () =>
       loaded &&
       !graphicsLost &&
+      pageActive &&
+      !document.hidden &&
       !busMap?.visible &&
+      !panels.hasForeground &&
+      !chat?.isOpen &&
       session.state === 'playing' &&
       // Во время размещения из рюкзака подсказки скрыты, как и прежде.
       !placementOwner,

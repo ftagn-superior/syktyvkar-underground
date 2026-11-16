@@ -53,7 +53,7 @@ try {
   for (let count = 1; count <= 3; count++) {
     await page.waitForFunction(() => {
       const prompt = document.querySelector<HTMLButtonElement>(
-        '.su-ctx[aria-keyshortcuts="Z"]:not([hidden])',
+        '.su-ctx[aria-keyshortcuts="Space"]:not([hidden])',
       );
       const state = (window as any).__SU_DEBUG__.snapshot();
       return (
@@ -63,7 +63,7 @@ try {
         state.items.some((item: any) => item.entityId === prompt.dataset.interactionId)
       );
     });
-    await page.keyboard.press('z');
+    await page.keyboard.press('Space');
     await page.waitForFunction((expected) => {
       const state = (window as any).__SU_DEBUG__.snapshot();
       return (
@@ -213,7 +213,7 @@ try {
   await rotateCamera(page, 0.39);
   assert.ok(Math.abs((await controls()).camera - beforeRotation.camera - 0.39) < 0.01);
   await rotateCamera(page, -0.39);
-  await page.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
+  await page.getByRole('button', { name: 'Подобрать · Пробел', exact: true }).click();
   await page.waitForFunction(
     () =>
       (window as any).__SU_DEBUG__.snapshot().items.length === 0 &&

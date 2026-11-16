@@ -314,8 +314,8 @@ try {
 
   const beforePickup = await Promise.all([audio(owner), audio(observer)]);
   await owner.locator('#world').focus();
-  await owner.locator('.su-ctx[aria-keyshortcuts="Z"]:not([hidden])').waitFor();
-  await owner.keyboard.press('z');
+  await owner.locator('.su-ctx[aria-keyshortcuts="Space"]:not([hidden])').waitFor();
+  await owner.keyboard.press('Space');
   await owner.waitForFunction(() => {
     const state = (window as any).__SU_DEBUG__.snapshot();
     return (

@@ -12,6 +12,7 @@ import {
   type BusTrip,
 } from '@su/contracts';
 import { ICONS } from './icons';
+import { isTextInput } from '../input/keyboard';
 
 /** Подложка карты: улицы и дома в границах мира (`content/.../bus-network/map.json`). */
 export interface BusMapBackground {
@@ -261,7 +262,6 @@ export class BusMapPanel {
   private moved = 0;
   private pinch = 0;
   private resize?: ResizeObserver;
-  private openedAt = 0;
 
   constructor(private readonly host: BusMapHost) {
     this.backdrop.className = 'bus-map-backdrop';
@@ -327,18 +327,36 @@ export class BusMapPanel {
     window.addEventListener(
       'keydown',
       (event) => {
-        // Та же нажатая Z, что открыла карту, не должна сразу отправить поездку.
-        if (this.backdrop.hidden || event.repeat || performance.now() - this.openedAt < 250) return;
+        // Открывающий пробел уже поглощён подсказкой; удержание не подтверждает поездку.
+        if (
+          this.backdrop.hidden ||
+          event.defaultPrevented ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          isTextInput(event.target)
+        )
+          return;
         if (event.code === 'Escape') {
+          if (event.repeat) return;
           event.preventDefault();
           if (this.target || this.line) {
             this.target = this.line = undefined;
             this.paint();
           } else this.close();
-        } else if (event.code === 'KeyZ' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        } else if (event.code === 'Space') {
+          // Повтор открывающего пробела не должен нажимать кнопку, получившую фокус в карте.
+          if (event.repeat) {
+            event.preventDefault();
+            return;
+          }
+          // У сфокусированных кнопок (маршрут, масштаб и т. п.) остаётся их обычное действие.
+          if (event.target instanceof Element && event.target.closest('button:not([data-go])'))
+            return;
+          // Отменяем также нативный click кнопки на keyup, чтобы поездка отправилась один раз.
+          event.preventDefault();
           const go = this.side.querySelector<HTMLButtonElement>('[data-go]');
           if (go && !go.disabled) {
-            event.preventDefault();
             go.click();
           }
         }
@@ -370,7 +388,6 @@ export class BusMapPanel {
     this.sending = false;
     this.pendingToPlatform = undefined;
     this.backdrop.hidden = false;
-    this.openedAt = performance.now();
     this.resize ??= new ResizeObserver(() => this.applyView());
     this.resize.observe(this.svg);
     this.fit();
@@ -874,7 +891,7 @@ export class BusMapPanel {
           .join('');
         html += `<button class="ui-btn ui-pri bus-go disp" type="button" data-go="${this.target}" data-to-platform="${chosen.toPlatformId}" data-route="${chosen.routeId}" data-dir="${chosen.directionIndex}"${busy ? ' disabled' : ''}>${
           this.sending ? 'Едем…' : `Поехать на ${chosen.ref}`
-        }<span class="k" aria-hidden="true">Z</span></button>`;
+        }<span class="k" aria-hidden="true">Пробел</span></button>`;
       } else if (opp.length) {
         const alt = opp[0]!;
         html += `<p class="bus-note bus-opp-note"><b>В эту сторону автобусы идут с другой стороны остановки</b>${
@@ -918,7 +935,7 @@ export class BusMapPanel {
                 .join('') +
               `<button class="ui-btn ui-pri bus-go disp" type="button" data-go="${first.toStopId}" data-to-platform="${first.toPlatformId}" data-route="${first.routeId}" data-dir="${first.directionIndex}" data-next="${this.target}"${busy ? ' disabled' : ''}>${
                 this.sending ? 'Едем…' : `Поехать до «${name(first.toStopId)}»`
-              }<span class="k" aria-hidden="true">Z</span></button>`;
+              }<span class="k" aria-hidden="true">Пробел</span></button>`;
           } else html += '<p class="bus-note">Туда не доехать даже с пересадкой.</p>';
         } else html += '<p class="bus-note">Туда не доехать даже с пересадкой.</p>';
       }
@@ -1141,7 +1158,7 @@ export class BusMapPanel {
         const stop = (event.target as Element).closest?.<SVGGElement>('[data-stop]');
         if (stop && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault();
-          this.choose(stop.dataset.stop!);
+          if (!event.repeat) this.choose(stop.dataset.stop!);
         }
       },
       options,

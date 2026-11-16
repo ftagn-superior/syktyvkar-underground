@@ -175,6 +175,8 @@ describe('BusStopSource platforms', () => {
     expect(items.map((i) => i.id)).toContain('bus-stop:p-a');
     expect(items.map((i) => i.id)).toContain('bus-stop:p-a-opp');
     const platA = items.find((i) => i.id === 'bus-stop:p-a')!;
+    expect(platA.key).toBe('Space');
+    expect(platA.keyLabel).toBe('Пробел');
     const platOpp = items.find((i) => i.id === 'bus-stop:p-a-opp')!;
     expect(platA.objectName).toBe('Остановка «СГУ» (→ Поликлиника №3)');
     expect(platA.getDistance({ x: 0, y: 0, z: 9 })).toBeCloseTo(1, 3);

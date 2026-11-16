@@ -125,6 +125,13 @@ export class CellStreamer {
   private historyRequired: string[] = [];
   private visual?: { center: Vec3; radius: number };
   private visualExplicit = false;
+  private lastArea?: {
+    authX: number;
+    authZ: number;
+    predX: number;
+    predZ: number;
+    historyKey: string;
+  };
   private disposed = false;
   private terminalError?: string;
   private cleanupErrors = 0;
@@ -186,6 +193,7 @@ export class CellStreamer {
       return Promise.reject(new Error('Incompatible live publication'));
     const changed = new Set(changedWorldPublicationCells(this.manifest, manifest));
     this.generation++;
+    this.lastArea = undefined;
     this.preparing = 0;
     // Every async continuation captures its immutable context and generation. Old partial
     // preparations and suspended release generators can never mutate the transferred cells.
@@ -314,12 +322,20 @@ export class CellStreamer {
         cell.set = { cell: loaded, buildingAssets: {} };
         if (old.physicsLoaded || this.physicsWanted.has(old.id)) {
           await resources.prefetchPhysics(old.id, signal, this.priority(old));
-          const set = await loadCellPhysics(manifest, old.id, (path) => read(path), loaded);
+          let physicsBytes = 0;
+          const set = await loadCellPhysics(
+            manifest,
+            old.id,
+            (path) =>
+              read(path).then((bytes) => {
+                physicsBytes += bytes.byteLength;
+                return bytes;
+              }),
+            loaded,
+          );
           cell.set = set;
           cell.physicsLoaded = true;
-          cell.physicsBytes = new TextEncoder().encode(
-            JSON.stringify(set.buildingAssets),
-          ).byteLength;
+          cell.physicsBytes = physicsBytes;
           if (old.physics.size || this.physicsWanted.has(old.id))
             cell.physics = new Set(
               [...loaded.statics, ...loaded.buildings].map((item) => item.entityId),
@@ -401,6 +417,7 @@ export class CellStreamer {
     // An unchanged critical area may finish loading while distant replacement graphics
     // are pending. Transfer its latest ownership, rather than the preparation snapshot.
     this.generation++;
+    this.lastArea = undefined;
     this.preparing = 0;
     for (const [id] of next)
       if (!transition.changed.has(id) && !this.cells.has(id)) next.delete(id);
@@ -585,8 +602,30 @@ export class CellStreamer {
     historyCells: Iterable<string> = [],
   ): void {
     if (this.disposed) throw new Error('Cell streamer disposed');
+    const historyRequired = [...new Set(historyCells)];
+    const historyKey = historyRequired.length > 0 ? [...historyRequired].sort().join('\0') : '';
+    if (
+      this.visualExplicit &&
+      this.lastArea &&
+      authoritative.x === this.lastArea.authX &&
+      authoritative.z === this.lastArea.authZ &&
+      predicted.x === this.lastArea.predX &&
+      predicted.z === this.lastArea.predZ &&
+      historyKey === this.lastArea.historyKey
+    ) {
+      if ([...this.critical].some((id) => !this.cells.get(id)?.physicsLoaded))
+        this.groups.reservePreparationSlot();
+      return;
+    }
+    this.lastArea = {
+      authX: authoritative.x,
+      authZ: authoritative.z,
+      predX: predicted.x,
+      predZ: predicted.z,
+      historyKey,
+    };
     this.groups.setPlayers([authoritative, predicted]);
-    this.historyRequired = [...new Set(historyCells)];
+    this.historyRequired = historyRequired;
     this.critical = new Set([
       ...cellNeighborhood(this.manifest, authoritative),
       ...cellNeighborhood(this.manifest, predicted),
@@ -619,6 +658,7 @@ export class CellStreamer {
   }
   /** Replace preparation pins without carrying old-area hysteresis into a new server plan. */
   setPreparationArea(center: Vec3): void {
+    this.lastArea = undefined;
     this.physicsWanted.clear();
     this.graphicsWanted.clear();
     if (this.visual) this.visual = { ...this.visual, center: { ...center } };
@@ -626,6 +666,7 @@ export class CellStreamer {
   }
   /** The preview has no physics, player reservation or network lifecycle. */
   setPreview(center: Vec3, drawRadius = 500): void {
+    this.lastArea = undefined;
     this.critical.clear();
     this.physicsWanted.clear();
     this.groups.setPlayers([]);
@@ -749,19 +790,22 @@ export class CellStreamer {
         const physicsSignal = AbortSignal.any([signal, controller.signal]);
         try {
           await context.resources.prefetchPhysics(cell.id, physicsSignal, this.priority(cell));
+          let physicsBytes = 0;
           const set = await loadCellPhysics(
             context.manifest,
             cell.id,
-            (path) => read(path, physicsSignal),
+            (path) =>
+              read(path, physicsSignal).then((bytes) => {
+                physicsBytes += bytes.byteLength;
+                return bytes;
+              }),
             cell.set.cell,
           );
           if (!valid()) return;
           if (this.physicsWanted.has(cell.id)) {
             cell.set.buildingAssets = set.buildingAssets;
             cell.physicsLoaded = true;
-            cell.physicsBytes = new TextEncoder().encode(
-              JSON.stringify(set.buildingAssets),
-            ).byteLength;
+            cell.physicsBytes = physicsBytes;
           }
         } catch (error) {
           if (!controller.signal.aborted || this.physicsWanted.has(cell.id)) throw error;

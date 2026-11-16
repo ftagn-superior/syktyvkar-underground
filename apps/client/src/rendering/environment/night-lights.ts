@@ -2,7 +2,8 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Constants } from '@babylonjs/core/Engines/constants';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { SubMesh } from '@babylonjs/core/Meshes/subMesh';
 import type { Material } from '@babylonjs/core/Materials/material';
 import type { MaterialDefines } from '@babylonjs/core/Materials/materialDefines';
@@ -10,8 +11,9 @@ import { MaterialPluginBase } from '@babylonjs/core/Materials/materialPluginBase
 import { RegisterMaterialPlugin } from '@babylonjs/core/Materials/materialPluginManager';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
 import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
-import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import type { BuildingInstance, StaticLightSource } from '@su/contracts';
 import { nightLevels, type GlowLevel, type NightLevels } from './night-schedule';
@@ -45,8 +47,79 @@ const NEON_POOL_INTENSITY = 1.0;
  */
 const CONE_SCATTER = 0.4;
 const CONE_TAN = 0.6;
-/** Отсчётов вдоль луча внутри конуса. */
-const CONE_SAMPLES = 6;
+const CONE_SEGMENTS = 16;
+
+const CONE_VERTEX = `
+  precision highp float;
+  attribute vec3 position;
+  attribute vec3 normal;
+  attribute vec4 suConeData;
+  #include<instancesDeclaration>
+  uniform mat4 viewProjection;
+  varying vec3 vWorldPos;
+  varying vec3 vNormal;
+  varying vec3 vConeColor;
+  varying float vAlong;
+  void main(void) {
+    #include<instancesVertex>
+    float height = suConeData.w;
+    float below = position.y * height;
+    float radius = 0.25 + below * ${CONE_TAN.toFixed(4)};
+    vec3 localPos = vec3(position.x * radius, -below, position.z * radius);
+    vec4 worldPos = finalWorld * vec4(localPos, 1.0);
+    vWorldPos = worldPos.xyz;
+    vNormal = normalize(mat3(finalWorld) * vec3(normal.x, ${CONE_TAN.toFixed(4)}, normal.z));
+    vConeColor = suConeData.rgb;
+    vAlong = 1.0 - position.y;
+    gl_Position = viewProjection * worldPos;
+  }
+`;
+
+const CONE_FRAGMENT = `
+  precision highp float;
+  uniform vec3 eyePosition;
+  uniform float scatter;
+  varying vec3 vWorldPos;
+  varying vec3 vNormal;
+  varying vec3 vConeColor;
+  varying float vAlong;
+  void main(void) {
+    vec3 viewDir = normalize(eyePosition - vWorldPos);
+    float facing = abs(dot(normalize(vNormal), viewDir));
+    float edge = pow(facing, 1.4);
+    float along = clamp(vAlong, 0.0, 1.0);
+    float intensity = along * along * edge * scatter;
+    gl_FragColor = vec4(vConeColor * intensity, 0.0);
+  }
+`;
+
+function coneGeometry(): VertexData {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  for (let ring = 0; ring <= 1; ring++) {
+    for (let i = 0; i <= CONE_SEGMENTS; i++) {
+      const angle = (i / CONE_SEGMENTS) * Math.PI * 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      positions.push(cos, ring, sin);
+      normals.push(cos, 0, sin);
+    }
+  }
+  const row = CONE_SEGMENTS + 1;
+  for (let i = 0; i < CONE_SEGMENTS; i++) {
+    const a = i;
+    const b = i + 1;
+    const c = row + i;
+    const d = row + i + 1;
+    indices.push(a, c, b, b, c, d);
+  }
+  const data = new VertexData();
+  data.positions = positions;
+  data.normals = normals;
+  data.indices = indices;
+  return data;
+}
 
 /**
  * Переносит данные свечения из UV модели в собственный атрибут. Так шейдер не путает
@@ -111,7 +184,6 @@ class NightLightsPlugin extends MaterialPluginBase {
         SU_GLOW: false,
         SU_GLOW_ORIGIN: false,
         SU_LAMP_SLOTS: 0,
-        SU_LAMP_CONES: false,
       },
       true,
       false,
@@ -129,7 +201,6 @@ class NightLightsPlugin extends MaterialPluginBase {
       SU_GLOW: boolean;
       SU_GLOW_ORIGIN: boolean;
       SU_LAMP_SLOTS: number;
-      SU_LAMP_CONES: boolean;
     };
     target.SU_NIGHT = this.state.enabled && !material.disableLighting && !material.unlit;
     target.SU_GLOW =
@@ -138,7 +209,6 @@ class NightLightsPlugin extends MaterialPluginBase {
       mesh.isVerticesDataPresent(GLOW_ATTRIBUTE);
     target.SU_GLOW_ORIGIN = target.SU_GLOW && mesh.isVerticesDataPresent(GLOW_ORIGIN_ATTRIBUTE);
     target.SU_LAMP_SLOTS = target.SU_NIGHT ? this.state.slots : 0;
-    target.SU_LAMP_CONES = target.SU_NIGHT && this.state.cones;
   }
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh) {
     if (
@@ -256,59 +326,6 @@ uniform vec4 suLampCone;`,
           return light;
         }
       #endif
-      #ifdef SU_LAMP_CONES
-        // Свет, рассеянный в воздухе под фонарями, вдоль луча от глаза до этой точки.
-        // Луч обрезается по описанному цилиндру конуса, внутри — несколько отсчётов.
-        vec3 suLampCones(vec3 position) {
-          vec3 light = vec3(0.0);
-          #if SU_LAMP_SLOTS > 0
-            if (suNightClock.z > 0.0) {
-              vec3 eye = vEyePosition.xyz;
-              vec3 ray = position - eye;
-              float rayLength = length(ray);
-              for (int i = 0; i < SU_LAMP_SLOTS; i++) {
-                float height = suLampColors[i].w;
-                if (height <= 0.0) continue;
-                vec3 lamp = suLampPositions[i].xyz;
-                float reach = 0.25 + height * suLampCone.y;
-                float s0 = 0.0;
-                float s1 = 1.0;
-                // Слой высот от плафона до земли.
-                if (abs(ray.y) > 0.0001) {
-                  float top = (lamp.y - eye.y) / ray.y;
-                  float bottom = (lamp.y - height - eye.y) / ray.y;
-                  s0 = max(s0, min(top, bottom));
-                  s1 = min(s1, max(top, bottom));
-                } else if (eye.y > lamp.y || eye.y < lamp.y - height) continue;
-                // Вертикальный цилиндр вокруг конуса.
-                vec2 offset = eye.xz - lamp.xz;
-                float a = dot(ray.xz, ray.xz);
-                float c = dot(offset, offset) - reach * reach;
-                if (a > 0.000001) {
-                  float b = dot(offset, ray.xz);
-                  float disc = b * b - a * c;
-                  if (disc <= 0.0) continue;
-                  float root = sqrt(disc);
-                  s0 = max(s0, (-b - root) / a);
-                  s1 = min(s1, (-b + root) / a);
-                } else if (c > 0.0) continue;
-                if (s1 <= s0) continue;
-                float stride = (s1 - s0) / ${CONE_SAMPLES}.0;
-                float density = 0.0;
-                for (int k = 0; k < ${CONE_SAMPLES}; k++) {
-                  vec3 point = eye + ray * (s0 + stride * (float(k) + 0.5));
-                  float below = lamp.y - point.y;
-                  float radius = 0.25 + below * suLampCone.y;
-                  float along = clamp(1.0 - below / height, 0.0, 1.0);
-                  density += (1.0 - smoothstep(0.45 * radius, radius, length(point.xz - lamp.xz))) * along * along;
-                }
-                light += suLampColors[i].rgb * density * stride * rayLength;
-              }
-            }
-          #endif
-          return light * suLampCone.x;
-        }
-      #endif
       #ifdef SU_GLOW
         // Свечение этого пикселя: из него ставится метка для ореола (см. glow-mask.ts).
         vec3 suGlowLight = vec3(0.0);
@@ -362,9 +379,6 @@ uniform vec4 suLampCone;`,
               finalDiffuse += suNightLampLight(vPositionW, normalW) * surfaceAlbedo.rgb;
             #endif
           #endif
-          #ifdef SU_LAMP_CONES
-            finalEmissive += suLampCones(vPositionW);
-          #endif
           #ifdef SU_GLOW
             suGlowLight = suNightGlow(surfaceAlbedo.rgb);
             finalEmissive += suGlowLight;
@@ -386,9 +400,6 @@ uniform vec4 suLampCone;`,
         #ifdef SU_NIGHT
           color.rgb += suNightLampLight(vPositionW, normalW) * diffuseColor * baseColor.rgb;
         #endif
-        #ifdef SU_LAMP_CONES
-          color.rgb += suLampCones(vPositionW);
-        #endif
       `,
     };
   }
@@ -405,6 +416,11 @@ export class WorldNightLights {
   private readonly sources = new Map<string, LampSource[]>();
   private readonly nearest: { lamp: LampSource; distance: number }[] = [];
   private readonly rotation = new Quaternion();
+  private readonly coneMatrices = new Float32Array(LAMP_SLOTS * 16);
+  private readonly coneData = new Float32Array(LAMP_SLOTS * 4);
+  private readonly coneScratch = new Matrix();
+  private coneMesh?: Mesh;
+  private coneMaterial?: ShaderMaterial;
   levels: NightLevels = nightLevels(12);
 
   constructor(private readonly scene: Scene) {
@@ -433,14 +449,16 @@ export class WorldNightLights {
 
   /**
    * Экономичный режим перебирает меньше фонарей и не рисует конусы под ними;
-   * переключение пересобирает шейдеры.
+   * смена числа слотов пересобирает шейдеры материалов.
    */
   setEconomy(economy: boolean): void {
     const slots = economy ? ECONOMY_LAMP_SLOTS : LAMP_SLOTS;
     if (slots === this.state.slots && this.state.cones === !economy) return;
+    const slotsChanged = slots !== this.state.slots;
     this.state.slots = slots;
     this.state.cones = !economy;
-    this.scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
+    if (!this.state.cones && this.coneMesh?.isEnabled()) this.coneMesh.setEnabled(false);
+    if (slotsChanged) this.scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
   }
 
   private sourceOwners = new Map<string, number>();
@@ -501,7 +519,73 @@ export class WorldNightLights {
       this.state.clock[3],
     ]);
     this.selectLamps(focus, levels.lamps, levels.neonLight);
+    this.updateCones(focus);
     this.state.version++;
+  }
+
+  private ensureConeResources(): void {
+    if (this.coneMesh && this.coneMaterial) return;
+    const mesh = (this.coneMesh = new Mesh('night-lamp-cones', this.scene));
+    mesh.isPickable = false;
+    mesh.alwaysSelectAsActiveMesh = true;
+    coneGeometry().applyToMesh(mesh, false);
+    mesh.doNotSyncBoundingInfo = true;
+    const material = (this.coneMaterial = new ShaderMaterial(
+      'night-lamp-cones',
+      this.scene,
+      { vertexSource: CONE_VERTEX, fragmentSource: CONE_FRAGMENT },
+      {
+        attributes: ['position', 'normal', 'world0', 'world1', 'world2', 'world3', 'suConeData'],
+        uniforms: ['viewProjection', 'eyePosition', 'scatter'],
+        needAlphaBlending: true,
+      },
+    ));
+    material.backFaceCulling = false;
+    material.disableDepthWrite = true;
+    material.alphaMode = Constants.ALPHA_ONEONE;
+    material.setFloat('scatter', CONE_SCATTER * 0.65);
+    mesh.material = material;
+    mesh.thinInstanceSetBuffer('matrix', this.coneMatrices, 16, false);
+    mesh.thinInstanceSetBuffer('suConeData', this.coneData, 4, false);
+    mesh.thinInstanceCount = 0;
+    mesh.setEnabled(false);
+  }
+
+  private updateCones(focus: Vector3): void {
+    if (!this.state.enabled || !this.state.cones || this.state.clock[2] <= 0) {
+      if (this.coneMesh?.isEnabled()) this.coneMesh.setEnabled(false);
+      return;
+    }
+    const positions = this.state.lampPositions;
+    const colors = this.state.lampColors;
+    let count = 0;
+    for (let i = 0; i < this.state.slots; i++) {
+      const height = colors[i * 4 + 3];
+      if (height <= 0) continue;
+      Matrix.TranslationToRef(
+        positions[i * 4],
+        positions[i * 4 + 1],
+        positions[i * 4 + 2],
+        this.coneScratch,
+      );
+      this.coneScratch.copyToArray(this.coneMatrices, count * 16);
+      this.coneData.set(
+        [colors[i * 4], colors[i * 4 + 1], colors[i * 4 + 2], height],
+        count * 4,
+      );
+      count++;
+    }
+    if (count === 0) {
+      if (this.coneMesh?.isEnabled()) this.coneMesh.setEnabled(false);
+      return;
+    }
+    this.ensureConeResources();
+    const mesh = this.coneMesh!;
+    mesh.thinInstanceCount = count;
+    mesh.thinInstanceBufferUpdated('matrix');
+    mesh.thinInstanceBufferUpdated('suConeData');
+    this.coneMaterial!.setVector3('eyePosition', this.scene.activeCamera?.globalPosition ?? focus);
+    if (!mesh.isEnabled()) mesh.setEnabled(true);
   }
 
   private selectLamps(focus: Vector3, lamps: number, neon: number): void {
@@ -553,6 +637,7 @@ export class WorldNightLights {
   setEnabled(enabled: boolean): void {
     if (enabled === this.state.enabled) return;
     this.state.enabled = enabled;
+    if (!enabled && this.coneMesh?.isEnabled()) this.coneMesh.setEnabled(false);
     this.scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
   }
 
@@ -560,5 +645,9 @@ export class WorldNightLights {
     states.delete(this.scene);
     this.sources.clear();
     this.sourceOwners.clear();
+    this.coneMesh?.dispose();
+    this.coneMesh = undefined;
+    this.coneMaterial?.dispose();
+    this.coneMaterial = undefined;
   }
 }

@@ -125,7 +125,8 @@ export class WorldView {
   };
   private streamingRadius = 0;
   private readonly cameraOrbit = new CameraOrbit();
-  private readonly instrumentation: SceneInstrumentation;
+  private instrumentation?: SceneInstrumentation;
+  private frameDrawCalls = 0;
   private readonly entities = new Map<string, EntityView>();
   private audio?: GameAudio;
   private readonly reactionSounds = new ReactionSoundGate();
@@ -195,6 +196,7 @@ export class WorldView {
     private readonly labels: HTMLElement,
     private readonly definition: WorldDefinition | WorldHeader,
     quality: RenderQuality = 'standard',
+    diagnostics = false,
   ) {
     this.quality = quality;
     this.engine = new Engine(canvas, true, {
@@ -207,7 +209,7 @@ export class WorldView {
     // Игра не использует события указателя Babylon над мешами: без этого каждое движение
     // мыши запускало бы поиск по всем мешам города.
     this.scene.skipPointerMovePicking = true;
-    this.instrumentation = new SceneInstrumentation(this.scene);
+    if (diagnostics) this.instrumentation = new SceneInstrumentation(this.scene);
     this.scene.useRightHandedSystem = true;
     this.camera = new ArcRotateCamera(
       'isometric',
@@ -378,7 +380,12 @@ export class WorldView {
       this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
       if (this.staticHighlight?.target) this.highlightStaticObject(this.staticHighlight.target);
       this.positionLabels();
-      this.scene.render();
+      if (this.instrumentation) this.scene.render();
+      else {
+        const drawCallsBefore = this.engine._drawCalls.current;
+        this.scene.render();
+        this.frameDrawCalls = this.engine._drawCalls.current - drawCallsBefore;
+      }
     });
   }
   private material(id: string, color: string): StandardMaterial {
@@ -899,7 +906,9 @@ export class WorldView {
           cameras: pipeline.cameras.map((camera) => camera.name),
         }),
       ),
-      drawCalls: this.instrumentation.drawCallsCounter.current,
+      drawCalls: this.instrumentation
+        ? this.instrumentation.drawCallsCounter.current
+        : this.frameDrawCalls,
       renderer: this.engine.getGlInfo(),
       camera: {
         mode: this.firstPerson ? 'first-person' : 'overview',
@@ -1641,7 +1650,7 @@ export class WorldView {
     this.farGroups.dispose();
     this.buildings.dispose();
     this.statics.dispose();
-    this.instrumentation.dispose();
+    this.instrumentation?.dispose();
     const releaseGraphics = () => {
       this.environment.dispose();
       this.scene.dispose();

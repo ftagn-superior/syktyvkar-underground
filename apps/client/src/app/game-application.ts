@@ -1161,7 +1161,13 @@ export function startGame(): void {
       view = undefined;
       await session.load();
       if (disposed) return;
-      view = new WorldView(canvas, element('labels'), session.definition, quality);
+      view = new WorldView(
+        canvas,
+        element('labels'),
+        session.definition,
+        quality,
+        new URLSearchParams(location.search).get('diagnostics') === '1',
+      );
       view.setAudio(audio);
       view.setWorldTimeSource(() => session.worldTimeMs());
       view.setDayClock(session.dayClock);

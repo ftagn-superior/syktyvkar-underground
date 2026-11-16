@@ -67,8 +67,9 @@ export class WorldEnvironment {
     scene: Scene,
     private readonly camera: ArcRotateCamera,
     additionalCameras: Camera[] = [],
+    initialQuality: RenderQuality = 'standard',
   ) {
-    this.lighting = new WorldLighting(scene, camera, additionalCameras);
+    this.lighting = new WorldLighting(scene, camera, additionalCameras, initialQuality);
     // Construct before world materials: the cloud, night and weather plugins attach
     // when those materials are created.
     this.clouds = new WorldClouds(scene, camera);

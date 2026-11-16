@@ -57,6 +57,7 @@ const vector = (v: { x: number; y: number; z: number }) => new Vector3(v.x, v.y,
 const MAX_IDLE_PER_VARIANT = 24;
 const MAX_IDLE_BATCHES = 96;
 const MAX_IDLE_BYTES = 8 * 1024 * 1024;
+const OCCLUSION_TEST_INTERVAL_MS = 50;
 const bufferBytes = (batch: Batch) => batch.capacity * (16 + 4 * TREE_ATTRIBUTES.length) * 4;
 // Count both the CPU arrays and GPU copies, including each batch's unique geometry.
 const retainedBytes = (batch: Batch) => 2 * (batch.geometryBytes + bufferBytes(batch));
@@ -73,6 +74,8 @@ export class TreeViews {
   private readonly fading = new Set<string>();
   private readonly shadowed = new Set<string>();
   private shadowDirty = false;
+  private lastOcclusionTest = -Infinity;
+  private opaque = false;
   private readonly index = new SpatialIndex();
 
   constructor(
@@ -368,15 +371,23 @@ export class TreeViews {
       else this.shadowed.delete(id);
       selected.add(id);
     }
+    const test =
+      opaque !== this.opaque || now - this.lastOcclusionTest >= OCCLUSION_TEST_INTERVAL_MS;
+    this.opaque = opaque;
+    if (test) this.lastOcclusionTest = now;
     for (const id of selected) {
       const tree = this.trees.get(id);
       if (!tree) continue;
-      const blocked = rays.some(
-        (ray) =>
-          ray.length > 0 &&
-          ray.intersectsBoxMinMax(tree.minimum, tree.maximum) &&
-          treeIntersectsRay(tree.recipe, Ray.Transform(ray, tree.inverse)),
-      );
+      const blocked = opaque
+        ? false
+        : test
+          ? rays.some(
+              (ray) =>
+                ray.length > 0 &&
+                ray.intersectsBoxMinMax(tree.minimum, tree.maximum) &&
+                treeIntersectsRay(tree.recipe, Ray.Transform(ray, tree.inverse)),
+            )
+          : tree.fade.blocked;
       const previousOpacity = tree.fade.opacity;
       if (opaque) tree.fade.clear();
       const opacity = tree.fade.update(blocked, now, seconds);

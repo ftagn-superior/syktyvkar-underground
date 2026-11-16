@@ -196,9 +196,9 @@ export type PrecipitationFrame = {
 /** Один вид осадков. Пока он не идёт, меш выключен и не стоит ничего. */
 export class PrecipitationLayer {
   private readonly mesh: Mesh;
-  private readonly material: ShaderMaterial;
+  private material?: ShaderMaterial;
   private readonly style: KindStyle;
-  private share = 1;
+  private economy = false;
   private readonly volume = new Vector4();
   private readonly motion = new Vector4();
   private readonly shape = new Vector4();
@@ -206,41 +206,60 @@ export class PrecipitationLayer {
   private readonly tint = new Color4();
 
   constructor(
-    scene: Scene,
+    private readonly scene: Scene,
     readonly kind: PrecipitationKind,
   ) {
     this.style = STYLES[kind];
     const mesh = (this.mesh = new Mesh(`precipitation-${kind}`, scene));
-    dropGeometry(DROPS, kind === 'rain' ? 0x5eed : 0x5a0f).applyToMesh(mesh, false);
+    mesh.isPickable = false;
+    // Капли расставляет шейдер; границы меша ничего не значат.
+    mesh.alwaysSelectAsActiveMesh = true;
+    mesh.setEnabled(false);
+  }
+
+  private ensureResources(): ShaderMaterial {
+    if (this.material) return this.material;
+    dropGeometry(DROPS, this.kind === 'rain' ? 0x5eed : 0x5a0f).applyToMesh(this.mesh, false);
+    this.mesh.doNotSyncBoundingInfo = true;
     const material = (this.material = new ShaderMaterial(
-      `precipitation-${kind}`,
-      scene,
+      `precipitation-${this.kind}`,
+      this.scene,
       { vertexSource: VERTEX, fragmentSource: FRAGMENT },
       {
         attributes: ['position', 'uv'],
         uniforms: ['viewProjection', 'volume', 'motion', 'shape', 'eye', 'viewDirection', 'tint'],
-        defines: kind === 'snow' ? ['#define SNOW'] : [],
+        defines: this.kind === 'snow' ? ['#define SNOW'] : [],
         needAlphaBlending: true,
       },
     ));
     material.backFaceCulling = false;
     material.disableDepthWrite = true;
-    mesh.material = material;
-    mesh.isPickable = false;
-    // Капли расставляет шейдер; границы меша ничего не значат.
-    mesh.alwaysSelectAsActiveMesh = true;
-    mesh.doNotSyncBoundingInfo = true;
-    mesh.setEnabled(false);
+    this.mesh.material = material;
+    this.applyEconomyCount();
+    return material;
+  }
+
+  private applyEconomyCount(): void {
+    const subMesh = this.mesh.subMeshes?.[0];
+    if (!subMesh) return;
+    subMesh.indexCount = (this.economy ? Math.round(DROPS * ECONOMY_SHARE) : DROPS) * 6;
+    subMesh.setBoundingInfo(this.mesh.getBoundingInfo());
   }
 
   setEconomy(economy: boolean): void {
-    this.share = economy ? ECONOMY_SHARE : 1;
+    if (this.economy === economy) return;
+    this.economy = economy;
+    this.applyEconomyCount();
   }
 
   update(frame: PrecipitationFrame): void {
     const visible = frame.amount > 0.001;
-    if (this.mesh.isEnabled() !== visible) this.mesh.setEnabled(visible);
-    if (!visible) return;
+    if (!visible) {
+      if (this.mesh.isEnabled()) this.mesh.setEnabled(false);
+      return;
+    }
+    const material = this.ensureResources();
+    if (!this.mesh.isEnabled()) this.mesh.setEnabled(true);
     const style = this.style;
     let scale = 1;
     if (frame.overhead) {
@@ -259,11 +278,11 @@ export class PrecipitationLayer {
         frame.target.z - (frame.forward.z / flat) * back * 0.5,
         2 * reach + back,
       );
-      this.motion.set(frame.seconds, style.fall * scale, height, frame.amount * this.share);
+      this.motion.set(frame.seconds, style.fall * scale, height, frame.amount);
       this.eye.set(0, 0, 0, 1);
     } else {
       this.volume.set(frame.eye.x, frame.eye.y - EYE_VOLUME.below, frame.eye.z, EYE_VOLUME.size);
-      this.motion.set(frame.seconds, style.fall, EYE_VOLUME.height, frame.amount * this.share);
+      this.motion.set(frame.seconds, style.fall, EYE_VOLUME.height, frame.amount);
       this.eye.set(frame.eye.x, frame.eye.y, frame.eye.z, 0);
     }
     this.shape.set(
@@ -274,7 +293,7 @@ export class PrecipitationLayer {
     );
     const [r, g, b] = frame.color;
     this.tint.set(r, g, b, style.alpha * (1 - 0.7 * frame.fog));
-    this.material
+    material
       .setVector4('volume', this.volume)
       .setVector4('motion', this.motion)
       .setVector4('shape', this.shape)
@@ -285,7 +304,8 @@ export class PrecipitationLayer {
 
   dispose(): void {
     this.mesh.dispose();
-    this.material.dispose();
+    this.material?.dispose();
+    this.material = undefined;
   }
 }
 

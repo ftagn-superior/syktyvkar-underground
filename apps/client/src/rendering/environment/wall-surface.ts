@@ -66,8 +66,10 @@ const PATTERN = `
     float grime = 0.88 + 0.12 * smoothstep(0.0, 1.4, p.y);
     vec3 base = albedo * stain * grime;
     if (kind == ${K.plaster}.0) {
+      float fade = 1.0 - smoothstep(0.02, 0.08, f);
+      if (fade <= 0.0) return base;
       float fine = 0.97 + 0.06 * suWallNoise(p * 9.0);
-      return base * mix(1.0, fine, 1.0 - smoothstep(0.02, 0.08, f));
+      return base * mix(1.0, fine, fade);
     }
     if (kind == ${K.brick}.0 || kind == ${K.block}.0) {
       bool brick = kind == ${K.brick}.0;
@@ -106,9 +108,10 @@ const PATTERN = `
     }
     if (kind == ${K.panel}.0) {
       // Координаты панелей — в шагах окон и этажах: швы целые.
-      float seam = max(suWallSeam(p.x, 1.0, 0.012, fw.x), suWallSeam(p.y, 1.0, 0.012, fw.y));
       float tone = 0.93 + 0.14 * suWallHash(floor(p) + 0.37);
       float seamFade = 1.0 - smoothstep(0.004, 0.02, f);
+      if (seamFade <= 0.0) return base * tone;
+      float seam = max(suWallSeam(p.x, 1.0, 0.012, fw.x), suWallSeam(p.y, 1.0, 0.012, fw.y));
       return base * tone * (1.0 - 0.5 * seam * seamFade);
     }
     if (kind == ${K.tile}.0) {
@@ -122,10 +125,10 @@ const PATTERN = `
       return mix(mean, detail, fade);
     }
     if (kind == ${K.metal}.0) {
-      float wave = 0.88 + 0.24 * (0.5 + 0.5 * sin(p.x * 41.89));
       float sheet = suWallSeam(p.x, 1.05, 0.02, fw.x);
-      vec3 detail = base * mix(wave, 1.0, 1.0 - smoothstep(0.01, 0.06, f)) * (1.0 - 0.35 * sheet);
-      return detail;
+      float waveFade = smoothstep(0.01, 0.06, f);
+      float wave = waveFade > 0.0 ? 0.88 + 0.24 * (0.5 + 0.5 * sin(p.x * 41.89)) : 1.0;
+      return base * mix(1.0, wave, waveFade) * (1.0 - 0.35 * sheet);
     }
     return albedo;
   }

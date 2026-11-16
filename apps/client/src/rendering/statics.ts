@@ -47,9 +47,8 @@ export class StaticViews {
     mesh.receiveShadows = true;
     mesh.isPickable = false;
     mesh.freezeWorldMatrix();
-    const casts = !entity.entityId.startsWith('ground-');
-    if (casts) {
-      this.shadow.addShadowCaster(mesh);
+    const obstacle = !entity.entityId.startsWith('ground-');
+    if (obstacle) {
       mesh.enableEdgesRendering();
       mesh.edgesWidth = 0.6;
       const accent = obstacleAccent(entity);
@@ -62,7 +61,7 @@ export class StaticViews {
       signature,
       references: 1,
       color: entity.color,
-      casts,
+      casts: false,
     });
     this.lifecycle.instancesCreated++;
   }
@@ -71,7 +70,7 @@ export class StaticViews {
     if (!entry || --entry.references > 0) return;
     this.instances.delete(id);
     this.lifecycle.instancesRemoved++;
-    this.shadow.removeShadowCaster(entry.mesh);
+    if (entry.casts) this.shadow.removeShadowCaster(entry.mesh);
     entry.mesh.dispose();
     const material = this.materials.get(entry.color)!;
     if (!--material.users) {

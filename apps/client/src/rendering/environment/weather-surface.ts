@@ -121,12 +121,14 @@ uniform vec4 suWeatherSheen;`,
         // Лужи стоят в низинах шума на горизонтальных поверхностях, но не на газоне:
         // трава (зелёное альбедо) вода впитывает.
         float suPuddle(vec3 normal, vec3 position, vec3 albedo) {
+          if (suWeather.x <= 0.35 || normal.y <= 0.9) return 0.0;
           float level = smoothstep(0.9, 0.98, normal.y);
           float green = smoothstep(1.05, 1.25, albedo.g / max(max(albedo.r, albedo.b), 0.001));
           float noise = suWeatherNoise(position.xz * 0.16) * 0.7 + suWeatherNoise(position.xz * 0.7) * 0.3;
           return level * (1.0 - green) * smoothstep(0.62, 0.7, noise) * smoothstep(0.35, 1.0, suWeather.x);
         }
         float suWetAmount(vec3 normal) {
+          if (suWeather.x <= 0.0) return 0.0;
           return suWeather.x * mix(0.5, 1.0, smoothstep(0.3, 0.9, normal.y));
         }
         float suFogAmount(vec3 position) {

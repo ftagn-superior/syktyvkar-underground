@@ -187,7 +187,8 @@ export class WorldLighting {
   private readonly fill: HemisphericLight;
   private readonly sun: DirectionalLight;
   private pipeline?: DefaultRenderingPipeline;
-  private readonly heldDepth?: RenderTargetTexture;
+  private heldDepth?: RenderTargetTexture;
+  private shadowsAllocated: boolean;
   private heldProjection?: ShadowProjection;
   private pendingProjection?: ShadowProjection;
   private incompleteRefreshes = 0;
@@ -209,6 +210,7 @@ export class WorldLighting {
     private readonly scene: Scene,
     private readonly camera: Camera,
     private readonly additionalCameras: Camera[] = [],
+    initialQuality: RenderQuality = 'standard',
   ) {
     // Economy applies this in the material shader; standard uses the HDR pipeline.
     // Changing quality must not change the art direction.
@@ -242,12 +244,14 @@ export class WorldLighting {
     sun.shadowFrustumSize = SHADOW_EXTENT;
     sun.shadowMinZ = 0;
     sun.shadowMaxZ = SUN_DISTANCE * 2;
+    this.shadowsAllocated = renderQualitySettings(initialQuality).shadows;
+    const initialMapSize = this.shadowsAllocated ? SHADOW_MAP_SIZE : 1;
     // The default generator is the cache. All receivers use the composed generator,
     // which is registered once after the cache and rendered after it within the frame.
-    this.staticShadow = new StaticShadowGenerator(SHADOW_MAP_SIZE, sun);
+    this.staticShadow = new StaticShadowGenerator(initialMapSize, sun, undefined, undefined, true);
     // Occlusion alpha reveals the player; it does not change a building/tree silhouette.
     this.staticShadow.transparencyShadow = true;
-    this.shadow = new WorldShadowGenerator(SHADOW_MAP_SIZE, sun, undefined, camera);
+    this.shadow = new WorldShadowGenerator(initialMapSize, sun, undefined, camera, true);
     for (const shadow of [this.staticShadow, this.shadow]) {
       // PCF даёт чёткий край у основания и мягкий на расстоянии, в отличие от размытой ESM.
       shadow.usePercentageCloserFiltering = true;
@@ -257,9 +261,21 @@ export class WorldLighting {
       shadow.setDarkness(0.22);
     }
     const engine = scene.getEngine();
-    if ((engine as { _gl?: WebGL2RenderingContext })._gl?.blitFramebuffer) {
+    if (this.shadowsAllocated) this.attachShadowTargets();
+    this.contextRestored = engine.onContextRestoredObservable.add(() => {
+      // Restored textures have no pixels from the old context.
+      this.heldProjection = undefined;
+      this.incompleteRefreshes = 0;
+      this.staticShadow.invalidate();
+    });
+    this.setTimeOfDay(REFERENCE_HOUR);
+  }
+
+  private attachShadowTargets(): void {
+    const engine = this.scene.getEngine();
+    if (!this.heldDepth && (engine as { _gl?: WebGL2RenderingContext })._gl?.blitFramebuffer) {
       // This target is never rendered by Babylon: it holds only the last published depth.
-      this.heldDepth = new RenderTargetTexture('held-static-shadow', SHADOW_MAP_SIZE, scene, {
+      this.heldDepth = new RenderTargetTexture('held-static-shadow', SHADOW_MAP_SIZE, this.scene, {
         generateMipMaps: false,
         generateDepthBuffer: true,
         noColorAttachment: true,
@@ -271,14 +287,7 @@ export class WorldLighting {
       () => this.restorePendingProjection(),
       () => this.publishStatic(),
     );
-    this.contextRestored = engine.onContextRestoredObservable.add(() => {
-      // Restored textures have no pixels from the old context.
-      this.heldProjection = undefined;
-      this.incompleteRefreshes = 0;
-      this.staticShadow.invalidate();
-    });
-    this.shadow.getShadowMap()!.onClearObservable.add((engine) => this.startFromStatic(engine));
-    this.setTimeOfDay(REFERENCE_HOUR);
+    this.shadow.getShadowMap()!.onClearObservable.add((e) => this.startFromStatic(e));
   }
 
   /**
@@ -411,9 +420,15 @@ export class WorldLighting {
   /** Standard adds HDR and MSAA; economy retains the same tone curve in its materials. */
   setQuality(quality: RenderQuality): void {
     const settings = renderQualitySettings(quality);
+    if (settings.shadows && !this.shadowsAllocated) {
+      this.shadowsAllocated = true;
+      this.staticShadow.mapSize = SHADOW_MAP_SIZE;
+      this.shadow.mapSize = SHADOW_MAP_SIZE;
+      this.attachShadowTargets();
+    }
     this.scene.shadowsEnabled = settings.shadows;
     // Disabled shadows skip the map entirely; draw it afresh when they return.
-    this.staticShadow.invalidate();
+    if (this.shadowsAllocated) this.staticShadow.invalidate();
     if (!settings.postProcessing) {
       this.pipeline?.dispose();
       this.pipeline = undefined;

@@ -336,7 +336,8 @@ export class VerifiedResources {
     throw new Error(`Resource version/SHA-256 mismatch: ${job.path}`);
   }
   private async digest(bytes: Uint8Array): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes).buffer);
+    const view = new Uint8Array(bytes.buffer as ArrayBuffer, bytes.byteOffset, bytes.byteLength);
+    const digest = await crypto.subtle.digest('SHA-256', view);
     return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   }
   invalidate(path: string) {

@@ -611,11 +611,11 @@ export class CellStreamer {
     this.physicsWanted = next;
     if ([...this.critical].some((id) => !this.cells.get(id)?.physicsLoaded))
       this.groups.reservePreparationSlot();
-    this.setVisualArea(
-      this.visualExplicit ? this.visual!.center : predicted,
-      this.visualExplicit ? this.visual!.radius : 500,
-      false,
-    );
+    if (this.visualExplicit) {
+      for (const id of this.critical) this.graphicsWanted.add(id);
+      this.groups.plan(this.visual!.center, this.visual!.radius);
+      this.refresh();
+    } else this.setVisualArea(predicted, 500, false);
   }
   /** Replace preparation pins without carrying old-area hysteresis into a new server plan. */
   setPreparationArea(center: Vec3): void {

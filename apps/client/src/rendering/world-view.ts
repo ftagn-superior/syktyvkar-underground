@@ -21,6 +21,7 @@ import '@babylonjs/core/Rendering/edgesRenderer';
 import {
   findReaction,
   buildingBounds,
+  distanceToBoundsXZ,
   normalizeYaw,
   type ItemPose,
   type Vec3,
@@ -228,7 +229,7 @@ export class WorldView {
     this.eyeCamera.minZ = FIRST_PERSON.minZ;
     this.eyeCamera.maxZ = FIRST_PERSON.maxZ;
     this.scene.activeCamera = this.camera;
-    this.environment = new WorldEnvironment(this.scene, this.camera, [this.eyeCamera]);
+    this.environment = new WorldEnvironment(this.scene, this.camera, [this.eyeCamera], quality);
     this.shadow = this.environment.shadow;
     this.scene.onBeforeRenderObservable.add(() => {
       this.shadowSubmittedIndices = 0;
@@ -345,7 +346,10 @@ export class WorldView {
         : this.streamingRadius;
       this.radial.radius =
         desiredRadius < this.radial.radius
-          ? desiredRadius
+          ? Math.max(
+              desiredRadius,
+              this.radial.radius - (Math.max(1, this.radial.radius) * delta) / 0.3,
+            )
           : Math.min(
               desiredRadius,
               this.radial.radius + (Math.max(1, desiredRadius) * delta) / 0.3,
@@ -359,11 +363,11 @@ export class WorldView {
         now,
         delta,
         this.ownPosition ?? this.target,
-        this.radial.radius,
+        desiredRadius,
         this.firstPerson,
       );
-      this.farGroups.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
-      this.statics.updateShadows(this.ownPosition ?? this.target, this.radial.radius);
+      this.farGroups.updateShadows(this.ownPosition ?? this.target, desiredRadius);
+      this.statics.updateShadows(this.ownPosition ?? this.target, desiredRadius);
       const center = this.ownPosition ?? this.target;
       this.radial.center = this.dynamicRadial.center = center;
       this.radial.time = this.dynamicRadial.time = now;
@@ -527,6 +531,16 @@ export class WorldView {
   }
   /** Camera coverage with a world-space X/Z guard, including the complete object volume. */
   isGraphicsVisible(bounds: Bounds, margin = 0): boolean {
+    if (this.firstPerson) {
+      const center = this.ownPosition ?? this.target;
+      if (center) {
+        const distance = distanceToBoundsXZ(center, bounds);
+        if (distance > FIRST_PERSON.radius + margin) return false;
+        // Preload/retain the full 200 m ring around the player so Q/E or 180-degree turns
+        // never expose unloaded ground or silhouettes.
+        if (margin >= 125 && distance <= FIRST_PERSON.radius) return true;
+      }
+    }
     const { planes } = this.graphicsFrame();
     for (const { normal, d } of planes) {
       // The vertex furthest into a plane proves separation if even it is outside.
@@ -546,21 +560,29 @@ export class WorldView {
       box = new BoundingInfo(vector(bounds.min), vector(bounds.max));
       this.graphicsBoxes.set(bounds, box);
     }
-    const { matrix, width, height } = frame,
-      visible = box.isInFrustum(frame.planes);
+    const { matrix, width, height } = frame;
+    const center = this.firstPerson ? (this.ownPosition ?? this.target) : undefined;
+    const withinFog = !center || distanceToBoundsXZ(center, bounds) <= FIRST_PERSON.radius;
+    const visible = withinFog && box.isInFrustum(frame.planes);
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
       maxY = -Infinity,
       nearPlane = false;
-    for (const point of box.boundingBox.vectorsWorld) {
-      const projected = Vector3.TransformCoordinates(point, matrix),
-        m = frame.view.m;
-      nearPlane ||= point.x * m[2] + point.y * m[6] + point.z * m[10] + m[14] > -camera.minZ;
-      minX = Math.min(minX, projected.x);
-      maxX = Math.max(maxX, projected.x);
-      minY = Math.min(minY, projected.y);
-      maxY = Math.max(maxY, projected.y);
+    if (visible) {
+      const m = frame.view.m;
+      for (const point of box.boundingBox.vectorsWorld) {
+        const behind = point.x * m[2] + point.y * m[6] + point.z * m[10] + m[14] > -camera.minZ;
+        if (behind) {
+          nearPlane = true;
+          continue;
+        }
+        const projected = Vector3.TransformCoordinates(point, matrix);
+        minX = Math.min(minX, projected.x);
+        maxX = Math.max(maxX, projected.x);
+        minY = Math.min(minY, projected.y);
+        maxY = Math.max(maxY, projected.y);
+      }
     }
     let pinned = this.editorSelectedGroup !== undefined && this.editorSelectedGroup === groupId;
     if (
@@ -630,7 +652,7 @@ export class WorldView {
         box.boundingBox.maximumWorld,
       );
     return {
-      pixels: Math.max(((maxX - minX) * width) / 2, ((maxY - minY) * height) / 2),
+      pixels: maxX > minX ? Math.max(((maxX - minX) * width) / 2, ((maxY - minY) * height) / 2) : 0,
       visible,
       nearPlane,
       pinned,
@@ -954,7 +976,7 @@ export class WorldView {
     return Math.ceil(bytes);
   }
   graphicalArea() {
-    this.activeCamera.getViewMatrix(true);
+    this.activeCamera.getViewMatrix();
     const center = this.ownPosition ?? this.target;
     const matrix = this.activeCamera.getTransformationMatrix();
     let frame = this.graphicalFrame;
@@ -972,7 +994,8 @@ export class WorldView {
     }
     // Keep the 75 m fog transition outside every visible cell, including tall buildings.
     // Physics and network AOI keep their independent 500/800 m safety margins.
-    const drawRadius = Math.max(125, frame.radius + 75);
+    const rawRadius = Math.max(125, frame.radius + 75);
+    const drawRadius = this.firstPerson ? Math.min(FIRST_PERSON.radius, rawRadius) : rawRadius;
     return {
       center: { x: center.x, y: center.y, z: center.z },
       drawRadius,
@@ -1509,6 +1532,15 @@ export class WorldView {
         ]);
     for (const landmark of this.landmarks)
       anchors.push([landmark, landmark.position, 0, this.radial.radius]);
+    const chatSize = new Map<HTMLElement, { halfWidth: number; height: number }>();
+    for (const [view] of anchors) {
+      if (view.chat && !view.chat.hidden) {
+        chatSize.set(view.chat, {
+          halfWidth: view.chat.offsetWidth / 2,
+          height: view.chat.offsetHeight,
+        });
+      }
+    }
     for (const [view, position, lift, radius] of anchors) {
       this.labelPosition.copyFrom(position);
       this.labelPosition.y += lift;
@@ -1522,7 +1554,6 @@ export class WorldView {
       const x = (this.projectedLabel.x * cssWidth) / width;
       const y = (this.projectedLabel.y * cssHeight) / height;
       const opacity = radialOpacity(this.radial.center, position, radius);
-      view.label.style.opacity = String(opacity);
       let hidden =
         opacity <= 0.01 ||
         this.projectedLabel.z < 0 ||
@@ -1554,22 +1585,28 @@ export class WorldView {
         }
       }
       if (view.label.hidden !== hidden) view.label.hidden = hidden;
+      if (view.reaction && view.reaction.hidden !== hidden) view.reaction.hidden = hidden;
+      if (view.chat && view.chat.hidden !== hidden) view.chat.hidden = hidden;
+      if (hidden) continue;
+      const opacityValue = String(opacity);
+      if (view.label.style.opacity !== opacityValue) view.label.style.opacity = opacityValue;
       if (view.reaction) {
-        view.reaction.hidden = hidden;
-        view.reaction.style.filter = `opacity(${opacity})`;
+        const filterValue = `opacity(${opacity})`;
+        if (view.reaction.style.filter !== filterValue) view.reaction.style.filter = filterValue;
         view.reaction.style.transform = `translate(${(x + 38).toFixed(2)}px, ${(y - 30).toFixed(2)}px) translate(-50%, -100%)`;
       }
       if (view.chat) {
-        view.chat.hidden = hidden;
-        view.chat.style.filter = `opacity(${opacity})`;
+        const filterValue = `opacity(${opacity})`;
+        if (view.chat.style.filter !== filterValue) view.chat.style.filter = filterValue;
         // Keep text above the name and any simultaneous reaction. Clamp horizontally
         // so a long line near the edge of the viewport remains readable.
-        const halfWidth = view.chat.offsetWidth / 2;
+        const size = chatSize.get(view.chat);
+        const halfWidth = size?.halfWidth ?? view.chat.offsetWidth / 2;
+        const heightOffset = size?.height ?? view.chat.offsetHeight;
         const chatX = Math.min(cssWidth - halfWidth - 8, Math.max(halfWidth + 8, x));
-        const chatY = Math.max(view.chat.offsetHeight + 8, y - (view.reaction ? 104 : 34));
+        const chatY = Math.max(heightOffset + 8, y - (view.reaction ? 104 : 34));
         view.chat.style.transform = `translate(${chatX.toFixed(2)}px, ${chatY.toFixed(2)}px) translate(-50%, -100%)`;
       }
-      if (hidden) continue;
       const transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) translate(-50%, -100%)`;
       if (transform !== view.labelTransform) {
         view.label.style.transform = transform;

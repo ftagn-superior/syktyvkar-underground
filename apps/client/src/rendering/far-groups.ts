@@ -126,6 +126,8 @@ export class FarGroups {
           if (!parts.parts[renderMeshes.indexOf(m)].ground) eligible.add(m);
           m.isPickable = false;
           m.receiveShadows = true;
+          m.doNotSyncBoundingInfo = true;
+          m.freezeWorldMatrix();
           adoptGlowAttribute(m);
           adoptSurfaceAttribute(m);
           const origin = m.getVerticesData(VertexBuffer.UV3Kind);

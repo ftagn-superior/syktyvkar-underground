@@ -70,6 +70,7 @@ type LampSource = {
 };
 type NightState = {
   enabled: boolean;
+  version: number;
   slots: number;
   /** Конусы под фонарями; в экономичном режиме выключены. */
   cones: boolean;
@@ -92,6 +93,10 @@ const linear = (hex: string): [number, number, number] =>
   ];
 
 class NightLightsPlugin extends MaterialPluginBase {
+  private boundVersion = -1;
+  private boundBuffer?: UniformBuffer;
+  private boundGpuBuffer: unknown;
+
   constructor(
     material: Material,
     private readonly state: NightState,
@@ -173,6 +178,17 @@ uniform vec4 suLampCone;`,
   ) {
     const { state } = this;
     if (!state.enabled) return;
+    const gpuBuffer = buffer.getBuffer();
+    if (
+      gpuBuffer &&
+      this.boundVersion === state.version &&
+      this.boundBuffer === buffer &&
+      this.boundGpuBuffer === gpuBuffer
+    )
+      return;
+    this.boundVersion = state.version;
+    this.boundBuffer = buffer;
+    this.boundGpuBuffer = gpuBuffer;
     buffer.updateFloatArray('suNightLevels', state.levels);
     buffer.updateFloat4(
       'suNightClock',
@@ -305,6 +321,7 @@ uniform vec4 suLampCone;`,
             : kind < 4.5 ? suNightLevels[3]
             : kind < 5.5 ? suNightLevels[4]
             : suNightLevels[5];
+          if (level.w <= 0.0) return vec3(0.0);
           float seed = vSuGlow.y + vSuGlow.z * 3.1 + suNightClock.x * 0.618;
           float evening = suNightHash(seed);
           float keep = suNightHash(seed + 41.7);
@@ -393,6 +410,7 @@ export class WorldNightLights {
   constructor(private readonly scene: Scene) {
     this.state = {
       enabled: true,
+      version: 0,
       slots: LAMP_SLOTS,
       cones: true,
       cone: new Float32Array([CONE_SCATTER, CONE_TAN, 0, 0]),
@@ -483,6 +501,7 @@ export class WorldNightLights {
       this.state.clock[3],
     ]);
     this.selectLamps(focus, levels.lamps, levels.neonLight);
+    this.state.version++;
   }
 
   private selectLamps(focus: Vector3, lamps: number, neon: number): void {
@@ -525,7 +544,10 @@ export class WorldNightLights {
    * слияния отрицательная альфа дошла бы до холста. Униформа, без пересборки шейдеров.
    */
   setGlowMask(on: boolean): void {
-    this.state.clock[3] = on ? 1 : 0;
+    const next = on ? 1 : 0;
+    if (this.state.clock[3] === next) return;
+    this.state.clock[3] = next;
+    this.state.version++;
   }
 
   setEnabled(enabled: boolean): void {

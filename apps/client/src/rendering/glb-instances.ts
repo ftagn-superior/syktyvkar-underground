@@ -56,6 +56,7 @@ type Instance = {
 type Batch = {
   key: string;
   variant: string;
+  shadow: boolean;
   mesh: Mesh;
   template: Template;
   instances: Set<Instance>;
@@ -381,6 +382,7 @@ export class GlbInstances {
           batch = {
             key,
             variant,
+            shadow: instance.shadow,
             mesh,
             template,
             instances: new Set(),
@@ -481,7 +483,9 @@ export class GlbInstances {
     }
   }
   flush() {
+    let shadowChanged = false;
     for (const batch of this.dirty) {
+      if (batch.shadow) shadowChanged = true;
       if (!batch.instances.size) {
         this.retire(batch);
         continue;
@@ -517,7 +521,7 @@ export class GlbInstances {
       batch.mesh.setBoundingInfo(new BoundingInfo(minimum, maximum));
       batch.mesh.setEnabled(true);
     }
-    if (this.dirty.size) this.shadows.getShadowMap()?.resetRefreshCounter();
+    if (shadowChanged) this.shadows.getShadowMap()?.resetRefreshCounter();
     this.dirty.clear();
   }
   aggregateDiagnostics() {

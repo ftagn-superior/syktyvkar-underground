@@ -25,6 +25,7 @@ type MeshVolume = {
   collider: Extract<StaticCollider, { kind: 'mesh' }>;
   bounds: Bounds;
   inverse: Matrix;
+  toBody: Matrix;
 };
 type AssetShapes = {
   definition: BuildingPhysicsAsset;
@@ -40,12 +41,47 @@ type BuildingBody = {
   inverse: Matrix;
   signature: string;
   references: number;
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
 };
+
+const GRID_CELL_SIZE = 32;
+
+function gridKey(cx: number, cz: number): string {
+  return `${cx},${cz}`;
+}
+
+function volumeWorldXZ(world: Matrix, volumes: MeshVolume[]) {
+  let minX = Infinity,
+    maxX = -Infinity,
+    minZ = Infinity,
+    maxZ = -Infinity;
+  const point = Vector3.Zero();
+  const toWorld = Matrix.Zero();
+  for (const volume of volumes) {
+    volume.toBody.multiplyToRef(world, toWorld);
+    const { min, max } = volume.bounds;
+    for (const x of [min.x, max.x])
+      for (const y of [min.y, max.y])
+        for (const z of [min.z, max.z]) {
+          point.set(x, y, z);
+          Vector3.TransformCoordinatesToRef(point, toWorld, point);
+          if (point.x < minX) minX = point.x;
+          if (point.x > maxX) maxX = point.x;
+          if (point.z < minZ) minZ = point.z;
+          if (point.z > maxZ) maxZ = point.z;
+        }
+  }
+  return { minX, maxX, minZ, maxZ };
+}
 
 /** Static physics resources belong to one world; instances share their asset's native shape. */
 export class BuildingColliders {
   private readonly assets = new Map<string, AssetShapes>();
   private readonly bodies = new Map<string, BuildingBody>();
+  private readonly volumeGrid = new Map<string, Map<string, BuildingBody>>();
   private readonly worldPoint = Vector3.Zero();
   private readonly bodyPoint = Vector3.Zero();
   private readonly shapePoint = Vector3.Zero();
@@ -84,14 +120,22 @@ export class BuildingColliders {
     try {
       body = new PhysicsBody(node, PhysicsMotionType.STATIC, false, this.scene);
       body.shape = shapes.container;
-      this.bodies.set(instance.entityId, {
+      const world = node.getWorldMatrix();
+      const xz =
+        shapes.volumes.length > 0
+          ? volumeWorldXZ(world, shapes.volumes)
+          : { minX: 0, maxX: -1, minZ: 0, maxZ: -1 };
+      const entry: BuildingBody = {
         node,
         body,
         asset: shapes,
-        inverse: node.getWorldMatrix().clone().invert(),
+        inverse: world.clone().invert(),
         signature,
         references: 1,
-      });
+        ...xz,
+      };
+      this.bodies.set(instance.entityId, entry);
+      if (shapes.volumes.length > 0) this.indexBody(instance.entityId, entry);
       shapes.users++;
     } catch (error) {
       body?.dispose();
@@ -127,14 +171,16 @@ export class BuildingColliders {
               bounds.min[key] = Math.min(bounds.min[key], collider.vertices[i + offset]);
               bounds.max[key] = Math.max(bounds.max[key], collider.vertices[i + offset]);
             }
+          const shapeInverse = Matrix.Compose(
+            Vector3.One(),
+            new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).normalize(),
+            new Vector3(position.x, position.y, position.z),
+          ).invert();
           volumes.push({
             collider,
             bounds,
-            inverse: Matrix.Compose(
-              Vector3.One(),
-              new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).normalize(),
-              new Vector3(position.x, position.y, position.z),
-            ).invert(),
+            inverse: shapeInverse,
+            toBody: shapeInverse.clone().invert(),
           });
         }
       }
@@ -144,6 +190,36 @@ export class BuildingColliders {
       for (const child of children) child.dispose();
       throw error;
     }
+  }
+
+  private indexBody(id: string, item: BuildingBody): void {
+    const minCx = Math.floor(item.minX / GRID_CELL_SIZE);
+    const maxCx = Math.floor(item.maxX / GRID_CELL_SIZE);
+    const minCz = Math.floor(item.minZ / GRID_CELL_SIZE);
+    const maxCz = Math.floor(item.maxZ / GRID_CELL_SIZE);
+    for (let cx = minCx; cx <= maxCx; cx++)
+      for (let cz = minCz; cz <= maxCz; cz++) {
+        const key = gridKey(cx, cz);
+        let bucket = this.volumeGrid.get(key);
+        if (!bucket) this.volumeGrid.set(key, (bucket = new Map()));
+        bucket.set(id, item);
+      }
+  }
+
+  private unindexBody(id: string, item: BuildingBody): void {
+    if (item.asset.volumes.length === 0) return;
+    const minCx = Math.floor(item.minX / GRID_CELL_SIZE);
+    const maxCx = Math.floor(item.maxX / GRID_CELL_SIZE);
+    const minCz = Math.floor(item.minZ / GRID_CELL_SIZE);
+    const maxCz = Math.floor(item.maxZ / GRID_CELL_SIZE);
+    for (let cx = minCx; cx <= maxCx; cx++)
+      for (let cz = minCz; cz <= maxCz; cz++) {
+        const key = gridKey(cx, cz);
+        const bucket = this.volumeGrid.get(key);
+        if (!bucket) continue;
+        bucket.delete(id);
+        if (bucket.size === 0) this.volumeGrid.delete(key);
+      }
   }
 
   /** Havok mesh queries test triangle surfaces; reject a placement fully inside a solid too. */
@@ -158,48 +234,71 @@ export class BuildingColliders {
       b = Vector3.Zero(),
       c = Vector3.Zero(),
       projected = Vector3.Zero();
-    for (const [id, { asset, inverse }] of this.bodies) {
-      if (this.ignored.has(id)) continue;
-      const bodyPoint = Vector3.TransformCoordinates(worldPoint, inverse);
-      for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
-        const p = Vector3.TransformCoordinates(bodyPoint, shapeInverse);
-        if (
-          p.x < bounds.min.x - surfaceTolerance ||
-          p.x > bounds.max.x + surfaceTolerance ||
-          p.y < bounds.min.y - surfaceTolerance ||
-          p.y > bounds.max.y + surfaceTolerance ||
-          p.z < bounds.min.z - surfaceTolerance ||
-          p.z > bounds.max.z + surfaceTolerance
-        )
-          continue;
-        const toBody = shapeInverse.clone().invert(),
-          toWorld = inverse.clone().invert();
-        for (let i = 0; i < collider.indices.length; i += 3) {
-          Vector3.FromArrayToRef(collider.vertices, collider.indices[i] * 3, a);
-          Vector3.FromArrayToRef(collider.vertices, collider.indices[i + 1] * 3, b);
-          Vector3.FromArrayToRef(collider.vertices, collider.indices[i + 2] * 3, c);
-          const distance = Vector3.ProjectOnTriangleToRef(p, a, b, c, projected);
-          if (distance >= surfaceTolerance) continue;
-          const normal = Vector3.Cross(b.subtract(a), c.subtract(a)).normalize();
-          const outside = projected.add(normal.scale((surfaceTolerance - distance) / 2));
-          Vector3.TransformCoordinatesToRef(outside, toBody, outside);
-          Vector3.TransformCoordinatesToRef(outside, toWorld, outside);
+    const minCx = Math.floor((point.x - surfaceTolerance) / GRID_CELL_SIZE);
+    const maxCx = Math.floor((point.x + surfaceTolerance) / GRID_CELL_SIZE);
+    const minCz = Math.floor((point.z - surfaceTolerance) / GRID_CELL_SIZE);
+    const maxCz = Math.floor((point.z + surfaceTolerance) / GRID_CELL_SIZE);
+    const seen = new Set<string>();
+    for (let cx = minCx; cx <= maxCx; cx++)
+      for (let cz = minCz; cz <= maxCz; cz++) {
+        const bucket = this.volumeGrid.get(gridKey(cx, cz));
+        if (!bucket) continue;
+        for (const [id, { asset, inverse, minX, maxX, minZ, maxZ }] of bucket) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          if (this.ignored.has(id)) continue;
           if (
-            Vector3.Distance(worldPoint, outside) <= surfaceTolerance &&
-            !this.containsStrict(outside)
+            point.x < minX - surfaceTolerance ||
+            point.x > maxX + surfaceTolerance ||
+            point.z < minZ - surfaceTolerance ||
+            point.z > maxZ + surfaceTolerance
           )
-            return false;
+            continue;
+          const bodyPoint = Vector3.TransformCoordinates(worldPoint, inverse);
+          for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
+            const p = Vector3.TransformCoordinates(bodyPoint, shapeInverse);
+            if (
+              p.x < bounds.min.x - surfaceTolerance ||
+              p.x > bounds.max.x + surfaceTolerance ||
+              p.y < bounds.min.y - surfaceTolerance ||
+              p.y > bounds.max.y + surfaceTolerance ||
+              p.z < bounds.min.z - surfaceTolerance ||
+              p.z > bounds.max.z + surfaceTolerance
+            )
+              continue;
+            const toBody = shapeInverse.clone().invert(),
+              toWorld = inverse.clone().invert();
+            for (let i = 0; i < collider.indices.length; i += 3) {
+              Vector3.FromArrayToRef(collider.vertices, collider.indices[i] * 3, a);
+              Vector3.FromArrayToRef(collider.vertices, collider.indices[i + 1] * 3, b);
+              Vector3.FromArrayToRef(collider.vertices, collider.indices[i + 2] * 3, c);
+              const distance = Vector3.ProjectOnTriangleToRef(p, a, b, c, projected);
+              if (distance >= surfaceTolerance) continue;
+              const normal = Vector3.Cross(b.subtract(a), c.subtract(a)).normalize();
+              const outside = projected.add(normal.scale((surfaceTolerance - distance) / 2));
+              Vector3.TransformCoordinatesToRef(outside, toBody, outside);
+              Vector3.TransformCoordinatesToRef(outside, toWorld, outside);
+              if (
+                Vector3.Distance(worldPoint, outside) <= surfaceTolerance &&
+                !this.containsStrict(outside)
+              )
+                return false;
+            }
+          }
         }
       }
-    }
     return true;
   }
 
   private containsStrict(point: Vec3): boolean {
+    const bucket = this.volumeGrid.get(
+      gridKey(Math.floor(point.x / GRID_CELL_SIZE), Math.floor(point.z / GRID_CELL_SIZE)),
+    );
+    if (!bucket) return false;
     this.worldPoint.set(point.x, point.y, point.z);
-    for (const [id, { asset, inverse }] of this.bodies) {
+    for (const [id, { asset, inverse, minX, maxX, minZ, maxZ }] of bucket) {
       if (this.ignored.has(id)) continue;
-      if (asset.volumes.length === 0) continue;
+      if (point.x < minX || point.x > maxX || point.z < minZ || point.z > maxZ) continue;
       Vector3.TransformCoordinatesToRef(this.worldPoint, inverse, this.bodyPoint);
       for (const { collider, bounds, inverse: shapeInverse } of asset.volumes) {
         Vector3.TransformCoordinatesToRef(this.bodyPoint, shapeInverse, this.shapePoint);
@@ -247,6 +346,7 @@ export class BuildingColliders {
   remove(entityId: string): void {
     const item = this.bodies.get(entityId);
     if (!item || --item.references > 0) return;
+    this.unindexBody(entityId, item);
     item.body.dispose();
     item.node.dispose();
     this.bodies.delete(entityId);
@@ -322,8 +422,10 @@ export class BuildingColliders {
       } else target.assets.set(assetId, item.asset);
       item.body.shape = item.asset.container;
       target.bodies.set(id, item);
+      if (item.asset.volumes.length > 0) target.indexBody(id, item);
     }
     this.bodies.clear();
+    this.volumeGrid.clear();
     this.assets.clear();
     this.inactiveShape?.dispose();
     this.inactiveShape = undefined;

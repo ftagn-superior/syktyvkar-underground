@@ -322,7 +322,6 @@ export class BuildingViews {
     this.references.set(definition.entityId, { count: 1, signature, view });
     this.lifecycle.instancesCreated++;
     this.index.add(definition.entityId, { min: plain(view.minimum), max: plain(view.maximum) });
-    this.shadowed.add(definition.entityId);
     return view.root;
   }
   remove(id: string): void {
@@ -350,10 +349,10 @@ export class BuildingViews {
     this.lifecycle.instancesRemoved++;
     this.index.remove(id);
     this.fading.delete(id);
-    this.shadowed.delete(id);
+    const wasShadowed = this.shadowed.delete(id);
     const instance = entry.view;
     this.instances.splice(this.instances.indexOf(instance), 1);
-    for (const mesh of instance.meshes) this.shadow.removeShadowCaster(mesh);
+    if (wasShadowed) for (const mesh of instance.meshes) this.shadow.removeShadowCaster(mesh);
     instance.entries.dispose();
     instance.root.dispose();
     for (const material of instance.materials) material.dispose(false, false);
@@ -407,7 +406,7 @@ export class BuildingViews {
       const enabled = view.size >= minimum;
       if (view.root.isEnabled(false) === enabled) continue;
       view.root.setEnabled(enabled);
-      changed = true;
+      if (this.shadowed.has(view.definition.entityId)) changed = true;
     }
     // Hidden objects stop casting without leaving the caster list.
     if (changed) this.shadow.getShadowMap()?.resetRefreshCounter();
@@ -529,7 +528,6 @@ export class BuildingViews {
         const bounds = mesh.getBoundingInfo().boundingBox;
         Vector3.CheckExtends(bounds.minimumWorld, minimum, maximum);
         Vector3.CheckExtends(bounds.maximumWorld, minimum, maximum);
-        this.shadow.addShadowCaster(mesh);
         if (part.occlusionGroup !== null) {
           let group = groups.get(part.occlusionGroup);
           if (!group) {

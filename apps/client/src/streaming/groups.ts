@@ -36,6 +36,7 @@ type Prepared = {
 type State = {
   group: GraphicsGroup;
   wanted?: GraphicsLevel;
+  preparingLevel?: GraphicsLevel;
   current?: Prepared;
   pending?: Prepared;
   controller?: AbortController;
@@ -57,6 +58,7 @@ export class GroupGraphics {
     string,
     { signature: string; instance: BuildingInstance; version: string }
   >();
+  private readonly nearSignatures = new WeakMap<BuildingInstance, string>();
   preparing = 0;
   peakSwapMs = 0;
   peakPreparationMs = 0;
@@ -118,17 +120,26 @@ export class GroupGraphics {
     if (!this.enabled || !this.visual || this.staged) return;
     for (const group of this.context.manifest.graphics!.groups) {
       let s = this.states.get(group.groupId);
-      const { wanted, level } = this.selection(group, s);
+      const { wanted, level, pinned } = this.selection(group, s);
       if (!s && !wanted) continue;
       if (!s) {
         s = { group };
         this.states.set(group.groupId, s);
       }
       if (level !== s.wanted) {
+        const keepFar =
+          !pinned &&
+          level === 'near' &&
+          !s.current &&
+          !!s.controller &&
+          s.preparingLevel === 'far';
         s.wanted = level;
-        s.controller?.abort();
-        s.pending?.release();
-        s.pending = undefined;
+        if (!keepFar) {
+          s.controller?.abort();
+          s.preparingLevel = undefined;
+          s.pending?.release();
+          s.pending = undefined;
+        }
         s.error = undefined;
       }
       if (wanted) s.releaseAt = undefined;
@@ -137,40 +148,48 @@ export class GroupGraphics {
   }
   /** Both ordinary loading and live-publication staging obey the same camera policy. */
   private selection(group: GraphicsGroup, previous?: State) {
-    const projection: GraphicsProjection = this.graphics.projectGraphicsGroup?.(
-      group.bounds,
-      group.groupId,
-    ) ?? { pixels: Infinity, visible: true, nearPlane: false };
-    const pinned =
-      !!projection.pinned ||
-      this.players.some(
-        (p) => distanceToBoundsXZ(p, group.bounds) <= GRAPHICS_LOD_POLICY.playerRadius,
-      );
-    const visible = this.visual
-      ? inGraphicsArea(group.bounds, this.visual, 0, this.graphics)
-      : false;
-    const preload = this.visual
-      ? inGraphicsArea(
-          group.bounds,
-          this.visual,
-          GRAPHICS_STREAMING_POLICY.preloadMargin,
-          this.graphics,
-        )
-      : false;
-    const retained = this.visual
-      ? inGraphicsArea(
-          group.bounds,
-          this.visual,
-          GRAPHICS_STREAMING_POLICY.retainMargin,
-          this.graphics,
-        )
-      : false;
     const held = !!(
       previous?.current ||
       previous?.pending ||
       (previous?.controller && !previous.controller.signal.aborted)
     );
-    const wanted = pinned || preload || (held && retained);
+    const visible = this.visual
+      ? inGraphicsArea(group.bounds, this.visual, 0, this.graphics)
+      : false;
+    const preload =
+      visible ||
+      (this.visual
+        ? inGraphicsArea(
+            group.bounds,
+            this.visual,
+            GRAPHICS_STREAMING_POLICY.preloadMargin,
+            this.graphics,
+          )
+        : false);
+    const retained =
+      held &&
+      (preload ||
+        (this.visual
+          ? inGraphicsArea(
+              group.bounds,
+              this.visual,
+              GRAPHICS_STREAMING_POLICY.retainMargin,
+              this.graphics,
+            )
+          : false));
+    const pinned =
+      this.players.some(
+        (p) => distanceToBoundsXZ(p, group.bounds) <= GRAPHICS_LOD_POLICY.playerRadius,
+      ) ||
+      (!!this.graphics.projectGraphicsGroup?.(group.bounds, group.groupId).pinned);
+    const wanted = pinned || preload || retained;
+    const projection: GraphicsProjection = wanted
+      ? (this.graphics.projectGraphicsGroup?.(group.bounds, group.groupId) ?? {
+          pixels: Infinity,
+          visible: true,
+          nearPlane: false,
+        })
+      : { pixels: 0, visible, nearPlane: false, pinned };
     return {
       visible,
       preload,
@@ -212,10 +231,16 @@ export class GroupGraphics {
       const generation = this.generation,
         context = this.context,
         level = s.wanted!;
+      s.preparingLevel = level;
       const started = this.clock();
       void this.prepare(context, s.group, level, controller.signal)
         .then((p) => {
-          if (controller.signal.aborted || generation !== this.generation || s.wanted !== level)
+          const keepForNear = !s.current && level === 'far' && s.wanted === 'near';
+          if (
+            controller.signal.aborted ||
+            generation !== this.generation ||
+            (s.wanted !== level && !keepForNear)
+          )
             p.release();
           else s.pending = p;
         })
@@ -223,7 +248,10 @@ export class GroupGraphics {
           if (!controller.signal.aborted && generation === this.generation) s.error = String(e);
         })
         .finally(() => {
-          if (s.controller === controller) s.controller = undefined;
+          if (s.controller === controller) {
+            s.controller = undefined;
+            s.preparingLevel = undefined;
+          }
           this.preparing--;
           this.peakPreparationMs = Math.max(this.peakPreparationMs, this.clock() - started);
         });
@@ -289,7 +317,12 @@ export class GroupGraphics {
     for (const s of states)
       for (const i of s.current?.members ?? []) {
         const version = s.current!.manifest.assets[i.assetId].version;
-        next.set(i.entityId, { signature: version + canonicalJson(i), instance: i, version });
+        let instanceJson = this.nearSignatures.get(i);
+        if (instanceJson === undefined) {
+          instanceJson = canonicalJson(i);
+          this.nearSignatures.set(i, instanceJson);
+        }
+        next.set(i.entityId, { signature: version + instanceJson, instance: i, version });
       }
     for (const [id, old] of this.near)
       if (next.get(id)?.signature !== old.signature) this.graphics.releaseStatic(id);

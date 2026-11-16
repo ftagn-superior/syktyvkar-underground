@@ -280,6 +280,10 @@ export async function createGameServer(options: GameServerOptions = {}) {
           res.sendStatus(404);
           return;
         }
+        res.setHeader(
+          'Cache-Control',
+          req.path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+        );
         res.sendFile(target, (error) => {
           if (error && !res.headersSent)
             res.status(404).send('Not found. For development run pnpm dev.');

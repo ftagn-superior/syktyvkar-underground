@@ -67,3 +67,5 @@ export {
 
 export * from './graphics-groups.js';
 export { transformWorldPoint } from './world-grid.js';
+export type { BuildIdentity } from './build-identity.js';
+export { readBuildIdentity } from './build-identity.js';

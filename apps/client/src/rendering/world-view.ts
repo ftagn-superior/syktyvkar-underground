@@ -1,4 +1,6 @@
 import { FarGroups } from './far-groups';
+import type { SessionHistory } from '../diagnostics/session-history';
+import { GpuRenderTimer } from '../diagnostics/gpu-timer';
 import { rayBoundsDistance, type GraphicsProjection } from '../streaming/graphics-plan';
 import type { GraphicsGroup, Bounds } from '@su/contracts';
 import { Ray } from '@babylonjs/core/Culling/ray';
@@ -168,6 +170,8 @@ export class WorldView {
     this.sizeCamera();
   };
   private frameHook?: (now: number, delta: number) => void;
+  private diagnosticHistory?: SessionHistory;
+  private gpuTimer?: GpuRenderTimer;
   private cameraFrameHook?: (now: number, delta: number) => void;
   private worldTimeSource: () => number = () => performance.now();
   private renderDeferred = false;
@@ -176,6 +180,7 @@ export class WorldView {
   private readonly visibilityChanged = () => {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
     this.lastFrame = performance.now();
+    this.diagnosticHistory?.visibility(!document.hidden);
     for (const view of this.entities.values()) view.avatar?.resetMotion();
     this.reactionSounds.suspend();
     if (document.hidden) {
@@ -291,6 +296,9 @@ export class WorldView {
       const now = performance.now();
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
+      this.diagnosticHistory?.beginFrame(now, delta * 1000, !document.hidden);
+      const gpu = this.gpuTimer?.poll();
+      if (gpu) this.diagnosticHistory?.gpuSample(gpu.frameId, gpu.ms);
       this.inputFrameHook?.(now, delta);
       const previousAngle = this.cameraOrbit.angle;
       this.camera.alpha = this.cameraOrbit.advance(delta);
@@ -322,9 +330,11 @@ export class WorldView {
       active.getProjectionMatrix(true);
       this.scene.updateTransformMatrix(true);
       this.cameraFrameHook?.(now, delta);
+      this.sampleDiagnosticState(now);
       // Keep RAF, streaming and UI active while local preparation owns the frame budget.
       if (this.renderDeferred) {
         this.deferredFrames++;
+        this.diagnosticHistory?.endFrame('deferred');
         return;
       }
       this.environment.update(
@@ -370,8 +380,80 @@ export class WorldView {
       this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
       if (this.staticHighlight?.target) this.highlightStaticObject(this.staticHighlight.target);
       this.positionLabels();
-      this.scene.render();
+      const renderStarted = this.diagnosticHistory ? performance.now() : 0;
+      this.gpuTimer?.begin(this.diagnosticHistory?.frameId ?? null);
+      try {
+        this.scene.render();
+      } catch (error) {
+        this.diagnosticHistory?.endFrame('failed', performance.now() - renderStarted);
+        throw error;
+      } finally {
+        this.gpuTimer?.end();
+      }
+      if (this.diagnosticHistory) {
+        this.diagnosticHistory.endFrame('rendered', performance.now() - renderStarted);
+      }
     });
+  }
+  private sampleDiagnosticState(now: number): void {
+    if (!this.diagnosticHistory?.sampleDue('render.sample', now)) return;
+    const sampledAtMs = performance.now(); // A long frame hook may have finished well after `now`.
+    this.diagnosticHistory.sampleSafely(
+      'render.sample',
+      () => {
+        const shadow = this.environment.shadowDiagnostics();
+        const shadowRequests = this.environment.shadowInvalidations(),
+          invalidations = shadowRequests.requested;
+        const pipeline = this.environment.pipelineDiagnostics();
+        const bloom = this.environment.bloomDiagnostics();
+        return {
+          quality: this.quality,
+          cameraMode: this.firstPerson ? 'first-person' : 'overview',
+          zoom: this.zoom,
+          renderWidth: this.engine.getRenderWidth(true),
+          renderHeight: this.engine.getRenderHeight(true),
+          readyRadius: this.streamingRadius,
+          shownRadius: this.radial.radius,
+          renderDeferred: this.renderDeferred,
+          hour: this.environment.hour,
+          ...this.environment.weatherAmounts,
+          staticRefreshes: shadow.staticRefreshes,
+          staticDiscarded: shadow.staticDiscarded,
+          staticFallbacks: shadow.staticFallbacks,
+          // Cumulative initiators of static shadow redraw requests; subtract adjacent samples.
+          shadowCasterInvalidations: invalidations.casters,
+          shadowSunStepInvalidations: invalidations['sun-step'],
+          shadowFollowInvalidations: invalidations.follow,
+          shadowResizeInvalidations: invalidations.resize,
+          shadowQualityInvalidations: invalidations.quality,
+          shadowRetryInvalidations: invalidations.retry,
+          shadowContextInvalidations: invalidations.context,
+          timeFixed: this.environment.timeFixed,
+          // Conditions that change GPU cost for the same scene (A/B comparability).
+          antialias: this.contextAntialias,
+          hardwareScaling: this.engine.getHardwareScalingLevel(),
+          pipeline: pipeline.enabled,
+          msaaSamples: pipeline.samples,
+          msaaSamplesRequested: pipeline.samplesRequested,
+          hdr: pipeline.hdr,
+          hdrRequested: pipeline.hdrRequested,
+          pipelineTextureType: pipeline.textureType,
+          bloom: bloom.enabled,
+          bloomWeight: bloom.weight,
+          shadows: this.scene.shadowsEnabled,
+          shadowMapSize: this.scene.shadowsEnabled ? shadowRequests.mapSize : null,
+          // Last completed render: counters of the previous scene.render(), not this callback.
+          drawCalls: this.instrumentation.drawCallsCounter.current,
+          submittedTriangles: (this.scene.getActiveIndices() - this.shadowSubmittedIndices) / 3,
+          gpuSamples: this.gpuTimer?.samples ?? null,
+          gpuDisjoint: this.gpuTimer?.disjoint ?? null,
+          gpuBusySkips: this.gpuTimer?.busySkips ?? null,
+          contextSampledAtMs: sampledAtMs,
+        };
+      },
+      sampledAtMs,
+      true,
+    );
   }
   private material(id: string, color: string): StandardMaterial {
     const material = new StandardMaterial(id, this.scene);
@@ -389,6 +471,8 @@ export class WorldView {
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
     this.quality = quality;
+    this.diagnosticHistory?.setContext({ quality });
+    this.diagnosticHistory?.event('render.quality', { quality });
     this.applyQuality();
     this.sizeCamera();
   }
@@ -440,6 +524,11 @@ export class WorldView {
       this.camera.setTarget(this.target.clone(), false, false, true);
     }
     this.firstPerson = enabled;
+    this.diagnosticHistory?.setContext({ cameraMode: enabled ? 'first-person' : 'overview' });
+    this.diagnosticHistory?.event('render.camera', {
+      cameraMode: enabled ? 'first-person' : 'overview',
+      zoom: this.zoom,
+    });
     this.scene.activeCamera = this.activeCamera;
     this.graphicalFrame = undefined;
     this.sizeCamera();
@@ -491,15 +580,16 @@ export class WorldView {
       width = this.canvas.clientWidth,
       height = this.canvas.clientHeight;
     let frame = this.graphicsProjectionFrame;
-    if (
+    const rebuilt =
       !frame ||
       frame.at !== this.lastFrame ||
       frame.camera !== camera ||
       frame.viewVersion !== view.updateFlag ||
       frame.projectionVersion !== projection.updateFlag ||
       frame.width !== width ||
-      frame.height !== height
-    ) {
+      frame.height !== height;
+    this.diagnosticHistory?.countGraphicsFrame(rebuilt);
+    if (rebuilt || !frame) {
       const matrix = camera.getTransformationMatrix().clone();
       frame = this.graphicsProjectionFrame = {
         at: this.lastFrame,
@@ -852,6 +942,8 @@ export class WorldView {
       texturePayloadEstimateBytes: this.texturePayloadEstimate(),
       shadowCasters: shadows.staticCasters + shadows.dynamicCasters,
       shadowMaps: shadows,
+      shadowInvalidations: this.environment.shadowInvalidations(),
+      pipeline: this.environment.pipelineDiagnostics(),
       streaming: {
         drawRadius: this.graphicalArea().drawRadius,
         readyRadius: this.streamingRadius,
@@ -868,6 +960,15 @@ export class WorldView {
       ),
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),
+      capabilities: {
+        backend: 'webgl',
+        webGLVersion: this.engine.webGLVersion,
+        timerQuerySupported: !!this.engine.getCaps().timerQuery,
+        contextAntialias: this.contextAntialias,
+        gpuTimer: this.gpuTimerDiagnostics(),
+        maxTextureSize: this.engine.getCaps().maxTextureSize,
+        maxMSAASamples: this.engine.getCaps().maxMSAASamples,
+      },
       camera: {
         mode: this.firstPerson ? 'first-person' : 'overview',
         yaw: this.yaw,
@@ -1027,11 +1128,62 @@ export class WorldView {
     }
   }
   setRenderDeferred(deferred: boolean): void {
+    if (deferred !== this.renderDeferred)
+      this.diagnosticHistory?.event('render.defer', {
+        renderDeferred: deferred,
+        reason: 'local-preparation',
+      });
     this.renderDeferred = deferred;
   }
 
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
+  }
+  setDiagnosticHistory(history: SessionHistory, options: { gpuTiming?: boolean } = {}): void {
+    this.diagnosticHistory = history;
+    history.setContext({ quality: this.quality, antialias: this.contextAntialias });
+    history.boundary('renderer-created');
+    this.gpuTimer?.dispose();
+    this.gpuTimer = options.gpuTiming
+      ? new GpuRenderTimer(
+          this.engine.webGLVersion === 2 ? (this.engine._gl as WebGL2RenderingContext) : null,
+          30,
+          () => performance.now(),
+          () =>
+            !this.engine._captureGPUFrameTime &&
+            !this.engine._currentNonTimestampToken &&
+            !this.engine._gpuFrameTimeToken,
+        )
+      : undefined;
+    // Babylon skips render callbacks while the context is lost; the next interval spans the outage.
+    this.engine.onContextLostObservable.add(() => {
+      history.boundary('graphics-lost');
+      this.gpuTimer?.contextLost();
+    });
+    this.engine.onContextRestoredObservable.add(() => this.gpuTimer?.contextRestored());
+  }
+  /** Actual default-framebuffer antialiasing granted by the browser; null while lost. */
+  private get contextAntialias(): boolean | null {
+    return this.engine._gl?.getContextAttributes()?.antialias ?? null;
+  }
+  /** Opt-in (`?gpuTiming=1`) sampled GPU elapsed time; null when not requested. */
+  gpuTimerDiagnostics() {
+    const timer = this.gpuTimer;
+    return timer
+      ? {
+          status: timer.status,
+          samples: timer.samples,
+          disjointDiscarded: timer.disjoint,
+          busySkips: timer.busySkips,
+          lostQueries: timer.lostQueries,
+          expiredQueries: timer.expired,
+          invalidResults: timer.invalidResults,
+          queryConflicts: timer.conflicts,
+          errors: timer.errors,
+          maxQueryAgeMs: 5000,
+          everyNthRenderedCallback: 30,
+        }
+      : null;
   }
   private inputFrameHook?: (now: number, delta: number) => void;
   /** Samples local controls before the orbit advances and movement reads its actual angle. */
@@ -1580,6 +1732,8 @@ export class WorldView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.diagnosticHistory?.boundary('renderer-disposed');
+    this.gpuTimer?.dispose();
     this.audio?.setListener(undefined);
     this.audio?.stopWorld();
     this.reactionSounds.clear();

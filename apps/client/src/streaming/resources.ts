@@ -342,7 +342,7 @@ export class VerifiedResources {
   invalidate(path: string) {
     if (Object.hasOwn(this.manifest.files, path)) this.cache.delete(this.manifest.files[path]);
   }
-  diagnostics() {
+  counters() {
     return {
       ...this.cache.diagnostics(),
       pending: this.jobs.size,
@@ -352,6 +352,11 @@ export class VerifiedResources {
       integrityRetries: this.retries,
       cacheHits: this.cacheHits,
       responseBodyBytes: this.responseBodyBytes,
+    };
+  }
+  diagnostics() {
+    return {
+      ...this.counters(),
       byteDefinition:
         'Decoded HTTP resource bodies, including retries; not compressed transfer or WebSocket bytes.',
       http: this.http.slice(),

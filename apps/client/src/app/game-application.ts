@@ -1162,6 +1162,9 @@ export function startGame(): void {
       await session.load();
       if (disposed) return;
       view = new WorldView(canvas, element('labels'), session.definition, quality);
+      view.setDiagnosticHistory(session.diagnosticHistory, {
+        gpuTiming: new URLSearchParams(location.search).get('gpuTiming') === '1',
+      });
       view.setAudio(audio);
       view.setWorldTimeSource(() => session.worldTimeMs());
       view.setDayClock(session.dayClock);
@@ -1174,6 +1177,7 @@ export function startGame(): void {
       view.engine.onContextRestoredObservable.add(() => {
         if (!graphicsLost) return;
         graphicsLost = false;
+        session.diagnosticHistory.event('graphics.restored');
         syncAudioActivity();
         graphicsRecovery.hidden = true;
         document.body.classList.remove('graphics-unavailable');
@@ -1181,7 +1185,7 @@ export function startGame(): void {
         resetGameInput();
         session.setInputEnabled(true);
         renderInputMode();
-        session.resetFrameMeasurements();
+        session.resetFrameMeasurements('graphics-restored');
         updateState(session.state);
         showNotice(
           session.state === 'playing'
@@ -1334,7 +1338,7 @@ export function startGame(): void {
       resetGameInput();
       quality = qualitySelect.value === 'economy' ? 'economy' : 'standard';
       view?.setQuality(quality);
-      session.resetFrameMeasurements();
+      session.resetFrameMeasurements('quality-changed');
       try {
         localStorage.setItem(qualityStorageKey, quality);
       } catch {
@@ -1357,6 +1361,7 @@ export function startGame(): void {
     (event) => {
       event.preventDefault();
       graphicsLost = true;
+      session.diagnosticHistory.event('graphics.lost');
       interruptControls();
       interruptGamepad(true);
       closeGamePanels();

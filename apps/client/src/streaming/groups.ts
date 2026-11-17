@@ -1,4 +1,9 @@
 import { abortablePreparation } from './preparation';
+import type {
+  DiagnosticFields,
+  DiagnosticSpan,
+  SessionHistory,
+} from '../diagnostics/session-history';
 import {
   canonicalJson,
   graphicsGroupIdentity,
@@ -64,6 +69,8 @@ export class GroupGraphics {
     private context: Context,
     private graphics: CellGraphics,
     private clock: () => number,
+    private readonly diagnosticHistory?: SessionHistory,
+    private readonly diagnosticScope: number | null = null,
   ) {
     this.indexContext();
   }
@@ -235,6 +242,37 @@ export class GroupGraphics {
     level: GraphicsLevel,
     signal: AbortSignal,
   ): Promise<Prepared> {
+    const started = this.diagnosticHistory ? this.clock() : 0;
+    const frameId = this.diagnosticHistory?.frameId ?? null;
+    let ok = false;
+    try {
+      const result = await this.prepareWork(context, group, level, signal);
+      ok = true;
+      return result;
+    } finally {
+      this.diagnosticHistory?.measure(
+        'group.prepare',
+        started,
+        this.clock(),
+        {
+          scopeId: this.diagnosticScope,
+          groupId: group.groupId,
+          to: level,
+          ok,
+          code: signal.aborted ? 'ABORTED' : ok ? null : 'FAILED',
+        },
+        'async-elapsed',
+        frameId,
+        true,
+      );
+    }
+  }
+  private async prepareWork(
+    context: Context,
+    group: GraphicsGroup,
+    level: GraphicsLevel,
+    signal: AbortSignal,
+  ): Promise<Prepared> {
     const read = (path: string, requestSignal?: AbortSignal) =>
       context.resources.read(
         path,
@@ -309,6 +347,49 @@ export class GroupGraphics {
     }
     this.near = next;
   }
+  /**
+   * Times one handoff stage. Stage durations always reach the enclosing `group.handoff`
+   * record; a separate stage span is kept only when slow or a new maximum, so frequent
+   * short handoffs cannot evict pump/area observations from the shared event ring.
+   */
+  private observe(
+    name: DiagnosticSpan,
+    fields: DiagnosticFields,
+    stages: DiagnosticFields,
+    action: () => void,
+  ): void {
+    if (!this.diagnosticHistory) {
+      action();
+      return;
+    }
+    const started = this.clock(),
+      frameId = this.diagnosticHistory.frameId;
+    let ok = false;
+    try {
+      action();
+      ok = true;
+    } finally {
+      const ended = this.clock();
+      stages[`${name.slice('group.'.length)}Ms` as keyof DiagnosticFields] = ended - started;
+      this.diagnosticHistory.measure(
+        name,
+        started,
+        ended,
+        { ...fields, ok },
+        'sync-elapsed',
+        frameId,
+      );
+    }
+  }
+  /** Current resident representation counts; O(groups), used by 1 Hz samples only. */
+  residency(): { near: number; far: number } {
+    let near = 0,
+      far = 0;
+    for (const s of this.states.values())
+      if (s.current?.level === 'near') near++;
+      else if (s.current?.level === 'far') far++;
+    return { near, far };
+  }
   pump(deadline: number) {
     if (!this.enabled || this.staged) return;
     const now = this.clock();
@@ -321,16 +402,28 @@ export class GroupGraphics {
     for (const [id, s] of work) {
       if (this.clock() >= deadline) break;
       const started = this.clock();
+      const from = s.current?.level ?? null;
+      const details = {
+          scopeId: this.diagnosticScope,
+          groupId: id,
+          from,
+          to: s.pending?.level ?? null,
+        },
+        stages: DiagnosticFields = {};
       if (s.pending) {
         const old = s.current,
           prepared = s.pending;
         s.pending = undefined;
         s.current = prepared;
         try {
-          prepared.far?.activate();
-          this.reconcileNear(this.states.values());
-          this.graphics.recordGraphicsResidency?.();
-          old?.release();
+          this.observe('group.activate', details, stages, () => prepared.far?.activate());
+          this.observe('group.reconcile', details, stages, () =>
+            this.reconcileNear(this.states.values()),
+          );
+          this.observe('group.residency', details, stages, () =>
+            this.graphics.recordGraphicsResidency?.(),
+          );
+          this.observe('group.release', details, stages, () => old?.release());
         } catch (e) {
           s.current = old;
           prepared.release();
@@ -342,11 +435,26 @@ export class GroupGraphics {
         s.controller?.abort();
         const old = s.current;
         s.current = undefined;
-        this.reconcileNear(this.states.values());
-        old?.release();
+        this.observe('group.reconcile', details, stages, () =>
+          this.reconcileNear(this.states.values()),
+        );
+        this.observe('group.release', details, stages, () => old?.release());
         this.states.delete(id);
       }
       this.peakSwapMs = Math.max(this.peakSwapMs, this.clock() - started);
+      this.diagnosticHistory?.measure(
+        'group.handoff',
+        started,
+        this.clock(),
+        {
+          ...details,
+          ...stages,
+          to: s.current?.level ?? null,
+        },
+        'sync-elapsed',
+        this.diagnosticHistory.frameId,
+        true,
+      );
     }
   }
   async stage(context: Context, parentSignal: AbortSignal) {
@@ -437,6 +545,7 @@ export class GroupGraphics {
     signal.throwIfAborted();
   }
   adopt() {
+    const started = this.diagnosticHistory ? this.clock() : 0;
     if (!this.staged) return;
     const { context, states } = this.staged;
     for (const s of states.values())
@@ -456,6 +565,15 @@ export class GroupGraphics {
     this.indexContext();
     this.staged = undefined;
     this.refresh();
+    this.diagnosticHistory?.measure(
+      'group.adopt',
+      started,
+      this.clock(),
+      { scopeId: this.diagnosticScope },
+      'sync-elapsed',
+      this.diagnosticHistory.frameId,
+      true,
+    );
   }
   cancelStage() {
     if (!this.staged) return;

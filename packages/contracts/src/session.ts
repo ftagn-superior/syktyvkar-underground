@@ -1,4 +1,5 @@
 import type { PlacementCatalogReference } from './placement-catalog.js';
+import type { BuildIdentity } from './build-identity.js';
 import type { ContentCatalogVersions } from './content-catalogs.js';
 import type { DayClock } from './day-clock.js';
 import type { StaticPlacementEffect } from './static-placement.js';
@@ -23,6 +24,8 @@ export const RESPAWN_COOLDOWN_MS = 3000;
 export const PLAYER_COLORS = PROFILE_COLORS.map((color) => color.hex);
 
 export interface WorldInfo {
+  /** Additive HTTP diagnostics metadata. Older servers omit it; not part of join compatibility. */
+  serverBuild?: BuildIdentity | null;
   catalogVersions: ContentCatalogVersions;
   placementCatalog?: PlacementCatalogReference;
   assetReleaseVersion: string;

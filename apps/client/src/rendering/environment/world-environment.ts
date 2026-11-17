@@ -220,6 +220,16 @@ export class WorldEnvironment {
   bloomDiagnostics() {
     return this.lighting.bloomDiagnostics();
   }
+  shadowInvalidations() {
+    return this.lighting.shadowInvalidations();
+  }
+  pipelineDiagnostics() {
+    return this.lighting.pipelineDiagnostics();
+  }
+  /** A local `?time=` hold or a room clock frozen by `/time`. */
+  get timeFixed(): boolean {
+    return this.fixedHour !== undefined || this.clock.frozenHour >= 0;
+  }
   dispose(): void {
     for (const layer of Object.values(this.precipitation)) layer.dispose();
     this.surface.dispose();

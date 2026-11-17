@@ -27,6 +27,7 @@ import {
   type WorldCell,
 } from '@su/contracts';
 import { VerifiedResources } from './resources';
+import type { SessionHistory } from '../diagnostics/session-history';
 
 const preparedModels = (pending: Promise<() => void>, signal: AbortSignal) =>
   abortablePreparation(pending, signal, (release) => release());
@@ -136,15 +137,25 @@ export class CellStreamer {
   private peakOperationMs = 0;
   private peakPumpMs = 0;
   private readonly samples: { cellId: string; action: 'connect' | 'release'; ms: number }[] = [];
+  private readonly diagnosticScope: number | null;
   constructor(
     manifest: WorldManifest,
     resources: VerifiedResources,
     private readonly physics: CellPhysics,
     private readonly graphics: CellGraphics,
     private readonly clock = () => performance.now(),
+    private readonly diagnosticHistory?: SessionHistory,
   ) {
     this.context = Object.freeze({ manifest, resources });
-    this.groups = new GroupGraphics(this.context, graphics, clock);
+    this.diagnosticScope = diagnosticHistory?.nextScope() ?? null;
+    diagnosticHistory?.event('stream.created', { scopeId: this.diagnosticScope });
+    this.groups = new GroupGraphics(
+      this.context,
+      graphics,
+      clock,
+      diagnosticHistory,
+      this.diagnosticScope,
+    );
     graphics.setGraphicsManifest?.(manifest, () => this.graphicsDefinitions());
   }
   get manifest() {
@@ -249,6 +260,32 @@ export class CellStreamer {
     this.refresh();
   }
   private async prepareTransition(transition: Transition): Promise<void> {
+    const frameId = this.diagnosticHistory?.frameId ?? null;
+    this.diagnosticHistory?.event('publication.stage', {
+      scopeId: this.diagnosticScope,
+      mapVersion: transition.context.manifest.mapVersion,
+      count: transition.changed.size,
+    });
+    try {
+      await this.prepareTransitionWork(transition);
+    } finally {
+      this.diagnosticHistory?.measure(
+        'publication.prepare',
+        transition.startedAt,
+        this.clock(),
+        {
+          scopeId: this.diagnosticScope,
+          mapVersion: transition.context.manifest.mapVersion,
+          ok: this.transitionPrepared && this.pendingTransition === transition,
+          code: transition.controller.signal.aborted ? 'ABORTED' : null,
+        },
+        'async-elapsed',
+        frameId,
+        true,
+      );
+    }
+  }
+  private async prepareTransitionWork(transition: Transition): Promise<void> {
     const { manifest, resources } = transition.context;
     const modelResources = this.context.resources;
     const signal = transition.controller.signal;
@@ -576,6 +613,21 @@ export class CellStreamer {
       this.cells.clear();
       this.entities.clear();
       transition.reject(error);
+    } finally {
+      this.diagnosticHistory?.measure(
+        'publication.swap',
+        startedAt,
+        this.clock(),
+        {
+          scopeId: this.diagnosticScope,
+          mapVersion: transition.context.manifest.mapVersion,
+          count: transition.changed.size,
+          ok: !this.disposed && this.context === transition.context,
+        },
+        'sync-elapsed',
+        this.diagnosticHistory.frameId,
+        true,
+      );
     }
   }
 
@@ -727,6 +779,8 @@ export class CellStreamer {
     }
   }
   private async prepare(cell: Cell) {
+    const diagnosticStarted = this.diagnosticHistory ? this.clock() : 0;
+    const diagnosticFrameId = this.diagnosticHistory?.frameId ?? null;
     const signal = cell.controller.signal;
     const context = this.context,
       generation = this.generation;
@@ -803,6 +857,19 @@ export class CellStreamer {
     } catch (error) {
       if (valid()) cell.error = String(error);
     } finally {
+      this.diagnosticHistory?.measure(
+        'cell.prepare',
+        diagnosticStarted,
+        this.clock(),
+        {
+          scopeId: this.diagnosticScope,
+          cellId: cell.id,
+          ok: valid() && !cell.error,
+          code: signal.aborted ? 'ABORTED' : cell.error ? 'FAILED' : null,
+        },
+        'async-elapsed',
+        diagnosticFrameId,
+      );
       if (this.generation === generation) {
         cell.loading = false;
         this.preparing--;
@@ -983,6 +1050,22 @@ export class CellStreamer {
     this.pump(budget);
   }
   pump(budgetMs: number = STREAMING_LIMITS.frameMs) {
+    const started = this.diagnosticHistory ? this.clock() : 0;
+    const frameId = this.diagnosticHistory?.frameId ?? null;
+    try {
+      this.pumpWork(budgetMs);
+    } finally {
+      this.diagnosticHistory?.measure(
+        'stream.pump',
+        started,
+        this.clock(),
+        { scopeId: this.diagnosticScope },
+        'sync-elapsed',
+        frameId,
+      );
+    }
+  }
+  private pumpWork(budgetMs: number) {
     if (this.disposed) return;
     this.applyTransition();
     if (this.disposed) return;
@@ -1061,6 +1144,12 @@ export class CellStreamer {
           cell.releasing = true;
         }
         const ms = this.clock() - operationStart;
+        const metric = action === 'release' ? 'cell.release' : 'cell.connect';
+        if (this.diagnosticHistory?.wants(metric, ms))
+          this.diagnosticHistory.measure(metric, operationStart, operationStart + ms, {
+            scopeId: this.diagnosticScope,
+            cellId: cell.id,
+          });
         this.peakOperationMs = Math.max(this.peakOperationMs, ms);
         this.samples.push({
           cellId: cell.id,
@@ -1148,6 +1237,9 @@ export class CellStreamer {
         return !!cell && this.graphicsReady(cell);
       })
     );
+  }
+  groupResidency(): { near: number; far: number } {
+    return this.groups.residency();
   }
   graphicsReadyRadius(center: Vec3, targetRadius: number): number {
     let radius = targetRadius;

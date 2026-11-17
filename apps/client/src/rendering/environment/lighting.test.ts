@@ -43,6 +43,73 @@ describe('static shadow cache', () => {
     }
   });
 
+  it('attributes static redraw requests to their initiator and coalesces repeats', () => {
+    const { engine, scene, lighting, frames } = fixture();
+    try {
+      frames(1);
+      const before = lighting.shadowInvalidations();
+      const house = MeshBuilder.CreateBox('house', {}, scene);
+      lighting.staticShadow.addShadowCaster(house);
+      lighting.staticShadow.invalidate('sun-step'); // Already pending: one redraw, not two.
+      expect(frames(3) - before.requested.casters).toBeGreaterThan(0);
+      const after = lighting.shadowInvalidations();
+      expect(after.requested.casters - before.requested.casters).toBe(1);
+      expect(after.requested['sun-step']).toBe(before.requested['sun-step']);
+      expect(after.coalesced - before.coalesced).toBe(1);
+      expect(after.mapSize).toBe(2048);
+      lighting.setQuality('economy');
+      expect(lighting.shadowInvalidations().requested.quality).toBeGreaterThan(
+        after.requested.quality,
+      );
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        enabled: false,
+        samples: null,
+        hdr: null,
+        samplesRequested: null,
+        hdrRequested: null,
+      });
+      lighting.setQuality('standard');
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        enabled: true,
+        samplesRequested: 4,
+        hdrRequested: true,
+      });
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it('distinguishes requested HDR/MSAA from a low-capability allocated attachment', () => {
+    const engine = new NullEngine();
+    engine.getCaps().textureHalfFloatRender = false;
+    engine.getCaps().textureFloatRender = false;
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
+    const lighting = new WorldLighting(scene, camera);
+    try {
+      lighting.setTimeOfDay(0); // Night bloom allocates a post-process target even without HDR support.
+      lighting.setQuality('standard');
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        samplesRequested: 4,
+        hdrRequested: true,
+        samples: null,
+        hdr: null,
+      });
+      scene.render();
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        samplesRequested: 4,
+        hdrRequested: true,
+        samples: 1,
+        hdr: false,
+        textureType: 0,
+      });
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it('draws immovable casters once and again only after their set changes', () => {
     const { engine, scene, lighting, frames } = fixture();
     try {

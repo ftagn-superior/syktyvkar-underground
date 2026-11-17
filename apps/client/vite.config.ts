@@ -1,18 +1,14 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
 import { inspectReactionCatalog } from '../../tools/reactions/catalog';
-
-const { version } = JSON.parse(
-  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
-);
+import { buildIdentity } from '../../tools/build-identity';
 
 export default defineConfig(async () => {
   const release = await inspectReactionCatalog(fileURLToPath(new URL('../..', import.meta.url)));
   return {
     root: fileURLToPath(new URL('.', import.meta.url)),
     define: {
-      __SU_BUILD_INFO__: JSON.stringify({ version, builtAt: new Date().toISOString() }),
+      __SU_BUILD_INFO__: JSON.stringify(buildIdentity()),
       __SU_REACTION_CATALOG_VERSION__: JSON.stringify(release.version),
     },
     plugins: [

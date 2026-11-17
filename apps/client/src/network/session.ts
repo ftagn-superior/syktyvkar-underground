@@ -1,4 +1,5 @@
 import { CLIENT_CATALOG_VERSIONS } from '../presentation/catalog-versions';
+import { SessionHistory } from '../diagnostics/session-history';
 import {
   Client,
   CloseCode,
@@ -140,6 +141,9 @@ function percentile(values: number[], percentile: number): number {
 }
 
 export class GameSession {
+  readonly diagnosticHistory = new SessionHistory();
+  private diagnosticConnectionNumber = 0;
+  private diagnosticPause?: { atMs: number; frameId: number | null; reason: string };
   accountId?: string;
   guestSkinId: AvatarSkinId = DEFAULT_AVATAR_SKIN;
   inventory: InventoryView = { slots: [] };
@@ -293,6 +297,7 @@ export class GameSession {
     private readonly onNotice: (message: string) => void,
   ) {}
   private setState(state: ConnectionState, message?: string): void {
+    this.diagnosticHistory.setPhase(state);
     if (state !== this.state) this.motionRevision++;
     if (['loading', 'ready', 'error', 'reconnecting'].includes(state)) {
       this.worldSounds.clear();
@@ -383,7 +388,7 @@ export class GameSession {
     this.publicationTarget = info.mapVersion;
     this.switchingPublication = true;
     this.cancelPhysicsPreparation();
-    this.pausePrediction();
+    this.pausePrediction('publication-change');
     this.neutral();
     this.clearEntityTracking();
     this.predictor?.dispose();
@@ -419,7 +424,7 @@ export class GameSession {
       if (generation !== this.generation) return;
       this.ensureStreamer();
       this.switchingPublication = false;
-      this.resetFrameMeasurements();
+      this.resetFrameMeasurements('publication-change');
       if (playing) this.room?.send('requestArea');
       this.layoutTransitions.push({
         revision: info.layoutRevision,
@@ -497,7 +502,7 @@ export class GameSession {
         publication.resources.dispose();
         if (streamer.failed) {
           this.reloadRequired = true;
-          this.pausePrediction();
+          this.pausePrediction('publication-failed');
           this.physics?.dispose();
           this.physics = undefined;
           if (this.streamer === streamer) this.streamer = undefined;
@@ -567,7 +572,7 @@ export class GameSession {
       for (const id of historyCells) this.layoutHistoryCells.add(id);
       this.layoutPauseStarted ??= performance.now();
       if (this.simulation) this.predictionPauses++;
-      this.pausePrediction();
+      this.pausePrediction('layout-gate');
       this.neutral();
     }
     if (!this.livePublication && !unknownSnapshot) this.layoutHistoryCells.clear();
@@ -727,13 +732,18 @@ export class GameSession {
         this.resources,
         this.streamingPhysics,
         this.graphics,
+        undefined,
+        this.diagnosticHistory,
       );
   }
   updateVisualArea(center: Vec3, drawRadius: number): number {
+    const started = performance.now();
     this.visualArea = { center, drawRadius };
     if (!this.room) this.streamer?.setPreview(center, drawRadius);
     else this.streamer?.setVisualArea(center, drawRadius);
-    return this.streamer?.graphicsReadyRadius(center, drawRadius) ?? 0;
+    const radius = this.streamer?.graphicsReadyRadius(center, drawRadius) ?? 0;
+    this.diagnosticHistory.addPlanning(performance.now() - started);
+    return radius;
   }
   get areaProblem(): string | undefined {
     return this.streamer?.problem ?? this.streamer?.backgroundProblem;
@@ -830,13 +840,17 @@ export class GameSession {
       room.reconnection.maxDelay = 1500;
       room.reconnection.maxEnqueuedMessages = 0;
       this.save();
+      this.diagnosticHistory.event('connection.join', {
+        connectionNumber: ++this.diagnosticConnectionNumber,
+      });
       room.onStateChange(() => {
         if (this.room === room) this.receiveState();
       });
       room.onDrop(() => {
         if (this.room !== room) return;
+        this.diagnosticHistory.event('connection.drop');
         this.stalled = true;
-        this.pausePrediction();
+        this.pausePrediction('connection-drop');
         this.clearEntityTracking();
         this.plan = undefined;
         this.planAcknowledged = undefined;
@@ -846,6 +860,9 @@ export class GameSession {
       });
       room.onReconnect(() => {
         if (this.room !== room) return;
+        this.diagnosticHistory.event('connection.reconnect', {
+          connectionNumber: ++this.diagnosticConnectionNumber,
+        });
         this.forgetCommandCatalog();
         this.stopRecoveryCheck();
         this.stalled = false;
@@ -853,7 +870,7 @@ export class GameSession {
         this.lastAck = 0;
         this.lastAckAt = performance.now();
         this.weatherSnapPending = true;
-        this.pausePrediction();
+        this.pausePrediction('reconnect');
         this.clearEntityTracking();
         this.setState('connecting');
         // SDK publishes the replacement token and sends JOIN acknowledgment after this callback.
@@ -866,6 +883,7 @@ export class GameSession {
       });
       room.onLeave((code) => {
         if (this.room !== room) return;
+        this.diagnosticHistory.event('connection.leave', { code });
         const recovering = this.state === 'reconnecting' || code === CloseCode.SERVER_SHUTDOWN;
         this.cleanup(recovering);
         writeStored();
@@ -1046,6 +1064,7 @@ export class GameSession {
       });
       room.onMessage<{ code: string }>('problem', ({ code }) => {
         if (this.room !== room) return;
+        this.diagnosticHistory.event('connection.problem', { code });
         if (
           ['PREPARE_TIMEOUT', 'SPAWN_UNAVAILABLE', 'VERSION_MISMATCH', 'STALE_WORLD'].includes(code)
         )
@@ -1081,13 +1100,27 @@ export class GameSession {
           return;
         }
         if (this.plan?.prepareId === plan.prepareId) return;
+        this.diagnosticHistory.event('area.plan', {
+          prepareId: plan.prepareId,
+          reason: plan.reason,
+          spawnSource: plan.spawnSource ?? null,
+          mapVersion: plan.mapVersion,
+          layoutRevision: plan.layoutRevision,
+        });
         if (plan.reason === 'spawn') {
+          if (this.savedSpawnPending && plan.spawnSource === 'default')
+            this.diagnosticHistory.event('spawn.fallback', {
+              from: 'saved',
+              to: 'default',
+              prepareId: plan.prepareId,
+              reason: 'server-plan',
+            });
           if (this.savedSpawnPending && plan.spawnSource === 'default')
             this.onNotice('Не удалось вернуться на прежнее место. Появляемся на старте');
           this.savedSpawnPending = plan.spawnSource === 'saved';
         }
         this.pendingSpawnSound = false;
-        this.pausePrediction();
+        this.pausePrediction('area-prepare');
         this.waitingTarget = undefined;
         this.preparationConfirmed = false;
         this.plan = plan;
@@ -1101,14 +1134,45 @@ export class GameSession {
         this.acknowledgeReadyArea();
       });
       room.onMessage<AreaResult>('areaResult', (result) => {
+        if (this.room !== room) return;
         if (
-          this.room !== room ||
           result.prepareId !== this.plan?.prepareId ||
           result.mapVersion !== this.info.mapVersion ||
           result.layoutRevision !== this.info.layoutRevision ||
           result.worldEpoch !== this.info.worldEpoch
-        )
+        ) {
+          this.diagnosticHistory.event('area.result-ignored', {
+            prepareId: result.prepareId,
+            ok: result.ok,
+            code: result.code ?? null,
+            mapVersion: result.mapVersion,
+            layoutRevision: result.layoutRevision,
+            reason: result.prepareId !== this.plan?.prepareId ? 'stale-plan' : 'stale-publication',
+          });
           return;
+        }
+        this.diagnosticHistory.measure(
+          'area.prepare',
+          this.prepareStartedAt,
+          performance.now(),
+          {
+            prepareId: result.prepareId,
+            reason: this.plan.reason,
+            spawnSource: this.plan.spawnSource ?? null,
+            ok: result.ok,
+            code: result.code ?? null,
+          },
+          'async-elapsed',
+          null,
+          true,
+        );
+        this.diagnosticHistory.event('area.result', {
+          prepareId: result.prepareId,
+          reason: this.plan.reason,
+          spawnSource: this.plan.spawnSource ?? null,
+          ok: result.ok,
+          code: result.code ?? null,
+        });
         this.preparations.push({
           reason: this.plan.reason,
           spawnSource: this.plan.spawnSource,
@@ -1137,7 +1201,7 @@ export class GameSession {
       });
       room.onMessage<{ serverTick: number }>('resync', (message) => {
         if (this.room !== room) return;
-        this.pausePrediction();
+        this.pausePrediction('server-resync');
         this.waitingResync = true;
         this.resyncTick = message.serverTick;
       });
@@ -1255,6 +1319,10 @@ export class GameSession {
     }
     if (this.persistencePaused !== room.state.paused) {
       this.persistencePaused = room.state.paused;
+      this.diagnosticHistory.event('prediction.server-pause', {
+        storagePaused: this.persistencePaused,
+        reason: room.state.pauseReason,
+      });
       if (this.persistencePaused) this.onControlInterruption?.();
       this.simulation?.reset();
       if (room.state.pauseReason === 'STORAGE_UNAVAILABLE')
@@ -1291,7 +1359,7 @@ export class GameSession {
       previousRevision !== undefined &&
       previousRevision !== self.revision
     )
-      this.pausePrediction();
+      this.pausePrediction('snapshot-revision');
     const liveIds = new Set([
       ...Array.from(room.state.items.values(), (item) => item.entityId),
       ...Array.from(room.state.players.values(), (player) => player.entityId),
@@ -1336,6 +1404,22 @@ export class GameSession {
     const sample = this.worldInfoSamples.get(info);
     if (sample && sample.sequence < this.acceptedWorldInfoSequence) return;
     if (sample) this.acceptedWorldInfoSequence = sample.sequence;
+    if (
+      this.info?.mapVersion !== info.mapVersion ||
+      this.info?.layoutRevision !== info.layoutRevision
+    )
+      this.diagnosticHistory.event('publication.info', {
+        mapVersion: info.mapVersion,
+        layoutRevision: info.layoutRevision,
+        layoutHash: info.layoutHash,
+        worldEpoch: info.worldEpoch,
+        assetReleaseVersion: info.assetReleaseVersion,
+      });
+    this.diagnosticHistory.setContext({
+      mapVersion: info.mapVersion,
+      layoutRevision: info.layoutRevision,
+      worldEpoch: info.worldEpoch,
+    });
     this.info = info;
     this.synchronizeWorldTime(info);
   }
@@ -1395,7 +1479,15 @@ export class GameSession {
       this.room?.state?.players?.get(this.room.sessionId)?.entityId ?? '',
     );
   }
-  private pausePrediction(): void {
+  private pausePrediction(reason = 'state-change'): void {
+    if (this.simulation && !this.diagnosticPause) {
+      this.diagnosticPause = {
+        atMs: performance.now(),
+        frameId: this.diagnosticHistory.frameId,
+        reason,
+      };
+      this.diagnosticHistory.event('prediction.pause', { reason });
+    }
     this.motionRevision++;
     // These inputs will not replay after the next authoritative restore.
     this.history.clear();
@@ -1477,6 +1569,19 @@ export class GameSession {
     this.trackedEntities.set(entity.entityId, entity);
   }
   private startPrediction(): void {
+    if (this.diagnosticPause) {
+      const pause = this.diagnosticPause;
+      this.diagnosticHistory.measure(
+        'prediction.pause',
+        pause.atMs,
+        performance.now(),
+        { reason: pause.reason, to: 'resumed' },
+        'async-elapsed',
+        pause.frameId,
+        true,
+      );
+      this.diagnosticPause = undefined;
+    }
     const room = this.room!;
     const physics = this.physics!;
     const self = room.state.players?.get(room.sessionId)!;
@@ -1532,6 +1637,13 @@ export class GameSession {
             : 0,
         );
         this.correctionCount++;
+        if (this.corrections.at(-1)! >= 0.05)
+          this.diagnosticHistory.event('prediction.correction', {
+            correctionM: this.corrections.at(-1)!,
+            correctionCount: this.correctionCount,
+            replaySteps: this.replaySteps,
+            serverTick: room.state.serverTick,
+          });
         if (this.corrections.length > 3600) this.corrections.shift();
         beforeCorrection = undefined;
       },
@@ -1548,6 +1660,62 @@ export class GameSession {
     delta: number,
     command: MoveInput,
   ): { entities: DisplayEntity[]; ownId?: string } {
+    this.diagnosticHistory.hud(
+      document.hidden
+        ? 'hidden'
+        : !Number.isFinite(delta) || delta <= 0
+          ? 'invalid-interval'
+          : this.state !== 'playing'
+            ? 'not-playing'
+            : !this.inputEnabled
+              ? 'input-disabled'
+              : this.discardNextInputFrame
+                ? 'discarded-input'
+                : this.frameWarmupMs < 60_000
+                  ? 'warmup'
+                  : 'included',
+    );
+    if (this.diagnosticHistory.sampleDue('network.sample', now)) {
+      const sampledAtMs = performance.now();
+      this.diagnosticHistory.sampleSafely(
+        'network.sample',
+        () => {
+          const resources = this.resources?.counters(),
+            residency = this.streamer?.groupResidency?.();
+          return {
+            connectionNumber: this.diagnosticConnectionNumber,
+            rttMs: this.room?.clock?.smoothedRtt() ?? null,
+            ack: this.input?.lastProcessed ?? null,
+            pendingInputs: this.input?.pendingCount ?? null,
+            ackAgeMs: this.input ? now - this.lastAckAt : null,
+            patchAgeMs: this.room ? now - this.lastPatchAt : null,
+            serverTick: this.room?.state?.serverTick ?? null,
+            serverStepMs: this.room?.state?.stepMs ?? null,
+            predictionPauses: this.predictionPauses,
+            replaySteps: this.replaySteps,
+            correctionCount: this.correctionCount,
+            stalled: this.stalled,
+            waitingResync: this.waitingResync,
+            storagePaused: this.persistencePaused,
+            inputEnabled: this.inputEnabled,
+            criticalReady: this.streamer?.criticalReady ?? null,
+            backgroundReady: this.streamer?.backgroundReady ?? null,
+            nearGroups: residency?.near ?? null,
+            farGroups: residency?.far ?? null,
+            mapVersion: this.info?.mapVersion ?? null,
+            layoutRevision: this.info?.layoutRevision ?? null,
+            cacheBytes: resources?.cacheBytes ?? null,
+            downloads: resources?.downloads ?? null,
+            cacheHits: resources?.cacheHits ?? null,
+            responseBodyBytes: resources?.responseBodyBytes ?? null,
+            integrityRetries: resources?.integrityRetries ?? null,
+            pendingDownloads: resources?.pending ?? null,
+            httpActive: resources?.httpActive ?? null,
+          };
+        },
+        sampledAtMs,
+      );
+    }
     // Capture the visible render clock independently of gameplay/preparation gates.
     // Diagnostic consumers must not accidentally omit a paused or discarded input frame.
     if (!document.hidden && Number.isFinite(delta) && delta > 0) {
@@ -1578,7 +1746,9 @@ export class GameSession {
     if (this.switchingPublication && !this.livePublication)
       return room ? this.authoritativeDisplay() : { entities: this.preview() };
     this.updateLayoutPredictionGate();
+    const planningStarted = performance.now();
     this.planArea();
+    this.diagnosticHistory.addPlanning(performance.now() - planningStarted);
     this.streamer?.pumpFrame(delta);
     if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     const selfNow = room.state.players?.get(room.sessionId);
@@ -1605,7 +1775,7 @@ export class GameSession {
     if (!ready || this.state === 'reconnecting') {
       if (this.simulation) {
         this.waitingTarget = { ...this.physics!.getState().position };
-        this.pausePrediction();
+        this.pausePrediction('area-not-ready');
         this.predictionPauses++;
         this.waitingResync = true;
         this.resyncTick = undefined;
@@ -1673,7 +1843,7 @@ export class GameSession {
     if (stalled && !this.stalled && this.state === 'playing') {
       this.stalled = true;
       this.onControlInterruption?.();
-      this.pausePrediction();
+      this.pausePrediction('ack-or-patch-stall');
       this.waitingResync = true;
       this.resyncTick = undefined;
       room.send('resync');
@@ -1933,6 +2103,7 @@ export class GameSession {
   /** Pause local controls independently of the connection, e.g. during GPU recovery. */
   setInputEnabled(enabled: boolean): void {
     if (this.inputEnabled === enabled) return;
+    this.diagnosticHistory.event('input.enabled', { inputEnabled: enabled });
     if (!enabled) this.neutral();
     this.inputEnabled = enabled;
     if (!enabled) this.onControlInterruption?.();
@@ -2175,6 +2346,19 @@ export class GameSession {
       });
   }
   private cleanup(preserveRecovery = false): void {
+    if (this.diagnosticPause) {
+      const pause = this.diagnosticPause;
+      this.diagnosticHistory.measure(
+        'prediction.pause',
+        pause.atMs,
+        performance.now(),
+        { reason: pause.reason, to: 'cleanup' },
+        'async-elapsed',
+        pause.frameId,
+        true,
+      );
+      this.diagnosticPause = undefined;
+    }
     this.forgetCommandCatalog();
     this.streamer?.cancelTransition();
     this.worldSounds.clear();
@@ -2240,10 +2424,11 @@ export class GameSession {
     this.trackedEntities.clear();
     this.stalled = false;
     this.waitingResync = false;
-    this.resetFrameMeasurements();
+    this.resetFrameMeasurements('session-cleanup');
   }
   /** Start a fresh visible-frame sample window after changing the render configuration. */
-  resetFrameMeasurements(): void {
+  resetFrameMeasurements(reason = 'requested'): void {
+    this.diagnosticHistory.event('hud.reset', { reason, count: this.frames.length });
     this.frames.length = 0;
     this.frameWarmupMs = 0;
   }

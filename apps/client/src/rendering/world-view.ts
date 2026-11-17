@@ -1,4 +1,5 @@
 import { FarGroups } from './far-groups';
+import type { SessionHistory } from '../diagnostics/session-history';
 import { rayBoundsDistance, type GraphicsProjection } from '../streaming/graphics-plan';
 import type { GraphicsGroup, Bounds } from '@su/contracts';
 import { Ray } from '@babylonjs/core/Culling/ray';
@@ -168,6 +169,7 @@ export class WorldView {
     this.sizeCamera();
   };
   private frameHook?: (now: number, delta: number) => void;
+  private diagnosticHistory?: SessionHistory;
   private cameraFrameHook?: (now: number, delta: number) => void;
   private worldTimeSource: () => number = () => performance.now();
   private renderDeferred = false;
@@ -176,6 +178,7 @@ export class WorldView {
   private readonly visibilityChanged = () => {
     // A suspended background tab is not a rendered frame. Keep visible slow frames intact.
     this.lastFrame = performance.now();
+    this.diagnosticHistory?.visibility(!document.hidden);
     for (const view of this.entities.values()) view.avatar?.resetMotion();
     this.reactionSounds.suspend();
     if (document.hidden) {
@@ -291,6 +294,7 @@ export class WorldView {
       const now = performance.now();
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
+      this.diagnosticHistory?.beginFrame(now, delta * 1000, !document.hidden);
       this.inputFrameHook?.(now, delta);
       const previousAngle = this.cameraOrbit.angle;
       this.camera.alpha = this.cameraOrbit.advance(delta);
@@ -322,9 +326,11 @@ export class WorldView {
       active.getProjectionMatrix(true);
       this.scene.updateTransformMatrix(true);
       this.cameraFrameHook?.(now, delta);
+      this.sampleDiagnosticState(now);
       // Keep RAF, streaming and UI active while local preparation owns the frame budget.
       if (this.renderDeferred) {
         this.deferredFrames++;
+        this.diagnosticHistory?.endFrame('deferred');
         return;
       }
       this.environment.update(
@@ -370,8 +376,39 @@ export class WorldView {
       this.radial.appearMs = this.dynamicRadial.appearMs = this.reducedMotion.matches ? 80 : 300;
       if (this.staticHighlight?.target) this.highlightStaticObject(this.staticHighlight.target);
       this.positionLabels();
-      this.scene.render();
+      const renderStarted = this.diagnosticHistory ? performance.now() : 0;
+      try {
+        this.scene.render();
+      } catch (error) {
+        this.diagnosticHistory?.endFrame('failed', performance.now() - renderStarted);
+        throw error;
+      }
+      if (this.diagnosticHistory) {
+        this.diagnosticHistory.endFrame('rendered', performance.now() - renderStarted);
+      }
     });
+  }
+  private sampleDiagnosticState(now: number): void {
+    if (!this.diagnosticHistory?.sampleDue('render.sample', now)) return;
+    const shadow = this.environment.shadowDiagnostics();
+    const fields = {
+      quality: this.quality,
+      cameraMode: this.firstPerson ? 'first-person' : 'overview',
+      zoom: this.zoom,
+      renderWidth: this.engine.getRenderWidth(true),
+      renderHeight: this.engine.getRenderHeight(true),
+      readyRadius: this.streamingRadius,
+      shownRadius: this.radial.radius,
+      renderDeferred: this.renderDeferred,
+      hour: this.environment.hour,
+      ...this.environment.weatherAmounts,
+      staticRefreshes: shadow.staticRefreshes,
+      staticDiscarded: shadow.staticDiscarded,
+      staticFallbacks: shadow.staticFallbacks,
+      contextSampledAtMs: now,
+    };
+    this.diagnosticHistory.setContext(fields);
+    this.diagnosticHistory.sample('render.sample', fields, now);
   }
   private material(id: string, color: string): StandardMaterial {
     const material = new StandardMaterial(id, this.scene);
@@ -389,6 +426,8 @@ export class WorldView {
   setQuality(quality: RenderQuality): void {
     if (quality === this.quality) return;
     this.quality = quality;
+    this.diagnosticHistory?.setContext({ quality });
+    this.diagnosticHistory?.event('render.quality', { quality });
     this.applyQuality();
     this.sizeCamera();
   }
@@ -440,6 +479,11 @@ export class WorldView {
       this.camera.setTarget(this.target.clone(), false, false, true);
     }
     this.firstPerson = enabled;
+    this.diagnosticHistory?.setContext({ cameraMode: enabled ? 'first-person' : 'overview' });
+    this.diagnosticHistory?.event('render.camera', {
+      cameraMode: enabled ? 'first-person' : 'overview',
+      zoom: this.zoom,
+    });
     this.scene.activeCamera = this.activeCamera;
     this.graphicalFrame = undefined;
     this.sizeCamera();
@@ -868,6 +912,14 @@ export class WorldView {
       ),
       drawCalls: this.instrumentation.drawCallsCounter.current,
       renderer: this.engine.getGlInfo(),
+      capabilities: {
+        backend: 'webgl',
+        webGLVersion: this.engine.webGLVersion,
+        timerQuerySupported: !!this.engine.getCaps().timerQuery,
+        gpuTimerSamples: 'not-collected',
+        maxTextureSize: this.engine.getCaps().maxTextureSize,
+        maxMSAASamples: this.engine.getCaps().maxMSAASamples,
+      },
       camera: {
         mode: this.firstPerson ? 'first-person' : 'overview',
         yaw: this.yaw,
@@ -1027,11 +1079,21 @@ export class WorldView {
     }
   }
   setRenderDeferred(deferred: boolean): void {
+    if (deferred !== this.renderDeferred)
+      this.diagnosticHistory?.event('render.defer', {
+        renderDeferred: deferred,
+        reason: 'local-preparation',
+      });
     this.renderDeferred = deferred;
   }
 
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
+  }
+  setDiagnosticHistory(history: SessionHistory): void {
+    this.diagnosticHistory = history;
+    history.setContext({ quality: this.quality });
+    history.boundary('renderer-created');
   }
   private inputFrameHook?: (now: number, delta: number) => void;
   /** Samples local controls before the orbit advances and movement reads its actual angle. */
@@ -1580,6 +1642,7 @@ export class WorldView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.diagnosticHistory?.boundary('renderer-disposed');
     this.audio?.setListener(undefined);
     this.audio?.stopWorld();
     this.reactionSounds.clear();

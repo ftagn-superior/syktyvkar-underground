@@ -4,7 +4,9 @@ Open the game normally, reproduce the delay and use the existing **Diagnostics �
 Download report** button promptly. Recording starts with this page's GameSession;
 opening the panel or waiting for the HUD's 60-second warmup is not required. Stay
 on the same page through saved-spawn fallback/reconnect. Reloading starts a new
-run. Exporting does not clear any history. A loaded old client still exports v2;
+run. Exporting does not clear any history. The file is compact (unindented) JSON;
+format it with any JSON tool. Add `?gpuTiming=1` to the page URL before playing to
+opt into sampled GPU timing (below). A loaded old client still exports v2;
 new fields cannot reconstruct an earlier run or identify an already deployed v2
 artifact retrospectively.
 
@@ -19,7 +21,9 @@ and may legitimately be null while raw observations are available.
 `build.commit` is embedded by Vite **when building this client**, with build ID,
 timestamp, dirty flag and provenance. It is never read from a runtime checkout.
 `SU_BUILD_SHA` accepts a full 40-character SHA and `SU_BUILD_ID` a short release
-identifier for source archives/CI. Without Git or explicit build metadata the
+identifier for source archives/CI. `tools/build.mjs` sets one `SU_BUILT_AT` for the
+whole build, so a client and server bundled together report the same `buildId`;
+compare `commit`/`dirty` for revisions. Without Git or explicit build metadata the
 revision is null. A dirty build identifies its base revision, not a reproducible
 clean artifact; retain the dirty flag in comparisons.
 
@@ -54,11 +58,19 @@ about clock accuracy or browser timer resolution. Second-resolution external log
 
 ```text
 [frameId, atMs, intervalMs, workElapsedMs, renderSubmitElapsedMs,
- renderOutcome, hudReason, phase]
+ renderOutcome, hudReason, phase, planningElapsedMs, graphicsFrameCalls,
+ projectionRebuilds, gpuRenderElapsedMs]
 ```
 
-The last three fields are indices into the exported `renderOutcomes`,
-`hudReasons` and `phases` dictionaries; phase is sampled at callback entry. A frame is a visible WorldView callback,
+`renderOutcome`, `hudReason` and `phase` are indices into the exported
+`renderOutcomes`, `hudReasons` and `phases` dictionaries; phase is sampled at
+callback entry. Re-planning columns show how much area work happens before the
+streaming pump: `planningElapsedMs` is the synchronous wall time of
+`planArea`/`updateVisualArea` (`setArea`, `setVisualArea`, `graphicsReadyRadius`)
+in that callback; `graphicsFrameCalls` counts camera-frame lookups by
+visibility/projection checks and `projectionRebuilds` their cache misses (a count
+per call, not a timer per call). `gpuRenderElapsedMs` is null unless GPU timing is
+enabled and this frame was sampled. A frame is a visible WorldView callback,
 including preparation, warmup, input pauses and render deferral. `rendered`
 means `scene.render()` returned, not that the display presented it or GPU work
 completed. `workElapsedMs` measures the synchronous callback wall duration;
@@ -66,7 +78,9 @@ completed. `workElapsedMs` measures the synchronous callback wall duration;
 CPU execution time or GPU duration. An unfinished callback has unknown elapsed
 time/outcome rather than fabricated completion.
 
-First/resumed/recreated-renderer boundary intervals are null. Hidden callbacks
+First/resumed/recreated-renderer boundary intervals are null, and so is the first
+interval after a WebGL context loss (Babylon runs no callbacks while the context is
+lost; `frame.boundary` reason `graphics-lost`). Hidden callbacks
 are excluded; real slow visible intervals are retained without clamping.
 `excluded` counts these decisions over the run. HUD resets/visibility boundaries
 appear in `transitions`; raw frames survive HUD resets and connection changes.
@@ -80,8 +94,11 @@ it is null with fewer than two observations. An empty history is explicitly
 
 - `events`: last **512** observations. Sync spans name actual logical boundaries;
   async spans include waits, preparation and cancellation. Ordinary cell/pump
-  spans retain durations >=4 ms and newly observed maxima. Group handoff stages
-  are retained even when short. This is not a complete instruction profiler.
+  spans retain durations >=4 ms and newly observed maxima. Every `group.handoff`
+  is retained and carries `activateMs`/`reconcileMs`/`residencyMs`/`releaseMs`;
+  separate stage spans are kept only when >=4 ms or a new maximum, so frequent
+  short handoffs do not evict pump/area records. This is not a complete
+  instruction profiler.
 - `transitions`: a separate last **128** connection/area/spawn/publication,
   visibility, graphics, camera/quality/defer, input/prediction-pause and HUD-reset observations. They survive frequent
   streaming event eviction. `area.plan`/`area.result` record prepare ID, source,
@@ -92,10 +109,24 @@ it is null with fewer than two observations. An empty history is explicitly
 - `samples`: last **240** rows shared between render/network sources, each at
   most 1 Hz. Render rows sample camera, quality/dimensions, time/weather, ready/shown radii and
   cumulative shadow counters; network rows sample RTT/ack/patch ages, pending
-  inputs, replay/pause/correction totals, ready state and resource counters.
-  They use the render loop, not a background polling timer. No fixed number of
-  seconds is guaranteed. Shadow invalidation causes and individual replay-step
-  CPU durations are not instrumented.
+  inputs, replay/pause/correction totals, ready state, resident near/far groups
+  and resource counters. They use the render loop, not a background polling
+  timer. No fixed number of seconds is guaranteed. Individual replay-step CPU
+  durations are not instrumented.
+- Render rows also carry **graphics A/B conditions**: granted canvas
+  `antialias`, `pipeline`, `msaaSamples`, `hdr`, `bloom`/`bloomWeight`,
+  `hardwareScaling`, `shadows`/`shadowMapSize`, plus `drawCalls` and
+  `submittedTriangles` of the previous completed render. Compare two runs only
+  when these match, or attribute differences to the changed condition.
+- **Shadow redraw initiators**: `shadowCasterInvalidations`,
+  `shadowSunStepInvalidations`, `shadowFollowInvalidations`,
+  `shadowResizeInvalidations`, `shadowQualityInvalidations`,
+  `shadowRetryInvalidations`, `shadowContextInvalidations` are cumulative counts of
+  static-map redraw _requests_ that started a pending redraw; repeats before it
+  ran are coalesced (`rendering.shadowInvalidations.coalesced`). Subtract adjacent
+  samples to see who asked; `staticRefreshes` counts redraws actually rendered,
+  `staticDiscarded`/`staticFallbacks` rejected/forced ones. `timeFixed` tells
+  whether game time was held (`?time=` or a frozen room clock).
 - `peaks`: maximum newly measured duration for each fixed span name, with start,
   completion, frame associations, group/cell/scope fields and last sampled
   context (`contextSampledAtMs` reveals its age). These survive ring eviction;
@@ -134,17 +165,32 @@ payload only. `performance.memory`, when exposed, is a partial browser-defined
 JS heap reading taken **at export**, not RSS or a historical maximum.
 
 Capabilities describe the actual engine/context. Timer-query support is not a
-sample: GPU timer samples are currently **not collected**, or explicitly
-unsupported/no-context/context-lost. No zeros are manufactured from unsupported APIs.
+sample. With `?gpuTiming=1` the client measures, on every 30th rendered callback,
+the GPU elapsed time of the commands issued by that `scene.render()`
+(`EXT_disjoint_timer_query_webgl2`, `TIME_ELAPSED`). At most one query is in
+flight; results are polled on later callbacks and never waited for (no
+`finish`/`readPixels`/busy loop), then attached to the issuing frame as
+`gpuRenderElapsedMs`. Results overlapping a GPU disjoint event are discarded
+(`disjointDiscarded`), due samples with a query still outstanding are skipped
+(`busySkips`), and a context loss drops the query (`lostQueries`) and re-acquires
+the extension after restoration. Without the flag the status is `not-collected`
+(or `unsupported`/`no-context`/`context-lost`). This is GPU duration of sampled
+render submissions, **not** GPU utilization, frame presentation or CPU time. No
+zeros are manufactured from unsupported APIs.
 
-The new frame storage is a fixed 225 KiB Float64Array (3600 × 8 × 8 bytes), plus
+The new frame storage is a fixed 337.5 KiB Float64Array (3600 × 12 × 8 bytes), plus
 bounded event/sample/peak objects with selected fields/128-character strings.
 No full scene/resource traversal or JSON serialization runs per frame. The
 existing detailed snapshot and serialization remain manual export work. The
 file size is bounded by record counts, not a constant byte target; legacy
 4096-operation/256-HTTP histories can already make files substantial.
-Instrumentation overhead and real-device end-to-end download remain to be
-checked on hardware; this change makes no FPS improvement claim.
+Measured costs on the reference ThinkPad T480 are recorded in
+`reports/s60-diagnostic-export-review-2026-11-17.md`; reproduce them with
+`tests/browser-diagnostic-export.ts` (real downloads across join, rotation, both
+cameras, quality change, hidden/resume, context loss, reconnect and reload),
+`tests/browser-diagnostic-overhead.ts` (sequential A/B of RAF callback time and
+export cost) and `tests/diagnostic-recorder-bench.ts` (recorder-only cost). This
+change makes no FPS improvement claim.
 
 ## Verification and S-61 integration
 

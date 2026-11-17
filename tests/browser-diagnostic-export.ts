@@ -27,14 +27,79 @@ const errors: string[] = [];
 const exports: Record<string, unknown>[] = [];
 const debug = (page: Page) => page.evaluate(() => (window as any).__SU_DEBUG__.snapshot());
 const ready = (page: Page, timeout = 240_000) =>
-  page.waitForFunction(
-    () => {
-      const r = (window as any).__SU_DEBUG__?.report();
-      return r?.metrics.connection === 'playing' && r.streaming.criticalReady;
-    },
-    undefined,
-    { timeout },
-  );
+  page
+    .waitForFunction(
+      () => {
+        const r = (window as any).__SU_DEBUG__?.report();
+        return r?.metrics.connection === 'playing' && r.streaming.criticalReady;
+      },
+      undefined,
+      // A full report per animation frame would itself load the page being measured.
+      { timeout, polling: 1000 },
+    )
+    .catch(async (error) => {
+      console.error(
+        await page.evaluate(() => {
+          const r = (window as any).__SU_DEBUG__?.report();
+          return JSON.stringify({
+            connection: r?.metrics.connection,
+            critical: r?.streaming.criticalReady,
+            area: document.getElementById('area-message')?.textContent,
+            notice: document.getElementById('notice')?.textContent,
+            join: (document.getElementById('join') as HTMLButtonElement)?.disabled,
+            joinLabel: document.getElementById('join-label')?.textContent,
+            frames: r?.history.frames.total,
+            problem: r?.streaming.problem ?? r?.streaming.backgroundProblem,
+            preparations: r?.preparations,
+            transitions: r?.history.transitions.records
+              .slice(-12)
+              .map((t: any) => [t.name, t.atMs, JSON.stringify(t.fields)]),
+            peaks: Object.fromEntries(
+              Object.entries(r?.history.peaks ?? {}).map(([k, v]: any) => [k, v.durationMs]),
+            ),
+          });
+        }),
+      );
+      throw error;
+    });
+
+const joinAttempts: { label: string; attempts: number }[] = [];
+/** Enter like a player: a cold T480 spawn can exceed the 15 s server PREPARE_TIMEOUT. */
+async function enter(page: Page, label: string) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (await page.locator('#join:not([disabled])').isVisible()) {
+      await page.locator('#join').click();
+      await page.waitForFunction(
+        () => (window as any).__SU_DEBUG__.snapshot().connection !== 'ready',
+        undefined,
+        { timeout: 60_000, polling: 200 },
+      );
+    }
+    const outcome = await page.waitForFunction(
+      () => {
+        const r = (window as any).__SU_DEBUG__?.report();
+        const join = document.getElementById('join') as HTMLButtonElement | null;
+        if (r?.metrics.connection === 'playing' && r.streaming.criticalReady) return 'playing';
+        return r?.metrics.connection === 'ready' && join && !join.disabled && join.offsetParent
+          ? 'retry'
+          : false;
+      },
+      undefined,
+      { timeout: 240_000, polling: 1000 },
+    );
+    if ((await outcome.jsonValue()) === 'playing') {
+      joinAttempts.push({ label, attempts: attempt });
+      return;
+    }
+    console.log(
+      `${label} attempt ${attempt}:`,
+      await page.evaluate(() =>
+        JSON.stringify((window as any).__SU_DEBUG__.report().preparations.slice(-1)),
+      ),
+    );
+  }
+  throw new Error(`${label}: could not enter after 3 attempts`);
+}
 
 async function download(page: Page, label: string) {
   const [file] = await Promise.all([
@@ -111,13 +176,19 @@ try {
     viewport: { width: 1440, height: 900 },
     acceptDownloads: true,
   });
+  const lobby = await context.newPage();
+  lobby.on('pageerror', (error) => errors.push(error.message));
+  await lobby.goto(`${url}/?diagnostics=1${process.env.SU_DIAGNOSTIC_QUERY ?? ''}`);
+  await lobby.locator('#join:not([disabled])').waitFor({ timeout: 240_000 });
+  // Separate tab: in automated full Chromium a download saved from the lobby made the same
+  // tab's next spawn preparation hang until PREPARE_TIMEOUT (main and this branch alike).
+  await download(lobby, 'preview-before-join');
+  await lobby.close();
   const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${url}/?diagnostics=1${process.env.SU_DIAGNOSTIC_QUERY ?? ''}`);
   await page.locator('#join:not([disabled])').waitFor({ timeout: 240_000 });
-  await download(page, 'preview-before-join');
-  await page.locator('#join').click();
-  await ready(page);
+  await enter(page, 'first-join');
   const early = await download(page, 'playing-before-hud-warmup');
   assert.equal(early.metrics.frameP95Ms, null, 'HUD p95 is still warming up');
   assert.ok(early.history.frames.validIntervalCount > 0, 'raw frames exist before HUD warmup');
@@ -220,8 +291,7 @@ try {
     undefined,
     { timeout: 240_000 },
   );
-  if (await page.locator('#join:not([disabled])').isVisible()) await page.locator('#join').click();
-  await ready(page);
+  await enter(page, 'rejoin-after-reload');
   await page.waitForTimeout(3000);
   const rejoined = await download(page, 'after-reload-rejoin');
   assert.notEqual(rejoined.history.runId, repeated.history.runId);
@@ -245,6 +315,7 @@ try {
             (r: any) => r.name === 'connection.reconnect' || r.name === 'connection.join',
           ),
         },
+        joinAttempts,
         errors,
         exports,
       },

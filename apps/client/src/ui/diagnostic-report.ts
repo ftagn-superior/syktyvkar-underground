@@ -17,7 +17,10 @@ export const DIAGNOSTIC_SEMANTICS = {
   elapsed:
     'Measured monotonic wall durations, not CPU execution time or utilization; async-elapsed includes waits.',
   frames:
-    'Visible WorldView callbacks, including warmup/preparation/deferred. Not physical display presentation. HUD filters do not filter this ring.',
+    'Visible WorldView callbacks, including warmup/preparation/deferred. Not physical display presentation. HUD filters do not filter this ring. Visibility, renderer creation/disposal and WebGL context loss start a new interval (null).',
+  planning:
+    'planningElapsedMs: synchronous area/visual planning wall time in the callback; graphicsFrameCalls/projectionRebuilds: camera-frame lookups and cache misses counted without timing each call.',
+  gpu: 'gpuRenderElapsedMs: opt-in (?gpuTiming=1) GPU elapsed of one sampled scene.render() submission, attached to its issuing frame; null when not sampled. Not utilization, presentation or CPU time.',
   frameOutcome:
     'rendered means scene.render returned; it does not prove GPU completion. Deferred means no scene.render call.',
   current: [
@@ -59,12 +62,14 @@ export const DIAGNOSTIC_SEMANTICS = {
   correlation:
     'frameId identifies a visible callback; async completion between callbacks has frameId=null and lastFrameId as a reference, not causal attribution. Peaks include last sampled render context, which can be older than the span.',
   eventSampling:
-    'Group handoffs/substages and area results are retained; ordinary cell/pump spans retain >=4 ms and new maxima. Corrections log >=0.05 m, all observations still contribute to cumulative count.',
+    'group.handoff and area results are always retained; handoff records carry activate/reconcile/residency/release durations. Separate stage, cell and pump spans retain >=4 ms and new maxima. Corrections log >=0.05 m, all observations still contribute to cumulative count.',
   sampleFields: {
     current:
       'quality/camera/zoom, render dimensions (pixels), radii (world meters), hour, weather mix (0..1), RTT/ack/patch ages and server step (ms), readiness/connection flags, pending counts and cacheBytes (bytes).',
     cumulative:
-      'staticRefreshes/staticDiscarded/staticFallbacks per renderer; predictionPauses/replaySteps/correctionCount per GameSession; downloads/cacheHits/responseBodyBytes/integrityRetries per resource context. No deltas/rates are implied.',
+      'staticRefreshes/staticDiscarded/staticFallbacks and shadow*Invalidations (redraw requests by initiator; coalesced repeats excluded) per renderer; gpuSamples/gpuDisjoint/gpuBusySkips per renderer; predictionPauses/replaySteps/correctionCount per GameSession; downloads/cacheHits/responseBodyBytes/integrityRetries per resource context. No deltas/rates are implied.',
+    conditions:
+      'antialias is the granted default-framebuffer attribute; pipeline/msaaSamples/hdr describe the post-process pipeline; drawCalls/submittedTriangles are from the previous completed render; nearGroups/farGroups are resident representations.',
     sequence: 'ack is lastProcessed input sequence; serverTick is authoritative server tick.',
   },
 } as const;

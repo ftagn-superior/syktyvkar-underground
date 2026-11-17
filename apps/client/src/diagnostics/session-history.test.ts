@@ -276,4 +276,11 @@ describe('real-session diagnostic history contract', () => {
     }
     expect(r.history.gpuSample(1, 1)).toBe(false);
   });
+
+  it('keeps every WorldEnvironment weather amount the render sample spreads in', () => {
+    const r = recorder();
+    const weather = { rain: 0, snow: 0, fog: 0.2, overcast: 0.7, wetness: 0.1, snowCover: 0 };
+    r.history.sample('render.sample', weather, 0);
+    expect(r.history.snapshot().samples.records[0].fields).toEqual(weather);
+  });
 });

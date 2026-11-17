@@ -933,6 +933,8 @@ export class WorldView {
       texturePayloadEstimateBytes: this.texturePayloadEstimate(),
       shadowCasters: shadows.staticCasters + shadows.dynamicCasters,
       shadowMaps: shadows,
+      shadowInvalidations: this.environment.shadowInvalidations(),
+      pipeline: this.environment.pipelineDiagnostics(),
       streaming: {
         drawRadius: this.graphicalArea().drawRadius,
         readyRadius: this.streamingRadius,

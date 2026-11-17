@@ -43,6 +43,37 @@ describe('static shadow cache', () => {
     }
   });
 
+  it('attributes static redraw requests to their initiator and coalesces repeats', () => {
+    const { engine, scene, lighting, frames } = fixture();
+    try {
+      frames(1);
+      const before = lighting.shadowInvalidations();
+      const house = MeshBuilder.CreateBox('house', {}, scene);
+      lighting.staticShadow.addShadowCaster(house);
+      lighting.staticShadow.invalidate('sun-step'); // Already pending: one redraw, not two.
+      expect(frames(3) - before.requested.casters).toBeGreaterThan(0);
+      const after = lighting.shadowInvalidations();
+      expect(after.requested.casters - before.requested.casters).toBe(1);
+      expect(after.requested['sun-step']).toBe(before.requested['sun-step']);
+      expect(after.coalesced - before.coalesced).toBe(1);
+      expect(after.mapSize).toBe(2048);
+      lighting.setQuality('economy');
+      expect(lighting.shadowInvalidations().requested.quality).toBeGreaterThan(
+        after.requested.quality,
+      );
+      expect(lighting.pipelineDiagnostics()).toEqual({ enabled: false, samples: null, hdr: null });
+      lighting.setQuality('standard');
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        enabled: true,
+        samples: 4,
+        hdr: true,
+      });
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it('draws immovable casters once and again only after their set changes', () => {
     const { engine, scene, lighting, frames } = fixture();
     try {

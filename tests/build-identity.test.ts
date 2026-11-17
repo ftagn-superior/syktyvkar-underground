@@ -42,4 +42,15 @@ describe('artifact build identity', () => {
       readBuildIdentity({ ...base, commit: 'HEAD', buildId: null, dirty: null, source: 'git' }),
     ).toBeNull();
   });
+  it('gives separately bundled client and server one build timestamp/ID', () => {
+    const env = { SU_BUILT_AT: '2026-11-17T11:30:11.577Z' };
+    const git = (args: string[]) => (args[0] === 'rev-parse' ? sha : '');
+    const client = buildIdentity({ version: '0.1.0', env, git });
+    const server = buildIdentity({ version: '0.1.0', env, git });
+    expect(client.buildId).toBe(`${sha}@${env.SU_BUILT_AT}`);
+    expect(server).toEqual(client);
+    expect(() => buildIdentity({ version: '0.1.0', env: { SU_BUILT_AT: 'soon' }, git })).toThrow(
+      'SU_BUILT_AT',
+    );
+  });
 });

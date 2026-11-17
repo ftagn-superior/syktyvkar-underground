@@ -47,8 +47,25 @@ describe('real-session diagnostic history contract', () => {
       2,
       HUD_REASONS.indexOf('not-playing'),
       3,
+      0,
+      0,
+      0,
+      null,
     ]);
-    expect(frame.samples[1]).toEqual([2, 50, 30, 5, 2, 1, HUD_REASONS.indexOf('warmup'), 3]);
+    expect(frame.samples[1]).toEqual([
+      2,
+      50,
+      30,
+      5,
+      2,
+      1,
+      HUD_REASONS.indexOf('warmup'),
+      3,
+      0,
+      0,
+      0,
+      null,
+    ]);
     expect(frame.coveredDurationMs).toBe(30);
   });
 
@@ -225,5 +242,38 @@ describe('real-session diagnostic history contract', () => {
       prepareId: 'id',
       code: 'PLAN_REPLACED',
     });
+  });
+
+  it('attributes re-planning work and asynchronous GPU results to the issuing frame', () => {
+    const r = recorder();
+    r.at(10);
+    r.history.beginFrame(10, 10, true);
+    r.history.addPlanning(1.5);
+    r.history.addPlanning(0.25);
+    for (let i = 0; i < 5; i++) r.history.countGraphicsFrame(i === 0);
+    r.history.endFrame('rendered', 3);
+    // Outside a callback nothing is attributed to the previous frame.
+    r.history.countGraphicsFrame(true);
+    r.history.addPlanning(9);
+    r.at(30);
+    r.history.beginFrame(30, 20, true);
+    expect(r.history.gpuSample(1, 7.25)).toBe(true);
+    r.history.endFrame('rendered', 2);
+    const [first, second] = r.history.snapshot().frames.samples;
+    const columns = r.history.snapshot().frames.columns;
+    const at = (row: (number | null)[], name: string) => row[columns.indexOf(name as never)];
+    expect(at(first, 'planningElapsedMs')).toBe(1.75);
+    expect(at(first, 'graphicsFrameCalls')).toBe(5);
+    expect(at(first, 'projectionRebuilds')).toBe(1);
+    expect(at(first, 'gpuRenderElapsedMs')).toBe(7.25);
+    expect(at(second, 'gpuRenderElapsedMs')).toBeNull();
+    expect(at(second, 'graphicsFrameCalls')).toBe(0);
+    // A late result for an overwritten or future frame is dropped, not misattributed.
+    expect(r.history.gpuSample(3, 1)).toBe(false);
+    for (let i = 0; i < HISTORY_LIMITS.frames; i++) {
+      r.history.beginFrame(40 + i, 1, true);
+      r.history.endFrame('rendered');
+    }
+    expect(r.history.gpuSample(1, 1)).toBe(false);
   });
 });

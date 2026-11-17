@@ -142,17 +142,20 @@ export function diagnosticReport(
         scope: 'adapter/process',
       },
       gpuTimer: {
-        samples: [],
+        ...rendererSnapshot?.capabilities?.gpuTimer,
         status: !view
           ? 'no-context'
           : graphicsLost
             ? 'context-lost'
-            : rendererSnapshot?.capabilities?.timerQuerySupported
-              ? 'not-collected'
-              : 'unsupported',
+            : (rendererSnapshot?.capabilities?.gpuTimer?.status ??
+              (rendererSnapshot?.capabilities?.timerQuerySupported
+                ? 'not-collected'
+                : 'unsupported')),
+        values: 'history.frames column gpuRenderElapsedMs',
+        enable: '?gpuTiming=1',
         unit: 'ms',
-        source: 'WebGL disjoint timer query',
-        scope: 'game-context',
+        source: 'EXT_disjoint_timer_query_webgl2 TIME_ELAPSED around scene.render()',
+        scope: 'GPU elapsed of sampled render submissions; not utilization or frame presentation',
       },
       jsHeap: {
         status: finite(heap?.usedJSHeapSize) === null ? 'unavailable' : 'reported',
@@ -222,7 +225,8 @@ export function diagnosticReport(
 }
 
 export function downloadDiagnosticReport(report: ReturnType<typeof diagnosticReport>): void {
-  const blob = new Blob([JSON.stringify(report, null, 2) + '\n'], { type: 'application/json' });
+  // Compact: indentation put every frame-column number on its own line (~2x size and work).
+  const blob = new Blob([JSON.stringify(report) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

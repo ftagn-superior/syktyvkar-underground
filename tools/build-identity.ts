@@ -21,7 +21,9 @@ export function buildIdentity(
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim());
-  const builtAt = options.builtAt ?? new Date().toISOString();
+  // One `pnpm build` bundles client and server separately; SU_BUILT_AT gives both one ID.
+  const builtAt = options.builtAt ?? env.SU_BUILT_AT ?? new Date().toISOString();
+  if (!Number.isFinite(Date.parse(builtAt))) throw new Error('SU_BUILT_AT must be an ISO time');
   const version =
     options.version ??
     JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;

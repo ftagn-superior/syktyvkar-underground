@@ -1162,7 +1162,9 @@ export function startGame(): void {
       await session.load();
       if (disposed) return;
       view = new WorldView(canvas, element('labels'), session.definition, quality);
-      view.setDiagnosticHistory(session.diagnosticHistory);
+      view.setDiagnosticHistory(session.diagnosticHistory, {
+        gpuTiming: new URLSearchParams(location.search).get('gpuTiming') === '1',
+      });
       view.setAudio(audio);
       view.setWorldTimeSource(() => session.worldTimeMs());
       view.setDayClock(session.dayClock);

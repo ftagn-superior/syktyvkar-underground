@@ -26,6 +26,18 @@ import { shadowUpdatesMuted } from '../shadow-casters';
 const SHADOW_EXTENT = 90;
 const SUN_DISTANCE = 150;
 const SHADOW_MAP_SIZE = 2048;
+const PIPELINE_HDR = true;
+export const SHADOW_INVALIDATION_REASONS = [
+  'casters',
+  'sun-step',
+  'follow',
+  'resize',
+  'quality',
+  'retry',
+  'context',
+  'other',
+] as const;
+export type ShadowInvalidationReason = (typeof SHADOW_INVALIDATION_REASONS)[number];
 /**
  * Солнце следует за камерой шагами в целое число текселей карты теней. Между шагами
  * проекция теней не меняется, поэтому неподвижный город можно не перерисовывать,
@@ -106,12 +118,19 @@ export class StaticShadowGenerator extends WorldShadowGenerator {
   refreshes = 0;
   incomplete = false;
   private rendering = false;
+  private pending = false;
+  /** Requests that started a pending redraw, by initiator; repeats before it ran coalesce. */
+  readonly requested = Object.fromEntries(
+    SHADOW_INVALIDATION_REASONS.map((reason) => [reason, 0]),
+  ) as Record<ShadowInvalidationReason, number>;
+  coalesced = 0;
 
   /** Call after the generator's filtering is configured: reconfiguring recreates the map. */
   cache(before: () => void, after: () => void): void {
     const map = this.getShadowMap()!;
     map.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
     map.onBeforeBindObservable.add(() => {
+      this.pending = false;
       before();
       this.incomplete = false;
       this.rendering = false;
@@ -134,15 +153,20 @@ export class StaticShadowGenerator extends WorldShadowGenerator {
     return ready;
   }
   /** Requests one redraw on the next frame. Cheap to call repeatedly. */
-  invalidate(): void {
+  invalidate(reason: ShadowInvalidationReason = 'other'): void {
+    if (this.pending) this.coalesced++;
+    else this.requested[reason]++;
+    this.pending = true;
     this.getShadowMap()?.resetRefreshCounter();
   }
   override addShadowCaster(mesh: AbstractMesh, includeDescendants = true): ShadowGenerator {
-    if (!shadowUpdatesMuted(this) && this.covers(mesh, includeDescendants)) this.invalidate();
+    if (!shadowUpdatesMuted(this) && this.covers(mesh, includeDescendants))
+      this.invalidate('casters');
     return super.addShadowCaster(mesh, includeDescendants);
   }
   override removeShadowCaster(mesh: AbstractMesh, includeDescendants = true): ShadowGenerator {
-    if (!shadowUpdatesMuted(this) && this.covers(mesh, includeDescendants)) this.invalidate();
+    if (!shadowUpdatesMuted(this) && this.covers(mesh, includeDescendants))
+      this.invalidate('casters');
     return super.removeShadowCaster(mesh, includeDescendants);
   }
   /**
@@ -275,7 +299,7 @@ export class WorldLighting {
       // Restored textures have no pixels from the old context.
       this.heldProjection = undefined;
       this.incompleteRefreshes = 0;
-      this.staticShadow.invalidate();
+      this.staticShadow.invalidate('context');
     });
     this.shadow.getShadowMap()!.onClearObservable.add((engine) => this.startFromStatic(engine));
     this.setTimeOfDay(REFERENCE_HOUR);
@@ -303,7 +327,7 @@ export class WorldLighting {
     if (Vector3.Dot(direction, this.sun.direction) < LIGHT_STEP_COS) {
       this.sun.direction.copyFrom(direction);
       this.follow(this.target, this.viewWidth);
-      this.staticShadow.invalidate();
+      this.staticShadow.invalidate('sun-step');
     }
     return sky;
   }
@@ -378,7 +402,7 @@ export class WorldLighting {
   private publishStatic(): void {
     if (this.staticShadow.incomplete) {
       this.incompleteRefreshes++;
-      this.staticShadow.invalidate();
+      this.staticShadow.invalidate('retry');
       if (this.incompleteRefreshes <= MAX_INCOMPLETE_REFRESHES) {
         this.discardedRefreshes++;
         if (this.heldProjection) {
@@ -413,14 +437,14 @@ export class WorldLighting {
     const settings = renderQualitySettings(quality);
     this.scene.shadowsEnabled = settings.shadows;
     // Disabled shadows skip the map entirely; draw it afresh when they return.
-    this.staticShadow.invalidate();
+    this.staticShadow.invalidate('quality');
     if (!settings.postProcessing) {
       this.pipeline?.dispose();
       this.pipeline = undefined;
       return;
     }
     if (this.pipeline) return;
-    const pipeline = new DefaultRenderingPipeline('lighting', true, this.scene, [
+    const pipeline = new DefaultRenderingPipeline('lighting', PIPELINE_HDR, this.scene, [
       this.camera,
       ...this.additionalCameras,
     ]);
@@ -503,7 +527,7 @@ export class WorldLighting {
         shadow.normalBias = 0.08 * (desired / SHADOW_EXTENT);
         shadow.resetProjection();
       }
-      this.staticShadow.invalidate();
+      this.staticShadow.invalidate('resize');
     }
     const extent = this.sun.shadowFrustumSize;
     const shadowSnap = (extent / SHADOW_MAP_SIZE) * 128;
@@ -524,7 +548,23 @@ export class WorldLighting {
       );
     if (position.equalsWithEpsilon(this.sun.position, 1e-6)) return;
     this.sun.position.copyFrom(position);
-    this.staticShadow.invalidate();
+    this.staticShadow.invalidate('follow');
+  }
+
+  /** Cumulative static-map requests by initiator, coalesced repeats and the fixed map size. */
+  shadowInvalidations() {
+    return {
+      requested: { ...this.staticShadow.requested },
+      coalesced: this.staticShadow.coalesced,
+      mapSize: SHADOW_MAP_SIZE,
+    };
+  }
+  /** Pipeline state that changes GPU cost independently of the scene contents. */
+  pipelineDiagnostics() {
+    const pipeline = this.pipeline;
+    return pipeline
+      ? { enabled: true, samples: pipeline.samples, hdr: PIPELINE_HDR }
+      : { enabled: false, samples: null, hdr: null };
   }
 
   /** Shadow maps and caster counts for the diagnostic report. */

@@ -1238,6 +1238,9 @@ export class CellStreamer {
       })
     );
   }
+  groupResidency(): { near: number; far: number } {
+    return this.groups.residency();
+  }
   graphicsReadyRadius(center: Vec3, targetRadius: number): number {
     let radius = targetRadius;
     for (const descriptor of this.manifest.cells) {

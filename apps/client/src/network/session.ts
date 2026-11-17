@@ -737,10 +737,13 @@ export class GameSession {
       );
   }
   updateVisualArea(center: Vec3, drawRadius: number): number {
+    const started = performance.now();
     this.visualArea = { center, drawRadius };
     if (!this.room) this.streamer?.setPreview(center, drawRadius);
     else this.streamer?.setVisualArea(center, drawRadius);
-    return this.streamer?.graphicsReadyRadius(center, drawRadius) ?? 0;
+    const radius = this.streamer?.graphicsReadyRadius(center, drawRadius) ?? 0;
+    this.diagnosticHistory.addPlanning(performance.now() - started);
+    return radius;
   }
   get areaProblem(): string | undefined {
     return this.streamer?.problem ?? this.streamer?.backgroundProblem;
@@ -1673,12 +1676,13 @@ export class GameSession {
                   : 'included',
     );
     if (this.diagnosticHistory.sampleDue('network.sample', now)) {
-      const resources = this.resources?.counters();
+      const resources = this.resources?.counters(),
+        residency = this.streamer?.groupResidency?.();
       this.diagnosticHistory.sample(
         'network.sample',
         {
           connectionNumber: this.diagnosticConnectionNumber,
-          rttMs: this.room?.clock.smoothedRtt() ?? null,
+          rttMs: this.room?.clock?.smoothedRtt() ?? null,
           ack: this.input?.lastProcessed ?? null,
           pendingInputs: this.input?.pendingCount ?? null,
           ackAgeMs: this.input ? now - this.lastAckAt : null,
@@ -1694,6 +1698,8 @@ export class GameSession {
           inputEnabled: this.inputEnabled,
           criticalReady: this.streamer?.criticalReady ?? null,
           backgroundReady: this.streamer?.backgroundReady ?? null,
+          nearGroups: residency?.near ?? null,
+          farGroups: residency?.far ?? null,
           mapVersion: this.info?.mapVersion ?? null,
           layoutRevision: this.info?.layoutRevision ?? null,
           cacheBytes: resources?.cacheBytes ?? null,
@@ -1737,7 +1743,9 @@ export class GameSession {
     if (this.switchingPublication && !this.livePublication)
       return room ? this.authoritativeDisplay() : { entities: this.preview() };
     this.updateLayoutPredictionGate();
+    const planningStarted = performance.now();
     this.planArea();
+    this.diagnosticHistory.addPlanning(performance.now() - planningStarted);
     this.streamer?.pumpFrame(delta);
     if (!room?.state?.worldEpoch || !this.streamer) return { entities: this.preview() };
     const selfNow = room.state.players?.get(room.sessionId);

@@ -87,6 +87,35 @@ const FIELD_NAMES = [
   'pendingDownloads',
   'httpActive',
   'contextSampledAtMs',
+  'activateMs',
+  'reconcileMs',
+  'residencyMs',
+  'releaseMs',
+  'antialias',
+  'pipeline',
+  'msaaSamples',
+  'hdr',
+  'bloom',
+  'bloomWeight',
+  'bloomThreshold',
+  'hardwareScaling',
+  'shadows',
+  'shadowMapSize',
+  'drawCalls',
+  'submittedTriangles',
+  'nearGroups',
+  'farGroups',
+  'timeFixed',
+  'shadowCasterInvalidations',
+  'shadowSunStepInvalidations',
+  'shadowFollowInvalidations',
+  'shadowResizeInvalidations',
+  'shadowQualityInvalidations',
+  'shadowRetryInvalidations',
+  'shadowContextInvalidations',
+  'gpuSamples',
+  'gpuDisjoint',
+  'gpuBusySkips',
 ] as const;
 export type DiagnosticFields = Partial<
   Record<(typeof FIELD_NAMES)[number], string | number | boolean | null>
@@ -121,6 +150,26 @@ type Observation = {
   fields: DiagnosticFields;
 };
 const rounded = (n: number) => Math.round(n * 1000) / 1000;
+/** Exported frame columns after frameId; one extra internal slot keeps the callback start. */
+const FRAME_COLUMNS = [
+  'atMs',
+  'intervalMs',
+  'workElapsedMs',
+  'renderSubmitElapsedMs',
+  'renderOutcome',
+  'hudReason',
+  'phase',
+  'planningElapsedMs',
+  'graphicsFrameCalls',
+  'projectionRebuilds',
+  'gpuRenderElapsedMs',
+] as const;
+const F = Object.fromEntries(FRAME_COLUMNS.map((name, i) => [name, i])) as Record<
+  (typeof FRAME_COLUMNS)[number],
+  number
+>;
+const STRIDE = FRAME_COLUMNS.length + 1,
+  STARTED = FRAME_COLUMNS.length;
 
 class Ring<T> {
   private readonly values: T[] = [];
@@ -150,9 +199,10 @@ export class SessionHistory {
   private readonly timeOriginMs: number;
   private readonly startedAtMs: number;
   private readonly startedUtcMs: number;
-  private readonly frames = new Float64Array(HISTORY_LIMITS.frames * 8);
+  private readonly frames = new Float64Array(HISTORY_LIMITS.frames * STRIDE);
   private frameCount = 0;
   private active = false;
+  private activeOffset = 0;
   private boundaryPending = true;
   private visible = true;
   private phase = 'loading';
@@ -229,7 +279,7 @@ export class SessionHistory {
       this.excluded.hiddenCallbacks++;
       return;
     }
-    const offset = (this.frameCount++ % HISTORY_LIMITS.frames) * 8;
+    const offset = (this.frameCount++ % HISTORY_LIMITS.frames) * STRIDE;
     let interval = intervalMs;
     if (this.boundaryPending) {
       interval = NaN;
@@ -239,28 +289,54 @@ export class SessionHistory {
       this.excluded.invalidIntervals++;
     }
     this.boundaryPending = false;
-    this.frames[offset] = atMs;
-    this.frames[offset + 1] = interval;
-    this.frames[offset + 2] = this.frames[offset + 3] = NaN;
-    this.frames[offset + 4] = this.frames[offset + 5] = 0;
-    this.frames[offset + 6] = FRAME_PHASES.indexOf(this.phase as (typeof FRAME_PHASES)[number]);
-    this.frames[offset + 7] = this.clock();
+    const row = this.frames;
+    row.fill(0, offset, offset + STRIDE);
+    row[offset + F.atMs] = atMs;
+    row[offset + F.intervalMs] = interval;
+    row[offset + F.workElapsedMs] = row[offset + F.renderSubmitElapsedMs] = NaN;
+    row[offset + F.gpuRenderElapsedMs] = NaN;
+    row[offset + F.phase] = FRAME_PHASES.indexOf(this.phase as (typeof FRAME_PHASES)[number]);
+    this.activeOffset = offset;
     this.active = true;
+    row[offset + STARTED] = this.clock();
   }
   hud(reason: HudReason): void {
-    if (this.active)
-      this.frames[((this.frameCount - 1) % HISTORY_LIMITS.frames) * 8 + 5] =
-        HUD_REASONS.indexOf(reason);
+    if (this.active) this.frames[this.activeOffset + F.hudReason] = HUD_REASONS.indexOf(reason);
+  }
+  /** Synchronous area/visual planning wall time inside the current callback. */
+  addPlanning(ms: number): void {
+    if (this.active && ms >= 0) this.frames[this.activeOffset + F.planningElapsedMs] += ms;
+  }
+  /** Called on every camera-frame lookup; costs one increment, no clock read. */
+  countGraphicsFrame(rebuilt: boolean): void {
+    if (!this.active) return;
+    this.frames[this.activeOffset + F.graphicsFrameCalls]++;
+    if (rebuilt) this.frames[this.activeOffset + F.projectionRebuilds]++;
+  }
+  /** Attaches an asynchronous GPU result to the frame that issued it, if still retained. */
+  gpuSample(frameId: number, ms: number): boolean {
+    if (
+      frameId < 1 ||
+      frameId > this.frameCount ||
+      this.frameCount - frameId >= HISTORY_LIMITS.frames
+    )
+      return false;
+    this.frames[((frameId - 1) % HISTORY_LIMITS.frames) * STRIDE + F.gpuRenderElapsedMs] = ms;
+    return true;
   }
   endFrame(
     outcome: 'rendered' | 'deferred' | 'failed',
     renderSubmitMs: number | null = null,
   ): void {
     if (!this.active) return;
-    const offset = ((this.frameCount - 1) % HISTORY_LIMITS.frames) * 8;
-    this.frames[offset + 2] = Math.max(0, this.clock() - this.frames[offset + 7]);
-    this.frames[offset + 3] = renderSubmitMs === null ? NaN : renderSubmitMs;
-    this.frames[offset + 4] = outcome === 'rendered' ? 1 : outcome === 'deferred' ? 2 : 3;
+    const offset = this.activeOffset;
+    this.frames[offset + F.workElapsedMs] = Math.max(
+      0,
+      this.clock() - this.frames[offset + STARTED],
+    );
+    this.frames[offset + F.renderSubmitElapsedMs] = renderSubmitMs === null ? NaN : renderSubmitMs;
+    this.frames[offset + F.renderOutcome] =
+      outcome === 'rendered' ? 1 : outcome === 'deferred' ? 2 : 3;
     this.active = false;
   }
   private observation(name: string, fields: DiagnosticFields, atMs: number): Observation {
@@ -330,15 +406,14 @@ export class SessionHistory {
     const first = this.frameCount - count;
     let validIntervals = 0;
     const samples = Array.from({ length: count }, (_, i) => {
-      const offset = ((first + i) % HISTORY_LIMITS.frames) * 8;
-      if (Number.isFinite(this.frames[offset + 1])) validIntervals++;
-      return [
-        first + i + 1,
-        ...Array.from({ length: 7 }, (_, n) => {
-          const value = this.frames[offset + n];
-          return Number.isFinite(value) ? rounded(value) : null;
-        }),
-      ];
+      const offset = ((first + i) % HISTORY_LIMITS.frames) * STRIDE;
+      if (Number.isFinite(this.frames[offset + F.intervalMs])) validIntervals++;
+      const row: (number | null)[] = [first + i + 1];
+      for (let n = 0; n < FRAME_COLUMNS.length; n++) {
+        const value = this.frames[offset + n];
+        row.push(Number.isFinite(value) ? rounded(value) : null);
+      }
+      return row;
     });
     const events = this.events.snapshot(),
       gauges = this.samples.snapshot(),
@@ -367,20 +442,11 @@ export class SessionHistory {
         coveredDurationMs:
           count > 1
             ? rounded(
-                this.frames[((this.frameCount - 1) % HISTORY_LIMITS.frames) * 8] -
-                  this.frames[(first % HISTORY_LIMITS.frames) * 8],
+                this.frames[((this.frameCount - 1) % HISTORY_LIMITS.frames) * STRIDE] -
+                  this.frames[(first % HISTORY_LIMITS.frames) * STRIDE],
               )
             : null,
-        columns: [
-          'frameId',
-          'atMs',
-          'intervalMs',
-          'workElapsedMs',
-          'renderSubmitElapsedMs',
-          'renderOutcome',
-          'hudReason',
-          'phase',
-        ],
+        columns: ['frameId', ...FRAME_COLUMNS],
         renderOutcomes: ['unfinished', 'rendered', 'deferred', 'failed'],
         hudReasons: HUD_REASONS,
         phases: FRAME_PHASES,

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { inspectReactionCatalog } from './reactions/catalog.ts';
 import { buildIdentity } from './build-identity.ts';
 const reactions = await inspectReactionCatalog(process.cwd());
+process.env.SU_BUILT_AT ??= new Date().toISOString();
 const require = createRequire(new URL('../packages/simulation/package.json', import.meta.url));
 await viteBuild({ configFile: 'apps/client/vite.config.ts' });
 const clientRelease = JSON.parse(await readFile('dist/client/reaction-release.json', 'utf8'));

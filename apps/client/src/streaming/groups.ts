@@ -347,7 +347,17 @@ export class GroupGraphics {
     }
     this.near = next;
   }
-  private observe(name: DiagnosticSpan, fields: DiagnosticFields, action: () => void): void {
+  /**
+   * Times one handoff stage. Stage durations always reach the enclosing `group.handoff`
+   * record; a separate stage span is kept only when slow or a new maximum, so frequent
+   * short handoffs cannot evict pump/area observations from the shared event ring.
+   */
+  private observe(
+    name: DiagnosticSpan,
+    fields: DiagnosticFields,
+    stages: DiagnosticFields,
+    action: () => void,
+  ): void {
     if (!this.diagnosticHistory) {
       action();
       return;
@@ -359,16 +369,26 @@ export class GroupGraphics {
       action();
       ok = true;
     } finally {
+      const ended = this.clock();
+      stages[`${name.slice('group.'.length)}Ms` as keyof DiagnosticFields] = ended - started;
       this.diagnosticHistory.measure(
         name,
         started,
-        this.clock(),
+        ended,
         { ...fields, ok },
         'sync-elapsed',
         frameId,
-        true,
       );
     }
+  }
+  /** Current resident representation counts; O(groups), used by 1 Hz samples only. */
+  residency(): { near: number; far: number } {
+    let near = 0,
+      far = 0;
+    for (const s of this.states.values())
+      if (s.current?.level === 'near') near++;
+      else if (s.current?.level === 'far') far++;
+    return { near, far };
   }
   pump(deadline: number) {
     if (!this.enabled || this.staged) return;
@@ -384,21 +404,26 @@ export class GroupGraphics {
       const started = this.clock();
       const from = s.current?.level ?? null;
       const details = {
-        scopeId: this.diagnosticScope,
-        groupId: id,
-        from,
-        to: s.pending?.level ?? null,
-      };
+          scopeId: this.diagnosticScope,
+          groupId: id,
+          from,
+          to: s.pending?.level ?? null,
+        },
+        stages: DiagnosticFields = {};
       if (s.pending) {
         const old = s.current,
           prepared = s.pending;
         s.pending = undefined;
         s.current = prepared;
         try {
-          this.observe('group.activate', details, () => prepared.far?.activate());
-          this.observe('group.reconcile', details, () => this.reconcileNear(this.states.values()));
-          this.observe('group.residency', details, () => this.graphics.recordGraphicsResidency?.());
-          this.observe('group.release', details, () => old?.release());
+          this.observe('group.activate', details, stages, () => prepared.far?.activate());
+          this.observe('group.reconcile', details, stages, () =>
+            this.reconcileNear(this.states.values()),
+          );
+          this.observe('group.residency', details, stages, () =>
+            this.graphics.recordGraphicsResidency?.(),
+          );
+          this.observe('group.release', details, stages, () => old?.release());
         } catch (e) {
           s.current = old;
           prepared.release();
@@ -410,8 +435,10 @@ export class GroupGraphics {
         s.controller?.abort();
         const old = s.current;
         s.current = undefined;
-        this.observe('group.reconcile', details, () => this.reconcileNear(this.states.values()));
-        this.observe('group.release', details, () => old?.release());
+        this.observe('group.reconcile', details, stages, () =>
+          this.reconcileNear(this.states.values()),
+        );
+        this.observe('group.release', details, stages, () => old?.release());
         this.states.delete(id);
       }
       this.peakSwapMs = Math.max(this.peakSwapMs, this.clock() - started);
@@ -421,6 +448,7 @@ export class GroupGraphics {
         this.clock(),
         {
           ...details,
+          ...stages,
           to: s.current?.level ?? null,
         },
         'sync-elapsed',

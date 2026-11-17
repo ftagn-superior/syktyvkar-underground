@@ -1,5 +1,6 @@
 import { FarGroups } from './far-groups';
 import type { SessionHistory } from '../diagnostics/session-history';
+import { GpuRenderTimer } from '../diagnostics/gpu-timer';
 import { rayBoundsDistance, type GraphicsProjection } from '../streaming/graphics-plan';
 import type { GraphicsGroup, Bounds } from '@su/contracts';
 import { Ray } from '@babylonjs/core/Culling/ray';
@@ -170,6 +171,7 @@ export class WorldView {
   };
   private frameHook?: (now: number, delta: number) => void;
   private diagnosticHistory?: SessionHistory;
+  private gpuTimer?: GpuRenderTimer;
   private cameraFrameHook?: (now: number, delta: number) => void;
   private worldTimeSource: () => number = () => performance.now();
   private renderDeferred = false;
@@ -295,6 +297,8 @@ export class WorldView {
       const delta = (now - this.lastFrame) / 1000;
       this.lastFrame = now;
       this.diagnosticHistory?.beginFrame(now, delta * 1000, !document.hidden);
+      const gpu = this.gpuTimer?.poll();
+      if (gpu) this.diagnosticHistory?.gpuSample(gpu.frameId, gpu.ms);
       this.inputFrameHook?.(now, delta);
       const previousAngle = this.cameraOrbit.angle;
       this.camera.alpha = this.cameraOrbit.advance(delta);
@@ -377,11 +381,14 @@ export class WorldView {
       if (this.staticHighlight?.target) this.highlightStaticObject(this.staticHighlight.target);
       this.positionLabels();
       const renderStarted = this.diagnosticHistory ? performance.now() : 0;
+      this.gpuTimer?.begin(this.diagnosticHistory?.frameId ?? null);
       try {
         this.scene.render();
       } catch (error) {
         this.diagnosticHistory?.endFrame('failed', performance.now() - renderStarted);
         throw error;
+      } finally {
+        this.gpuTimer?.end();
       }
       if (this.diagnosticHistory) {
         this.diagnosticHistory.endFrame('rendered', performance.now() - renderStarted);
@@ -391,6 +398,10 @@ export class WorldView {
   private sampleDiagnosticState(now: number): void {
     if (!this.diagnosticHistory?.sampleDue('render.sample', now)) return;
     const shadow = this.environment.shadowDiagnostics();
+    const shadowRequests = this.environment.shadowInvalidations(),
+      invalidations = shadowRequests.requested;
+    const pipeline = this.environment.pipelineDiagnostics();
+    const bloom = this.environment.bloomDiagnostics();
     const fields = {
       quality: this.quality,
       cameraMode: this.firstPerson ? 'first-person' : 'overview',
@@ -405,6 +416,31 @@ export class WorldView {
       staticRefreshes: shadow.staticRefreshes,
       staticDiscarded: shadow.staticDiscarded,
       staticFallbacks: shadow.staticFallbacks,
+      // Cumulative initiators of static shadow redraw requests; subtract adjacent samples.
+      shadowCasterInvalidations: invalidations.casters,
+      shadowSunStepInvalidations: invalidations['sun-step'],
+      shadowFollowInvalidations: invalidations.follow,
+      shadowResizeInvalidations: invalidations.resize,
+      shadowQualityInvalidations: invalidations.quality,
+      shadowRetryInvalidations: invalidations.retry,
+      shadowContextInvalidations: invalidations.context,
+      timeFixed: this.environment.timeFixed,
+      // Conditions that change GPU cost for the same scene (A/B comparability).
+      antialias: this.contextAntialias,
+      hardwareScaling: this.engine.getHardwareScalingLevel(),
+      pipeline: pipeline.enabled,
+      msaaSamples: pipeline.samples,
+      hdr: pipeline.hdr,
+      bloom: bloom.enabled,
+      bloomWeight: bloom.weight,
+      shadows: this.scene.shadowsEnabled,
+      shadowMapSize: this.scene.shadowsEnabled ? shadowRequests.mapSize : null,
+      // Last completed render: counters of the previous scene.render(), not this callback.
+      drawCalls: this.instrumentation.drawCallsCounter.current,
+      submittedTriangles: (this.scene.getActiveIndices() - this.shadowSubmittedIndices) / 3,
+      gpuSamples: this.gpuTimer?.samples ?? null,
+      gpuDisjoint: this.gpuTimer?.disjoint ?? null,
+      gpuBusySkips: this.gpuTimer?.busySkips ?? null,
       contextSampledAtMs: now,
     };
     this.diagnosticHistory.setContext(fields);
@@ -535,15 +571,16 @@ export class WorldView {
       width = this.canvas.clientWidth,
       height = this.canvas.clientHeight;
     let frame = this.graphicsProjectionFrame;
-    if (
+    const rebuilt =
       !frame ||
       frame.at !== this.lastFrame ||
       frame.camera !== camera ||
       frame.viewVersion !== view.updateFlag ||
       frame.projectionVersion !== projection.updateFlag ||
       frame.width !== width ||
-      frame.height !== height
-    ) {
+      frame.height !== height;
+    this.diagnosticHistory?.countGraphicsFrame(rebuilt);
+    if (rebuilt || !frame) {
       const matrix = camera.getTransformationMatrix().clone();
       frame = this.graphicsProjectionFrame = {
         at: this.lastFrame,
@@ -916,7 +953,8 @@ export class WorldView {
         backend: 'webgl',
         webGLVersion: this.engine.webGLVersion,
         timerQuerySupported: !!this.engine.getCaps().timerQuery,
-        gpuTimerSamples: 'not-collected',
+        contextAntialias: this.contextAntialias,
+        gpuTimer: this.gpuTimerDiagnostics(),
         maxTextureSize: this.engine.getCaps().maxTextureSize,
         maxMSAASamples: this.engine.getCaps().maxMSAASamples,
       },
@@ -1090,10 +1128,35 @@ export class WorldView {
   onFrame(callback: (now: number, delta: number) => void): void {
     this.frameHook = callback;
   }
-  setDiagnosticHistory(history: SessionHistory): void {
+  setDiagnosticHistory(history: SessionHistory, options: { gpuTiming?: boolean } = {}): void {
     this.diagnosticHistory = history;
-    history.setContext({ quality: this.quality });
+    history.setContext({ quality: this.quality, antialias: this.contextAntialias });
     history.boundary('renderer-created');
+    if (options.gpuTiming) this.gpuTimer = new GpuRenderTimer(this.canvas.getContext('webgl2'));
+    // Babylon skips render callbacks while the context is lost; the next interval spans the outage.
+    this.engine.onContextLostObservable.add(() => {
+      history.boundary('graphics-lost');
+      this.gpuTimer?.contextLost();
+    });
+    this.engine.onContextRestoredObservable.add(() => this.gpuTimer?.contextRestored());
+  }
+  /** Actual default-framebuffer antialiasing granted by the browser; null while lost. */
+  private get contextAntialias(): boolean | null {
+    return this.engine._gl?.getContextAttributes()?.antialias ?? null;
+  }
+  /** Opt-in (`?gpuTiming=1`) sampled GPU elapsed time; null when not requested. */
+  gpuTimerDiagnostics() {
+    const timer = this.gpuTimer;
+    return timer
+      ? {
+          status: timer.status,
+          samples: timer.samples,
+          disjointDiscarded: timer.disjoint,
+          busySkips: timer.busySkips,
+          lostQueries: timer.lostQueries,
+          everyNthRenderedCallback: 30,
+        }
+      : null;
   }
   private inputFrameHook?: (now: number, delta: number) => void;
   /** Samples local controls before the orbit advances and movement reads its actual angle. */
@@ -1643,6 +1706,7 @@ export class WorldView {
     if (this.disposed) return;
     this.disposed = true;
     this.diagnosticHistory?.boundary('renderer-disposed');
+    this.gpuTimer?.dispose();
     this.audio?.setListener(undefined);
     this.audio?.stopWorld();
     this.reactionSounds.clear();

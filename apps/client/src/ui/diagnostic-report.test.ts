@@ -85,7 +85,10 @@ describe('downloaded diagnostic JSON v3', () => {
   it('does not invent system utilization/VRAM or GPU timer samples from supported capabilities', () => {
     const { session, view } = fixture();
     const report = diagnosticReport(session, view, false);
-    expect(report.measurements.gpuTimer).toMatchObject({ samples: [], status: 'not-collected' });
+    // Supported but not opted in (`?gpuTiming=1`): no per-frame GPU values exist.
+    expect(report.measurements.gpuTimer).toMatchObject({ status: 'not-collected' });
+    expect(report.measurements.gpuTimer).not.toHaveProperty('samples');
+    expect(report.history.frames.samples.every((row) => row.at(-1) === null)).toBe(true);
     expect(report.measurements.gpuUtilization.value).toBeNull();
     expect(report.measurements.cpuUtilization.value).toBeNull();
     expect(report.measurements.physicalVram.value).toBeNull();

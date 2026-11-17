@@ -3,6 +3,7 @@ import { build as viteBuild } from 'vite';
 import { cp, mkdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { inspectReactionCatalog } from './reactions/catalog.ts';
+import { buildIdentity } from './build-identity.ts';
 const reactions = await inspectReactionCatalog(process.cwd());
 const require = createRequire(new URL('../packages/simulation/package.json', import.meta.url));
 await viteBuild({ configFile: 'apps/client/vite.config.ts' });
@@ -29,7 +30,10 @@ await bundle({
   format: 'esm',
   target: 'node24',
   sourcemap: true,
-  define: { __SU_REACTION_CATALOG_VERSION__: JSON.stringify(reactions.version) },
+  define: {
+    __SU_REACTION_CATALOG_VERSION__: JSON.stringify(reactions.version),
+    __SU_BUILD_INFO__: JSON.stringify(buildIdentity()),
+  },
   external: ['bufferutil', 'utf-8-validate', 'msgpackr-extract'],
   banner: {
     js: "import { createRequire as createBundleRequire } from 'node:module'; const require = createBundleRequire(import.meta.url);",

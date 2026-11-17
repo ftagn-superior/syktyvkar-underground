@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { SERVER_BUILD } from './build-identity.js';
 import { randomUUID } from 'node:crypto';
 import { WorldOwnership } from './world-ownership.js';
 import { LayoutPublications } from './layout/live.js';
@@ -181,6 +182,7 @@ export async function createGameServer(options: GameServerOptions = {}) {
           return;
         }
         const info: WorldInfo = {
+          serverBuild: SERVER_BUILD,
           roomId: room.roomId,
           ...layouts.info(room.state.worldEpoch),
           protocolVersion: PROTOCOL_VERSION,

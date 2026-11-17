@@ -164,23 +164,44 @@ payloads are estimates and overlap; byte-cache size counts its retained decoded
 payload only. `performance.memory`, when exposed, is a partial browser-defined
 JS heap reading taken **at export**, not RSS or a historical maximum.
 
+`msaaSamplesRequested`/`hdrRequested` describe pipeline configuration, while
+`msaaSamples`/`hdr`/`pipelineTextureType` describe the allocated first post-process
+input attachment; they are null before allocation. This distinguishes driver/
+engine fallback from the requested 4x MSAA/HDR. The active camera's short
+post-process chain is inspected only in the rare snapshot, not the scene graph.
+`shadowMapSize` is the configured static-shadow map side, not an independent
+measurement of device allocation or physical memory.
+
 Capabilities describe the actual engine/context. Timer-query support is not a
 sample. With `?gpuTiming=1` the client measures, on every 30th rendered callback,
-the GPU elapsed time of the commands issued by that `scene.render()`
+the GPU elapsed time of the commands issued by that `scene.render()` attempt
 (`EXT_disjoint_timer_query_webgl2`, `TIME_ELAPSED`). At most one query is in
 flight; results are polled on later callbacks and never waited for (no
 `finish`/`readPixels`/busy loop), then attached to the issuing frame as
 `gpuRenderElapsedMs`. Results overlapping a GPU disjoint event are discarded
 (`disjointDiscarded`), due samples with a query still outstanding are skipped
 (`busySkips`), and a context loss drops the query (`lostQueries`) and re-acquires
-the extension after restoration. Without the flag the status is `not-collected`
+the extension after restoration. Queries older than 5000 ms are discarded
+(`expiredQueries`); non-finite/negative results are rejected (`invalidResults`).
+The timer checks ownership before begin/end, yields to Babylon's GPU instrument,
+and drops a pending sample if another query owner is observed (`queryConflicts`).
+Disjoint is checked even before availability, following the
+[Khronos extension protocol](https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/).
+Do not enable independent timer-query profilers on the same context together:
+their disjoint flag is shared. API exceptions disable only this sensor with
+status `error` and an error count; no error text or player payload is recorded.
+Without the flag the status is `not-collected`
 (or `unsupported`/`no-context`/`context-lost`). This is GPU duration of sampled
 render submissions, **not** GPU utilization, frame presentation or CPU time. No
-zeros are manufactured from unsupported APIs.
+zeros are manufactured from unsupported APIs. A successful timer query does not
+prove physical hardware acceleration; check the renderer for software fallback.
 
 The new frame storage is a fixed 337.5 KiB Float64Array (3600 × 12 × 8 bytes), plus
 bounded event/sample/peak objects with selected fields/128-character strings.
 No full scene/resource traversal or JSON serialization runs per frame. The
+render/network getter snapshots run through a failure boundary; a failed getter
+does not interrupt the game frame, emits `diagnostic.sample-error` and increments
+`history.samples.failures` instead of manufacturing a complete sample. The
 existing detailed snapshot and serialization remain manual export work. The
 file size is bounded by record counts, not a constant byte target; legacy
 4096-operation/256-HTTP histories can already make files substantial.
@@ -196,12 +217,19 @@ change makes no FPS improvement claim.
 
 Contract tests cover warmup/deferral, visibility and renderer boundaries, ring
 losses, async attribution, peak retention, spawn replacement, clocks, missing
-values, privacy and artifact provenance. Hardware/GPU benchmarks, a production
-deployment and database changes are outside this change.
+values, privacy and artifact provenance. Final Linux checks and their explicit
+gaps are in `reports/s60-diagnostic-export-final-review-2026-11-17.md`.
+`SU_TEST_HEADED=1` selects a full window for the download scenario (e.g. under
+Xvfb); the hidden check remains an assertion and fails if the window system does
+not change `document.hidden`. No production deployment or database migration is
+part of the feature.
 
 This branch targets main. S-61 has a different optimized group pump, visibility
 and renderer lifecycle. Port recorder/build/export contracts first, then adapt
 only observational hooks around **S-61's existing** batched activation/reconcile/
 release. Never replace its optimized files with main's versions or split a
 batched reconcile just to collect per-group spans. Validate the final session on
-the original device after the port/push; no port/merge is performed here.
+the original device after the port/push. S-61's optional SceneInstrumentation
+uses `frameDrawCalls`; adapt the sample source as well. Preserve its existing
+GPU profiling guards when connecting the opt-in timer. No transfer to S-61 is
+performed by this PR.

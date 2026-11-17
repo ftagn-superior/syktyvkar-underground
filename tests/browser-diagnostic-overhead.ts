@@ -17,7 +17,9 @@ const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
 const label = process.env.SU_OVERHEAD_LABEL ?? 'run';
 const seconds = Number(process.env.SU_OVERHEAD_SECONDS ?? 20);
 const output = process.env.SU_DIAGNOSTIC_OUTPUT ?? 'output/diagnostic-overhead';
+// Full Chromium: the headless shell falls back to SwiftShader instead of the real GPU.
 const browser = await launchTestBrowser({
+  channel: 'chromium',
   renderer: process.env.SU_TEST_RENDERER === 'hardware' ? 'default' : 'software',
 });
 const stats = (values: number[]) => {
@@ -38,17 +40,16 @@ try {
     viewport: { width: 1440, height: 900 },
     acceptDownloads: true,
   });
-  await context.addInitScript(() => {
+  // A string, not a function: transpiled helpers do not exist inside the page.
+  await context.addInitScript(`(() => {
     const raf = window.requestAnimationFrame.bind(window);
-    const rows: number[] = [];
+    const rows = [];
     let recording = false;
-    Object.assign(window, {
-      __S60_RAF__: rows,
-      __S60_RAF_RECORD__: (on: boolean) => {
-        if (on) rows.length = 0;
-        recording = on;
-      },
-    });
+    window.__S60_RAF__ = rows;
+    window.__S60_RAF_RECORD__ = (on) => {
+      if (on) rows.length = 0;
+      recording = on;
+    };
     window.requestAnimationFrame = (callback) =>
       raf((time) => {
         const started = performance.now();
@@ -58,7 +59,7 @@ try {
           if (recording) rows.push(time, performance.now() - started);
         }
       });
-  });
+  })();`);
   const page = await context.newPage();
   await page.goto(
     `${url}/?diagnostics=1&time=12&weather=clear${process.env.SU_DIAGNOSTIC_QUERY ?? ''}`,
@@ -68,30 +69,26 @@ try {
   await page.waitForFunction(
     () => {
       const r = (window as any).__SU_DEBUG__?.report();
-      return (
-        r?.metrics.connection === 'playing' &&
-        r.streaming.criticalReady &&
-        r.streaming.groups
-          .filter((g: any) => g.wanted)
-          .every((g: any) => g.current === g.wanted && !g.pending && !g.preparing && !g.error)
-      );
+      return r?.metrics.connection === 'playing' && r.streaming.criticalReady;
     },
     undefined,
     { timeout: 300_000, polling: 1000 },
   );
-  await page.waitForTimeout(10_000);
+  // Background streaming keeps refining the city; both builds get the same settle period.
+  await page.waitForTimeout(Number(process.env.SU_OVERHEAD_SETTLE_SECONDS ?? 30) * 1000);
   await page.evaluate(() => (window as any).__S60_RAF_RECORD__(true));
   await page.waitForTimeout(seconds * 1000);
   const rows: number[] = await page.evaluate(() => {
     (window as any).__S60_RAF_RECORD__(false);
     return (window as any).__S60_RAF__.slice();
   });
-  const callbacks: number[] = [],
-    intervals: number[] = [];
-  for (let i = 0; i < rows.length; i += 2) {
-    callbacks.push(rows[i + 1]);
-    if (i) intervals.push(rows[i] - rows[i - 2]);
-  }
+  // Several RAF users share one frame timestamp: sum their callbacks per frame.
+  const perFrame = new Map<number, number>();
+  for (let i = 0; i < rows.length; i += 2)
+    perFrame.set(rows[i], (perFrame.get(rows[i]) ?? 0) + rows[i + 1]);
+  const times = [...perFrame.keys()].sort((a, b) => a - b);
+  const callbacks = times.map((time) => perFrame.get(time)!),
+    intervals = times.slice(1).map((time, i) => time - times[i]);
   const exports = [];
   for (let i = 0; i < 5; i++) {
     const [file] = await Promise.all([

@@ -61,12 +61,48 @@ describe('static shadow cache', () => {
       expect(lighting.shadowInvalidations().requested.quality).toBeGreaterThan(
         after.requested.quality,
       );
-      expect(lighting.pipelineDiagnostics()).toEqual({ enabled: false, samples: null, hdr: null });
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        enabled: false,
+        samples: null,
+        hdr: null,
+        samplesRequested: null,
+        hdrRequested: null,
+      });
       lighting.setQuality('standard');
       expect(lighting.pipelineDiagnostics()).toMatchObject({
         enabled: true,
-        samples: 4,
-        hdr: true,
+        samplesRequested: 4,
+        hdrRequested: true,
+      });
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it('distinguishes requested HDR/MSAA from a low-capability allocated attachment', () => {
+    const engine = new NullEngine();
+    engine.getCaps().textureHalfFloatRender = false;
+    engine.getCaps().textureFloatRender = false;
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera('camera', 0, 1, 120, Vector3.Zero(), scene);
+    const lighting = new WorldLighting(scene, camera);
+    try {
+      lighting.setTimeOfDay(0); // Night bloom allocates a post-process target even without HDR support.
+      lighting.setQuality('standard');
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        samplesRequested: 4,
+        hdrRequested: true,
+        samples: null,
+        hdr: null,
+      });
+      scene.render();
+      expect(lighting.pipelineDiagnostics()).toMatchObject({
+        samplesRequested: 4,
+        hdrRequested: true,
+        samples: 1,
+        hdr: false,
+        textureType: 0,
       });
     } finally {
       scene.dispose();

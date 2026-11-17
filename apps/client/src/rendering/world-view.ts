@@ -397,54 +397,63 @@ export class WorldView {
   }
   private sampleDiagnosticState(now: number): void {
     if (!this.diagnosticHistory?.sampleDue('render.sample', now)) return;
-    const shadow = this.environment.shadowDiagnostics();
-    const shadowRequests = this.environment.shadowInvalidations(),
-      invalidations = shadowRequests.requested;
-    const pipeline = this.environment.pipelineDiagnostics();
-    const bloom = this.environment.bloomDiagnostics();
-    const fields = {
-      quality: this.quality,
-      cameraMode: this.firstPerson ? 'first-person' : 'overview',
-      zoom: this.zoom,
-      renderWidth: this.engine.getRenderWidth(true),
-      renderHeight: this.engine.getRenderHeight(true),
-      readyRadius: this.streamingRadius,
-      shownRadius: this.radial.radius,
-      renderDeferred: this.renderDeferred,
-      hour: this.environment.hour,
-      ...this.environment.weatherAmounts,
-      staticRefreshes: shadow.staticRefreshes,
-      staticDiscarded: shadow.staticDiscarded,
-      staticFallbacks: shadow.staticFallbacks,
-      // Cumulative initiators of static shadow redraw requests; subtract adjacent samples.
-      shadowCasterInvalidations: invalidations.casters,
-      shadowSunStepInvalidations: invalidations['sun-step'],
-      shadowFollowInvalidations: invalidations.follow,
-      shadowResizeInvalidations: invalidations.resize,
-      shadowQualityInvalidations: invalidations.quality,
-      shadowRetryInvalidations: invalidations.retry,
-      shadowContextInvalidations: invalidations.context,
-      timeFixed: this.environment.timeFixed,
-      // Conditions that change GPU cost for the same scene (A/B comparability).
-      antialias: this.contextAntialias,
-      hardwareScaling: this.engine.getHardwareScalingLevel(),
-      pipeline: pipeline.enabled,
-      msaaSamples: pipeline.samples,
-      hdr: pipeline.hdr,
-      bloom: bloom.enabled,
-      bloomWeight: bloom.weight,
-      shadows: this.scene.shadowsEnabled,
-      shadowMapSize: this.scene.shadowsEnabled ? shadowRequests.mapSize : null,
-      // Last completed render: counters of the previous scene.render(), not this callback.
-      drawCalls: this.instrumentation.drawCallsCounter.current,
-      submittedTriangles: (this.scene.getActiveIndices() - this.shadowSubmittedIndices) / 3,
-      gpuSamples: this.gpuTimer?.samples ?? null,
-      gpuDisjoint: this.gpuTimer?.disjoint ?? null,
-      gpuBusySkips: this.gpuTimer?.busySkips ?? null,
-      contextSampledAtMs: now,
-    };
-    this.diagnosticHistory.setContext(fields);
-    this.diagnosticHistory.sample('render.sample', fields, now);
+    const sampledAtMs = performance.now(); // A long frame hook may have finished well after `now`.
+    this.diagnosticHistory.sampleSafely(
+      'render.sample',
+      () => {
+        const shadow = this.environment.shadowDiagnostics();
+        const shadowRequests = this.environment.shadowInvalidations(),
+          invalidations = shadowRequests.requested;
+        const pipeline = this.environment.pipelineDiagnostics();
+        const bloom = this.environment.bloomDiagnostics();
+        return {
+          quality: this.quality,
+          cameraMode: this.firstPerson ? 'first-person' : 'overview',
+          zoom: this.zoom,
+          renderWidth: this.engine.getRenderWidth(true),
+          renderHeight: this.engine.getRenderHeight(true),
+          readyRadius: this.streamingRadius,
+          shownRadius: this.radial.radius,
+          renderDeferred: this.renderDeferred,
+          hour: this.environment.hour,
+          ...this.environment.weatherAmounts,
+          staticRefreshes: shadow.staticRefreshes,
+          staticDiscarded: shadow.staticDiscarded,
+          staticFallbacks: shadow.staticFallbacks,
+          // Cumulative initiators of static shadow redraw requests; subtract adjacent samples.
+          shadowCasterInvalidations: invalidations.casters,
+          shadowSunStepInvalidations: invalidations['sun-step'],
+          shadowFollowInvalidations: invalidations.follow,
+          shadowResizeInvalidations: invalidations.resize,
+          shadowQualityInvalidations: invalidations.quality,
+          shadowRetryInvalidations: invalidations.retry,
+          shadowContextInvalidations: invalidations.context,
+          timeFixed: this.environment.timeFixed,
+          // Conditions that change GPU cost for the same scene (A/B comparability).
+          antialias: this.contextAntialias,
+          hardwareScaling: this.engine.getHardwareScalingLevel(),
+          pipeline: pipeline.enabled,
+          msaaSamples: pipeline.samples,
+          msaaSamplesRequested: pipeline.samplesRequested,
+          hdr: pipeline.hdr,
+          hdrRequested: pipeline.hdrRequested,
+          pipelineTextureType: pipeline.textureType,
+          bloom: bloom.enabled,
+          bloomWeight: bloom.weight,
+          shadows: this.scene.shadowsEnabled,
+          shadowMapSize: this.scene.shadowsEnabled ? shadowRequests.mapSize : null,
+          // Last completed render: counters of the previous scene.render(), not this callback.
+          drawCalls: this.instrumentation.drawCallsCounter.current,
+          submittedTriangles: (this.scene.getActiveIndices() - this.shadowSubmittedIndices) / 3,
+          gpuSamples: this.gpuTimer?.samples ?? null,
+          gpuDisjoint: this.gpuTimer?.disjoint ?? null,
+          gpuBusySkips: this.gpuTimer?.busySkips ?? null,
+          contextSampledAtMs: sampledAtMs,
+        };
+      },
+      sampledAtMs,
+      true,
+    );
   }
   private material(id: string, color: string): StandardMaterial {
     const material = new StandardMaterial(id, this.scene);
@@ -1134,7 +1143,18 @@ export class WorldView {
     this.diagnosticHistory = history;
     history.setContext({ quality: this.quality, antialias: this.contextAntialias });
     history.boundary('renderer-created');
-    if (options.gpuTiming) this.gpuTimer = new GpuRenderTimer(this.canvas.getContext('webgl2'));
+    this.gpuTimer?.dispose();
+    this.gpuTimer = options.gpuTiming
+      ? new GpuRenderTimer(
+          this.engine.webGLVersion === 2 ? (this.engine._gl as WebGL2RenderingContext) : null,
+          30,
+          () => performance.now(),
+          () =>
+            !this.engine._captureGPUFrameTime &&
+            !this.engine._currentNonTimestampToken &&
+            !this.engine._gpuFrameTimeToken,
+        )
+      : undefined;
     // Babylon skips render callbacks while the context is lost; the next interval spans the outage.
     this.engine.onContextLostObservable.add(() => {
       history.boundary('graphics-lost');
@@ -1156,6 +1176,11 @@ export class WorldView {
           disjointDiscarded: timer.disjoint,
           busySkips: timer.busySkips,
           lostQueries: timer.lostQueries,
+          expiredQueries: timer.expired,
+          invalidResults: timer.invalidResults,
+          queryConflicts: timer.conflicts,
+          errors: timer.errors,
+          maxQueryAgeMs: 5000,
           everyNthRenderedCallback: 30,
         }
       : null;

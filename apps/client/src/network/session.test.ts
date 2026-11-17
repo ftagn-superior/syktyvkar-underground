@@ -386,6 +386,37 @@ describe('saved spawn resource preparation', () => {
     });
     await v.messages.get('prepareArea')!(fallback);
     expect(v.notice).toHaveBeenCalledTimes(1);
+    const trail = v.instance.diagnosticHistory.snapshot().transitions.records;
+    expect(trail.filter((e) => e.name === 'area.plan').map((e) => e.fields.spawnSource)).toEqual([
+      'saved',
+      'default',
+    ]);
+    expect(
+      trail.find((e) => e.name === 'area.result' && e.fields.prepareId === 'saved')?.fields.code,
+    ).toBe('PLAN_REPLACED');
+    expect(trail.find((e) => e.name === 'spawn.fallback')?.fields).toMatchObject({
+      from: 'saved',
+      to: 'default',
+      prepareId: 'fallback',
+    });
+    expect(trail.find((e) => e.name === 'area.result-ignored')?.fields).toMatchObject({
+      prepareId: 'saved',
+      reason: 'stale-plan',
+    });
+  });
+
+  it('continues the actual frame after an RTT diagnostic source throws', async () => {
+    const v = await joined();
+    Object.assign(v.room, {
+      clock: {
+        smoothedRtt: () => {
+          throw new Error('diagnostic source failed');
+        },
+      },
+    });
+    expect(() => v.frame()).not.toThrow();
+    expect(v.streamer.pumpFrame).toHaveBeenCalled();
+    expect(v.instance.diagnosticHistory.snapshot().samples.failures['network.sample']).toBe(1);
   });
 
   it('does not announce a fallback for an initially missing position', async () => {

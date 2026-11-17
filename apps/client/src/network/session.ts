@@ -1676,41 +1676,44 @@ export class GameSession {
                   : 'included',
     );
     if (this.diagnosticHistory.sampleDue('network.sample', now)) {
-      const resources = this.resources?.counters(),
-        residency = this.streamer?.groupResidency?.();
-      this.diagnosticHistory.sample(
+      const sampledAtMs = performance.now();
+      this.diagnosticHistory.sampleSafely(
         'network.sample',
-        {
-          connectionNumber: this.diagnosticConnectionNumber,
-          rttMs: this.room?.clock?.smoothedRtt() ?? null,
-          ack: this.input?.lastProcessed ?? null,
-          pendingInputs: this.input?.pendingCount ?? null,
-          ackAgeMs: this.input ? now - this.lastAckAt : null,
-          patchAgeMs: this.room ? now - this.lastPatchAt : null,
-          serverTick: this.room?.state?.serverTick ?? null,
-          serverStepMs: this.room?.state?.stepMs ?? null,
-          predictionPauses: this.predictionPauses,
-          replaySteps: this.replaySteps,
-          correctionCount: this.correctionCount,
-          stalled: this.stalled,
-          waitingResync: this.waitingResync,
-          storagePaused: this.persistencePaused,
-          inputEnabled: this.inputEnabled,
-          criticalReady: this.streamer?.criticalReady ?? null,
-          backgroundReady: this.streamer?.backgroundReady ?? null,
-          nearGroups: residency?.near ?? null,
-          farGroups: residency?.far ?? null,
-          mapVersion: this.info?.mapVersion ?? null,
-          layoutRevision: this.info?.layoutRevision ?? null,
-          cacheBytes: resources?.cacheBytes ?? null,
-          downloads: resources?.downloads ?? null,
-          cacheHits: resources?.cacheHits ?? null,
-          responseBodyBytes: resources?.responseBodyBytes ?? null,
-          integrityRetries: resources?.integrityRetries ?? null,
-          pendingDownloads: resources?.pending ?? null,
-          httpActive: resources?.httpActive ?? null,
+        () => {
+          const resources = this.resources?.counters(),
+            residency = this.streamer?.groupResidency?.();
+          return {
+            connectionNumber: this.diagnosticConnectionNumber,
+            rttMs: this.room?.clock?.smoothedRtt() ?? null,
+            ack: this.input?.lastProcessed ?? null,
+            pendingInputs: this.input?.pendingCount ?? null,
+            ackAgeMs: this.input ? now - this.lastAckAt : null,
+            patchAgeMs: this.room ? now - this.lastPatchAt : null,
+            serverTick: this.room?.state?.serverTick ?? null,
+            serverStepMs: this.room?.state?.stepMs ?? null,
+            predictionPauses: this.predictionPauses,
+            replaySteps: this.replaySteps,
+            correctionCount: this.correctionCount,
+            stalled: this.stalled,
+            waitingResync: this.waitingResync,
+            storagePaused: this.persistencePaused,
+            inputEnabled: this.inputEnabled,
+            criticalReady: this.streamer?.criticalReady ?? null,
+            backgroundReady: this.streamer?.backgroundReady ?? null,
+            nearGroups: residency?.near ?? null,
+            farGroups: residency?.far ?? null,
+            mapVersion: this.info?.mapVersion ?? null,
+            layoutRevision: this.info?.layoutRevision ?? null,
+            cacheBytes: resources?.cacheBytes ?? null,
+            downloads: resources?.downloads ?? null,
+            cacheHits: resources?.cacheHits ?? null,
+            responseBodyBytes: resources?.responseBodyBytes ?? null,
+            integrityRetries: resources?.integrityRetries ?? null,
+            pendingDownloads: resources?.pending ?? null,
+            httpActive: resources?.httpActive ?? null,
+          };
         },
-        now,
+        sampledAtMs,
       );
     }
     // Capture the visible render clock independently of gameplay/preparation gates.

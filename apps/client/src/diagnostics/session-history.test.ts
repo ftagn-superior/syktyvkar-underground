@@ -22,6 +22,26 @@ function recorder() {
 }
 
 describe('real-session diagnostic history contract', () => {
+  it('keeps frames running if an external sample getter throws, and counts incomplete observations', () => {
+    const r = recorder();
+    r.history.beginFrame(10, 10, true);
+    expect(() =>
+      r.history.sampleSafely(
+        'render.sample',
+        () => {
+          throw new Error('source failure');
+        },
+        10,
+        true,
+      ),
+    ).not.toThrow();
+    r.history.endFrame('rendered', 1);
+    const data = r.history.snapshot();
+    expect(data.frames.samples[0][5]).toBe(1);
+    expect(data.samples.failures['render.sample']).toBe(1);
+    expect(data.samples.records).toHaveLength(0);
+    expect(data.events.records.at(-1)?.name).toBe('diagnostic.sample-error');
+  });
   it('keeps warmup and deferred frame intervals independently of HUD filtering', () => {
     const r = recorder();
     r.history.setPhase('preparing');

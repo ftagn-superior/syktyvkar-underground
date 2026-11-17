@@ -69,7 +69,7 @@ export const DIAGNOSTIC_SEMANTICS = {
     cumulative:
       'staticRefreshes/staticDiscarded/staticFallbacks and shadow*Invalidations (redraw requests by initiator; coalesced repeats excluded) per renderer; gpuSamples/gpuDisjoint/gpuBusySkips per renderer; predictionPauses/replaySteps/correctionCount per GameSession; downloads/cacheHits/responseBodyBytes/integrityRetries per resource context. No deltas/rates are implied.',
     conditions:
-      'antialias is the granted default-framebuffer attribute; pipeline/msaaSamples/hdr describe the post-process pipeline; drawCalls/submittedTriangles are from the previous completed render; nearGroups/farGroups are resident representations.',
+      'antialias is the granted default-framebuffer attribute; msaaSamples/hdr/pipelineTextureType describe the allocated first post-process input attachment (null until allocated); msaaSamplesRequested/hdrRequested are pipeline requests. drawCalls/submittedTriangles are from the previous completed render; nearGroups/farGroups are resident representations.',
     sequence: 'ack is lastProcessed input sequence; serverTick is authoritative server tick.',
   },
 } as const;

@@ -96,7 +96,10 @@ const FIELD_NAMES = [
   'antialias',
   'pipeline',
   'msaaSamples',
+  'msaaSamplesRequested',
   'hdr',
+  'hdrRequested',
+  'pipelineTextureType',
   'bloom',
   'bloomWeight',
   'bloomThreshold',
@@ -218,6 +221,7 @@ export class SessionHistory {
   private sequence = 0;
   private scopeSequence = 0;
   private readonly excluded = { hiddenCallbacks: 0, boundaryIntervals: 0, invalidIntervals: 0 };
+  private readonly sampleFailures = { 'render.sample': 0, 'network.sample': 0 };
 
   constructor(
     options: {
@@ -318,6 +322,9 @@ export class SessionHistory {
   /** Attaches an asynchronous GPU result to the frame that issued it, if still retained. */
   gpuSample(frameId: number, ms: number): boolean {
     if (
+      !Number.isInteger(frameId) ||
+      !Number.isFinite(ms) ||
+      ms < 0 ||
       frameId < 1 ||
       frameId > this.frameCount ||
       this.frameCount - frameId >= HISTORY_LIMITS.frames
@@ -402,6 +409,22 @@ export class SessionHistory {
   sample(name: 'render.sample' | 'network.sample', fields: DiagnosticFields, atMs: number): void {
     this.samples.push(this.observation(name, fields, atMs));
   }
+  /** External diagnostic getters must not interrupt gameplay if a source fails. */
+  sampleSafely(
+    name: 'render.sample' | 'network.sample',
+    gather: () => DiagnosticFields,
+    atMs: number,
+    updateContext = false,
+  ): void {
+    try {
+      const fields = gather();
+      if (updateContext) this.setContext(fields);
+      this.sample(name, fields, atMs);
+    } catch {
+      this.sampleFailures[name]++;
+      this.event('diagnostic.sample-error', { reason: name }, atMs);
+    }
+  }
   snapshot() {
     const exportedAtMs = this.clock(),
       count = Math.min(this.frameCount, HISTORY_LIMITS.frames);
@@ -469,6 +492,7 @@ export class SessionHistory {
       },
       samples: {
         ...this.samples.coverage(),
+        failures: { ...this.sampleFailures },
         nominalPeriodMsPerSource: 1000,
         startMs: gauges[0]?.atMs ?? null,
         endMs: gauges.at(-1)?.atMs ?? null,

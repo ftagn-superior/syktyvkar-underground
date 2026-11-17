@@ -7,6 +7,7 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture';
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
+import { Constants } from '@babylonjs/core/Engines/constants';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { SubMesh } from '@babylonjs/core/Meshes/subMesh';
 import type { Observer } from '@babylonjs/core/Misc/observable';
@@ -562,9 +563,23 @@ export class WorldLighting {
   /** Pipeline state that changes GPU cost independently of the scene contents. */
   pipelineDiagnostics() {
     const pipeline = this.pipeline;
-    return pipeline
-      ? { enabled: true, samples: pipeline.samples, hdr: PIPELINE_HDR }
-      : { enabled: false, samples: null, hdr: null };
+    const first = pipeline
+      ? (this.scene.activeCamera ?? this.camera)._postProcesses.find((process) => !!process)
+      : undefined;
+    const target = first?.inputTexture;
+    const textureType = target?.texture?.type;
+    return {
+      enabled: !!pipeline,
+      samplesRequested: pipeline?.samples ?? null,
+      hdrRequested: pipeline ? PIPELINE_HDR : null,
+      samples: target?.samples ?? null,
+      textureType: textureType ?? null,
+      hdr:
+        textureType === undefined
+          ? null
+          : textureType === Constants.TEXTURETYPE_FLOAT ||
+            textureType === Constants.TEXTURETYPE_HALF_FLOAT,
+    };
   }
 
   /** Shadow maps and caster counts for the diagnostic report. */

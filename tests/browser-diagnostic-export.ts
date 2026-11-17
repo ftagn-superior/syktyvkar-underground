@@ -20,6 +20,7 @@ const url = process.env.SU_TEST_URL ?? 'http://127.0.0.1:2567';
 const output = process.env.SU_DIAGNOSTIC_OUTPUT ?? 'output/diagnostic-export';
 // Full Chromium: first-person view requires pointer lock, unavailable in the headless shell.
 const browser = await launchTestBrowser({
+  headless: process.env.SU_TEST_HEADED !== '1',
   channel: 'chromium',
   renderer: process.env.SU_TEST_RENDERER === 'hardware' ? 'default' : 'software',
 });
@@ -277,7 +278,7 @@ try {
   assert.equal(repeated.history.runId, reconnected.history.runId, 'export does not reset history');
   assert.ok(repeated.history.frames.total >= reconnected.history.frames.total);
 
-  // Reloading starts a new run; the account/guest position should come back as a saved spawn.
+  // Reloading starts a new run. Guests do not exercise authenticated saved-spawn fallback.
   await page.reload();
   // A stored guest session may continue directly; otherwise enter through the lobby again.
   await page.waitForFunction(

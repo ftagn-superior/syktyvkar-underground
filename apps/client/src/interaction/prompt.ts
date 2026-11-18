@@ -1,5 +1,6 @@
 import type { Interactable, Vec3 } from './interactable';
 import { selectInteractable } from './interactable';
+import { isTextInput } from '../input/keyboard';
 
 const SCAN_MS = 100;
 /** Keep the prompt briefly after leaving range so the range edge does not flicker. */
@@ -53,16 +54,15 @@ export class InteractionSystem {
     window.addEventListener(
       'keydown',
       (event) => {
-        const target = this.current;
-        if (!target || event.code !== target.key || event.repeat) return;
+        if (event.defaultPrevented || !this.host.enabled()) return;
         if (this.host.keys && !this.host.keys()) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
-        if (
-          event.target instanceof HTMLElement &&
-          (event.target.matches('input,textarea,select') || event.target.isContentEditable)
-        )
-          return;
+        if (isTextInput(event.target)) return;
+        const target = this.current;
+        if (event.code !== 'Space' && event.code !== target?.key) return;
+        // Reserve Space even without a nearby target or during auto-repeat: the world must not scroll.
         event.preventDefault();
+        if (!target || event.code !== target.key || event.repeat) return;
         this.keyCap.classList.add('pressed');
         this.activate();
       },
@@ -102,6 +102,7 @@ export class InteractionSystem {
     if (next === this.current) return;
     this.current?.setHighlighted(false);
     this.current = next;
+    this.keyCap.classList.remove('pressed');
     this.button.hidden = !next;
     this.button.dataset.interactionId = next?.id ?? '';
     if (!next) return;
@@ -120,7 +121,8 @@ export class InteractionSystem {
   private activate(): void {
     const target = this.current;
     const player = this.host.player();
-    if (target && player && this.host.enabled()) target.onActivate(player);
+    if (target && player && this.host.enabled() && target.getDistance(player) <= target.range)
+      target.onActivate(player);
   }
   dispose(): void {
     this.controller.abort();

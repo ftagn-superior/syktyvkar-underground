@@ -3,7 +3,7 @@ import { INTERACTION_KINDS, type Interactable, type Vec3 } from './interactable'
 
 /**
  * Платформы остановок как места взаимодействия: у каждой платформы появляется подсказка
- * «Z · Автобусы» с направлением движения на этой стороне улицы.
+ * «Пробел · Автобусы» с направлением движения на этой стороне улицы.
  */
 export class BusStopSource {
   private readonly cache = new Map<string, Interactable>();

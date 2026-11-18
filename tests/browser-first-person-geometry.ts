@@ -149,7 +149,7 @@ try {
   await first.keyboard.press('h');
   await capture(first);
   const itemsBefore = (await snapshot(first)).items.length;
-  for (const key of ['x', 'z', 'r', 'f']) await first.keyboard.press(key);
+  for (const key of ['x', 'Space', 'r', 'f']) await first.keyboard.press(key);
   await first.waitForTimeout(350);
   assert.equal((await snapshot(first)).items.length, itemsBefore);
   assert.equal(await first.locator('#inventory-panel').isVisible(), false);
@@ -157,7 +157,7 @@ try {
   await first.keyboard.press('v');
   await first.waitForFunction(() => (window as any).__SU_DEBUG__.controls().view === 'overview');
   await first.waitForFunction(() => !!document.querySelector('.su-ctx:not([hidden])'));
-  await first.keyboard.press('z');
+  await first.keyboard.press('Space');
   await first.waitForFunction(
     (count) => (window as any).__SU_DEBUG__.snapshot().items.length < count,
     itemsBefore,

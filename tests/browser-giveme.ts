@@ -140,7 +140,7 @@ try {
     );
     await observer.screenshot({ path: `output/playwright/catalog-${typeId}-world.png` });
     await owner.bringToFront();
-    await owner.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
+    await owner.getByRole('button', { name: 'Подобрать · Пробел', exact: true }).click();
     await inventoryCount(owner, 3 + index);
   }
 
@@ -196,7 +196,7 @@ try {
     .waitFor();
   await inventoryCount(owner, 5);
   await owner.keyboard.press('Escape');
-  await owner.getByRole('button', { name: 'Подобрать · Z', exact: true }).click();
+  await owner.getByRole('button', { name: 'Подобрать · Пробел', exact: true }).click();
   await inventoryCount(owner, 6);
   assert.equal(
     app.room.state.items.has(placedId),

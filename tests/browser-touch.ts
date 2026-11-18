@@ -283,7 +283,7 @@ try {
     'native multitouch: analog speed, authoritative movement, actual camera axes, independent release, capture, third finger',
   );
 
-  for (const key of ['r', 't', '/', 'f', 'x', 'z', 'q', 'e', 'Shift'])
+  for (const key of ['r', 't', '/', 'f', 'x', 'Space', 'q', 'e', 'Shift'])
     await page.keyboard.press(key);
   await page.waitForTimeout(600); // includes periodic and network UI updates
   for (const selector of [
@@ -315,7 +315,7 @@ try {
   );
 
   const touchItemId = (await snapshot(page)).items[0].entityId;
-  const pickup = page.locator('.su-ctx[aria-keyshortcuts="Z"]');
+  const pickup = page.locator('.su-ctx[aria-keyshortcuts="Space"]');
   await pickup.waitFor({ state: 'visible' });
   await pickup.tap();
   await page.waitForFunction((itemId) => {
@@ -342,7 +342,7 @@ try {
   const tilePoint = await point(page, '.inventory-choice');
   await fingers.down(1, tilePoint.x, tilePoint.y);
   await fingers.up(1);
-  for (const key of ['x', '1', 'z']) await page.keyboard.press(key);
+  for (const key of ['x', '1', 'Space']) await page.keyboard.press(key);
   assert.equal(await page.locator('#inventory-panel').isVisible(), true);
   assert.equal(await page.locator('#item-placement').isHidden(), true);
   assert.equal((await snapshot(page)).items.length, 0);
